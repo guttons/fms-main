@@ -1,0 +1,7 @@
+{
+  "name": "MACL FMS",
+  "description": "Enterprise-grade Aviation Fuel Management System with RBAC, offline capabilities, and advanced forecasting.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

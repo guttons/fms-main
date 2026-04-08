@@ -1,0 +1,418 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and role information.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The user's full name."
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "ADMIN",
+            "ITP_MANAGER",
+            "DEPOT_MANAGER",
+            "ITP_OPERATOR",
+            "DEPOT_OPERATOR",
+            "EXECUTIVE",
+            "COMMERCIAL"
+          ],
+          "description": "The user's role."
+        },
+        "avatar": {
+          "type": "string",
+          "description": "URL to the user's avatar image."
+        }
+      },
+      "required": ["name", "role"]
+    },
+    "Tank": {
+      "title": "Tank",
+      "description": "Fuel tank information.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the tank."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["Jet A-1", "Diesel", "Petrol"],
+          "description": "The type of fuel in the tank."
+        },
+        "capacity": {
+          "type": "number",
+          "description": "The total capacity of the tank in liters."
+        },
+        "current_level": {
+          "type": "number",
+          "description": "The current level of fuel in the tank in liters."
+        },
+        "safe_min_level": {
+          "type": "number",
+          "description": "The safe minimum level of fuel in the tank in liters."
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp of the last update."
+        },
+        "location": {
+          "type": "string",
+          "description": "The location of the tank."
+        }
+      },
+      "required": ["name", "type", "capacity", "current_level", "safe_min_level", "last_updated"]
+    },
+    "FlightJob": {
+      "title": "FlightJob",
+      "description": "A flight job assignment.",
+      "type": "object",
+      "properties": {
+        "flight_number": {
+          "type": "string",
+          "description": "The flight number."
+        },
+        "aircraft_reg": {
+          "type": "string",
+          "description": "The aircraft registration."
+        },
+        "aircraft_type": {
+          "type": "string",
+          "description": "The aircraft type."
+        },
+        "stand": {
+          "type": "string",
+          "description": "The stand where the aircraft is parked."
+        },
+        "assigned_to": {
+          "type": "string",
+          "description": "The user ID assigned to the job."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["PENDING", "IN_PROGRESS", "COMPLETED"],
+          "description": "The status of the job."
+        }
+      },
+      "required": ["flight_number", "aircraft_reg", "aircraft_type", "stand", "assigned_to", "status"]
+    },
+    "FlightLog": {
+      "title": "FlightLog",
+      "description": "A log of a flight refueling operation.",
+      "type": "object",
+      "properties": {
+        "flight_number": {
+          "type": "string",
+          "description": "The flight number."
+        },
+        "aircraft_reg": {
+          "type": "string",
+          "description": "The aircraft registration."
+        },
+        "aircraft_type": {
+          "type": "string",
+          "description": "The aircraft type."
+        },
+        "stand": {
+          "type": "string",
+          "description": "The stand where the aircraft is parked."
+        },
+        "operator_id": {
+          "type": "string",
+          "description": "The user ID of the operator."
+        },
+        "vehicle_id": {
+          "type": "string",
+          "description": "The vehicle ID used."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["PENDING", "IN_PROGRESS", "COMPLETED"],
+          "description": "The status of the log."
+        },
+        "timestamp_arrived": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp arrived at stand."
+        },
+        "timestamp_position": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp positioned at aircraft."
+        },
+        "timestamp_start": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp commenced pumping."
+        },
+        "timestamp_initial_end": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp initial stop."
+        },
+        "timestamp_final_start": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp top-up start."
+        },
+        "timestamp_final_end": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp final stop / completed."
+        },
+        "timestamp_clearance": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp documents signed, leaving safety zone."
+        },
+        "meter_open": {
+          "type": "number",
+          "description": "Meter open reading."
+        },
+        "meter_close": {
+          "type": "number",
+          "description": "Meter close reading."
+        },
+        "volume": {
+          "type": "number",
+          "description": "Volume pumped."
+        },
+        "panel_check": {
+          "type": "boolean",
+          "description": "Panel closed check."
+        },
+        "walk_around_check": {
+          "type": "boolean",
+          "description": "Walk around check done."
+        },
+        "appearance_check": {
+          "type": "boolean",
+          "description": "Clear & bright check."
+        },
+        "water_check": {
+          "type": "boolean",
+          "description": "Water/sediments free check."
+        }
+      },
+      "required": ["flight_number", "aircraft_reg", "aircraft_type", "stand", "operator_id", "vehicle_id", "status", "volume", "panel_check", "walk_around_check", "appearance_check", "water_check"]
+    },
+    "BridgingLog": {
+      "title": "BridgingLog",
+      "description": "A log of a bridging operation.",
+      "type": "object",
+      "properties": {
+        "source_tank_id": {
+          "type": "string",
+          "description": "The source tank ID."
+        },
+        "vehicle_id": {
+          "type": "string",
+          "description": "The vehicle ID."
+        },
+        "volume": {
+          "type": "number",
+          "description": "The volume transferred."
+        },
+        "start_time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The start time."
+        },
+        "end_time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The end time."
+        },
+        "visual_check_passed": {
+          "type": "boolean",
+          "description": "Visual check passed."
+        },
+        "cwd_check_passed": {
+          "type": "boolean",
+          "description": "CWD check passed."
+        },
+        "density": {
+          "type": "number",
+          "description": "Density."
+        },
+        "temperature": {
+          "type": "number",
+          "description": "Temperature."
+        },
+        "operator_id": {
+          "type": "string",
+          "description": "The operator ID."
+        }
+      },
+      "required": ["source_tank_id", "vehicle_id", "volume", "start_time", "end_time", "visual_check_passed", "cwd_check_passed", "operator_id"]
+    },
+    "Alert": {
+      "title": "Alert",
+      "description": "A system alert.",
+      "type": "object",
+      "properties": {
+        "severity": {
+          "type": "string",
+          "enum": ["low", "medium", "critical"],
+          "description": "The severity of the alert."
+        },
+        "message": {
+          "type": "string",
+          "description": "The alert message."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "The timestamp of the alert."
+        },
+        "acknowledged": {
+          "type": "boolean",
+          "description": "Whether the alert has been acknowledged."
+        }
+      },
+      "required": ["severity", "message", "timestamp", "acknowledged"]
+    },
+    "DomesticAssignment": {
+      "title": "DomesticAssignment",
+      "description": "A domestic assignment.",
+      "type": "object",
+      "properties": {
+        "assignment_date": {
+          "type": "string",
+          "description": "The date of the assignment."
+        },
+        "team_name": {
+          "type": "string",
+          "description": "The team name."
+        },
+        "operator1_id": {
+          "type": "string",
+          "description": "The ID of operator 1."
+        },
+        "operator2_id": {
+          "type": "string",
+          "description": "The ID of operator 2."
+        }
+      },
+      "required": ["assignment_date", "team_name", "operator1_id", "operator2_id"]
+    },
+    "EquipmentAssignment": {
+      "title": "EquipmentAssignment",
+      "description": "An equipment assignment.",
+      "type": "object",
+      "properties": {
+        "assignment_date": {
+          "type": "string",
+          "description": "The date of the assignment."
+        },
+        "equipment_id": {
+          "type": "string",
+          "description": "The equipment ID."
+        },
+        "shift_type": {
+          "type": "string",
+          "description": "The shift type."
+        },
+        "operator1_id": {
+          "type": "string",
+          "description": "The ID of operator 1."
+        },
+        "operator2_id": {
+          "type": "string",
+          "description": "The ID of operator 2."
+        }
+      },
+      "required": ["assignment_date", "equipment_id", "shift_type", "operator1_id", "operator2_id"]
+    },
+    "ShiftBriefingInfo": {
+      "title": "ShiftBriefingInfo",
+      "description": "Information for a shift briefing.",
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "description": "The date of the shift briefing."
+        },
+        "info": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "italic": {
+                "type": "boolean"
+              }
+            },
+            "required": ["text", "type"]
+          },
+          "description": "The list of additional info items."
+        }
+      },
+      "required": ["date", "info"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "Collection of user profiles."
+    },
+    "tanks": {
+      "schema": {
+        "$ref": "#/entities/Tank"
+      },
+      "description": "Collection of fuel tanks."
+    },
+    "flight_jobs": {
+      "schema": {
+        "$ref": "#/entities/FlightJob"
+      },
+      "description": "Collection of flight jobs."
+    },
+    "flight_logs": {
+      "schema": {
+        "$ref": "#/entities/FlightLog"
+      },
+      "description": "Collection of flight logs."
+    },
+    "bridging_logs": {
+      "schema": {
+        "$ref": "#/entities/BridgingLog"
+      },
+      "description": "Collection of bridging logs."
+    },
+    "alerts": {
+      "schema": {
+        "$ref": "#/entities/Alert"
+      },
+      "description": "Collection of system alerts."
+    },
+    "domestic_assignments": {
+      "schema": {
+        "$ref": "#/entities/DomesticAssignment"
+      },
+      "description": "Collection of domestic assignments."
+    },
+    "equipment_assignments": {
+      "schema": {
+        "$ref": "#/entities/EquipmentAssignment"
+      },
+      "description": "Collection of equipment assignments."
+    },
+    "shift_briefing_info": {
+      "schema": {
+        "$ref": "#/entities/ShiftBriefingInfo"
+      },
+      "description": "Collection of shift briefing information."
+    }
+  }
+}
