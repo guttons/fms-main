@@ -10,19 +10,31 @@
         theme: {
           extend: {
             colors: {
-              aviation: {
-                50: '#f0f9ff',
-                100: '#e0f2fe',
-                500: '#0ea5e9',
-                600: '#0284c7',
-                800: '#075985',
-                900: '#0c4a6e',
+              surface: '#f7f9fb',
+              'surface-low': '#f2f4f6',
+              'surface-lowest': '#ffffff',
+              'surface-highest': '#e0e3e5',
+              primary: {
+                DEFAULT: '#002046',
+                container: '#1b365d',
               },
-              safety: {
-                warning: '#f59e0b',
-                danger: '#ef4444',
-                success: '#22c55e',
+              error: {
+                DEFAULT: '#ba1a1a',
+                container: '#ffdad6',
+              },
+              tertiary: {
+                DEFAULT: '#361900',
+                container: '#ffdcbe',
+              },
+              on: {
+                surface: '#191c1e',
               }
+            },
+            fontFamily: {
+              sans: ['Inter', 'system-ui', 'sans-serif'],
+            },
+            boxShadow: {
+              ambient: '0 12px 40px rgba(25, 28, 30, 0.06)',
             }
           }
         }

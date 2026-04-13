@@ -18,7 +18,7 @@ import { Login } from './components/Login';
 import { BottomNav } from './components/BottomNav';
 import { MOCK_USERS, TANKS } from './constants';
 import { User, UserRole, Tank } from './types';
-import { Wifi, WifiOff, Menu, X, Loader2 } from 'lucide-react';
+import { Wifi, WifiOff, Menu, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon } from 'lucide-react';
 import { supabaseService } from './services/supabaseService';
 
 const App: React.FC = () => {
@@ -27,6 +27,16 @@ const App: React.FC = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  });
+  
+  // Theme management
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
+    localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+  }, [isDarkMode]);
   
   // Lifted State for Tanks to allow real-time updates across modules
   const [tanks, setTanks] = useState<Tank[]>(TANKS);
@@ -104,7 +114,7 @@ const App: React.FC = () => {
       case 'reports':
         return <CommercialReports />;
       case 'equipment':
-        return <EquipmentStatus tanks={tanks} />;
+        return <EquipmentStatus tanks={tanks} user={currentUser!} />;
       case 'seaplane':
         return <Seaplane />;
       default:
@@ -146,7 +156,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden text-slate-900">
+    <div className="flex h-screen bg-surface overflow-hidden text-on-surface">
       {/* Sidebar */}
       <Sidebar 
         user={currentUser} 
@@ -159,47 +169,110 @@ const App: React.FC = () => {
         isMobileMenuOpen={isMobileMenuOpen}
       />
 
-      {/* Main Content Wrapper */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      {/* Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         
-        {/* Top Header */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-8">
-          <div className="flex items-center">
+        {/* Phase 1: Critical Alert Bar */}
+        <div className="h-10 bg-error text-white flex items-center justify-between px-6 z-50 shadow-lg">
+          <div className="flex items-center space-x-3">
+            <AlertCircle className="w-4 h-4 animate-pulse" />
+            <span className="text-[10px] font-extrabold uppercase tracking-[0.2em]">
+              Critical Alert: <span className="opacity-80 font-medium ml-2">TK-8 below threshold • Flow mismatch Bay 3</span>
+            </span>
+          </div>
+          <div className="flex items-center space-x-6">
+            <span className="text-[10px] font-bold opacity-60 uppercase tracking-widest hidden md:block">Primary Loop: Offline</span>
+            <button className="text-[10px] font-black uppercase tracking-tighter bg-white/10 hover:bg-white/20 px-3 py-1 rounded-sm transition-colors">
+              Acknowledge All
+            </button>
+          </div>
+        </div>
+
+        {/* Phase 2: AeroFuel Command Header */}
+        <header className="h-[var(--header-height)] bg-surface-lowest border-b border-outline flex items-center justify-between px-4 lg:px-8 z-40">
+          <div className="flex items-center flex-1">
             <button 
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="lg:hidden mr-4 text-slate-500"
             >
               {isMobileMenuOpen ? <X /> : <Menu />}
             </button>
-            <h1 className="text-xl font-bold text-slate-800 capitalize hidden sm:block">
-              {activeView.replace('_', ' ')}
-            </h1>
+            <div className="hidden md:block mr-12">
+              <h1 className="headline-lg text-primary tracking-tight leading-none">AeroFuel</h1>
+              <span className="text-xs font-black text-primary opacity-90 uppercase tracking-[0.3em]">Command</span>
+            </div>
+
+            {/* Global Search */}
+            <div className="hidden lg:flex items-center bg-surface-dim border border-outline rounded-full px-4 py-2 w-96 max-w-xl group focus-within:border-primary-bright transition-all">
+              <Search className="w-4 h-4 text-slate-400 mr-3" />
+              <input 
+                type="text" 
+                placeholder="Search operations, assets, personnel..." 
+                className="bg-transparent border-none outline-none text-sm w-full font-medium placeholder:text-slate-400"
+              />
+              <div className="flex items-center space-x-2 ml-2">
+                <div className="dot-live"></div>
+                <span className="text-[9px] font-bold text-slate-400 uppercase whitespace-nowrap">Last updated: 12s ago</span>
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center space-x-4">
-             {/* Offline Indicator */}
-             <div className={`flex items-center px-3 py-1 rounded-full text-xs font-bold ${isOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                {isOnline ? <Wifi className="w-3 h-3 mr-1"/> : <WifiOff className="w-3 h-3 mr-1"/>}
-                {isOnline ? 'ONLINE' : 'OFFLINE MODE'}
-             </div>
+          <div className="flex items-center space-x-6">
+            {/* Mode Switcher */}
+            <div className="hidden sm:flex items-center bg-surface-dim p-1 rounded-lg border border-outline">
+              <button className="px-4 py-1.5 bg-primary text-white text-[10px] font-black rounded-md shadow-sm uppercase tracking-widest transition-all">
+                Shift Mode
+              </button>
+              <button className="px-4 py-1.5 text-slate-500 text-[10px] font-bold uppercase tracking-widest hover:text-primary transition-colors">
+                Supervisor
+              </button>
+            </div>
+
+            {/* Notifications & Profile */}
+            <div className="flex items-center space-x-4 border-l border-outline pl-6">
+              <button className="relative p-2 text-slate-400 hover:text-primary transition-colors">
+                <Bell className="w-5 h-5" />
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full border-2 border-white"></span>
+              </button>
+
+              {/* Theme Toggle */}
+              <button 
+                onClick={() => setIsDarkMode(!isDarkMode)}
+                className="p-2 text-slate-400 hover:text-primary transition-all duration-300 hover:rotate-45"
+                title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              >
+                {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              </button>
+
+              <div className="flex items-center space-x-3 bg-slate-100 dark:bg-slate-800 p-1 pr-3 rounded-full border border-outline hover:border-primary-bright cursor-pointer transition-all">
+                <img src={currentUser.avatar} alt="" className="w-8 h-8 rounded-full border border-white dark:border-slate-700 shadow-sm" />
+                <div className="hidden xl:block">
+                  <p className="text-[10px] font-black text-primary leading-tight">{currentUser.name}</p>
+                </div>
+              </div>
+            </div>
           </div>
         </header>
 
         {/* Main Content Scroll Area */}
-        <main className="flex-1 overflow-y-auto relative pb-16 lg:pb-0">
+        <main className="flex-1 overflow-y-auto relative canvas">
           {isLoading ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 z-50">
-              <Loader2 className="w-10 h-10 text-aviation-600 animate-spin mb-4" />
-              <p className="text-slate-600 font-medium">Connecting to Supabase...</p>
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface/80 z-50 backdrop-blur-sm">
+              <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
+              <p className="label-sm text-primary tracking-widest">ESTABLISHING SECURE DATA STREAM...</p>
             </div>
-          ) : renderContent()}
+          ) : (
+            <div className="fade-in">
+              {renderContent()}
+            </div>
+          )}
         </main>
       </div>
       
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-50 lg:hidden"
+          className="fixed inset-0 bg-primary/40 backdrop-blur-sm z-50 lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}

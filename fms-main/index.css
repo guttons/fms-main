@@ -1,0 +1,172 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* AeroFuel Brand Palette (Fixed) */
+  --color-brand-blue: #002046;
+  --color-primary-bright: #0ea5e9;
+  --color-error: #ef4444; /* Standardized Red */
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+
+  /* Layout Spacing */
+  --header-height: 72px;
+  --alert-bar-height: 40px;
+  --sidebar-width: 280px;
+
+  /* Global Effects */
+  --glass-blur: 12px;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+/* Default Theme (Light) */
+:root, [data-theme='light'] {
+  --color-surface: #f8fafc;
+  --color-surface-lowest: #ffffff;
+  --color-surface-dim: #f1f5f9;
+  --color-on-surface: #0f172a;
+  --color-on-surface-dim: #64748b;
+  --color-primary: var(--color-brand-blue);
+  --color-primary-dim: #1b365d;
+  --color-outline: rgba(0, 32, 70, 0.06);
+  --color-glass-bg: rgba(255, 255, 255, 0.8);
+  --color-glass-border: rgba(255, 255, 255, 0.1);
+}
+
+/* Dark Theme Overrides */
+[data-theme='dark'] {
+  --color-surface: #0b0f1a;
+  --color-surface-lowest: #141b2d;
+  --color-surface-dim: #1c253d;
+  --color-on-surface: #f8fafc;
+  --color-on-surface-dim: #94a3b8;
+  --color-primary: #38bdf8;
+  --color-primary-dim: #0ea5e9;
+  --color-outline: rgba(255, 255, 255, 0.08);
+  --color-glass-bg: rgba(20, 27, 45, 0.8);
+  --color-glass-border: rgba(255, 255, 255, 0.05);
+}
+
+/* Global Reset */
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-surface);
+  color: var(--color-on-surface);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Typography Hierarchy */
+.headline-xl { font-size: 2.25rem; font-weight: 800; letter-spacing: -0.04em; line-height: 1.1; }
+.headline-lg { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+.title-lg { font-size: 1.25rem; font-weight: 700; }
+.title-md { font-size: 1.125rem; font-weight: 600; }
+.body-md { font-size: 0.9375rem; font-weight: 400; line-height: 1.6; }
+.label-sm { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* Premium Utility Classes */
+.glass-surface {
+  background-color: var(--color-glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--color-glass-border);
+}
+
+.card-premium {
+  background-color: var(--color-surface-lowest);
+  border: 1px solid var(--color-outline);
+  border-radius: 1rem;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+}
+
+.card-premium:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.btn-command {
+  background-color: var(--color-primary);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 700;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-command:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.btn-emergency {
+  background-color: var(--color-error);
+  color: white;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  width: 100%;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
+}
+
+.btn-emergency:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.6);
+}
+
+/* Indicators */
+.dot-live {
+  width: 8px;
+  height: 8px;
+  background-color: var(--color-success);
+  border-radius: 50%;
+  position: relative;
+}
+
+.dot-live::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: 50%;
+  background-color: var(--color-success);
+  opacity: 0.4;
+  animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes ping {
+  75%, 100% { transform: scale(3); opacity: 0; }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { 
+  background: var(--color-outline); 
+  border-radius: 10px; 
+}
+::-webkit-scrollbar-thumb:hover { background: var(--color-on-surface-dim); }
+
+/* Animation Utils */
+.fade-in { animation: fadeIn 0.4s ease-out; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+

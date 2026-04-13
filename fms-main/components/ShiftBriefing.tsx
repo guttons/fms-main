@@ -1,20 +1,56 @@
 import React, { useState, useEffect } from 'react';
+import { 
+  Users, 
+  Truck, 
+  Plane, 
+  Clock, 
+  ClipboardList, 
+  MessageSquare, 
+  Save, 
+  Shield, 
+  UserCheck, 
+  Activity,
+  AlertTriangle,
+  ChevronRight,
+  User as UserIcon
+} from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
-import { Save } from 'lucide-react';
+import { MOCK_USERS, MOCK_JOBS, MOCK_DOMESTIC_FLIGHTS, EQUIPMENT } from '../constants';
+import { User, UserRole, EquipmentType, EquipmentStatus } from '../types';
 
 export const ShiftBriefing: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
+  const [briefingDate] = useState(new Date().toLocaleDateString('en-GB', { 
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' 
+  }));
+  const [currentTime] = useState(new Date().toLocaleTimeString('en-GB', { 
+    hour: '2-digit', minute: '2-digit' 
+  }));
+
+  // Initial Data
   const [additionalInfo, setAdditionalInfo] = useState([
-    { text: 'Ready before 15 mins/PPE/360 Walkaround check/Following speed limits/Marshaling when required', type: 'black' },
-    { text: 'Officers should NOT stay inside the Bowser while refuelling is in progress', type: 'gray' },
-    { text: 'The officer and operator have the responsibility to check and complete the daily refueller check', type: 'gray' },
-    { text: 'All hose related issues must be reported with specific hose identification number clearly stated', type: 'gray', italic: true },
-    { text: 'Rf 16 & 17 check if gear changed to NEUTRAL after parking', type: 'gray' },
-    { text: 'Only water bottle is allowed on apron/ No food or drink is allowed', type: 'gray' },
-    { text: 'DOUBLE CHECK IF TIMINGS ARE ENTERED CORRECTLY BEFORE SAVING LOG ENTRY', type: 'black', italic: true },
-    { text: 'WITH SALES , CHECK IF THE TIMINGS ARE SAVED CORRECTLY TO LOG ENTRY', type: 'black', italic: true },
-    { text: 'DO NOT USE SAME ARRIVED / STARTED TIME FOR SECOND REFUELLING INVOICE', type: 'black', italic: true },
+    { text: 'Ready before 15 mins/PPE/360 Walkaround check/Following speed limits/Marshaling when required', type: 'critical' },
+    { text: 'Officers should NOT stay inside the Bowser while refuelling is in progress', type: 'standard' },
+    { text: 'The officer and operator have the responsibility to check and complete the daily refueller check', type: 'standard' },
+    { text: 'All hose related issues must be reported with specific hose identification number clearly stated', type: 'standard' },
+    { text: 'Rf 16 & 17 check if gear changed to NEUTRAL after parking', type: 'standard' },
   ]);
+
+  const [staffAssignments, setStaffAssignments] = useState({
+    officers: ['u1'], // Default IDs
+    operators: ['u3', 'u3b'],
+    supervisor: 'u2',
+    inCharge: 'u2b'
+  });
+
+  const [ongoingTasks, setOngoingTasks] = useState({
+    int: 'Preparing for morning wave of arrivals',
+    dom: '3 teams active for Dash-8 operations',
+    adhoc: 'No adhoc requests currently',
+    vvip: 'VVIP flight expected at 14:00'
+  });
+
+  const [remarks, setRemarks] = useState('Safety first. Ensure all grounding cables are checked before each operation.');
 
   const todayDate = new Date().toISOString().split('T')[0];
 
@@ -32,16 +68,11 @@ export const ShiftBriefing: React.FC = () => {
     loadBriefing();
   }, [todayDate]);
 
-  const handleInfoChange = (index: number, newText: string) => {
-    const newInfo = [...additionalInfo];
-    newInfo[index].text = newText;
-    setAdditionalInfo(newInfo);
-  };
-
   const handleSave = async () => {
     setIsSaving(true);
     try {
       await supabaseService.upsertShiftBriefingInfo(todayDate, additionalInfo);
+      // In a real app, we would also save staffAssignments and tasks
       alert('Shift briefing saved successfully!');
     } catch (error) {
       console.error("Failed to save shift briefing:", error);
@@ -51,397 +82,255 @@ export const ShiftBriefing: React.FC = () => {
     }
   };
 
-  // Mock Data to match the image
-  const intFlights = [
-    { flight: 'MU 9656', eta: '23:55', etd: '00:55', stand: '2R' },
-    { flight: 'AI 3202', eta: 'DEP', etd: '06:45', stand: '8L' },
-    { flight: 'Q2 706', eta: 'DEP', etd: '08:00', stand: '7R' },
-  ];
+  const rfHdEquipment = EQUIPMENT.filter(eq => 
+    eq.type === EquipmentType.REFUELLER || eq.type === EquipmentType.HYDRANT_DISPENSER
+  );
 
-  const domMaldivian = [
-    { flight: 'Q2 128', time: '23:55', stand: 'T' },
-    { flight: 'Q2 2112', time: '00:25', stand: 'Z', off: true },
-    { flight: 'Q2 2268', time: '00:30', stand: 'X' },
-    { flight: 'Q2 2248', time: '01:45', stand: 'W' },
-    { flight: 'Q2 220', time: '04:45', stand: 'V' },
-    { flight: 'Q2 260', time: '06:30', stand: 'Y' },
-    { flight: 'Q2 132', time: '08:00', stand: 'T' },
-    { flight: 'Q2 2472', time: '08:20', stand: 'V' },
-    { flight: 'Q2 442', time: '08:25', stand: 'Z' },
-  ];
+  const renderStaffSelect = (value: string, role: UserRole, label: string, onSelect: (id: string) => void) => {
+    const roleUsers = MOCK_USERS.filter(u => u.role === role);
+    return (
+      <div className="flex flex-col space-y-1">
+        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">{label}</label>
+        <select 
+          value={value}
+          onChange={(e) => onSelect(e.target.value)}
+          className="bg-white/5 border border-white/10 rounded-lg p-2 text-xs font-bold text-white outline-none focus:border-primary-bright transition-colors cursor-pointer"
+        >
+          <option value="" className="bg-slate-900">-- Unassigned --</option>
+          {roleUsers.map(u => (
+            <option key={u.id} value={u.id} className="bg-slate-900">{u.name}</option>
+          ))}
+        </select>
+      </div>
+    );
+  };
 
-  const officers = [
-    { id: 'A-8724', name: 'ALEEF', checked: true, domDate: '10-Mar', domCount: 2, stockDate: '26-Feb', stockCount: 1 },
-    { id: 'A-8288', name: 'SHAIKHAN', checked: true, off: true },
-    { id: '', name: '', checked: false },
-    { id: '', name: '', checked: false },
-    { id: '', name: '', checked: false },
-    { id: '', name: '', checked: false },
-  ];
-
-  const operators = [
-    { id: '472', name: 'ZAREER', checked: true, domDate: '10-Mar', domCount: 4, dailyDate: '8-Mar', dailyCount: 4 },
-    { id: 'A-8633', name: 'IS.WAHEED', checked: true, domDate: '04-Mar', domCount: 3, dailyDate: '5-Mar', dailyCount: 1 },
-    { id: '', name: '', checked: false },
-    { id: '', name: '', checked: false },
-    { id: 'A-5582', name: 'MUSHFIQ', checked: true, hd: true, dailyDate: '5-Mar', dailyCount: 1 },
-    { id: 'A-8581', name: 'MUNEEF', checked: true, hd: true, dailyDate: '5-Mar', dailyCount: 1 },
-  ];
-
-  const equipment = [
-    { id: 'RF-02', status: 'IN SERVICE' },
-    { id: 'RF-04', status: 'IN SERVICE' },
-    { id: 'RF-06', status: 'IN SERVICE' },
-    { id: 'RF-07', status: 'IN SERVICE' },
-    { id: 'RF-10', status: 'IN SERVICE' },
-    { id: 'RF-11', status: 'IN SERVICE' },
-    { id: 'RF-12', status: 'IN SERVICE' },
-    { id: 'HD-01', status: 'IN SERVICE' },
-    { id: 'HD-02', status: 'IN SERVICE' },
-    { id: 'HD-03', status: 'IN SERVICE' },
-    { id: 'HD-04', status: 'IN SERVICE' },
-    { id: 'RF-14', status: 'OUT OF SERVICE' },
-    { id: 'RF-15', status: 'OUT OF SERVICE' },
-    { id: 'RF-16', status: 'OUT OF SERVICE' },
-    { id: 'RF-17', status: 'OUT OF SERVICE' },
-  ];
+  const getUserName = (id: string) => MOCK_USERS.find(u => u.id === id)?.name || 'Unassigned';
 
   return (
-    <div className="min-h-screen bg-white p-4 lg:p-8">
-      <div className="max-w-[1200px] mx-auto bg-white text-black font-sans text-[11px] leading-tight">
+    <div className="p-6 lg:p-10 space-y-8 animate-in fade-in duration-500 min-h-full bg-[#00142D]">
+      
+      {/* Tactical Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-white/10 pb-8">
+        <div className="space-y-2">
+          <div className="flex items-center space-x-3">
+            <div className="bg-primary-bright text-white p-2 rounded-lg shadow-lg shadow-primary-bright/20">
+              <Shield className="w-6 h-6" />
+            </div>
+            <h1 className="headline-lg text-white mb-0">SHIFT INFRASTRUCTURE <span className="text-primary-bright font-medium">BRIEFING</span></h1>
+          </div>
+          <div className="flex items-center space-x-4">
+            <div className="px-3 py-1 bg-white/5 rounded-full border border-white/10 flex items-center space-x-2">
+              <Clock className="w-3 h-3 text-primary-bright" />
+              <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">{briefingDate} | {currentTime}</span>
+            </div>
+            <div className="flex items-center space-x-2 px-3 py-1 bg-green-500/10 rounded-full border border-green-500/20">
+              <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-[10px] font-black text-green-500 uppercase tracking-widest">LIVE OPS MODE</span>
+            </div>
+          </div>
+        </div>
         
-        {/* Header */}
-        <div className="border-b-2 border-black pb-1 mb-2">
-          <div className="bg-black text-white px-2 py-1 inline-block font-bold mb-1 text-xs">
-            Wednesday 11 March 26, 07:32 | Shift: MORNING
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight uppercase">INTO-PLANE SHIFT INFO / BRIEFING</h1>
-        </div>
+        <button 
+          onClick={handleSave}
+          disabled={isSaving}
+          className="flex items-center px-6 py-3 bg-primary-bright text-white font-black text-xs rounded-xl hover:bg-white hover:text-slate-900 transition-all active:scale-95 shadow-xl shadow-primary-bright/20 uppercase tracking-widest disabled:opacity-50 group"
+        >
+          <Save className="w-4 h-4 mr-2 group-hover:rotate-12 transition-transform" />
+          {isSaving ? 'ARCHIVING...' : 'AUTHORIZE & SAVE'}
+        </button>
+      </div>
 
-        {/* Top Grid */}
-        <div className="grid grid-cols-12 gap-x-4 mb-4">
+      <div className="grid grid-cols-12 gap-8">
+        
+        {/* LEFT COLUMN: Operations Overview */}
+        <div className="col-span-12 lg:col-span-8 space-y-8">
           
-          {/* Column 1: Flights (col-span-4) */}
-          <div className="col-span-4 flex gap-x-2">
-            
-            {/* International */}
-            <div className="flex-[1.2]">
-              <div className="flex justify-between font-bold border-b-2 border-black mb-1 px-1">
-                <span className="underline">INTERNATIONAL</span>
-                <span>3</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* International Flights Card */}
+            <div className="glass-surface rounded-3xl p-6 border-white/10 space-y-6">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-3">
+                  <Plane className="w-5 h-5 text-primary-bright" />
+                  <h3 className="text-xs font-black text-white/80 uppercase tracking-widest">International Ops</h3>
+                </div>
+                <span className="bg-primary-bright/20 text-primary-bright px-3 py-1 rounded-full text-[10px] font-black">{MOCK_JOBS.length} FLIGHTS</span>
               </div>
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-black text-white">
-                    <th className="p-1 border border-black font-bold">FLIGHT</th>
-                    <th className="p-1 border border-black font-bold text-center">ETA</th>
-                    <th className="p-1 border border-black font-bold text-center">ETD</th>
-                    <th className="p-1 border border-black font-bold text-center w-6"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {intFlights.map((f, i) => (
-                    <tr key={i}>
-                      <td className="p-1 border border-black font-bold">{f.flight}</td>
-                      <td className="p-1 border border-black text-center">{f.eta}</td>
-                      <td className="p-1 border border-black text-center">{f.etd}</td>
-                      <td className="p-1 border border-black text-center font-bold">{f.stand}</td>
-                    </tr>
-                  ))}
-                  {/* Empty rows for layout */}
-                  {Array.from({ length: 9 }).map((_, i) => (
-                    <tr key={`empty-int-${i}`} className={i % 2 === 0 ? 'bg-gray-100' : ''}>
-                      <td className="p-2 border-none"></td>
-                      <td className="p-2 border-none"></td>
-                      <td className="p-2 border-none"></td>
-                      <td className="p-2 border-none"></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            
-            {/* Domestic */}
-            <div className="flex-1">
-              <div className="flex justify-between font-bold border-b-2 border-black mb-1 px-1">
-                <span className="underline">DOMESTIC</span>
-                <span>9</span>
+              <div className="space-y-3">
+                {MOCK_JOBS.map((job) => (
+                  <div key={job.id} className="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/5 group hover:border-white/20 transition-all cursor-default">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-10 h-10 rounded-xl bg-primary-bright/10 flex items-center justify-center font-black text-primary-bright text-xs">
+                        {job.stand}
+                      </div>
+                      <div>
+                        <div className="text-sm font-black text-white">{job.flightNumber}</div>
+                        <div className="text-[10px] text-white/40 font-bold uppercase">{job.aircraftType}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${
+                        job.status === 'COMPLETED' ? 'bg-green-500/10 text-green-500' : 
+                        job.status === 'IN_PROGRESS' ? 'bg-amber-500/10 text-amber-500' : 'bg-white/10 text-white/60'
+                      }`}>
+                        {job.status.replace('_', ' ')}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              
-              {/* Maldivian */}
-              <div className="bg-[#C8102E] text-white text-center font-bold py-0.5 mb-1">MALDIVIAN</div>
-              <table className="w-full text-left border-collapse mb-2 relative">
-                <tbody>
-                  {domMaldivian.map((f, i) => (
-                    <tr key={i} className="relative">
-                      {f.off && <td className="absolute -left-6 top-1 text-[9px] font-bold">OFF</td>}
-                      <td className="p-1 border-none">{f.flight}</td>
-                      <td className="p-1 border-none text-center">{f.time}</td>
-                      <td className="p-1 border-none text-center font-bold">{f.stand}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              
-              {/* Villa Air */}
-              <div className="bg-[#B5D334] text-white text-center font-bold py-0.5 mb-1">VILLA AIR</div>
-              <table className="w-full text-left border-collapse mb-2">
-                <tbody>
-                  <tr className="bg-gray-100"><td className="p-2 border-none"></td></tr>
-                  <tr><td className="p-2 border-none"></td></tr>
-                </tbody>
-              </table>
+            </div>
 
-              {/* Manta Air */}
-              <div className="bg-[#2B3990] text-white text-center font-bold py-0.5 mb-1">MANTA AIR</div>
-              <table className="w-full text-left border-collapse mb-2">
-                <tbody>
-                  <tr className="bg-gray-100"><td className="p-2 border-none"></td></tr>
-                  <tr><td className="p-2 border-none"></td></tr>
-                  <tr className="bg-gray-100"><td className="p-2 border-none"></td></tr>
-                </tbody>
-              </table>
+            {/* Domestic Flights Card */}
+            <div className="glass-surface rounded-3xl p-6 border-white/10 space-y-6">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-3">
+                  <Activity className="w-5 h-5 text-primary-bright" />
+                  <h3 className="text-xs font-black text-white/80 uppercase tracking-widest">Domestic Ops</h3>
+                </div>
+                <span className="bg-primary-bright/20 text-primary-bright px-3 py-1 rounded-full text-[10px] font-black">{MOCK_DOMESTIC_FLIGHTS.length} FLIGHTS</span>
+              </div>
+              <div className="space-y-3">
+                {MOCK_DOMESTIC_FLIGHTS.slice(0, 4).map((flight) => (
+                  <div key={flight.id} className="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/5 group hover:border-white/20 transition-all cursor-default">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center font-black text-white/60 text-xs">
+                        {flight.stand}
+                      </div>
+                      <div>
+                        <div className="text-sm font-black text-white">{flight.flightNumber}</div>
+                        <div className="text-[10px] text-white/40 font-bold uppercase">ETA: {flight.eta}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${
+                        flight.status === 'COMPLETED' ? 'bg-green-500/10 text-green-500' : 
+                        flight.status === 'IN_PROGRESS' ? 'bg-amber-500/10 text-amber-500' : 'bg-white/10 text-white/60'
+                      }`}>
+                        {flight.status.replace('_', ' ')}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Column 2: Staffing (col-span-5) */}
-          <div className="col-span-5">
-            <div className="text-center font-bold mb-0.5 text-sm">1</div>
-            <table className="w-full text-left border-collapse mb-4">
-              <thead>
-                <tr>
-                  <th colSpan={2} className="p-1 border border-black bg-black text-white font-bold">OFFICERS</th>
-                  <th className="p-1 border border-black bg-black text-white font-bold text-center w-6">1</th>
-                  <th colSpan={2} className="p-1 border border-black bg-[#C5E0B4] text-black font-bold text-center w-16">DOM</th>
-                  <th colSpan={2} className="p-1 border border-black bg-[#E7E6E6] text-black font-bold text-center w-16">STOCK</th>
-                </tr>
-              </thead>
-              <tbody>
-                {officers.map((o, i) => (
-                  <tr key={i} className="relative">
-                    {o.off && <td className="absolute -left-6 top-1 text-[9px] font-bold">OFF</td>}
-                    <td className="p-1 border border-black w-16">{o.id}</td>
-                    <td className="p-1 border border-black">{o.name}</td>
-                    <td className="p-1 border border-black text-center bg-white">
-                      {o.name && (
-                        <div className="w-3 h-3 border border-black mx-auto flex items-center justify-center bg-black text-white">
-                          {o.checked && '✓'}
-                        </div>
-                      )}
-                    </td>
-                    <td className="p-1 border border-black text-center text-[10px] w-10 bg-[#E2EFDA]">{o.domDate}</td>
-                    <td className="p-1 border border-black text-center bg-[#E2EFDA]">{o.domCount}</td>
-                    <td className="p-1 border border-black text-center text-[10px] w-10 bg-[#F2F2F2]">{o.stockDate}</td>
-                    <td className="p-1 border border-black text-center bg-[#F2F2F2]">{o.stockCount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <div className="text-center font-bold mb-0.5 text-sm">4</div>
-            <table className="w-full text-left border-collapse mb-4">
-              <thead>
-                <tr>
-                  <th colSpan={2} className="p-1 border border-black bg-black text-white font-bold">RF. OPERATORS</th>
-                  <th className="p-1 border border-black bg-black text-white font-bold text-center w-6">4</th>
-                  <th colSpan={2} className="p-1 border border-black bg-[#C5E0B4] text-black font-bold text-center w-16">DOM</th>
-                  <th colSpan={2} className="p-1 border border-black bg-[#BDD7EE] text-black font-bold text-center w-16">DAILY</th>
-                </tr>
-              </thead>
-              <tbody>
-                {operators.map((o, i) => (
-                  <tr key={i} className="relative">
-                    {o.hd && <td className="absolute -left-5 top-1 text-[9px] font-bold">HD</td>}
-                    <td className="p-1 border border-black w-16">{o.id}</td>
-                    <td className="p-1 border border-black">{o.name}</td>
-                    <td className="p-1 border border-black text-center bg-white">
-                      {o.name && (
-                        <div className="w-3 h-3 border border-black mx-auto flex items-center justify-center bg-black text-white">
-                          {o.checked && '✓'}
-                        </div>
-                      )}
-                    </td>
-                    <td className="p-1 border border-black text-center text-[10px] w-10 bg-[#E2EFDA]">{o.domDate}</td>
-                    <td className="p-1 border border-black text-center bg-[#E2EFDA]">{o.domCount}</td>
-                    <td className="p-1 border border-black text-center text-[10px] w-10 bg-[#DDEBF7]">{o.dailyDate}</td>
-                    <td className="p-1 border border-black text-center bg-[#DDEBF7]">{o.dailyCount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <div className="flex items-center gap-2 mb-4 mt-6">
-              <div className="bg-black text-white px-2 py-0.5 font-bold text-xs">DOM 1</div>
-              <div className="font-bold underline text-sm">ALEEF / IS.WAHEED</div>
+          {/* Tactical Briefing Points */}
+          <div className="card-premium glass-surface border-white/10 p-8 rounded-[32px] space-y-6">
+            <div className="flex items-center space-x-3 mb-2">
+              <ClipboardList className="w-5 h-5 text-primary-bright" />
+              <h3 className="text-xs font-black text-white/80 uppercase tracking-widest">Strategic Briefing Points</h3>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="bg-[#A6A6A6] text-white px-2 py-0.5 font-bold text-xs">STOCK</div>
-              <div className="font-bold underline text-sm">No matching data</div>
-            </div>
-          </div>
-
-          {/* Column 3: Equipment (col-span-3) */}
-          <div className="col-span-3">
-            <table className="w-full text-left border-collapse mb-4">
-              <thead>
-                <tr>
-                  <th className="p-1 border border-black bg-black text-white font-bold">EQUIPMENT STATUS</th>
-                  <th className="p-1 border border-black bg-black text-white font-bold text-center w-6">9</th>
-                </tr>
-              </thead>
-              <tbody>
-                {equipment.map((e, i) => (
-                  <tr key={i}>
-                    <td className="p-1 border border-black font-bold w-16">{e.id}</td>
-                    <td className="p-1 border border-black">{e.status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <table className="w-full text-left border-collapse mb-4 mt-6">
-              <thead>
-                <tr>
-                  <th colSpan={3} className="p-1 border border-black bg-black text-white font-bold">SHIFT SUPERVISORS</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="p-1 border border-black w-16">A-1159</td>
-                  <td className="p-1 border border-black">SHAREEF IB.</td>
-                  <td className="p-1 border border-black text-center w-6">
-                    <div className="w-3 h-3 border border-black mx-auto flex items-center justify-center bg-black text-white">✓</div>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="p-3 border border-black"></td>
-                  <td className="p-3 border border-black"></td>
-                  <td className="p-3 border border-black"></td>
-                </tr>
-              </tbody>
-            </table>
-
-            <table className="w-full text-left border-collapse mb-4">
-              <thead>
-                <tr>
-                  <th colSpan={3} className="p-1 border border-black bg-black text-white font-bold">SHIFT INCHARGE</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="p-1 border border-black w-16">A-3162</td>
-                  <td className="p-1 border border-black">SAM AAN</td>
-                  <td className="p-1 border border-black text-center w-6">
-                    <div className="w-3 h-3 border border-black mx-auto flex items-center justify-center bg-black text-white">✓</div>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="p-3 border border-black"></td>
-                  <td className="p-3 border border-black"></td>
-                  <td className="p-3 border border-black"></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Middle Section */}
-        <div className="grid grid-cols-12 gap-4 mb-4">
-          <div className="col-span-9">
-            <div className="flex justify-between items-center mb-1">
-                <div className="bg-black text-white inline-block px-2 py-1 font-bold underline">ADDITIONAL INFO</div>
-                <button 
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="flex items-center px-3 py-1 bg-aviation-600 text-white font-bold rounded hover:bg-aviation-700 disabled:opacity-50"
-                >
-                    <Save className="w-4 h-4 mr-1" />
-                    {isSaving ? 'Saving...' : 'Save Info'}
-                </button>
-            </div>
-            <div className="border border-black flex flex-col">
+            <div className="space-y-4">
               {additionalInfo.map((info, i) => (
-                <div 
-                  key={i} 
-                  className={`p-1.5 border-b border-black last:border-b-0 font-bold ${
-                    info.type === 'black' ? 'bg-black text-white' : 'bg-[#F2F2F2] text-black'
-                  } ${info.italic ? 'italic' : ''}`}
-                >
+                <div key={i} className={`flex items-start space-x-4 p-4 rounded-2xl border transition-all ${
+                  info.type === 'critical' ? 'bg-error/10 border-error/30 text-white' : 'bg-white/5 border-white/5 text-white/80'
+                }`}>
+                  <div className={`mt-1 h-2 w-2 rounded-full flex-shrink-0 animate-pulse ${
+                    info.type === 'critical' ? 'bg-error shadow-[0_0_10px_rgba(186,26,26,0.8)]' : 'bg-primary-bright shadow-[0_0_10px_rgba(14,165,233,0.8)]'
+                  }`}></div>
                   <input 
-                      type="text" 
-                      value={info.text} 
-                      onChange={(e) => handleInfoChange(i, e.target.value)}
-                      className={`w-full bg-transparent border-none focus:ring-0 p-0 m-0 ${
-                          info.type === 'black' ? 'text-white placeholder-gray-400' : 'text-black placeholder-gray-500'
-                      }`}
-                      placeholder="Enter information here..."
+                    type="text"
+                    value={info.text}
+                    onChange={(e) => {
+                      const newInfo = [...additionalInfo];
+                      newInfo[i].text = e.target.value;
+                      setAdditionalInfo(newInfo);
+                    }}
+                    className="bg-transparent border-none focus:ring-0 p-0 m-0 w-full text-sm font-bold placeholder:text-white/20"
                   />
+                  {info.type === 'critical' && <AlertTriangle className="w-4 h-4 text-error flex-shrink-0" />}
                 </div>
               ))}
             </div>
           </div>
+        </div>
+
+        {/* RIGHT COLUMN: Personnel & Equipment */}
+        <div className="col-span-12 lg:col-span-4 space-y-8">
           
-          <div className="col-span-3 flex flex-col gap-4">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr>
-                  <th colSpan={2} className="p-1 border border-black bg-black text-white font-bold">ONGOING TASKS</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td className="p-1.5 border border-black font-bold w-16">INT</td><td className="p-1.5 border border-black"></td></tr>
-                <tr><td className="p-1.5 border border-black font-bold">DOM</td><td className="p-1.5 border border-black"></td></tr>
-                <tr><td className="p-1.5 border border-black font-bold">ADHOC</td><td className="p-1.5 border border-black"></td></tr>
-                <tr><td className="p-1.5 border border-black font-bold">VVIP</td><td className="p-1.5 border border-black"></td></tr>
-              </tbody>
-            </table>
+          {/* Staff Matrix */}
+          <div className="glass-surface border-white/10 p-8 rounded-[32px] space-y-8 shadow-2xl">
+            <div className="flex items-center space-x-3">
+              <UserCheck className="w-5 h-5 text-primary-bright" />
+              <h3 className="text-xs font-black text-white/80 uppercase tracking-widest">Tactical Staffing</h3>
+            </div>
+            
+            <div className="space-y-6">
+              {/* Shift Command */}
+              <div className="grid grid-cols-2 gap-4">
+                {renderStaffSelect(staffAssignments.supervisor, UserRole.ITP_MANAGER, "Duty Supervisor", (id) => setStaffAssignments(prev => ({ ...prev, supervisor: id })))}
+                {renderStaffSelect(staffAssignments.inCharge, UserRole.DEPOT_MANAGER, "Shift In-Charge", (id) => setStaffAssignments(prev => ({ ...prev, inCharge: id })))}
+              </div>
 
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr>
-                  <th className="p-1 border border-black bg-black text-white font-bold">REMARKS</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td className="p-3 border border-black"></td></tr>
-                <tr><td className="p-3 border border-black"></td></tr>
-                <tr><td className="p-3 border border-black"></td></tr>
-              </tbody>
-            </table>
+              {/* Functional Units */}
+              <div className="space-y-4 pt-4 border-t border-white/5">
+                <div className="flex flex-col space-y-3">
+                  <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Command Officers</label>
+                  <div className="grid grid-cols-1 gap-2">
+                    {staffAssignments.officers.map((id, idx) => (
+                      <div key={idx} className="flex items-center bg-white/5 border border-white/5 rounded-xl p-3">
+                        <UserIcon className="w-4 h-4 text-primary-bright mr-3" />
+                        <span className="text-xs font-bold text-white">{getUserName(id)}</span>
+                        <ChevronRight className="w-3 h-3 ml-auto text-white/20" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col space-y-3">
+                  <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Active Operators</label>
+                  <div className="grid grid-cols-1 gap-2">
+                    {staffAssignments.operators.map((id, idx) => (
+                      <div key={idx} className="flex items-center bg-white/5 border border-white/5 rounded-xl p-3">
+                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-3"></div>
+                        <span className="text-xs font-bold text-white">{getUserName(id)}</span>
+                        <ChevronRight className="w-3 h-3 ml-auto text-white/20" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+
+          {/* Equipment Readiness (RF & HD ONLY) */}
+          <div className="glass-surface border-white/10 p-8 rounded-[32px] space-y-6">
+            <div className="flex items-center space-x-3">
+              <Truck className="w-5 h-5 text-primary-bright" />
+              <h3 className="text-xs font-black text-white/80 uppercase tracking-widest">Fleet Readiness (RF/HD)</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+              {rfHdEquipment.map((eq) => (
+                <div key={eq.id} className="bg-white/5 border border-white/5 rounded-xl p-3 flex flex-col space-y-2 group hover:bg-white/10 transition-all cursor-default">
+                  <div className="flex justify-between items-start">
+                    <span className="text-xs font-black text-white">{eq.id}</span>
+                    <div className={`w-1.5 h-1.5 rounded-full ${
+                      eq.status === EquipmentStatus.AVAILABLE ? 'bg-green-500' : 'bg-red-500'
+                    }`}></div>
+                  </div>
+                  <div className="text-[9px] font-bold text-white/30 uppercase">{eq.status}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Ongoing Tasks & Remarks */}
+          <div className="glass-surface border-white/10 p-8 rounded-[32px] space-y-6">
+            <div className="flex items-center space-x-3">
+              <MessageSquare className="w-5 h-5 text-primary-bright" />
+              <h3 className="text-xs font-black text-white/80 uppercase tracking-widest">Mission Remarks</h3>
+            </div>
+            <textarea 
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm font-bold text-white/80 focus:border-primary-bright outline-none min-h-[120px] resize-none"
+              placeholder="Enter shift remarks here..."
+            />
+          </div>
+
         </div>
-
-        {/* Bottom Section */}
-        <div className="grid grid-cols-12 gap-4">
-          <div className="col-span-3">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr>
-                  <th colSpan={2} className="p-1 border border-black bg-black text-white font-bold">OUTGOING SHIFT</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td className="p-1 border border-black w-16">A-6102</td><td className="p-1 border border-black">SHINAAN</td></tr>
-                <tr><td className="p-3 border border-black"></td><td className="p-3 border border-black"></td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div className="col-span-6"></div>
-          <div className="col-span-3">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr>
-                  <th colSpan={2} className="p-1 border border-black bg-black text-white font-bold">INCOMING SHIFT</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td className="p-1 border border-black w-16">A-3162</td><td className="p-1 border border-black">SAM AAN</td></tr>
-                <tr><td className="p-3 border border-black"></td><td className="p-3 border border-black"></td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
       </div>
     </div>
   );
