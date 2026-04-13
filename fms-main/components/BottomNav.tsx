@@ -81,8 +81,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({ user, activeView, setActiv
   if (navItems.length === 0) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 lg:hidden z-50 px-2 pb-safe">
-      <div className="flex items-center justify-around h-16">
+    <div className="fixed bottom-0 left-0 right-0 bg-surface/80 backdrop-blur-xl border-t border-outline lg:hidden z-50 px-2 pb-safe shadow-premium transition-all duration-500">
+      <div className="flex items-center justify-around h-18 py-2">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeView === item.id;
@@ -90,28 +90,32 @@ export const BottomNav: React.FC<BottomNavProps> = ({ user, activeView, setActiv
             <button
               key={item.id}
               onClick={() => setActiveView(item.id)}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 py-1 px-2 transition-colors ${
-                isActive ? 'text-aviation-600' : 'text-slate-500 hover:text-slate-700'
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 py-2 px-1 transition-all relative active:scale-90 ${
+                isActive ? 'text-primary' : 'text-on-surface-dim'
               }`}
             >
-              <Icon className={`w-6 h-6 mb-1 ${isActive ? 'animate-in zoom-in-75 duration-300' : ''}`} />
-              <span className="text-[10px] font-bold truncate w-full text-center uppercase tracking-tighter">
+              <div className={`relative p-2 rounded-2xl transition-all duration-500 ${isActive ? 'bg-primary/10 shadow-glow mb-1' : 'opacity-60 mb-1'}`}>
+                <Icon className={`w-5 h-5 ${isActive ? 'animate-in zoom-in-95 duration-500' : ''}`} />
+              </div>
+              <span className={`text-[8px] font-black truncate w-full text-center uppercase tracking-widest ${isActive ? 'opacity-100' : 'opacity-30 italic'}`}>
                 {item.label}
               </span>
               {isActive && (
-                <div className="absolute bottom-1 w-1 h-1 bg-aviation-600 rounded-full" />
+                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-8 h-1 bg-primary rounded-full shadow-glow" />
               )}
             </button>
           );
         })}
         
-        {/* More Menu Button to trigger sidebar for Logout/Profile */}
+        {/* More Menu Button */}
         <button
           onClick={onMenuClick}
-          className="flex flex-col items-center justify-center flex-1 min-w-0 py-1 px-2 text-slate-500 hover:text-slate-700"
+          className="flex flex-col items-center justify-center flex-1 min-w-0 py-2 px-1 text-on-surface-dim group"
         >
-          <Menu className="w-6 h-6 mb-1" />
-          <span className="text-[10px] font-bold uppercase tracking-tighter">More</span>
+          <div className="p-2 rounded-2xl opacity-60 group-hover:bg-primary/5 transition-all mb-1">
+            <Menu className="w-5 h-5" />
+          </div>
+          <span className="text-[8px] font-black uppercase tracking-widest opacity-30 italic">Menu</span>
         </button>
       </div>
     </div>

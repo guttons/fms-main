@@ -8,22 +8,24 @@ export const MOCK_USERS: User[] = [
   { id: 'u3', name: 'Apron Operator A', role: UserRole.ITP_OPERATOR, avatar: 'https://picsum.photos/100/100?random=3' },
   { id: 'u3b', name: 'Apron Operator B', role: UserRole.ITP_OPERATOR, avatar: 'https://picsum.photos/100/100?random=31' },
   { id: 'u4', name: 'Depot Operator', role: UserRole.DEPOT_OPERATOR, avatar: 'https://picsum.photos/100/100?random=4' },
+  { id: 'u7', name: 'Hydrant Specialist A', role: UserRole.ITP_HD_OPERATOR, avatar: 'https://picsum.photos/100/100?random=7' },
+  { id: 'u8', name: 'Hydrant Specialist B', role: UserRole.ITP_HD_OPERATOR, avatar: 'https://picsum.photos/100/100?random=8' },
   { id: 'u5', name: 'Executive Director', role: UserRole.EXECUTIVE, avatar: 'https://picsum.photos/100/100?random=5' },
   { id: 'u6', name: 'Commercial Analyst', role: UserRole.COMMERCIAL, avatar: 'https://picsum.photos/100/100?random=6' },
 ];
 
 export const MOCK_JOBS: FlightJob[] = [
-  { id: 'j1', flightNumber: 'SQ432', aircraftReg: '9V-SKT', aircraftType: 'A350-900', stand: 'F55', assignedTo: 'u3', status: 'PENDING' },
-  { id: 'j2', flightNumber: 'UL102', aircraftReg: '4R-ALM', aircraftType: 'A330-300', stand: 'C12', assignedTo: 'u3b', status: 'PENDING' },
-  { id: 'j3', flightNumber: 'EK659', aircraftReg: 'A6-EEO', aircraftType: 'A380-800', stand: 'D14', assignedTo: 'u3', status: 'IN_PROGRESS' },
-  { id: 'j4', flightNumber: 'QR882', aircraftReg: 'A7-BCX', aircraftType: 'B787-9', stand: 'E04', assignedTo: 'u3b', status: 'COMPLETED' },
+  { id: 'j1', flightNumber: 'SQ432', aircraftReg: '9V-SKT', aircraftType: 'A350-900', stand: 'F55', sta: '07:45', eta: '08:00', std: '09:30', assignedTo: 'u3', status: 'PENDING' },
+  { id: 'j2', flightNumber: 'UL102', aircraftReg: '4R-ALM', aircraftType: 'A330-300', stand: 'C12', sta: '08:15', eta: '08:15', std: '09:45', assignedTo: 'u3b', status: 'PENDING' },
+  { id: 'j3', flightNumber: 'EK659', aircraftReg: 'A6-EEO', aircraftType: 'A380-800', stand: 'D14', sta: '09:30', eta: '09:45', std: '11:15', assignedTo: 'u3', status: 'IN_PROGRESS', vehicleId: 'HD-01' },
+  { id: 'j4', flightNumber: 'QR882', aircraftReg: 'A7-BCX', aircraftType: 'B787-9', stand: 'E04', sta: '10:00', eta: '10:15', std: '12:00', assignedTo: 'u3b', status: 'COMPLETED', vehicleId: 'RF-04' },
 ];
 
 export const MOCK_DOMESTIC_FLIGHTS = [
-  { id: 'df1', flightNumber: 'Q2 104', aircraftReg: '8Q-IAE', aircraftType: 'Dash 8', stand: 'D01', assignedTeam: 'Team 1', status: 'PENDING', eta: '08:00' },
-  { id: 'df2', flightNumber: 'Q2 112', aircraftReg: '8Q-IAF', aircraftType: 'Dash 8', stand: 'D02', assignedTeam: 'Team 2', status: 'IN_PROGRESS', eta: '09:15' },
-  { id: 'df3', flightNumber: 'Q2 118', aircraftReg: '8Q-IAG', aircraftType: 'ATR 72', stand: 'D03', assignedTeam: 'Team 3', status: 'PENDING', eta: '10:30' },
-  { id: 'df4', flightNumber: 'VP 601', aircraftReg: '8Q-VAA', aircraftType: 'ATR 72', stand: 'D04', assignedTeam: 'Team 1', status: 'PENDING', eta: '11:45' },
+  { id: 'df1', flightNumber: 'Q2 104', aircraftReg: '8Q-IAE', aircraftType: 'Dash 8', stand: 'D01', assignedTeam: 'Team 1', status: 'PENDING', sta: '07:30', eta: '08:00', std: '08:45' },
+  { id: 'df2', flightNumber: 'Q2 112', aircraftReg: '8Q-IAF', aircraftType: 'Dash 8', stand: 'D02', assignedTeam: 'Team 2', status: 'IN_PROGRESS', sta: '08:45', eta: '09:15', std: '09:50', vehicleId: 'RF-02' },
+  { id: 'df3', flightNumber: 'Q2 118', aircraftReg: '8Q-IAG', aircraftType: 'ATR 72', stand: 'D03', assignedTeam: 'Team 3', status: 'PENDING', sta: '10:00', eta: '10:30', std: '11:15' },
+  { id: 'df4', flightNumber: 'VP 601', aircraftReg: '8Q-VAA', aircraftType: 'ATR 72', stand: 'D04', assignedTeam: 'Team 1', status: 'PENDING', sta: '11:15', eta: '11:45', std: '12:30' },
 ];
 
 export const TANKS: Tank[] = [

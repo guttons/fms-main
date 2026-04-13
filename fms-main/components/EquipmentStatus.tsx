@@ -93,121 +93,74 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ tanks, user })
   }, {} as Record<string, { inService: Equipment[], outOfService: Equipment[] }>);
 
   return (
-    <div className="p-6 space-y-8">
-      {/* Tank Levels Overview */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-slate-900 flex items-center tracking-tight">
-            <Database className="w-5 h-5 mr-2 text-aviation-600" />
-            Terminal Tank Status
-          </h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {tanks.map(tank => {
-            const percentage = (tank.currentLevel / tank.capacity) * 100;
-            const isLow = tank.currentLevel < tank.safeMinLevel;
-            
-            return (
-              <div key={tank.id} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 relative overflow-hidden group hover:shadow-md transition-all">
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h3 className="font-bold text-slate-900 text-sm tracking-tight">{tank.name}</h3>
-                    <p className="text-[10px] font-black text-aviation-600/60 uppercase tracking-widest">{tank.type}</p>
-                  </div>
-                  <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${
-                    tank.type === 'Jet A-1' ? 'bg-blue-50 text-blue-700 border-blue-100' : 
-                    tank.type === 'Diesel' ? 'bg-orange-50 text-orange-700 border-orange-100' : 'bg-green-50 text-green-700 border-green-100'
-                  }`}>
-                    {tank.type === 'Jet A-1' ? 'JET' : tank.type}
-                  </div>
-                </div>
-                <div className="flex items-end justify-between mb-2">
-                  <span className="text-2xl font-black text-slate-900 tabular-nums">{tank.currentLevel.toLocaleString()}</span>
-                  <span className="text-xs font-bold text-slate-400 mb-1 ml-1 opacity-60">/ {tank.capacity.toLocaleString()} L</span>
-                </div>
-                <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden mb-2 relative">
-                  <div 
-                    className={`h-full transition-all duration-1000 ease-out relative ${isLow ? 'bg-error' : 'bg-primary'}`}
-                    style={{ width: `${percentage}%` }}
-                  >
-                    <div className="absolute top-0 right-0 w-8 h-full bg-white/20 skew-x-[-20deg]"></div>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Utilisation: {Math.round(percentage)}%</span>
-                  {isLow && (
-                    <span className="text-[10px] text-error font-black flex items-center animate-pulse">
-                      <AlertCircle className="w-3 h-3 mr-1" /> CRITICAL LOW
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+    <div className="p-4 md:p-6 lg:p-8 space-y-8">
 
       {/* Equipment Management */}
       <section>
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div className="flex flex-col xl:flex-row xl:items-end justify-between mb-8 gap-6 border-b border-outline pb-6">
           <div>
-            <h2 className="text-2xl font-black text-slate-900 flex items-center tracking-tight">
-              <Truck className="w-6 h-6 mr-3 text-aviation-600" />
-              Equipment Ops Command
+            <h2 className="headline-lg tracking-tighter mb-2 uppercase flex items-center">
+              EQUIPMENT <span className="text-primary italic font-medium ml-3">COMMAND</span>
             </h2>
-            <p className="text-sm text-slate-500 font-medium ml-9">Real-time status monitoring and fleet management</p>
+            <div className="flex items-center space-x-3">
+               <span className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-[0.3em] font-mono">Live Sync: ACTIVE</span>
+               <div className="h-1 w-1 rounded-full bg-on-surface-dim opacity-20"></div>
+               <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">{filteredEquipment.length} Tactical units online</span>
+            </div>
           </div>
           
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-aviation-600 transition-colors" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim opacity-40 group-focus-within:text-primary transition-colors" />
               <input 
                 type="text" 
-                placeholder="Search unit ID..."
-                className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-aviation-500/10 focus:border-aviation-500 outline-none w-full sm:w-64 transition-all"
+                placeholder="ID SEARCH..."
+                className="pl-12 pr-6 py-3 bg-surface-dim border border-outline rounded-xl text-[11px] font-black uppercase tracking-widest placeholder:opacity-20 focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none w-full sm:w-56 transition-all"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim opacity-40 pointer-events-none" />
               <select 
-                className="pl-10 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-aviation-500/10 focus:border-aviation-500 outline-none appearance-none w-full sm:w-56 transition-all cursor-pointer"
+                className="pl-12 pr-10 py-3 bg-surface-dim border border-outline rounded-xl text-[10px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none appearance-none w-full sm:w-52 transition-all cursor-pointer"
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value as any)}
               >
-                <option value="All">All Categories</option>
+                <option value="All">ALL ASSETS</option>
                 {Object.values(EquipmentType).map(type => (
-                  <option key={type} value={type}>{type}</option>
+                  <option key={type} value={type}>{type}s</option>
                 ))}
               </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim opacity-40 pointer-events-none" />
             </div>
           </div>
         </div>
 
-        <div className="space-y-10">
+        <div className="space-y-6">
           {Object.entries(equipmentByType).map(([type, statusGroups]) => (
-            <div key={type} className="bg-slate-50/50 rounded-3xl p-6 border border-slate-100">
+            <div key={type} className="bg-surface-lowest rounded-3xl p-6 md:p-8 border border-outline shadow-sm relative overflow-hidden group/section">
+              <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-primary/5 rounded-full blur-[80px] -mr-32 -mt-32 pointer-events-none group-hover/section:bg-primary/10 transition-all duration-700"></div>
+              
               <div 
-                className="flex items-center justify-between mb-6 cursor-pointer group/header"
+                className="flex items-center justify-between mb-8 cursor-pointer group/header relative z-10"
                 onClick={() => toggleCategory(type)}
               >
                 <div className="flex items-center">
-                  <div className="p-2 bg-white rounded-xl shadow-sm border border-slate-100 mr-4 group-hover/header:border-aviation-300 transition-colors">
-                    {expandedCategories[type] ? <ChevronDown className="w-5 h-5 text-slate-600" /> : <ChevronRight className="w-5 h-5 text-slate-600" />}
+                  <div className="p-3 bg-surface-dim rounded-xl border border-outline mr-4 group-hover/header:border-primary transition-all shadow-sm active:scale-95">
+                    {expandedCategories[type] ? <ChevronDown className="w-5 h-5 text-on-surface" /> : <ChevronRight className="w-5 h-5 text-on-surface" />}
                   </div>
                   <div>
-                    <h3 className="text-xl font-black text-slate-900 tracking-tight">{type}s</h3>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center">
-                        <span className="w-2 h-2 bg-green-500 rounded-full mr-1.5 border border-white"></span>
-                        {statusGroups.inService.length} Operational
+                    <h3 className="text-xl md:text-2xl font-[900] text-on-surface tracking-tighter uppercase italic">{type} FLEET</h3>
+                    <div className="flex items-center gap-4 mt-1.5">
+                      <span className="text-[9px] font-black text-success uppercase tracking-widest flex items-center">
+                        <div className="w-1.5 h-1.5 bg-success rounded-full mr-1.5 shadow-[0_0_8px_rgba(34,197,94,0.4)]"></div>
+                        {statusGroups.inService.length} ACTIVE
                       </span>
                       {statusGroups.outOfService.length > 0 && (
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center">
-                          <span className="w-2 h-2 bg-error rounded-full mr-1.5 border border-white"></span>
-                          {statusGroups.outOfService.length} Inactive
+                        <span className="text-[9px] font-black text-error uppercase tracking-widest flex items-center opacity-60">
+                          <div className="w-1.5 h-1.5 bg-error rounded-full mr-1.5"></div>
+                          {statusGroups.outOfService.length} GROUNDED
                         </span>
                       )}
                     </div>
@@ -216,38 +169,38 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ tanks, user })
               </div>
 
               {expandedCategories[type] && (
-                <div className="space-y-8">
+                <div className="space-y-8 relative z-10">
                   {/* In Service Section */}
                   {statusGroups.inService.length > 0 && (
                     <div>
-                      <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center">
-                        <span className="w-8 h-[1px] bg-slate-200 mr-3"></span>
-                        Operational units
+                      <h4 className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.3em] mb-4 flex items-center opacity-40">
+                        <span className="w-6 h-0.5 bg-primary/30 mr-3"></span>
+                        TASK READY ASSETS
                       </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
                         {statusGroups.inService.map(eq => (
-                          <div key={eq.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col group hover:shadow-xl hover:border-aviation-200 transition-all duration-300">
-                            <div className="p-5 flex-1">
-                              <div className="flex justify-between items-start mb-4">
+                          <div key={eq.id} className="card-premium flex flex-col group transition-all duration-500 hover:scale-[1.02] hover:border-primary/20">
+                            <div className="p-5 md:p-6 flex-1">
+                              <div className="flex justify-between items-start mb-6">
                                 <div>
-                                  <h3 className="text-lg font-black text-slate-900 group-hover:text-aviation-600 transition-colors">{eq.name}</h3>
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{eq.type}</p>
+                                  <h3 className="text-xl font-[900] text-on-surface group-hover:text-primary transition-colors tracking-tighter italic">{eq.name}</h3>
+                                  <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">{eq.type}</p>
                                 </div>
-                                <div className={`flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-black border uppercase tracking-wider ${getStatusColor(eq.status)}`}>
+                                <div className={`flex items-center space-x-2 px-2.5 py-1 rounded-full text-[9px] font-black border uppercase tracking-widest ${getStatusColor(eq.status)}`}>
                                   {getStatusIcon(eq.status)}
-                                  <span>{eq.status}</span>
+                                  <span className="ml-1">{eq.status}</span>
                                 </div>
                               </div>
 
                               {eq.maxCapacity > 0 && (
-                                <div className="mb-6">
+                                <div className="mb-6 bg-surface-lowest border border-outline p-4 rounded-2xl shadow-inner">
                                   <div className="flex justify-between items-end mb-2">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight">Current Load</span>
-                                    <span className="text-xs font-black text-slate-900">{eq.currentVolume.toLocaleString()} / {eq.maxCapacity.toLocaleString()} L</span>
+                                    <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Payload Sync</span>
+                                    <span className="text-xs font-black text-on-surface tracking-tighter">{eq.currentVolume.toLocaleString()} / {eq.maxCapacity.toLocaleString()} L</span>
                                   </div>
-                                  <div className="w-full bg-slate-50 h-2.5 rounded-full overflow-hidden border border-slate-100">
+                                  <div className="w-full bg-surface-dim h-1.5 rounded-full overflow-hidden shadow-inner">
                                     <div 
-                                      className="bg-aviation-600 h-full transition-all duration-700 ease-out"
+                                      className="bg-primary h-full transition-all duration-1000 ease-out shadow-premium"
                                       style={{ width: `${(eq.currentVolume / eq.maxCapacity) * 100}%` }}
                                     />
                                   </div>
@@ -255,17 +208,17 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ tanks, user })
                               )}
 
                               {canEdit && (
-                                <div className="mt-4 pt-4 border-t border-slate-50">
-                                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 tracking-widest">Master Status Override</label>
-                                  <div className="flex flex-wrap gap-1.5">
+                                <div className="mt-6 pt-5 border-t border-outline">
+                                  <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-[0.2em] opacity-30">Status FUEL SERVICES Override</label>
+                                  <div className="flex flex-wrap gap-2">
                                     {Object.values(EqStatus).map(status => (
                                       <button
                                         key={status}
                                         onClick={() => handleStatusChange(eq.id, status)}
-                                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all border uppercase tracking-tight ${
+                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all border uppercase tracking-tight ${
                                           eq.status === status 
-                                            ? 'bg-aviation-600 text-white border-aviation-600 shadow-md shadow-aviation-200' 
-                                            : 'bg-white text-slate-500 border-slate-200 hover:border-aviation-300 hover:text-aviation-600'
+                                            ? 'bg-primary text-white border-primary shadow-sm scale-[1.02]' 
+                                            : 'bg-surface-dim text-on-surface-dim border-outline hover:text-primary hover:border-primary/30'
                                         }`}
                                       >
                                         {status}
@@ -276,15 +229,17 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ tanks, user })
                               )}
                             </div>
 
-                            <div className="bg-slate-50/80 backdrop-blur-sm p-4 border-t border-slate-100 flex justify-between items-center group-hover:bg-aviation-50/30 transition-colors">
-                              <span className="text-[10px] font-bold text-slate-400">SYNCED: {new Date(eq.lastUpdated).toLocaleTimeString()}</span>
+                            <div className="bg-surface-dim/40 p-4 border-t border-outline flex justify-between items-center group-hover:bg-primary/5 transition-colors">
+                              <span className="text-[9px] font-black text-on-surface-dim opacity-30 uppercase tracking-widest">
+                                {new Date(eq.lastUpdated).toLocaleTimeString()}
+                              </span>
                               {eq.type === EquipmentType.REFUELLER && canEdit && (
                                 <button 
                                   onClick={() => sendRefuelRequest(eq.id)}
-                                  className="flex items-center text-[10px] font-black text-aviation-600 hover:text-white hover:bg-aviation-600 bg-white px-3 py-2 rounded-xl border border-aviation-200 shadow-sm transition-all active:scale-95 uppercase tracking-widest"
+                                  className="flex items-center text-[9px] font-black text-primary hover:bg-primary hover:text-white bg-surface-lowest px-3 py-2 rounded-xl border border-outline shadow-sm transition-all active:scale-95 uppercase tracking-widest"
                                 >
-                                  <Send className="w-3 h-3 mr-2" />
-                                  Initiate Refill
+                                  <Send className="w-3 h-3 mr-1.5" />
+                                  REPLENISH
                                 </button>
                               )}
                             </div>
@@ -296,41 +251,41 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ tanks, user })
 
                   {/* Out of Service Section */}
                   {statusGroups.outOfService.length > 0 && (
-                    <div>
-                      <h4 className="text-[11px] font-black text-error/60 uppercase tracking-[0.2em] mb-4 flex items-center">
-                        <span className="w-8 h-[1px] bg-error/10 mr-3"></span>
-                        Units in maintenance / grounded
+                    <div className="pt-6">
+                      <h4 className="text-[9px] font-black text-error uppercase tracking-[0.3em] mb-4 flex items-center opacity-60">
+                        <span className="w-6 h-0.5 bg-error/20 mr-3"></span>
+                        GROUNDED / MAINT
                       </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
                         {statusGroups.outOfService.map(eq => (
-                          <div key={eq.id} className="bg-slate-50/50 rounded-2xl border border-slate-200 overflow-hidden flex flex-col opacity-80 grayscale-[0.5] hover:opacity-100 hover:grayscale-0 transition-all duration-300">
-                            <div className="p-5 flex-1 relative">
-                              <div className="absolute top-0 right-0 p-4">
-                                <AlertCircle className="w-5 h-5 text-error opacity-20" />
+                          <div key={eq.id} className="bg-surface-dim/30 rounded-[24px] border border-error/10 overflow-hidden flex flex-col opacity-75 grayscale-[0.6] hover:opacity-100 hover:grayscale-0 transition-all duration-500">
+                            <div className="p-5 md:p-6 flex-1 relative">
+                              <div className="absolute top-0 right-0 p-5 w-full flex justify-end">
+                                <AlertCircle className="w-6 h-6 text-error opacity-10" />
                               </div>
-                              <div className="flex justify-between items-start mb-4">
+                              <div className="flex justify-between items-start mb-6">
                                 <div>
-                                  <h3 className="text-lg font-black text-slate-700">{eq.name}</h3>
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{eq.type}</p>
+                                  <h3 className="text-xl font-[900] text-on-surface-dim tracking-tighter italic uppercase">{eq.name}</h3>
+                                  <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">{eq.type}</p>
                                 </div>
-                                <div className={`flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-black border uppercase tracking-wider ${getStatusColor(eq.status)}`}>
+                                <div className={`flex items-center space-x-2 px-2.5 py-1 rounded-full text-[9px] font-black border uppercase tracking-widest ${getStatusColor(eq.status)}`}>
                                   {getStatusIcon(eq.status)}
-                                  <span>{eq.status}</span>
+                                  <span className="ml-1">{eq.status}</span>
                                 </div>
                               </div>
 
                               {canEdit && (
-                                <div className="mt-4 pt-4 border-t border-slate-200/50">
-                                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 tracking-widest">Status Recovery</label>
-                                  <div className="flex flex-wrap gap-1.5">
+                                <div className="mt-6 pt-5 border-t border-error/5">
+                                  <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-[0.2em] opacity-30">Fleet Recovery</label>
+                                  <div className="flex flex-wrap gap-2">
                                     {Object.values(EqStatus).map(status => (
                                       <button
                                         key={status}
                                         onClick={() => handleStatusChange(eq.id, status)}
-                                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all border uppercase tracking-tight ${
+                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all border uppercase tracking-tight ${
                                           eq.status === status 
-                                            ? 'bg-aviation-600 text-white border-aviation-600 shadow-md' 
-                                            : 'bg-white text-slate-500 border-slate-200 hover:border-aviation-300'
+                                            ? 'bg-error text-white border-error shadow-sm' 
+                                            : 'bg-surface-lowest text-on-surface-dim border-outline hover:border-error/30 hover:text-error'
                                         }`}
                                       >
                                         {status}
@@ -340,9 +295,9 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ tanks, user })
                                 </div>
                               )}
                             </div>
-                            <div className="bg-slate-100/50 p-4 border-t border-slate-200 flex justify-between items-center text-slate-400">
-                              <span className="text-[10px] font-bold italic">Unit restricted from active ops</span>
-                              <Wrench className="w-3 h-3" />
+                            <div className="bg-error/[0.03] p-4 border-t border-error/5 flex justify-between items-center text-error opacity-60">
+                              <span className="text-[9px] font-black uppercase tracking-widest italic">Operations Restriction Active</span>
+                              <Wrench className="w-3.5 h-3.5" />
                             </div>
                           </div>
                         ))}
@@ -355,6 +310,60 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ tanks, user })
           ))}
         </div>
       </section>
+
+      {/* Tank Levels Overview */}
+      <section>
+        <div className="flex items-center justify-between mb-4 mt-8">
+          <h2 className="text-lg font-bold text-on-surface flex items-center tracking-tight">
+            <Database className="w-4 h-4 mr-2 text-primary" />
+            Terminal Tank Status
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {tanks.map(tank => {
+            const percentage = (tank.currentLevel / tank.capacity) * 100;
+            const isLow = tank.currentLevel < tank.safeMinLevel;
+            
+            return (
+              <div key={tank.id} className="card-premium p-5 group relative overflow-hidden transition-all hover:scale-[1.02]">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="text-sm font-black text-on-surface uppercase tracking-tighter">{tank.name}</h3>
+                    <p className="text-[9px] font-black text-primary opacity-60 uppercase tracking-widest">{tank.type}</p>
+                  </div>
+                  <div className={`text-[9px] font-black px-2.5 py-1 rounded-lg uppercase border shadow-sm ${
+                    tank.type === 'Jet A-1' ? 'bg-primary/10 text-primary border-primary/20' : 
+                    tank.type === 'Diesel' ? 'bg-warning/10 text-warning border-warning/20' : 'bg-success/10 text-success border-success/20'
+                  }`}>
+                    {tank.type === 'Jet A-1' ? 'JET' : tank.type}
+                  </div>
+                </div>
+                <div className="flex items-end justify-between mb-3">
+                  <span className="text-2xl font-[900] text-on-surface tracking-tighter tabular-nums">{tank.currentLevel.toLocaleString()}</span>
+                  <span className="text-[9px] font-black text-on-surface-dim mb-1 opacity-40 uppercase tracking-[0.2em]">/ {tank.capacity.toLocaleString()} L</span>
+                </div>
+                <div className="w-full bg-surface-dim h-2 rounded-full overflow-hidden border border-outline mb-3 relative shadow-inner">
+                  <div 
+                    className={`h-full transition-all duration-1000 ease-out relative ${isLow ? 'bg-error shadow-[0_0_12px_rgba(239,68,68,0.5)]' : 'bg-primary shadow-sm'}`}
+                    style={{ width: `${percentage}%` }}
+                  >
+                    <div className="absolute top-0 right-0 w-6 h-full bg-white/10 skew-x-[-20deg]"></div>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-50">Load: {Math.round(percentage)}%</span>
+                  {isLow && (
+                    <span className="text-[9px] text-error font-black flex items-center animate-pulse">
+                      <AlertCircle className="w-3 h-3 mr-1" /> CRITICAL
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
     </div>
+
   );
 };

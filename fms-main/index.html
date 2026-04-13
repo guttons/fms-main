@@ -10,31 +10,32 @@
         theme: {
           extend: {
             colors: {
-              surface: '#f7f9fb',
-              'surface-low': '#f2f4f6',
-              'surface-lowest': '#ffffff',
-              'surface-highest': '#e0e3e5',
-              primary: {
-                DEFAULT: '#002046',
-                container: '#1b365d',
-              },
-              error: {
-                DEFAULT: '#ba1a1a',
-                container: '#ffdad6',
-              },
-              tertiary: {
-                DEFAULT: '#361900',
-                container: '#ffdcbe',
-              },
+              surface: 'var(--color-surface)',
+              'surface-container': 'var(--color-surface-container)',
+              'surface-dim': 'var(--color-surface-dim)',
               on: {
-                surface: '#191c1e',
-              }
+                surface: 'var(--color-on-surface)',
+                'surface-dim': 'var(--color-on-surface-dim)',
+                primary: {
+                  container: 'var(--color-on-primary-container)',
+                }
+              },
+              primary: {
+                DEFAULT: 'var(--color-primary)',
+                container: 'var(--color-primary-container)',
+              },
+              error: 'var(--color-error)',
+              success: 'var(--color-success)',
+              warning: 'var(--color-warning)',
+              outline: 'var(--color-outline)',
+              'outline-variant': 'var(--color-outline-variant)',
             },
             fontFamily: {
               sans: ['Inter', 'system-ui', 'sans-serif'],
             },
             boxShadow: {
-              ambient: '0 12px 40px rgba(25, 28, 30, 0.06)',
+              ambient: 'var(--shadow-md)',
+              premium: 'var(--shadow-lg)',
             }
           }
         }
@@ -47,14 +48,14 @@
         height: 8px;
       }
       ::-webkit-scrollbar-track {
-        background: #f1f1f1; 
+        background: transparent; 
       }
       ::-webkit-scrollbar-thumb {
-        background: #cbd5e1; 
+        background: var(--color-outline); 
         border-radius: 4px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #94a3b8; 
+        background: var(--color-on-surface-dim); 
       }
     </style>
   <script type="importmap">
@@ -70,7 +71,7 @@
 </script>
 <link rel="stylesheet" href="/index.css">
 </head>
-  <body class="bg-gray-50 text-slate-900 font-sans antialiased overflow-hidden">
+  <body class="font-sans antialiased overflow-hidden">
     <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>

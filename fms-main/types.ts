@@ -4,6 +4,7 @@ export enum UserRole {
   ITP_MANAGER = 'ITP_MANAGER',
   DEPOT_MANAGER = 'DEPOT_MANAGER',
   ITP_OPERATOR = 'ITP_OPERATOR',
+  ITP_HD_OPERATOR = 'ITP_HD_OPERATOR',
   DEPOT_OPERATOR = 'DEPOT_OPERATOR',
   EXECUTIVE = 'EXECUTIVE',
   COMMERCIAL = 'COMMERCIAL'
@@ -63,8 +64,13 @@ export interface FlightJob {
   aircraftReg: string;
   aircraftType: string;
   stand: string;
+  sta?: string;
+  eta?: string;
+  std?: string;
   assignedTo: string; // User ID
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
+  vehicleId?: string;
+  remarks?: string;
 }
 
 export interface FlightLog {
@@ -96,6 +102,7 @@ export interface FlightLog {
   walkAroundCheck: boolean;   // Walk Around Done?
   appearanceCheck: boolean;   // Clear & Bright?
   waterCheck: boolean;        // Water/Sediments Free?
+  remarks?: string;
 }
 
 export interface BridgingLog {

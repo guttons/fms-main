@@ -195,7 +195,8 @@ export const supabaseService = {
         panel_check: log.panelCheck,
         walk_around_check: log.walkAroundCheck,
         appearance_check: log.appearanceCheck,
-        water_check: log.waterCheck
+        water_check: log.waterCheck,
+        remarks: log.remarks || ''
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, path);
@@ -354,16 +355,20 @@ export const supabaseService = {
       const q = query(collection(db, path), where('date', '==', date));
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
-        return querySnapshot.docs[0].data().info || [];
+        const data = querySnapshot.docs[0].data();
+        return {
+          info: data.info || [],
+          dieselNeeds: data.diesel_needs || []
+        };
       }
-      return [];
+      return { info: [], dieselNeeds: [] };
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, path);
       throw error;
     }
   },
 
-  async upsertShiftBriefingInfo(date: string, info: any[]) {
+  async upsertShiftBriefingInfo(date: string, info: any[], dieselNeeds: string[]) {
     if (!auth.currentUser) return; // Mock success
     const docId = date;
     const path = `shift_briefing_info/${docId}`;
@@ -371,7 +376,8 @@ export const supabaseService = {
       const briefingRef = doc(db, 'shift_briefing_info', docId);
       await setDoc(briefingRef, {
         date: date,
-        info: info
+        info: info,
+        diesel_needs: dieselNeeds
       }, { merge: true });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);

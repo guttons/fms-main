@@ -31,93 +31,100 @@ export const LogHistory: React.FC = () => {
   );
 
   return (
-    <div className="p-4 lg:p-8 max-w-7xl mx-auto">
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+    <div className="p-6 lg:p-10 space-y-10">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-outline pb-10">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 flex items-center">
-            <FileText className="w-6 h-6 mr-3 text-aviation-600" />
-            Operation Logs
-          </h2>
-          <p className="text-slate-500">Historical records of fueling operations</p>
+          <h1 className="headline-lg tracking-tighter mb-2 uppercase flex items-center">
+            OPERATION <span className="text-primary italic font-medium ml-3">ARCHIVE</span>
+          </h1>
+          <div className="flex items-center space-x-3">
+             <span className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-[0.3em] font-mono">Registry: TASK CONTROL</span>
+             <div className="h-1 w-1 rounded-full bg-on-surface-dim opacity-20"></div>
+             <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Historical Engagement Audit</span>
+          </div>
         </div>
-        <div className="flex space-x-3 w-full md:w-auto">
-             <div className="relative flex-1 md:w-64">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+        <div className="flex space-x-4 w-full md:w-auto">
+             <div className="relative flex-1 md:w-72">
+                <Search className="absolute left-6 top-1/2 transform -translate-y-1/2 h-4 w-4 text-primary opacity-40" />
                 <input 
                     type="text" 
-                    placeholder="Search Flight No..." 
+                    placeholder="SEARCH TASK REGISTRY..." 
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-aviation-500 bg-white text-slate-900"
+                    className="w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all"
                 />
              </div>
-             <button className="p-2 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 text-slate-600">
+             <button className="p-4 bg-surface-dim border border-outline rounded-2xl hover:bg-primary/5 transition-all text-on-surface-dim">
                 <Filter className="w-5 h-5" />
              </button>
-             <button className="flex items-center px-4 py-2 bg-aviation-600 text-white rounded-lg font-medium hover:bg-aviation-700 shadow-sm text-sm">
-                <Download className="w-4 h-4 mr-2" />
-                Export CSV
+             <button className="flex items-center px-8 py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all">
+                <Download className="w-4 h-4 mr-3" />
+                EXPORT CSV
              </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="card-premium overflow-hidden">
         {loading ? (
-          <div className="p-20 flex flex-col items-center justify-center">
-            <Loader2 className="w-8 h-8 text-aviation-600 animate-spin mb-2" />
-            <p className="text-slate-500">Loading logs from Firebase...</p>
+          <div className="p-32 flex flex-col items-center justify-center">
+            <Loader2 className="w-10 h-10 text-primary animate-spin mb-6" />
+            <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.3em] opacity-40 animate-pulse">Syncing Archive Database...</p>
           </div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Date/Time</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Flight</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Operator</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Volume (L)</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">View</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200 text-slate-800">
-              {filteredLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-slate-500">No logs found</td>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-surface-dim/50 border-b border-outline">
+                  <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Timestamp</th>
+                  <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Flight ID</th>
+                  <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Tactical Operator</th>
+                  <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
+                  <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Deployment Status</th>
+                  <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
                 </tr>
-              ) : (
-                filteredLogs.map((log) => {
-                    const operatorName = MOCK_USERS.find(u => u.id === log.operatorId)?.name || 'Unknown';
-                    return (
-                      <tr key={log.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                            {log.timestampStart ? new Date(log.timestampStart).toLocaleString() : 'Pending'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="font-bold text-slate-900">{log.flightNumber}</div>
-                            <div className="text-xs text-slate-500">{log.aircraftReg} ({log.aircraftType})</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                            {operatorName}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap font-mono font-medium text-slate-700">
-                            {log.volume.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 py-1 text-xs font-bold rounded-full ${
-                                log.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                                {log.status}
-                            </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button className="text-aviation-600 hover:text-aviation-900 font-bold">Details</button>
-                        </td>
-                      </tr>
-                    );
-                })
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-outline">
+                {filteredLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-10 py-20 text-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 italic">Zero matches in historical database</td>
+                  </tr>
+                ) : (
+                  filteredLogs.map((log) => {
+                      const operatorName = MOCK_USERS.find(u => u.id === log.operatorId)?.name || 'Unknown';
+                      return (
+                        <tr key={log.id} className="hover:bg-primary/[0.02] transition-colors group">
+                          <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
+                              {log.timestampStart ? new Date(log.timestampStart).toLocaleString() : 'PENDING SYNC'}
+                          </td>
+                          <td className="px-10 py-6">
+                              <div className="text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">{log.flightNumber}</div>
+                              <div className="text-[9px] font-black text-on-surface-dim opacity-30 uppercase tracking-widest mt-1">{log.aircraftReg} ({log.aircraftType})</div>
+                          </td>
+                          <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest">
+                              {operatorName}
+                          </td>
+                          <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
+                              {log.volume.toLocaleString()}
+                          </td>
+                          <td className="px-10 py-6">
+                              <span className={`text-[9px] font-black px-4 py-1.5 rounded-full border uppercase tracking-[0.2em] shadow-sm ${
+                                  log.status === 'COMPLETED' 
+                                  ? 'bg-success/10 text-success border-success/20' 
+                                  : 'bg-warning/10 text-warning border-warning/20'
+                              }`}>
+                                  {log.status}
+                              </span>
+                          </td>
+                          <td className="px-10 py-6 text-right">
+                              <button className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-[0.3em] transition-all">DETAILS</button>
+                          </td>
+                        </tr>
+                      );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

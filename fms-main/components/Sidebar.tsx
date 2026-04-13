@@ -41,8 +41,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, activeView, setActiveVie
       case UserRole.ITP_MANAGER:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
+          { id: 'intoplane', label: 'Into-Plane Ops', icon: Plane },
+          { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'briefing', label: 'Shift Briefing', icon: ClipboardList },
           { id: 'history', label: 'Ops History', icon: FileText },
         ];
@@ -77,9 +78,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, activeView, setActiveVie
       default:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
           { id: 'admin', label: 'System Admin', icon: Settings },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
-          { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
           { id: 'briefing', label: 'Shift Briefing', icon: ClipboardList },
           { id: 'intoplane', label: 'Into-Plane Ops', icon: Plane },
           { id: 'stock', label: 'Stock Management', icon: Database },
@@ -93,20 +94,31 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, activeView, setActiveVie
 
   return (
     <aside className={`
-      fixed inset-y-0 left-0 z-[60] w-[var(--sidebar-width)] bg-surface-lowest border-r border-outline transform transition-transform duration-300 ease-in-out
-      ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-0 shadow-sm
+      fixed inset-y-0 left-0 z-[60] w-[var(--sidebar-width)] bg-surface-container border-r border-outline transform transition-transform duration-300 ease-in-out
+      ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-0 shadow-sm transition-colors duration-500
     `}>
       <div className="h-full flex flex-col">
         {/* Brand */}
-        <div className="h-[calc(var(--header-height)+var(--alert-bar-height))] flex items-start pt-12 px-8">
+        <div className="h-[calc(var(--header-height)+var(--alert-bar-height))] flex items-start pt-6 px-8">
           <div>
-            <h1 className="headline-lg text-primary tracking-tight leading-none bg-primary text-white p-2 px-3 rounded-lg inline-block">AeroFuel</h1>
-            <p className="text-[10px] font-black text-primary opacity-60 uppercase tracking-[0.4em] mt-3 ml-1">Terminal A-North</p>
+            <div className="flex items-center space-x-3 mb-6">
+              <img 
+                src="https://lh3.googleusercontent.com/d/1YCRXjbsAQ5LskxJcQlSUQV5QyaSX9gD2=s220?authuser=0" 
+                alt="MACL Logo" 
+                className="logo-light h-16 w-auto object-contain"
+              />
+              <img 
+                src="https://lh3.googleusercontent.com/d/1Uk6kyiqhPYw2_9qnXk8612yfdw5ioz5y=s220?authuser=0" 
+                alt="MACL Logo" 
+                className="logo-dark h-16 w-auto object-contain"
+              />
+            </div>
+            <h1 className="text-sm font-black text-primary uppercase tracking-tight">FUEL SERVICES</h1>
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto custom-scrollbar">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeView === item.id;
@@ -114,17 +126,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, activeView, setActiveVie
               <button
                 key={item.id}
                 onClick={() => setActiveView(item.id)}
-                className={`w-full flex items-center px-4 py-3 rounded-xl transition-all group
+                className={`w-full flex items-center px-4 py-3.5 rounded-xl transition-all group
                   ${isActive 
-                    ? 'bg-primary/5 text-primary' 
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                    ? 'bg-primary/10 text-primary' 
+                    : 'text-on-surface-dim hover:bg-surface-dim hover:text-on-surface'
                   }`}
               >
-                <Icon className={`w-5 h-5 mr-4 transition-colors ${isActive ? 'text-primary' : 'text-slate-400 group-hover:text-slate-600'}`} />
-                <span className={`text-[13px] font-semibold tracking-tight ${isActive ? 'font-bold' : ''}`}>
+                <Icon className={`w-5 h-5 mr-4 transition-colors ${isActive ? 'text-primary' : 'opacity-40 group-hover:opacity-100'}`} />
+                <span className={`text-[13.5px] font-bold tracking-tight ${isActive ? 'font-black' : ''}`}>
                   {item.label}
                 </span>
-                {isActive && <div className="ml-auto w-1.5 h-1.5 bg-primary rounded-full shadow-[0_0_8px_rgba(0,32,70,0.5)]"></div>}
+                {isActive && (
+                  <div className="ml-auto w-1.5 h-1.5 bg-primary rounded-full shadow-[0_0_12px_rgba(56,189,248,0.6)]"></div>
+                )}
               </button>
             );
           })}
@@ -132,25 +146,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, activeView, setActiveVie
 
         {/* Footer Controls */}
         <div className="p-6 space-y-6">
-          <button className="btn-emergency flex items-center justify-center space-x-3">
-             <AlertTriangle className="w-5 h-5" />
-             <span>Emergency Shutdown</span>
+          <button className="group relative w-full bg-error text-white py-4 rounded-[1.25rem] flex items-center justify-center space-x-3 transition-all duration-300 shadow-[0_10px_25px_rgba(239,68,68,0.25)] hover:shadow-[0_12px_30px_rgba(239,68,68,0.35)] hover:scale-[1.02] active:scale-[0.98] overflow-hidden border border-white/10">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            <AlertTriangle className="w-4 h-4 animate-pulse" />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] italic">Emergency Shutdown</span>
           </button>
 
           <div className="space-y-4 pt-4 border-t border-outline">
-            <button className="flex items-center text-slate-500 hover:text-primary transition-colors text-[13px] font-semibold px-2">
-              <ClipboardList className="w-4 h-4 mr-3 opacity-60" />
+            <button className="flex items-center text-on-surface-dim hover:text-primary transition-colors text-[13px] font-bold px-2 group">
+              <ClipboardList className="w-4 h-4 mr-3 opacity-40 group-hover:opacity-100" />
               Help Center
             </button>
-            <button className="flex items-center text-slate-500 hover:text-primary transition-colors text-[13px] font-semibold px-2">
-              <Settings className="w-4 h-4 mr-3 opacity-60" />
+            <button className="flex items-center text-on-surface-dim hover:text-primary transition-colors text-[13px] font-bold px-2 group">
+              <Settings className="w-4 h-4 mr-3 opacity-40 group-hover:opacity-100" />
               System Settings
             </button>
             <button 
               onClick={onLogout}
-              className="flex items-center text-error hover:text-red-700 transition-colors text-[13px] font-bold px-2 mt-4"
+              className="flex items-center text-error font-black px-2 mt-4 hover:brightness-110 transition-all text-[13px] group"
             >
-              <LogOut className="w-4 h-4 mr-3 opacity-60" />
+              <LogOut className="w-4 h-4 mr-3 opacity-60 group-hover:translate-x-1 transition-transform" />
               Sign Out
             </button>
           </div>

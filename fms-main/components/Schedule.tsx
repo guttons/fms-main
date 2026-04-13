@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { MOCK_USERS, MOCK_DOMESTIC_FLIGHTS } from '../constants';
-import { UserRole } from '../types';
-import { Calendar, Plus, Plane, Clock, Users, Truck, MapPin } from 'lucide-react';
+import { MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, EQUIPMENT } from '../constants';
+import { UserRole, EquipmentType } from '../types';
+import { Calendar, Plus, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 
 export const Schedule: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'international' | 'domestic' | 'equipment'>('international');
 
   const [scheduledFlights, setScheduledFlights] = useState([
-    { id: 'sf1', flight: 'EK405', ac: 'B777-300', stand: 'D12', eta: '14:30', assignedTo: 'u3' },
-    { id: 'sf2', flight: 'SQ321', ac: 'A350-900', stand: 'F10', eta: '15:15', assignedTo: '' },
-    { id: 'sf3', flight: 'QR101', ac: 'A320', stand: 'C05', eta: '16:00', assignedTo: '' },
+    { id: 'sf1', flight: 'EK405', ac: 'B777-300', stand: 'D12', sta: '14:15', eta: '14:30', std: '15:45', assignedTo: 'u3' },
+    { id: 'sf2', flight: 'SQ321', ac: 'A350-900', stand: 'F10', sta: '15:00', eta: '15:15', std: '16:30', assignedTo: '' },
+    { id: 'sf3', flight: 'QR101', ac: 'A320', stand: 'C05', sta: '15:45', eta: '16:00', std: '17:15', assignedTo: '' },
   ]);
 
   const [domesticTeams, setDomesticTeams] = useState([
@@ -24,12 +24,15 @@ export const Schedule: React.FC = () => {
   const currentShiftLabel = isDieselTime ? 'DIESEL' : 'DAILY';
 
   const [equipmentShift, setEquipmentShift] = useState<'DAILY' | 'DIESEL'>(currentShiftLabel);
-  const [equipmentAssignments, setEquipmentAssignments] = useState([
-    { id: 'eq1', eqNumber: 'EQ-01', op1: '', op2: '' },
-    { id: 'eq2', eqNumber: 'EQ-02', op1: '', op2: '' },
-    { id: 'eq3', eqNumber: 'EQ-03', op1: '', op2: '' },
-    { id: 'eq4', eqNumber: 'EQ-04', op1: '', op2: '' },
-  ]);
+  const [dieselNeeds, setDieselNeeds] = useState<string[]>([]);
+  
+  const rfHdEquipment = EQUIPMENT.filter(eq => 
+    eq.type === EquipmentType.REFUELLER || eq.type === EquipmentType.HYDRANT_DISPENSER
+  );
+
+  const [equipmentAssignments, setEquipmentAssignments] = useState(
+    rfHdEquipment.map(eq => ({ id: eq.id, eqNumber: eq.id, op1: '', op2: '' }))
+  );
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const operators = MOCK_USERS.filter(u => u.role === UserRole.ITP_OPERATOR);
@@ -52,6 +55,13 @@ export const Schedule: React.FC = () => {
 
         // Load Equipment Assignments
         const equipmentData = await supabaseService.getEquipmentAssignments(todayDate, equipmentShift);
+        
+        // Load Diesel Needs from Briefing
+        const briefingData = await supabaseService.getShiftBriefingInfo(todayDate) as any;
+        if (briefingData && briefingData.dieselNeeds) {
+          setDieselNeeds(briefingData.dieselNeeds);
+        }
+
         if (equipmentData && equipmentData.length > 0) {
           setEquipmentAssignments(prev => prev.map(eq => {
             const dbEq = equipmentData.find(d => d.equipment_id === eq.eqNumber);
@@ -62,7 +72,7 @@ export const Schedule: React.FC = () => {
           }));
         } else {
           // Reset if no data for this shift
-          setEquipmentAssignments(prev => prev.map(eq => ({ ...eq, op1: '', op2: '' })));
+          setEquipmentAssignments(rfHdEquipment.map(eq => ({ id: eq.id, eqNumber: eq.id, op1: '', op2: '' })));
         }
       } catch (error) {
         console.error("Failed to load assignments:", error);
@@ -121,7 +131,9 @@ export const Schedule: React.FC = () => {
         flight: formData.get('flight') as string,
         ac: formData.get('ac') as string,
         stand: formData.get('stand') as string,
+        sta: formData.get('sta') as string,
         eta: formData.get('eta') as string,
+        std: formData.get('std') as string,
         assignedTo: ''
     };
     setScheduledFlights(prev => [...prev, newFlight]);
@@ -129,138 +141,170 @@ export const Schedule: React.FC = () => {
   };
 
   const renderOperatorSelect = (value: string, onChange: (val: string) => void) => (
-    <select 
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={`block w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-aviation-500 focus:border-aviation-500 p-2 border ${value ? 'bg-white text-slate-900' : 'bg-red-50 border-red-200 text-slate-900'}`}
-    >
-      <option value="">-- Unassigned --</option>
-      {operators.map(op => (
-        <option key={op.id} value={op.id}>{op.name}</option>
-      ))}
-    </select>
+    <div className="relative group/select">
+      <select 
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`block w-full text-[11px] font-[900] rounded-xl shadow-inner focus:ring-4 focus:ring-primary/10 focus:border-primary px-4 py-3 border uppercase tracking-widest appearance-none transition-all ${
+          value ? 'bg-surface-dim text-on-surface border-outline' : 'bg-surface-dim text-error border-error/30'
+        }`}
+      >
+        <option value="" className="bg-surface-container text-on-surface">-- UNASSIGNED --</option>
+        {operators.map(op => (
+          <option key={op.id} value={op.id} className="bg-surface-container text-on-surface">{op.name.toUpperCase()}</option>
+        ))}
+      </select>
+      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-on-surface-dim opacity-30 pointer-events-none group-hover/select:opacity-100 transition-all" />
+    </div>
   );
 
   return (
-    <div className="p-4 lg:p-8 max-w-7xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
+    <div className="p-6 lg:p-10 space-y-10">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-outline pb-10">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 flex items-center">
-            <Calendar className="w-6 h-6 mr-3 text-aviation-600" />
-            Shift Schedule & Assignments
-          </h2>
-          <p className="text-slate-500">Manage operator assignments for all operations</p>
+          <h1 className="headline-lg tracking-tighter mb-2 uppercase flex items-center">
+            SHIFT <span className="text-primary italic font-medium ml-3">OPERATIONS</span>
+          </h1>
+          <div className="flex items-center space-x-3">
+             <span className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-[0.3em]">FUEL SERVICES HUB</span>
+             <div className="h-1 w-1 rounded-full bg-on-surface-dim opacity-20"></div>
+             <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Fleet Deployment Active</span>
+          </div>
         </div>
-        {activeTab === 'international' && (
-          <button 
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center px-4 py-2 bg-aviation-600 text-white rounded-lg font-bold hover:bg-aviation-700 shadow-sm"
-          >
-              <Plus className="w-5 h-5 mr-2" />
-              Add Flight
-          </button>
-        )}
+        
+        <div className="flex flex-col sm:flex-row gap-4">
+          {activeTab === 'international' && (
+            <button 
+                onClick={() => setIsModalOpen(true)}
+                className="flex items-center px-6 py-3 bg-primary text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all"
+            >
+                <Plus className="w-4 h-4 mr-2" />
+                NEW TASK
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-1 bg-gray-100 p-1 rounded-xl mb-6 shadow-inner w-fit">
+      <div className="flex bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner w-fit">
         <button
           onClick={() => setActiveTab('international')}
-          className={`flex items-center px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-            activeTab === 'international' ? 'bg-white text-aviation-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+          className={`flex items-center px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+            activeTab === 'international' ? 'bg-primary text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
-          <Plane className="w-4 h-4 mr-2" />
-          International Ops
+          <Plane className="w-4 h-4 mr-2.5" />
+          International
         </button>
         <button
           onClick={() => setActiveTab('domestic')}
-          className={`flex items-center px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-            activeTab === 'domestic' ? 'bg-white text-aviation-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+          className={`flex items-center px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+            activeTab === 'domestic' ? 'bg-primary text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
-          <Users className="w-4 h-4 mr-2" />
-          Domestic Ops
+          <Users className="w-4 h-4 mr-2.5" />
+          Domestic
         </button>
         <button
           onClick={() => setActiveTab('equipment')}
-          className={`flex items-center px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-            activeTab === 'equipment' ? 'bg-white text-aviation-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+          className={`flex items-center px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+            activeTab === 'equipment' ? 'bg-primary text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
-          <Truck className="w-4 h-4 mr-2" />
+          <Truck className="w-4 h-4 mr-2.5" />
           {currentShiftLabel}
         </button>
       </div>
 
       {/* Content */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-surface rounded-3xl border border-outline overflow-hidden shadow-sm">
         
         {/* International Ops */}
         {activeTab === 'international' && (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Flight</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Aircraft / Stand</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">ETA</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Assigned Operator</th>
-                <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Action</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200 text-slate-800">
-              {scheduledFlights.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                          <div className="p-2 bg-aviation-50 rounded-lg mr-3">
-                              <Plane className="w-5 h-5 text-aviation-600" />
-                          </div>
-                          <span className="font-bold text-lg">{item.flight}</span>
-                      </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium">{item.ac}</div>
-                      <div className="text-xs text-slate-500">Stand: {item.stand}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center text-sm font-medium text-slate-600">
-                          <Clock className="w-4 h-4 mr-2" />
-                          {item.eta}
-                      </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                      {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, val))}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button className="text-aviation-600 hover:text-aviation-900 font-bold">Edit</button>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-outline">
+              <thead className="bg-surface-dim">
+                <tr>
+                  <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">FLIGHT / TASK</th>
+                  <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">PLATFORM / SECTOR</th>
+                  <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STA</th>
+                  <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">ETA</th>
+                  <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STD</th>
+                  <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">OPERATOR ASSIGNED</th>
+                  <th className="px-8 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STATUS</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="bg-surface divide-y divide-outline text-on-surface">
+                {scheduledFlights.map((item) => (
+                  <tr key={item.id} className="hover:bg-primary/[0.02] transition-colors group">
+                    <td className="px-8 py-6 whitespace-nowrap">
+                        <div className="flex items-center">
+                            <div className="p-3 bg-surface-lowest rounded-2xl border border-outline mr-4 group-hover:border-primary/20 transition-all">
+                                <Plane className="w-5 h-5 text-primary" />
+                            </div>
+                            <span className="text-xl font-[900] tracking-tighter italic">{item.flight}</span>
+                        </div>
+                    </td>
+                    <td className="px-8 py-6 whitespace-nowrap">
+                        <div className="text-sm font-black tracking-tight">{item.ac}</div>
+                        <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Stand {item.stand}</div>
+                    </td>
+                    <td className="px-8 py-6 whitespace-nowrap">
+                        <div className="flex items-center text-sm font-black">
+                            <Clock className="w-4 h-4 mr-2.5 text-primary opacity-40" />
+                            {(item as any).sta || '--:--'}
+                        </div>
+                    </td>
+                    <td className="px-8 py-6 whitespace-nowrap">
+                        <div className="flex items-center text-sm font-black">
+                            <Clock className="w-4 h-4 mr-2.5 text-primary" />
+                            {item.eta}
+                        </div>
+                    </td>
+                    <td className="px-8 py-6 whitespace-nowrap">
+                        <div className="flex items-center text-sm font-black">
+                            <Clock className="w-4 h-4 mr-2.5 text-primary opacity-40" />
+                            {(item as any).std || '--:--'}
+                        </div>
+                    </td>
+                    <td className="px-8 py-6 whitespace-nowrap max-w-[240px]">
+                        {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, val))}
+                    </td>
+                    <td className="px-8 py-6 whitespace-nowrap text-right text-sm font-medium">
+                        <button className="text-[10px] font-black text-on-surface-dim hover:text-primary uppercase tracking-[0.2em] transition-all">
+                            CONFIGURE
+                        </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {/* Domestic Ops */}
         {activeTab === 'domestic' && (
-          <div className="p-6">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Domestic Operations Teams</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="p-8 lg:p-10">
+            <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] mb-8 flex items-center">
+               <span className="w-1.5 h-6 bg-primary rounded-full mr-4"></span>
+               Squadron Assignments
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
               {domesticTeams.map(team => (
-                <div key={team.id} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
-                  <div className="flex items-center mb-4">
-                    <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                      <Users className="w-5 h-5 text-blue-600" />
+                <div key={team.id} className="card-premium p-6 group transition-all hover:scale-[1.02]">
+                  <div className="flex items-center mb-8">
+                    <div className="p-3 bg-surface-dim rounded-2xl border border-outline mr-4 group-hover:border-primary/30 transition-all">
+                      <Users className="w-5 h-5 text-on-surface" />
                     </div>
-                    <h4 className="font-bold text-slate-800">{team.name}</h4>
+                    <h4 className="text-xl font-[900] text-on-surface italic uppercase tracking-tighter">{team.name}</h4>
                   </div>
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Operator 1</label>
+                      <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">RF OPERATOR</label>
                       {renderOperatorSelect(team.op1, (val) => handleAssignDomestic(team.id, 1, val))}
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Operator 2</label>
+                      <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">OFFICER</label>
                       {renderOperatorSelect(team.op2, (val) => handleAssignDomestic(team.id, 2, val))}
                     </div>
                   </div>
@@ -268,103 +312,116 @@ export const Schedule: React.FC = () => {
               ))}
             </div>
 
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Today's Domestic Flights</h3>
-            <div className="border border-gray-200 rounded-xl overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Flight</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Aircraft / Stand</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">ETA</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Assigned Team</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200 text-slate-800">
-                  {MOCK_DOMESTIC_FLIGHTS.map((flight) => (
-                    <tr key={flight.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="p-2 bg-blue-50 rounded-lg mr-3">
-                            <Plane className="w-5 h-5 text-blue-600" />
-                          </div>
-                          <span className="font-bold text-lg">{flight.flightNumber}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium">{flight.aircraftType} ({flight.aircraftReg})</div>
-                        <div className="text-xs text-slate-500 flex items-center mt-1">
-                          <MapPin className="w-3 h-3 mr-1" /> Stand {flight.stand}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center text-sm font-medium text-slate-600">
-                          <Clock className="w-4 h-4 mr-2" />
-                          {flight.eta}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-bold">
-                          {flight.assignedTeam}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
-                            flight.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : 
-                            flight.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'
-                        }`}>
-                            {flight.status.replace('_', ' ')}
-                        </span>
-                      </td>
+            <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] mb-8 flex items-center">
+               <span className="w-1.5 h-6 bg-primary/40 rounded-full mr-4"></span>
+               Tactical Flight Log
+            </h3>
+            <div className="bg-surface-lowest border border-outline rounded-[32px] overflow-hidden shadow-inner">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-outline">
+                  <thead className="bg-surface-dim">
+                    <tr>
+                      <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">TASK ID</th>
+                      <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">ASSET / SECTOR</th>
+                      <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">ETD/ETA</th>
+                      <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STATUS</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-outline text-on-surface">
+                    {MOCK_DOMESTIC_FLIGHTS.map((flight) => (
+                      <tr key={flight.id} className="hover:bg-primary/[0.01] transition-colors group">
+                        <td className="px-8 py-6 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="p-3 bg-surface-dim rounded-2xl border border-outline mr-4">
+                              <Plane className="w-5 h-5 text-on-surface-dim" />
+                            </div>
+                            <span className="text-lg font-[900] italic tracking-tighter">{flight.flightNumber}</span>
+                          </div>
+                        </td>
+                        <td className="px-8 py-6 whitespace-nowrap">
+                          <div className="text-sm font-black tracking-tight">{flight.aircraftType}</div>
+                          <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1">
+                            {flight.aircraftReg} • Stand {flight.stand}
+                          </div>
+                        </td>
+                        <td className="px-8 py-6 whitespace-nowrap">
+                          <div className="flex items-center text-sm font-black">
+                            <Clock className="w-4 h-4 mr-2.5 opacity-40" />
+                            {flight.eta}
+                          </div>
+                        </td>
+
+                        <td className="px-8 py-6 whitespace-nowrap">
+                          <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+                              flight.status === 'COMPLETED' ? 'bg-success/10 text-success border-success/20 shadow-[0_0_12px_rgba(34,197,94,0.1)]' : 
+                              flight.status === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/20' : 'bg-surface-dim text-on-surface-dim border-outline'
+                          }`}>
+                              {flight.status.replace('_', ' ')}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
 
         {/* Equipment Assignments */}
         {activeTab === 'equipment' && (
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-bold text-slate-800">Equipment Assignments</h3>
-              <div className="flex bg-gray-200 p-1 rounded-lg">
+          <div className="p-8 lg:p-10">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
+              <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
+                 <span className="w-1.5 h-6 bg-primary rounded-full mr-4"></span>
+                 Tactical Fleet Assignment
+              </h3>
+              <div className="flex bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner">
                 <button
                   onClick={() => setEquipmentShift('DAILY')}
-                  className={`px-4 py-1.5 text-sm font-bold rounded-md transition-colors ${
-                    equipmentShift === 'DAILY' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  className={`px-6 py-2.5 text-[10px] font-black rounded-xl transition-all uppercase tracking-widest ${
+                    equipmentShift === 'DAILY' ? 'bg-primary text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface'
                   }`}
                 >
-                  DAILY (Morning/Night)
+                  Daily Ops
                 </button>
                 <button
                   onClick={() => setEquipmentShift('DIESEL')}
-                  className={`px-4 py-1.5 text-sm font-bold rounded-md transition-colors ${
-                    equipmentShift === 'DIESEL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  className={`px-6 py-2.5 text-[10px] font-black rounded-xl transition-all uppercase tracking-widest ${
+                    equipmentShift === 'DIESEL' ? 'bg-primary text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface'
                   }`}
                 >
-                  DIESEL (Evening)
+                  Diesel Shift
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {equipmentAssignments.map(eq => (
-                <div key={eq.id} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
-                  <div className="flex items-center mb-4">
-                    <div className="p-2 bg-orange-100 rounded-lg mr-3">
-                      <Truck className="w-5 h-5 text-orange-600" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+              {equipmentAssignments
+                .filter(eq => equipmentShift === 'DAILY' || dieselNeeds.includes(eq.eqNumber))
+                .map(eq => (
+                <div key={eq.id} className="card-premium p-6 group transition-all hover:scale-[1.02]">
+                  <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center">
+                      <div className="p-3 bg-surface-dim rounded-2xl border border-outline mr-4 group-hover:border-primary/30 transition-all">
+                        <Truck className="w-5 h-5 text-on-surface" />
+                      </div>
+                      <h4 className="text-xl font-[900] text-on-surface italic uppercase tracking-tighter">{eq.eqNumber}</h4>
                     </div>
-                    <h4 className="font-bold text-slate-800">{eq.eqNumber}</h4>
+                    {dieselNeeds.includes(eq.eqNumber) && (
+                      <div className="flex items-center space-x-1 px-2 py-1 bg-amber-500/10 text-amber-500 rounded-lg border border-amber-500/20 shadow-sm animate-pulse">
+                        <Droplet className="w-3 h-3" />
+                        <span className="text-[8px] font-black uppercase tracking-widest">DIESEL</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Operator 1</label>
+                      <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Primary Pilot</label>
                       {renderOperatorSelect(eq.op1, (val) => handleAssignEquipment(eq.id, 1, val))}
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Operator 2</label>
+                      <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Support Specialist</label>
                       {renderOperatorSelect(eq.op2, (val) => handleAssignEquipment(eq.id, 2, val))}
                     </div>
                   </div>
@@ -378,41 +435,53 @@ export const Schedule: React.FC = () => {
 
       {/* Add Flight Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 border border-gray-100">
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Add Incoming Flight</h3>
-                <form onSubmit={handleAddFlight} className="space-y-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-surface/20 backdrop-blur-xl p-4">
+            <div className="bg-surface-lowest rounded-[40px] shadow-2xl w-full max-w-lg p-10 border border-outline relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
+                
+                <h3 className="text-3xl font-[900] text-on-surface mb-8 tracking-tighter uppercase italic relative z-10">INITIATE TASK</h3>
+                <form onSubmit={handleAddFlight} className="space-y-8 relative z-10">
                     <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">Flight Number</label>
-                        <input name="flight" required className="w-full p-2 border border-gray-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-aviation-500" placeholder="e.g. BA245" />
+                        <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Flight Identity</label>
+                        <input name="flight" required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="E.G. EK405" />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-6">
                         <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">Aircraft Type</label>
-                            <input name="ac" required className="w-full p-2 border border-gray-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-aviation-500" placeholder="e.g. A320" />
+                            <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Airframe</label>
+                            <input name="ac" required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="E.G. B777" />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">Stand</label>
-                            <input name="stand" required className="w-full p-2 border border-gray-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-aviation-500" placeholder="e.g. C12" />
+                            <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Tactical Stand</label>
+                            <input name="stand" required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="E.G. D12" />
                         </div>
                     </div>
-                    <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">Estimated Arrival (ETA)</label>
-                        <input name="eta" type="time" required className="w-full p-2 border border-gray-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-aviation-500" />
+                    <div className="grid grid-cols-3 gap-6">
+                        <div>
+                            <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">STA</label>
+                            <input name="sta" type="time" required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">ETA</label>
+                            <input name="eta" type="time" required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">STD</label>
+                            <input name="std" type="time" required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" />
+                        </div>
                     </div>
-                    <div className="flex justify-end space-x-3 mt-6">
+                    <div className="flex justify-end space-x-5 mt-10">
                         <button 
                             type="button" 
                             onClick={() => setIsModalOpen(false)}
-                            className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg border border-gray-200"
+                            className="px-8 py-4 text-[10px] font-black text-on-surface-dim hover:text-on-surface uppercase tracking-[0.2em] transition-all"
                         >
-                            Cancel
+                            ABORT
                         </button>
                         <button 
                             type="submit" 
-                            className="px-4 py-2 bg-aviation-600 text-white font-bold rounded-lg hover:bg-aviation-700 shadow-md"
+                            className="px-10 py-4 bg-primary text-white font-[900] text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-premium hover:scale-105 active:scale-95 transition-all"
                         >
-                            Add Flight
+                            CONFIRM DEPLOYMENT
                         </button>
                     </div>
                 </form>

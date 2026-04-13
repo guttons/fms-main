@@ -21,110 +21,121 @@ export const Seaplane: React.FC = () => {
 
     if (success) {
         return (
-             <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in zoom-in duration-300 bg-slate-50 min-h-[600px]">
-                <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6 ring-8 ring-green-50">
-                  <CheckCircle className="w-12 h-12 text-green-600" />
+             <div className="flex flex-col items-center justify-center h-full p-12 text-center animate-in fade-in zoom-in duration-500 bg-surface">
+                <div className="w-32 h-32 bg-primary/10 rounded-[40px] flex items-center justify-center mb-8 border border-primary/20 shadow-premium">
+                  <CheckCircle className="w-12 h-12 text-primary shadow-glow" />
                 </div>
-                <h2 className="text-3xl font-bold text-slate-900 mb-2">Daily Log Submitted</h2>
-                <p className="text-slate-600 max-w-md text-lg">
-                  Hydrant volume for the operator has been successfully recorded and synced to the central inventory.
+                <h2 className="text-4xl font-[900] text-on-surface mb-4 tracking-tighter uppercase italic">LOG SYNCHRONIZED</h2>
+                <p className="text-on-surface-dim max-w-md uppercase tracking-widest text-[10px] font-black opacity-60">
+                  Daily hydrant volume recorded and distributed to global inventory. Task integrity verified.
                 </p>
                 <button 
                   onClick={() => { setSuccess(false); }}
-                  className="mt-8 px-8 py-3 text-aviation-600 font-bold hover:bg-aviation-50 rounded-lg border-2 border-aviation-200 bg-white shadow-sm transition-colors text-lg"
+                  className="mt-12 px-10 py-4 bg-primary text-white font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-premium hover:scale-105 active:scale-95 transition-all"
                 >
-                  Submit Another Log
+                  NEW LOG ENTRY
                 </button>
               </div>
         );
     }
 
     return (
-        <div className="p-4 lg:p-8 max-w-5xl mx-auto">
-            <div className="flex items-center mb-8 p-6 bg-white rounded-xl border border-gray-200 shadow-sm">
-                <div className="p-4 bg-blue-50 rounded-full mr-5 border border-blue-100">
-                    <Sailboat className="w-10 h-10 text-blue-600" />
-                </div>
-                <div>
-                    <h2 className="text-3xl font-bold text-slate-900">Seaplane Daily Operations</h2>
-                    <p className="text-slate-500 text-lg">End-of-day Hydrant Volume Recording</p>
+        <div className="p-6 lg:p-10 space-y-10">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-outline pb-10">
+                <div className="flex items-center">
+                    <div className="p-5 bg-primary/10 rounded-3xl mr-6 border border-primary/20 shadow-sm transition-all group-hover:shadow-glow">
+                        <Sailboat className="w-10 h-10 text-primary" />
+                    </div>
+                    <div>
+                        <h1 className="headline-lg tracking-tighter mb-2 uppercase flex items-center">
+                            SEAPLANE <span className="text-primary italic font-medium ml-3">OPERATIONS</span>
+                        </h1>
+                        <div className="flex items-center space-x-3">
+                            <span className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-[0.3em] font-mono">Registry: WATERBORNE OPS</span>
+                            <div className="h-1 w-1 rounded-full bg-on-surface-dim opacity-20"></div>
+                            <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Hydrant Volume Management</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            <form onSubmit={handleSubmit} className="card-premium p-10">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-10">
                      {/* Operator Selection */}
                      <div>
-                        <label className={labelClass}>Seaplane Operator</label>
-                        <select className={inputClass} required>
-                            <option value="">Select Operator...</option>
-                            <option value="TMA">Trans Maldivian (TMA)</option>
-                            <option value="Manta">Manta Air</option>
-                            <option value="Flyme">Flyme</option>
+                        <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-4 tracking-widest opacity-40">Tactical Operator Identification</label>
+                        <select className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all appearance-none" required>
+                            <option value="">SELECT OPERATOR...</option>
+                            <option value="TMA">TRANS MALDIVIAN (TMA)</option>
+                            <option value="Manta">MANTA AIR</option>
+                            <option value="Flyme">FLYME</option>
                         </select>
                      </div>
 
                      {/* Dock Location */}
                      <div>
-                        <label className={labelClass}>Dock Location</label>
+                        <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-4 tracking-widest opacity-40">Deployment Coordinates (Dock)</label>
                         <div className="relative">
-                            <MapPin className="absolute left-4 top-4 w-6 h-6 text-gray-400" />
-                            <select className={`${inputClass} pl-12`} required>
-                                <option value="">Select Dock...</option>
-                                <option>Terminal A - Dock 1</option>
-                                <option>Terminal A - Dock 2</option>
-                                <option>Terminal B - Dock 1</option>
-                                <option>Terminal B - Dock 2</option>
-                                <option>Floating Dock C</option>
+                            <MapPin className="absolute left-6 top-1/2 transform -translate-y-1/2 w-4 h-4 text-primary opacity-40" />
+                            <select className="w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all appearance-none" required>
+                                <option value="">SELECT DOCK...</option>
+                                <option>TERMINAL A - DOCK 1</option>
+                                <option>TERMINAL A - DOCK 2</option>
+                                <option>TERMINAL B - DOCK 1</option>
+                                <option>TERMINAL B - DOCK 2</option>
+                                <option>FLOATING DOCK C</option>
                             </select>
                         </div>
                     </div>
 
                     {/* Hydrant/Pump ID */}
                     <div>
-                        <label className={labelClass}>Hydrant / Pump ID</label>
-                         <input required type="text" className={inputClass} placeholder="e.g. HP-01" />
+                        <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-4 tracking-widest opacity-40">Infrastructure Registry (Pump ID)</label>
+                         <input required type="text" className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="E.G. HP-01" />
                     </div>
 
                     {/* Fuel Type Readonly */}
                      <div>
-                        <label className={labelClass}>Product</label>
-                        <div className="w-full p-4 bg-slate-50 border border-gray-200 rounded-lg text-slate-700 font-bold flex items-center text-lg h-[62px]">
-                            <Droplet className="w-6 h-6 mr-3 text-aviation-600" />
-                            Jet A-1
+                        <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-4 tracking-widest opacity-40">Resource Protocol</label>
+                        <div className="w-full px-6 py-4 bg-primary/5 border border-primary/20 rounded-2xl text-primary font-black uppercase tracking-widest flex items-center shadow-inner">
+                            <Droplet className="w-4 h-4 mr-3 opacity-60" />
+                            JET A-1
                         </div>
                      </div>
                 </div>
 
                 {/* Volume Input - Prominent */}
-                <div className="mb-8 p-6 bg-slate-50 rounded-xl border border-slate-200">
-                    <label className={labelClass}>Total Daily Volume (Liters)</label>
-                    <div className="relative">
+                <div className="mb-10 p-10 bg-surface-dim rounded-[32px] border border-outline shadow-inner relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-5">
+                       <Sailboat className="w-32 h-32 text-on-surface" />
+                    </div>
+                    <label className="block text-[10px] font-bold text-on-surface uppercase mb-6 tracking-[0.3em] font-mono opacity-60 text-center">TOTAL DAILY FLOW COLLECTION (LITERS)</label>
+                    <div className="relative max-w-lg mx-auto">
                         <input 
                             required 
                             type="number" 
                             min="1"
-                            className="w-full text-5xl font-black p-6 border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-aviation-500/20 focus:border-aviation-500 bg-white text-slate-900 placeholder:text-slate-300 text-right pr-28 transition-all" 
+                            className="w-full text-6xl font-[900] p-10 bg-surface-lowest border border-outline rounded-[40px] focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none text-primary tracking-tighter text-center transition-all font-mono shadow-premium"
                             placeholder="0" 
                         />
-                        <span className="absolute right-8 top-1/2 transform -translate-y-1/2 text-2xl font-bold text-slate-400">LITERS</span>
+                        <span className="absolute right-10 top-1/2 transform -translate-y-1/2 text-[10px] font-black text-on-surface-dim uppercase opacity-30 tracking-[0.2em]">LTRS</span>
                     </div>
-                    <p className="text-slate-500 text-sm mt-3 flex items-center font-medium">
-                        <AlertTriangle className="w-4 h-4 mr-2 text-orange-500" />
-                        Please verify the closing meter reading matches the entered volume before submission.
-                    </p>
+                    <div className="mt-8 flex items-center justify-center text-warning text-[10px] font-black uppercase tracking-widest space-x-3">
+                        <AlertTriangle className="w-4 h-4 animate-pulse" />
+                        <span>Confirm meter integrity before sync submission</span>
+                    </div>
                 </div>
 
                 <div className="flex justify-end">
                     <button 
                         type="submit" 
                         disabled={loading}
-                        className="w-full md:w-auto px-10 py-4 bg-aviation-600 text-white rounded-xl font-bold text-xl hover:bg-aviation-700 shadow-lg flex items-center justify-center transition-transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
+                        className="w-full md:w-auto px-12 py-5 bg-primary text-white rounded-2xl font-[900] text-[12px] uppercase tracking-[0.4em] shadow-premium hover:scale-105 active:scale-95 transition-all flex items-center justify-center disabled:opacity-20"
                     >
-                        {loading ? 'Processing...' : (
+                        {loading ? 'SYNCHRONIZING...' : (
                             <>
-                                <Save className="w-6 h-6 mr-3" />
-                                Submit Daily Log
+                                <Save className="w-5 h-5 mr-4" />
+                                FINAL SYNCHRONIZATION
                             </>
                         )}
                     </button>

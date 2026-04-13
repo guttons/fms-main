@@ -4,101 +4,114 @@ import { MOCK_USERS } from '../constants';
 
 export const SystemAdmin: React.FC = () => {
   return (
-    <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-         <div>
-            <h2 className="text-2xl font-bold text-slate-900 flex items-center">
-                <Settings className="w-6 h-6 mr-3 text-aviation-600" />
-                System Administration
-            </h2>
-            <p className="text-slate-500">Platform configuration, user provisioning, and health monitoring</p>
-         </div>
-         <div className="flex items-center space-x-2 bg-green-50 text-green-700 px-4 py-2 rounded-lg border border-green-200 font-medium text-sm">
-            <Activity className="w-4 h-4" />
-            <span>All Systems Operational</span>
-         </div>
+    <div className="p-6 lg:p-10 space-y-10">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-outline pb-10">
+        <div>
+          <h1 className="headline-lg tracking-tighter mb-2 uppercase flex items-center">
+            SYSTEM <span className="text-primary italic font-medium ml-3">ADMINISTRATION</span>
+          </h1>
+          <div className="flex items-center space-x-3">
+             <span className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-[0.3em] font-mono">Platform Integrity Center</span>
+             <div className="h-1 w-1 rounded-full bg-on-surface-dim opacity-20"></div>
+             <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">All services synchronized</span>
+          </div>
+        </div>
+        <div className="flex items-center space-x-3 bg-success/10 text-success px-6 py-3 rounded-2xl border border-success/20 font-black text-[10px] uppercase tracking-widest shadow-[0_0_20px_rgba(34,197,94,0.05)]">
+           <Activity className="w-4 h-4 animate-pulse" />
+           <span>System Status: OPERATIONAL</span>
+        </div>
       </div>
 
       {/* System Health Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="card-premium p-8 flex items-center justify-between group transition-all hover:scale-[1.02]">
            <div>
-              <p className="text-sm font-medium text-slate-500">Database Status</p>
-              <h3 className="text-lg font-bold text-slate-900 mt-1">Connected</h3>
-              <p className="text-xs text-green-600 mt-1">Latency: 24ms</p>
+              <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 mb-2">Database Integrity</p>
+              <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">CONNECTED</h3>
+              <p className="text-[10px] font-black text-success mt-2 flex items-center">
+                 <div className="w-1.5 h-1.5 bg-success rounded-full mr-2 shadow-[0_0_8px_rgba(34,197,94,0.4)]"></div>
+                 LATENCY: 24MS
+              </p>
            </div>
-           <div className="p-3 bg-blue-50 rounded-full">
-              <Database className="w-6 h-6 text-blue-600" />
+           <div className="p-4 bg-surface-dim rounded-2xl border border-outline group-hover:border-primary/30 transition-all">
+              <Database className="w-8 h-8 text-primary opacity-60" />
            </div>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
+        
+        <div className="card-premium p-8 flex items-center justify-between group transition-all hover:scale-[1.02]">
            <div>
-              <p className="text-sm font-medium text-slate-500">Sync Gateway</p>
-              <h3 className="text-lg font-bold text-slate-900 mt-1">Active</h3>
-              <p className="text-xs text-slate-400 mt-1">Last sync: 2s ago</p>
+              <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 mb-2">Sync Gateway</p>
+              <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">ACTIVE</h3>
+              <p className="text-[10px] font-black text-on-surface-dim mt-2 opacity-60 uppercase tracking-widest">Last ping: 2s ago</p>
            </div>
-           <div className="p-3 bg-purple-50 rounded-full">
-              <Server className="w-6 h-6 text-purple-600" />
+           <div className="p-4 bg-surface-dim rounded-2xl border border-outline group-hover:border-primary/30 transition-all">
+              <Server className="w-8 h-8 text-primary opacity-60" />
            </div>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
+
+        <div className="card-premium p-8 flex items-center justify-between group transition-all hover:scale-[1.02]">
            <div>
-              <p className="text-sm font-medium text-slate-500">Security Audit</p>
-              <h3 className="text-lg font-bold text-slate-900 mt-1">Passed</h3>
-              <p className="text-xs text-slate-400 mt-1">Last scan: 24h ago</p>
+              <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 mb-2">Security Perimeter</p>
+              <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">SECURE</h3>
+              <p className="text-[10px] font-black text-on-surface-dim mt-2 opacity-60 uppercase tracking-widest">Protocol: SHIELD-X</p>
            </div>
-           <div className="p-3 bg-green-50 rounded-full">
-              <ShieldCheck className="w-6 h-6 text-green-600" />
+           <div className="p-4 bg-surface-dim rounded-2xl border border-outline group-hover:border-primary/30 transition-all">
+              <ShieldCheck className="w-8 h-8 text-primary opacity-60" />
            </div>
         </div>
       </div>
 
       {/* User Management */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-         <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-            <h3 className="text-lg font-bold text-slate-900 flex items-center">
-               <Users className="w-5 h-5 mr-2 text-aviation-600" />
-               User Provisioning
-            </h3>
-            <button className="px-4 py-2 bg-aviation-600 text-white rounded-lg text-sm font-bold hover:bg-aviation-700">
-               + Add User
+      <div className="bg-surface rounded-3xl border border-outline overflow-hidden shadow-sm">
+         <div className="px-8 py-6 border-b border-outline flex justify-between items-center bg-surface-dim/30">
+            <div>
+               <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
+                  <Users className="w-4 h-4 mr-3 text-primary opacity-60" />
+                  PERSOnnel PROTOCOL
+               </h3>
+            </div>
+            <button className="px-6 py-2.5 bg-primary text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-premium hover:scale-105 active:scale-95 transition-all">
+               NEW OPERATOR
             </button>
          </div>
          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-               <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-outline">
+               <thead className="bg-surface-dim">
                   <tr>
-                     <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">User</th>
-                     <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Role</th>
-                     <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                     <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
+                     <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">OPERATOR IDENTITY</th>
+                     <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">CLEARANCE LEVEL</th>
+                     <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">LOGIN STATUS</th>
+                     <th className="px-8 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">COMMANDS</th>
                   </tr>
                </thead>
-               <tbody className="bg-white divide-y divide-gray-200">
+               <tbody className="bg-surface divide-y divide-outline">
                   {MOCK_USERS.map((user) => (
-                     <tr key={user.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
+                     <tr key={user.id} className="hover:bg-primary/[0.02] transition-colors group">
+                        <td className="px-8 py-6 whitespace-nowrap">
                            <div className="flex items-center">
-                              <img className="h-8 w-8 rounded-full" src={user.avatar} alt="" />
-                              <div className="ml-4">
-                                 <div className="text-sm font-medium text-slate-900">{user.name}</div>
-                                 <div className="text-xs text-slate-500">{user.id}</div>
+                              <div className="relative">
+                                 <img className="h-10 w-10 rounded-2xl border border-outline object-cover shadow-sm group-hover:border-primary/30 transition-all" src={user.avatar} alt="" />
+                                 <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-success rounded-full border-2 border-surface shadow-sm"></div>
+                              </div>
+                              <div className="ml-5">
+                                 <div className="text-sm font-black text-on-surface uppercase tracking-tight">{user.name}</div>
+                                 <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">{user.id}</div>
                               </div>
                            </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                           <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-slate-100 text-slate-800">
+                        <td className="px-8 py-6 whitespace-nowrap">
+                           <span className="px-4 py-1.5 inline-flex text-[9px] font-black rounded-xl bg-surface-dim text-on-surface-dim border border-outline uppercase tracking-widest">
                               {user.role}
                            </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              Active
+                        <td className="px-8 py-6 whitespace-nowrap">
+                           <span className="inline-flex items-center px-4 py-1.5 rounded-xl text-[9px] font-black bg-success/10 text-success border border-success/20 uppercase tracking-widest">
+                              AUTHORIZED
                            </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                           <button className="text-aviation-600 hover:text-aviation-900 mr-4">Edit</button>
-                           <button className="text-red-600 hover:text-red-900">Revoke</button>
+                        <td className="px-8 py-6 whitespace-nowrap text-right text-sm font-medium">
+                           <button className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-widest mr-6 transition-all">EDIT</button>
+                           <button className="text-[10px] font-black text-error/60 hover:text-error uppercase tracking-widest transition-all">REVOKE</button>
                         </td>
                      </tr>
                   ))}
@@ -108,25 +121,25 @@ export const SystemAdmin: React.FC = () => {
       </div>
       
       {/* Recent System Alerts */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-         <div className="p-6 border-b border-gray-100">
-             <h3 className="text-lg font-bold text-slate-900 flex items-center">
-                 <AlertCircle className="w-5 h-5 mr-2 text-slate-500" />
-                 Audit Log & Security Alerts
+      <div className="card-premium overflow-hidden">
+         <div className="px-8 py-6 border-b border-outline bg-surface-dim/30">
+             <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
+                 <AlertCircle className="w-4 h-4 mr-3 text-on-surface-dim opacity-40" />
+                 Tactical Audit Log
              </h3>
          </div>
-         <div className="p-6">
-             <div className="space-y-4">
+         <div className="p-8">
+             <div className="space-y-6">
                  {[
-                     { msg: 'Failed login attempt from IP 192.168.1.105', time: '10 mins ago', severity: 'high' },
-                     { msg: 'User provisioned: Commercial Analyst (u6)', time: '2 hours ago', severity: 'low' },
-                     { msg: 'System backup completed successfully', time: '6 hours ago', severity: 'low' }
+                     { msg: 'Unauthorized bridge attempt from sector 192.168.1.105', time: '10 MINS AGO', severity: 'high' },
+                     { msg: 'Personnel provisioned: Commercial Analyst (u6)', time: '2 HOURS AGO', severity: 'low' },
+                     { msg: 'Primary datastore backup sequence complete', time: '6 HOURS AGO', severity: 'low' }
                  ].map((log, i) => (
-                     <div key={i} className="flex items-start">
-                         <div className={`w-2 h-2 mt-2 rounded-full mr-3 ${log.severity === 'high' ? 'bg-red-500' : 'bg-green-500'}`}></div>
-                         <div>
-                             <p className="text-sm text-slate-800 font-medium">{log.msg}</p>
-                             <p className="text-xs text-slate-400">{log.time}</p>
+                     <div key={i} className="flex items-start group">
+                         <div className={`w-1.5 h-6 rounded-full mr-5 ${log.severity === 'high' ? 'bg-error shadow-[0_0_12px_rgba(239,68,68,0.4)]' : 'bg-primary/40'}`}></div>
+                         <div className="flex-1">
+                             <p className="text-sm text-on-surface font-black uppercase tracking-tight group-hover:text-primary transition-colors">{log.msg}</p>
+                             <p className="text-[10px] font-black text-on-surface-dim opacity-30 mt-1 uppercase tracking-widest">{log.time}</p>
                          </div>
                      </div>
                  ))}
