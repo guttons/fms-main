@@ -27,18 +27,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({ user, activeView, setActiv
   const getNavItems = () => {
     switch (user.role) {
       case UserRole.ITP_OPERATOR:
+      case UserRole.ITP_HD_OPERATOR:
+      case UserRole.ITP_MANAGER:
         return [
           { id: 'dashboard', label: 'Tasks', icon: LayoutDashboard },
           { id: 'intoplane', label: 'Refuel', icon: Plane },
           { id: 'history', label: 'Logs', icon: FileText },
-        ];
-      
-      case UserRole.ITP_MANAGER:
-        return [
-          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'equipment', label: 'Equipment', icon: Truck },
-          { id: 'schedule', label: 'Schedule', icon: Calendar },
-          { id: 'history', label: 'History', icon: FileText },
         ];
 
       case UserRole.DEPOT_OPERATOR:

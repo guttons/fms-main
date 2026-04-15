@@ -177,15 +177,13 @@ const App: React.FC = () => {
     const user = MOCK_USERS.find(u => u.id === e.target.value);
     if (user) {
       setCurrentUser(user);
-      // Smart redirect based on role
-      if (user.role === UserRole.ITP_OPERATOR) {
-        setActiveView('dashboard');
-      } else if (user.role === UserRole.ITP_MANAGER) {
+      // Smart redirect based on role: ITP Operators, HD Operators, and Managers land on Dashboard
+      const isOperational = [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_MANAGER, UserRole.DEPOT_MANAGER].includes(user.role);
+      
+      if (isOperational) {
         setActiveView('dashboard');
       } else if (user.role === UserRole.DEPOT_OPERATOR) {
         setActiveView('bridging');
-      } else if (user.role === UserRole.DEPOT_MANAGER) {
-        setActiveView('dashboard');
       } else {
         setActiveView('dashboard');
       }

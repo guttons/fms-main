@@ -33,7 +33,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ tanks, user })
     [EquipmentType.HYDRANT_SERVICE]: true,
   });
 
-  const canEdit = user.role === UserRole.ADMIN || user.role === UserRole.ITP_MANAGER;
+  const canEdit = user.role === UserRole.ADMIN;
 
   const handleStatusChange = (id: string, newStatus: EqStatus) => {
     setEquipment(prev => prev.map(eq => 

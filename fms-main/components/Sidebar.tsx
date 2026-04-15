@@ -31,6 +31,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, activeView, setActiveVie
   const getMenuItems = () => {
     switch (user.role) {
       case UserRole.ITP_OPERATOR:
+      case UserRole.ITP_HD_OPERATOR:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
@@ -41,11 +42,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, activeView, setActiveVie
       case UserRole.ITP_MANAGER:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
-          { id: 'intoplane', label: 'Into-Plane Ops', icon: Plane },
+          { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'briefing', label: 'Shift Briefing', icon: ClipboardList },
-          { id: 'history', label: 'Ops History', icon: FileText },
+          { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
+          { id: 'history', label: 'Log History', icon: FileText },
         ];
 
       case UserRole.DEPOT_OPERATOR:

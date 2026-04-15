@@ -35,7 +35,7 @@ export const Schedule: React.FC = () => {
   );
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const operators = MOCK_USERS.filter(u => u.role === UserRole.ITP_OPERATOR);
+  const operators = MOCK_USERS.filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(u.role));
   const todayDate = new Date().toISOString().split('T')[0];
 
   useEffect(() => {

@@ -36,7 +36,7 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ tanks, user, setActiveView, onStartJob }) => {
   // Logic to determine initial view and if switching is allowed
   const isItpManager = user.role === UserRole.ITP_MANAGER;
-  const isItpOperator = user.role === UserRole.ITP_OPERATOR;
+  const isItpOperator = [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_MANAGER].includes(user.role);
   const isDualRole = [UserRole.ADMIN, UserRole.EXECUTIVE].includes(user.role);
   
   const [viewMode, setViewMode] = useState<'ITP' | 'DEPOT'>(
@@ -104,7 +104,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ tanks, user, setActiveView
     { name: 'Ullage (Empty)', value: maxJetA1 - totalJetA1 },
   ];
 
-  const operators = MOCK_USERS.filter(u => u.role === UserRole.ITP_OPERATOR);
+  const operators = MOCK_USERS.filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(u.role));
 
   // --- Sub-Component: Operator Dashboard (My Tasks) ---
   const renderOperatorDashboard = () => {
