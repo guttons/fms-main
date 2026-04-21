@@ -33,6 +33,7 @@ const App: React.FC = () => {
     return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
   const [showHeader, setShowHeader] = useState(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const scrollRef = React.useRef<HTMLElement>(null);
   const [pendingJob, setPendingJob] = useState<FlightJob | null>(null);
   
@@ -109,6 +110,8 @@ const App: React.FC = () => {
           setPendingJob={setPendingJob}
           showAlertsPanel={showAlertsPanel}
           setShowAlertsPanel={setShowAlertsPanel}
+          isSettingsOpen={isSettingsOpen}
+          setIsSettingsOpen={setIsSettingsOpen}
           handleLogout={handleLogout}
         />
       </OperationalDataProvider>
@@ -120,7 +123,7 @@ const App: React.FC = () => {
 const AppContextContent: React.FC<any> = ({ 
   currentUser, activeView, setActiveView, isMobileMenuOpen, setIsMobileMenuOpen,
   isDarkMode, setIsDarkMode, showHeader, scrollRef, pendingJob, setPendingJob,
-  showAlertsPanel, setShowAlertsPanel, handleLogout
+  showAlertsPanel, setShowAlertsPanel, isSettingsOpen, setIsSettingsOpen, handleLogout
 }) => {
   const { alerts, acknowledgeAlert, acknowledgeAllAlerts } = useOperationalData();
 
@@ -173,7 +176,7 @@ const AppContextContent: React.FC<any> = ({
       case 'briefing':
         return <ShiftBriefing />;
       case 'admin':
-        return <SystemAdmin />;
+        return currentUser.role === UserRole.ADMIN ? <SystemAdmin /> : <Dashboard user={currentUser} setActiveView={setActiveView} onStartJob={() => {}} />;
       case 'reports':
         return <CommercialReports />;
       case 'equipment':
@@ -201,12 +204,7 @@ const AppContextContent: React.FC<any> = ({
           }}
           onLogout={handleLogout}
           isMobileMenuOpen={isMobileMenuOpen}
-          isDarkMode={isDarkMode}
-          setIsDarkMode={setIsDarkMode}
-          onSettingsClick={() => {
-            setActiveView('admin');
-            setIsMobileMenuOpen(false);
-          }}
+          onSettingsClick={() => setIsSettingsOpen(true)}
         />
 
         {/* Content Area */}
@@ -380,6 +378,95 @@ const AppContextContent: React.FC<any> = ({
           onMenuClick={() => setIsMobileMenuOpen(true)}
           isVisible={showHeader}
         />
+
+        {/* Universal System Settings Modal */}
+        {isSettingsOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 lg:p-8">
+            {/* Backdrop */}
+            <div 
+              className="absolute inset-0 bg-surface/60 backdrop-blur-md animate-in fade-in duration-300"
+              onClick={() => setIsSettingsOpen(false)}
+            />
+            
+            {/* Modal Content */}
+            <div className="relative w-full max-w-xl bg-surface-container border border-outline rounded-[32px] shadow-premium overflow-hidden animate-in zoom-in-95 fade-in duration-300">
+              <div className="p-8">
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h2 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-2">Platform Preferences</h2>
+                    <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase underline decoration-primary underline-offset-8">System Settings</h3>
+                  </div>
+                  <button 
+                    onClick={() => setIsSettingsOpen(false)}
+                    className="p-3 bg-surface-dim hover:bg-surface-container border border-outline rounded-2xl text-on-surface-dim hover:text-primary transition-all active:scale-95"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Appearance Section */}
+                  <div className="p-6 bg-surface-dim/40 border border-outline/50 rounded-2xl hover:border-primary/30 transition-all group">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className={`p-3 rounded-xl transition-all ${isDarkMode ? 'bg-primary/10 text-primary' : 'bg-warning/10 text-warning'}`}>
+                          {isDarkMode ? <Moon className="w-5 h-5 shadow-glow" /> : <Sun className="w-5 h-5" />}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-on-surface uppercase tracking-tight">Appearance</h4>
+                          <p className="text-[11px] font-bold text-on-surface-dim opacity-50">Toggle between high-contrast light and dark modes</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => setIsDarkMode(!isDarkMode)}
+                        className={`relative w-14 h-8 rounded-full transition-all duration-500 overflow-hidden group-active:scale-90 border border-outline/50 ${isDarkMode ? 'bg-primary shadow-glow' : 'bg-surface-container-high'}`}
+                      >
+                        <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-all duration-500 shadow-lg ${isDarkMode ? 'translate-x-6' : 'translate-x-0'}`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Language Section (Placeholder) */}
+                  <div className="p-6 bg-surface-dim/40 border border-outline/50 rounded-2xl opacity-50 cursor-not-allowed">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="p-3 bg-surface-container rounded-xl text-on-surface-dim">
+                          <Search className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-on-surface uppercase tracking-tight">Regional Language</h4>
+                          <p className="text-[11px] font-bold text-on-surface-dim opacity-50 italic">Dhivehi support coming soon</p>
+                        </div>
+                      </div>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-on-surface-dim">Locked</span>
+                    </div>
+                  </div>
+
+                  {/* User Profile Summary */}
+                  <div className="mt-8 pt-8 border-t border-outline">
+                    <div className="flex items-center space-x-4">
+                      <img src={currentUser.avatar} alt="" className="w-12 h-12 rounded-2xl border-2 border-primary/20 shadow-xl" />
+                      <div>
+                        <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 mb-0.5">Authenticated User</p>
+                        <h4 className="text-base font-[900] text-on-surface tracking-tight uppercase leading-none">{currentUser.name}</h4>
+                        <p className="text-[11px] font-bold text-primary opacity-80 mt-1 uppercase tracking-tighter">{currentUser.role.replace('_', ' ')}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-12">
+                   <button 
+                    onClick={() => setIsSettingsOpen(false)}
+                    className="w-full py-4 bg-primary text-white text-[10px] font-black uppercase tracking-[0.3em] rounded-2xl shadow-glow hover:brightness-110 active:scale-[0.98] transition-all"
+                   >
+                     Apply Preferences
+                   </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
   );
 };

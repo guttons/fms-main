@@ -27,8 +27,6 @@ interface SidebarProps {
   onLogout: () => void;
   isMobileMenuOpen: boolean;
   onSettingsClick: () => void;
-  isDarkMode: boolean;
-  setIsDarkMode: (val: boolean) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
@@ -37,9 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveView, 
   onLogout, 
   isMobileMenuOpen,
-  onSettingsClick,
-  isDarkMode,
-  setIsDarkMode
+  onSettingsClick
 }) => {
   const getMenuItems = () => {
     if (!user || !user.role) return [];
@@ -90,7 +86,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ];
 
       case UserRole.ADMIN:
-      default:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
@@ -104,6 +99,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
           { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
           { id: 'reports', label: 'Commercial Reports', icon: FileText },
+        ];
+      
+      default:
+        return [
+          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'history', label: 'Log History', icon: FileText },
         ];
     }
   };
