@@ -1,17 +1,37 @@
-import React, { useState } from 'react';
-import { FuelType, Tank, BridgingLog } from '../types';
+import React, { useState, useEffect } from 'react';
+import { FuelType, BridgingLog, UserRole } from '../types';
 import { Droplet, Truck, CheckCircle, AlertTriangle, Save, Clock, ArrowRight, History, FileText } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
+import { useNotification } from '../context/NotificationContext';
+import { useOperationalData } from '../context/OperationalDataContext';
 
-interface BridgingProps {
-  tanks: Tank[];
-  onUpdateTank: (id: string, newLevel: number) => void;
-}
-
-export const Bridging: React.FC<BridgingProps> = ({ tanks, onUpdateTank }) => {
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+export const Bridging: React.FC = () => {
+  const { tanks, updateTankLevel, alerts, acknowledgeAlert, createAlert } = useOperationalData();
   const [logs, setLogs] = useState<BridgingLog[]>([]);
+  const { notify } = useNotification();
+
+  // Filter alerts for replenishment requests
+  const requestedRFs = Array.from(new Set(
+    (alerts || [])
+      .filter(a => a && !a.acknowledged && (
+        a.message.toLowerCase().includes('replenishment requested') || 
+        a.message.toLowerCase().includes('refuel requested')
+      ))
+      .map(a => {
+        const match = a.message.match(/unit\s+(RF-\d+)/i);
+        return match ? match[1].toUpperCase() : null;
+      })
+      .filter(Boolean) as string[]
+  ));
+
+  const handleBridgingComplete = async (vehicleId: string) => {
+    // Acknowledge the corresponding alert
+    const relevantAlert = (alerts || []).find(a => a && !a.acknowledged && a.message.includes(`unit ${vehicleId}`));
+    if (relevantAlert) {
+      await acknowledgeAlert(relevantAlert.id);
+    }
+  };
+
   
   // Standardized Input Classes for High Contrast
   const inputClass = "w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aviation-500 focus:border-aviation-500 bg-white text-slate-900 placeholder:text-slate-400";
@@ -28,13 +48,15 @@ export const Bridging: React.FC<BridgingProps> = ({ tanks, onUpdateTank }) => {
     density: '',
     temperature: '',
   });
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   // Fetch logs from Firebase on mount
   React.useEffect(() => {
     const fetchLogs = async () => {
       try {
         const fetchedLogs = await supabaseService.getBridgingLogs();
-        setLogs(fetchedLogs);
+        setLogs(fetchedLogs || []);
       } catch (error) {
         console.error('Error fetching bridging logs:', error);
       }
@@ -42,7 +64,7 @@ export const Bridging: React.FC<BridgingProps> = ({ tanks, onUpdateTank }) => {
     fetchLogs();
   }, []);
 
-  const jetA1Tanks = tanks.filter(t => t.type === FuelType.JET_A1);
+  const jetA1Tanks = (tanks || []).filter(t => t && t.type === FuelType.JET_A1);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -65,14 +87,15 @@ export const Bridging: React.FC<BridgingProps> = ({ tanks, onUpdateTank }) => {
     
     try {
         // Update Tank Level
-        const tank = tanks.find(t => t.id === formData.sourceTankId);
+        const tank = (tanks || []).find(t => t && t.id === formData.sourceTankId);
         if (tank) {
             const transferVol = parseInt(formData.volume);
             if (!isNaN(transferVol)) {
                 const newLevel = tank.currentLevel - transferVol;
-                await onUpdateTank(tank.id, newLevel < 0 ? 0 : newLevel);
+                await updateTankLevel(tank.id, newLevel < 0 ? 0 : newLevel);
             }
         }
+
         
         const logToSave: Omit<BridgingLog, 'id'> = {
           sourceTankId: formData.sourceTankId,
@@ -88,6 +111,18 @@ export const Bridging: React.FC<BridgingProps> = ({ tanks, onUpdateTank }) => {
         };
 
         await supabaseService.createBridgingLog(logToSave);
+        
+        // Acknowledge the alert
+        await handleBridgingComplete(formData.vehicleId);
+
+        // Notify ITP Duty Manager of replenishment completion
+        await createAlert({
+          severity: 'low',
+          message: `Refueller ${formData.vehicleId} replenished with ${formData.volume}L`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          acknowledged: false,
+          targetRole: UserRole.ITP_MANAGER
+        });
         
         setLoading(false);
         setSuccess(true);
@@ -113,7 +148,7 @@ export const Bridging: React.FC<BridgingProps> = ({ tanks, onUpdateTank }) => {
         }, 3000);
     } catch (error) {
         console.error('Error saving bridging log to Firebase:', error);
-        alert('Failed to save log to Firebase.');
+        notify('Failed to save log to Firebase.', 'error');
         setLoading(false);
     }
   };
@@ -191,15 +226,22 @@ export const Bridging: React.FC<BridgingProps> = ({ tanks, onUpdateTank }) => {
                             <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
                                 <Truck className="h-4 w-4 text-primary opacity-40" />
                             </div>
-                            <input 
-                                type="text" 
+                            <select 
                                 name="vehicleId"
                                 required
-                                placeholder="E.G. R-045"
                                 value={formData.vehicleId}
                                 onChange={handleInputChange}
-                                className="w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all"
-                            />
+                                className="w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all appearance-none"
+                            >
+                                <option value="">SELECT REQUESTED RF...</option>
+                                {requestedRFs.length === 0 ? (
+                                    <option disabled>NO ACTIVE REQUESTS</option>
+                                ) : (
+                                    requestedRFs.map(rfId => (
+                                        <option key={rfId} value={rfId}>{rfId}</option>
+                                    ))
+                                )}
+                            </select>
                         </div>
                     </div>
                     </div>
@@ -209,7 +251,7 @@ export const Bridging: React.FC<BridgingProps> = ({ tanks, onUpdateTank }) => {
                     </div>
 
                     <div className="mt-4">
-                        <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-4 tracking-widest opacity-40 text-center">Fuel Volume Provision (L)</label>
+                        <label className="block text-[10px] font-black text-on-surface uppercase mb-4 tracking-widest text-center">Fuel Volume Provision (L)</label>
                         <div className="relative max-w-md mx-auto">
                             <input 
                                 type="number" 
@@ -351,12 +393,12 @@ export const Bridging: React.FC<BridgingProps> = ({ tanks, onUpdateTank }) => {
                     </h3>
                 </div>
                 <div className="flex-1 overflow-y-auto">
-                    {logs.length === 0 ? (
+                    {(logs || []).length === 0 ? (
                         <div className="p-10 text-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 italic">Retrieving shift data...</div>
                     ) : (
                         <div className="divide-y divide-outline">
-                            {logs.map(log => {
-                                const tank = tanks.find(t => t.id === log.sourceTankId);
+                            {(logs || []).map(log => {
+                                const tank = (tanks || []).find(t => t && t.id === log.sourceTankId);
                                 return (
                                     <div key={log.id} className="p-8 hover:bg-primary/[0.02] transition-colors group">
                                         <div className="flex justify-between items-start mb-3">

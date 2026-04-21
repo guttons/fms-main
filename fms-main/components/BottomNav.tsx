@@ -8,7 +8,7 @@ import {
   Droplet, 
   Anchor, 
   Sailboat,
-  Menu,
+  PanelLeft,
   TrendingUp,
   Settings,
   ClipboardList,
@@ -21,10 +21,18 @@ interface BottomNavProps {
   activeView: string;
   setActiveView: (view: string) => void;
   onMenuClick: () => void;
+  isVisible?: boolean;
 }
 
-export const BottomNav: React.FC<BottomNavProps> = ({ user, activeView, setActiveView, onMenuClick }) => {
+export const BottomNav: React.FC<BottomNavProps> = ({ 
+  user, 
+  activeView, 
+  setActiveView, 
+  onMenuClick,
+  isVisible = true
+}) => {
   const getNavItems = () => {
+    if (!user || !user.role) return [];
     switch (user.role) {
       case UserRole.ITP_OPERATOR:
       case UserRole.ITP_HD_OPERATOR:
@@ -75,8 +83,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({ user, activeView, setActiv
   if (navItems.length === 0) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-surface/80 backdrop-blur-xl border-t border-outline lg:hidden z-50 px-2 pb-safe shadow-premium transition-all duration-500">
-      <div className="flex items-center justify-around h-18 py-2">
+    <div className={`fixed bottom-6 left-6 right-6 bg-surface-container/70 backdrop-blur-3xl border border-white/5 lg:hidden z-50 px-4 rounded-[32px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6),0_0_20px_rgba(0,0,0,0.2)] transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+      isVisible ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-32 opacity-0 scale-95 pointer-events-none'
+    }`}>
+      <div className="flex items-center justify-around h-16">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeView === item.id;
@@ -84,18 +94,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({ user, activeView, setActiv
             <button
               key={item.id}
               onClick={() => setActiveView(item.id)}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 py-2 px-1 transition-all relative active:scale-90 ${
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 py-1 transition-all duration-300 relative active:scale-90 ${
                 isActive ? 'text-primary' : 'text-on-surface-dim'
               }`}
             >
-              <div className={`relative p-2 rounded-2xl transition-all duration-500 ${isActive ? 'bg-primary/10 shadow-glow mb-1' : 'opacity-60 mb-1'}`}>
-                <Icon className={`w-5 h-5 ${isActive ? 'animate-in zoom-in-95 duration-500' : ''}`} />
+              <div className={`relative p-2 rounded-2xl transition-all duration-500 ease-out ${isActive ? 'bg-primary/10 shadow-glow scale-110' : 'opacity-60 scale-100 hover:bg-primary/5'}`}>
+                <Icon className={`w-5 h-5 transition-transform duration-500 ${isActive ? 'scale-110' : 'scale-100'}`} />
               </div>
-              <span className={`text-[8px] font-black truncate w-full text-center uppercase tracking-widest ${isActive ? 'opacity-100' : 'opacity-30 italic'}`}>
-                {item.label}
-              </span>
               {isActive && (
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-8 h-1 bg-primary rounded-full shadow-glow" />
+                <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-5 h-1 bg-primary rounded-full shadow-glow animate-in fade-in zoom-in duration-500" />
               )}
             </button>
           );
@@ -104,12 +111,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({ user, activeView, setActiv
         {/* More Menu Button */}
         <button
           onClick={onMenuClick}
-          className="flex flex-col items-center justify-center flex-1 min-w-0 py-2 px-1 text-on-surface-dim group"
+          className="flex flex-col items-center justify-center flex-1 min-w-0 py-1 text-on-surface-dim group active:scale-90 transition-all rounded-full"
         >
-          <div className="p-2 rounded-2xl opacity-60 group-hover:bg-primary/5 transition-all mb-1">
-            <Menu className="w-5 h-5" />
+          <div className="p-2 rounded-2xl opacity-60 group-hover:bg-primary/5 transition-all">
+            <PanelLeft className="w-5 h-5 transition-transform" />
           </div>
-          <span className="text-[8px] font-black uppercase tracking-widest opacity-30 italic">Menu</span>
         </button>
       </div>
     </div>

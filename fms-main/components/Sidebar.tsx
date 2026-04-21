@@ -8,15 +8,16 @@ import {
   Settings, 
   FileText, 
   LogOut,
-  AlertTriangle,
   Database,
   Calendar,
   Anchor,
   Sailboat,
-  Hexagon,
-  Users,
   ClipboardList,
-  Truck
+  Truck,
+  Sun,
+  Moon,
+  ToggleRight,
+  ToggleLeft
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -25,10 +26,23 @@ interface SidebarProps {
   setActiveView: (view: string) => void;
   onLogout: () => void;
   isMobileMenuOpen: boolean;
+  onSettingsClick: () => void;
+  isDarkMode: boolean;
+  setIsDarkMode: (val: boolean) => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ user, activeView, setActiveView, onLogout, isMobileMenuOpen }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ 
+  user, 
+  activeView, 
+  setActiveView, 
+  onLogout, 
+  isMobileMenuOpen,
+  onSettingsClick,
+  isDarkMode,
+  setIsDarkMode
+}) => {
   const getMenuItems = () => {
+    if (!user || !user.role) return [];
     switch (user.role) {
       case UserRole.ITP_OPERATOR:
       case UserRole.ITP_HD_OPERATOR:
@@ -85,6 +99,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, activeView, setActiveVie
           { id: 'briefing', label: 'Shift Briefing', icon: ClipboardList },
           { id: 'intoplane', label: 'Into-Plane Ops', icon: Plane },
           { id: 'stock', label: 'Stock Management', icon: Database },
+          { id: 'bridging', label: 'Transfer Oversight', icon: Droplet },
+          { id: 'marine', label: 'Marine Oversight', icon: Anchor },
+          { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
           { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
           { id: 'reports', label: 'Commercial Reports', icon: FileText },
         ];
@@ -100,21 +117,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, activeView, setActiveVie
     `}>
       <div className="h-full flex flex-col">
         {/* Brand */}
-        <div className="h-[calc(var(--header-height)+var(--alert-bar-height))] flex items-start pt-6 px-8">
-          <div>
-            <div className="flex items-center space-x-3 mb-6">
-              <img 
-                src="https://lh3.googleusercontent.com/d/1YCRXjbsAQ5LskxJcQlSUQV5QyaSX9gD2=s220?authuser=0" 
-                alt="MACL Logo" 
-                className="logo-light h-16 w-auto object-contain"
-              />
-              <img 
-                src="https://lh3.googleusercontent.com/d/1Uk6kyiqhPYw2_9qnXk8612yfdw5ioz5y=s220?authuser=0" 
-                alt="MACL Logo" 
-                className="logo-dark h-16 w-auto object-contain"
-              />
-            </div>
-            <h1 className="text-sm font-black text-primary uppercase tracking-tight">FUEL SERVICES</h1>
+        <div className="h-[72px] flex items-center justify-between px-8 bg-surface-dim/20 border-b border-outline">
+          <h1 className="text-2xl font-[1000] text-primary uppercase tracking-tighter leading-none italic">FMS</h1>
+          <div className="hidden lg:flex items-center space-x-3">
+            <img 
+              src="https://lh3.googleusercontent.com/d/1YCRXjbsAQ5LskxJcQlSUQV5QyaSX9gD2=s220?authuser=0" 
+              alt="MACL Logo" 
+              className="logo-light h-14 w-auto object-contain"
+            />
+            <img 
+              src="https://lh3.googleusercontent.com/d/1Uk6kyiqhPYw2_9qnXk8612yfdw5ioz5y=s220?authuser=0" 
+              alt="MACL Logo" 
+              className="logo-dark h-14 w-auto object-contain"
+            />
           </div>
         </div>
 
@@ -147,18 +162,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, activeView, setActiveVie
 
         {/* Footer Controls */}
         <div className="p-6 space-y-6">
-          <button className="group relative w-full bg-error text-white py-4 rounded-[1.25rem] flex items-center justify-center space-x-3 transition-all duration-300 shadow-[0_10px_25px_rgba(239,68,68,0.25)] hover:shadow-[0_12px_30px_rgba(239,68,68,0.35)] hover:scale-[1.02] active:scale-[0.98] overflow-hidden border border-white/10">
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-            <AlertTriangle className="w-4 h-4 animate-pulse" />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] italic">Emergency Shutdown</span>
-          </button>
 
           <div className="space-y-4 pt-4 border-t border-outline">
             <button className="flex items-center text-on-surface-dim hover:text-primary transition-colors text-[13px] font-bold px-2 group">
               <ClipboardList className="w-4 h-4 mr-3 opacity-40 group-hover:opacity-100" />
               Help Center
             </button>
-            <button className="flex items-center text-on-surface-dim hover:text-primary transition-colors text-[13px] font-bold px-2 group">
+            <button 
+              onClick={onSettingsClick}
+              className="flex items-center text-on-surface-dim hover:text-primary transition-colors text-[13px] font-bold px-2 group"
+            >
               <Settings className="w-4 h-4 mr-3 opacity-40 group-hover:opacity-100" />
               System Settings
             </button>

@@ -2,14 +2,37 @@
 import React, { useState, useEffect } from 'react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, Legend, BarChart, Bar
+  PieChart, Pie, Cell, Legend, BarChart, Bar, ComposedChart
 } from 'recharts';
 import { MOCK_ALERTS, MOCK_USERS, MOCK_JOBS, MOCK_DOMESTIC_FLIGHTS } from '../constants';
-import { FuelType, Tank, User, UserRole, FlightJob } from '../types';
-import { AlertTriangle, TrendingDown, TrendingUp, Activity, Droplet, Users, Clock, Plane, LayoutDashboard, MapPin, CheckCircle, Truck, Play } from 'lucide-react';
+import { FuelType, Tank, User, UserRole, FlightJob, Equipment, EquipmentStatus as EqStatus, EquipmentType } from '../types';
+import { AlertTriangle, TrendingDown, TrendingUp, Activity, Droplet, Users, Clock, Plane, LayoutDashboard, MapPin, CheckCircle, Truck, Play, Thermometer, CloudSun, Wind, RefreshCw, Send, Globe, Anchor, ShoppingBag } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
+import { useOperationalData } from '../context/OperationalDataContext';
+import { useNotification } from '../context/NotificationContext';
+import { equipmentBadgeClass, equipmentDotClass, equipmentBadgeSoftClass } from '../utils/equipmentColors';
 
 // Mock Data for Charts
+const HOURLY_DATA_INT = [
+  { hour: '06:00', flights: 2, volume: 15000 },
+  { hour: '08:00', flights: 5, volume: 45000 },
+  { hour: '10:00', flights: 8, volume: 72000 },
+  { hour: '12:00', flights: 6, volume: 54000 },
+  { hour: '14:00', flights: 10, volume: 90000 },
+  { hour: '16:00', flights: 12, volume: 108000 },
+  { hour: '18:00', flights: 9, volume: 81000 },
+];
+
+const HOURLY_DATA_DOM = [
+  { hour: '06:00', flights: 4, volume: 12000 },
+  { hour: '08:00', flights: 7, volume: 21000 },
+  { hour: '10:00', flights: 12, volume: 36000 },
+  { hour: '12:00', flights: 10, volume: 30000 },
+  { hour: '14:00', flights: 15, volume: 45000 },
+  { hour: '16:00', flights: 13, volume: 39000 },
+  { hour: '18:00', flights: 8, volume: 24000 },
+];
+
 const HOURLY_DATA = [
   { hour: '06:00', jetA1: 4000, diesel: 200, flights: 2 },
   { hour: '08:00', jetA1: 12000, diesel: 500, flights: 5 },
@@ -27,21 +50,32 @@ const FLIGHT_PERFORMANCE = [
 ];
 
 interface DashboardProps {
-  tanks: Tank[];
   user: User;
   setActiveView: (view: string) => void;
   onStartJob?: (job: FlightJob) => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ tanks, user, setActiveView, onStartJob }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onStartJob }) => {
+  const { tanks = [], equipment = [], briefingInfo, flightJobs = [], domesticFlights = [], alerts = [], createAlert, acknowledgeAlert } = useOperationalData();
+  const { notify } = useNotification();
   // Logic to determine initial view and if switching is allowed
-  const isItpManager = user.role === UserRole.ITP_MANAGER;
-  const isItpOperator = [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_MANAGER].includes(user.role);
-  const isDualRole = [UserRole.ADMIN, UserRole.EXECUTIVE].includes(user.role);
+
+  // Logic to determine initial view and if switching is allowed
+  const isItpManager = user?.role === UserRole.ITP_MANAGER;
+  const isItpOperator = user ? [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(user.role) : false;
+  const isDualRole = user ? [UserRole.ADMIN, UserRole.EXECUTIVE].includes(user.role) : false;
+  const isDepotRole = user ? [UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(user.role) : false;
   
-  const [viewMode, setViewMode] = useState<'ITP' | 'DEPOT'>(
-    isItpManager ? 'ITP' : 'DEPOT'
-  );
+  const [viewMode, setViewMode] = useState<'ITP' | 'DEPOT'>(isDepotRole ? 'DEPOT' : 'ITP');
+  const [pendingRequests, setPendingRequests] = useState<Set<string>>(new Set());
+
+  const userAlerts = (alerts || []).filter(a => {
+    if (!user) return false;
+    if (isDualRole) return true;
+    if (a.targetRole === user.role) return true;
+    if (isDepotRole && [UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(a.targetRole as UserRole)) return true;
+    return !a.targetRole;
+  });
 
   const [myDomesticTeam, setMyDomesticTeam] = useState<any>(null);
   const [myEquipment, setMyEquipment] = useState<any>(null);
@@ -49,6 +83,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ tanks, user, setActiveView
   const [showWelcome, setShowWelcome] = useState(true);
   const [allEquipmentAssignments, setAllEquipmentAssignments] = useState<any[]>([]);
   const [allDomesticAssignments, setAllDomesticAssignments] = useState<any[]>([]);
+  const [rotationIndex, setRotationIndex] = useState(0);
+
+  // Rotation timer for dashboard cards (5 categories for Uplift)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRotationIndex(prev => (prev + 1) % 5);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const isDelayed = (sta?: string, eta?: string) => {
     if (!sta || !eta) return false;
@@ -81,23 +124,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ tanks, user, setActiveView
           const allEq = [...(dailyEq || []), ...(dieselEq || [])];
           const myEqs = allEq.filter(d => d.operator1_id === user.id || d.operator2_id === user.id);
           if (myEqs.length > 0) setMyEquipment(myEqs);
-
-          // Fetch Shift Briefing Info
-          const briefingData = await supabaseService.getShiftBriefingInfo(todayDate) as any;
-          if (briefingData && briefingData.info && briefingData.info.length > 0) {
-            setShiftBriefingInfo(briefingData.info);
-          }
         }
       } catch (error) {
         console.error("Error fetching assignments", error);
       }
     };
     fetchAssignments();
-  }, [isItpOperator, user.id, viewMode]);
+  }, [isItpOperator, user.id, viewMode, briefingInfo]);
 
-  const totalJetA1 = tanks.filter(t => t.type === FuelType.JET_A1).reduce((acc, t) => acc + t.currentLevel, 0);
-  const maxJetA1 = tanks.filter(t => t.type === FuelType.JET_A1).reduce((acc, t) => acc + t.capacity, 0);
-  const percentage = Math.round((totalJetA1 / maxJetA1) * 100);
+
+
+  const handleAcknowledgeAlert = async (id: string) => {
+    try {
+      await acknowledgeAlert(id);
+    } catch (error) {
+      console.error("Failed to acknowledge alert", error);
+    }
+  };
+
+  const totalJetA1 = (tanks || []).filter(t => t.type === FuelType.JET_A1).reduce((acc, t) => acc + t.currentLevel, 0);
+  const maxJetA1 = (tanks || []).filter(t => t.type === FuelType.JET_A1).reduce((acc, t) => acc + t.capacity, 0);
+  const percentage = maxJetA1 > 0 ? Math.round((totalJetA1 / maxJetA1) * 100) : 0;
 
   const stockData = [
     { name: 'Available', value: totalJetA1 },
@@ -109,20 +156,36 @@ export const Dashboard: React.FC<DashboardProps> = ({ tanks, user, setActiveView
   // --- Sub-Component: Operator Dashboard (My Tasks) ---
   const renderOperatorDashboard = () => {
     // STRICT filtering for RBAC: Only show jobs assigned to current user
-    const myTasks = MOCK_JOBS
-      .filter(job => job.assignedTo === user.id)
-      .sort((a, b) => (a.std || '').localeCompare(b.std || ''));
+    const myTasks = flightJobs
+      .filter((job: FlightJob) => job.assignedTo === user.id)
+      .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+
 
     const myDomesticFlights = myDomesticTeam 
-      ? MOCK_DOMESTIC_FLIGHTS
-          .filter(f => f.assignedTeam === myDomesticTeam.team_name)
-          .sort((a, b) => (a.std || '').localeCompare(b.std || ''))
+      ? domesticFlights
+          .filter((f: any) => f.assignedTeam === myDomesticTeam.team_name)
+          .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''))
       : [];
+
     
     const hasAnyTasks = myTasks.length > 0 || myDomesticTeam || myEquipment;
 
     return (
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-4xl mx-auto">
+        {/* Welcome Message - above all others */}
+        <div className={`transition-all duration-1000 overflow-hidden ${showWelcome ? 'max-h-40 opacity-100 mb-6' : 'max-h-0 opacity-0 mb-0'}`}>
+           <div className="card-premium p-8 border-outline flex items-center justify-between shadow-glow">
+               <div>
+                   <h2 className="title-lg text-on-surface">Operations Hub</h2>
+                   <p className="text-on-surface-dim font-bold italic tracking-tight">Welcome back, <span className="text-primary">{user.name}</span></p>
+               </div>
+               <div className="bg-primary/10 text-primary px-4 py-2 rounded-xl font-black border border-primary/20 flex items-center text-[10px] uppercase tracking-widest">
+                   <Clock className="w-4 h-4 mr-2" />
+                   {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+               </div>
+           </div>
+        </div>
+
         {/* Modern Stats Panel */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="card-premium p-6 border-outline flex flex-col justify-center items-center text-center group hover:bg-primary/5 transition-colors">
@@ -139,34 +202,109 @@ export const Dashboard: React.FC<DashboardProps> = ({ tanks, user, setActiveView
                 </div>
                 <span className="text-[10px] font-black text-success mt-2 uppercase">65% DONE</span>
             </div>
-            <div className="card-premium p-6 border-outline flex flex-col justify-center items-center text-center group hover:bg-warning/5 transition-colors">
-                <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">Wind Velocity</span>
-                <div className="flex items-baseline space-x-1">
-                    <span className="text-2xl font-black text-on-surface">08</span>
-                    <span className="text-xs font-bold text-warning italic">KTS</span>
+            
+            {/* Rotating Weather/Wind Card */}
+            <div className="card-premium p-6 border-outline flex flex-col justify-center items-center text-center group hover:bg-warning/5 transition-all duration-500 overflow-hidden relative">
+                <div className={`transition-all duration-500 transform ${rotationIndex === 0 ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 absolute'}`}>
+                  <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">Wind Velocity</span>
+                  <div className="flex items-baseline space-x-1">
+                      <span className="text-2xl font-black text-on-surface">08</span>
+                      <span className="text-xs font-bold text-warning italic">KTS</span>
+                  </div>
+                </div>
+                <div className={`transition-all duration-500 transform ${rotationIndex === 1 ? 'translate-y-0 opacity-100' : '-translate-y-12 opacity-0 absolute'}`}>
+                  <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">Weather</span>
+                  <div className="flex items-center space-x-2">
+                      <CloudSun className="w-5 h-5 text-warning" />
+                      <span className="text-sm font-black text-on-surface uppercase">29°C / Clear</span>
+                  </div>
                 </div>
             </div>
-            <div className="card-premium p-6 border-outline flex flex-col justify-center items-center text-center group active:scale-95 transition-transform cursor-pointer hover:bg-primary/5">
-                <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">Safety Status</span>
-                <div className="flex items-center space-x-2 text-primary">
-                    <CheckCircle className="w-5 h-5 text-success" />
-                    <span className="text-xs font-black uppercase text-success">Verified</span>
+
+            {/* Rotating Tank/Density Card */}
+            <div className="card-premium p-6 border-outline flex flex-col justify-center items-center text-center group hover:bg-primary/5 transition-all duration-500 overflow-hidden relative">
+                <div className={`transition-all duration-500 transform ${rotationIndex === 0 ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 absolute'}`}>
+                  <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">Service Tank</span>
+                  <div className="flex items-center space-x-2">
+                      <Droplet className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-black text-on-surface uppercase tracking-tight">TK-101 (NFF)</span>
+                  </div>
+                </div>
+                <div className={`transition-all duration-500 transform ${rotationIndex === 1 ? 'translate-y-0 opacity-100' : '-translate-y-12 opacity-0 absolute'}`}>
+                  <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">Density</span>
+                  <div className="flex items-center space-x-2">
+                      <Activity className="w-4 h-4 text-success" />
+                      <span className="text-sm font-black text-on-surface uppercase tracking-tight">0.801 kg/m³</span>
+                  </div>
                 </div>
             </div>
         </div>
 
-        <div className={`transition-all duration-1000 overflow-hidden ${showWelcome ? 'max-h-40 opacity-100 mb-6' : 'max-h-0 opacity-0 mb-0'}`}>
-           <div className="card-premium p-8 border-outline flex items-center justify-between shadow-glow">
-               <div>
-                   <h2 className="title-lg text-on-surface">Operations Hub</h2>
-                   <p className="text-on-surface-dim font-bold italic tracking-tight">Welcome back, <span className="text-primary">{user.name}</span></p>
-               </div>
-               <div className="bg-primary/10 text-primary px-4 py-2 rounded-xl font-black border border-primary/20 flex items-center text-[10px] uppercase tracking-widest">
-                   <Clock className="w-4 h-4 mr-2" />
-                   {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-               </div>
-           </div>
-        </div>
+        {/* Available Equipment Section - categorized RF / HD */}
+        {equipment && equipment.length > 0 && (() => {
+          const available = equipment.filter(eq => eq.status === EqStatus.AVAILABLE);
+          const rfUnits = available.filter(eq => eq.id.startsWith('RF'));
+          const hdUnits = available.filter(eq => eq.id.startsWith('HD'));
+
+          return (
+            <div className="space-y-5">
+              {/* Header */}
+              <div className="flex items-center px-1">
+                <h3 className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.3em]">Available Assets</h3>
+                <span className="w-8 h-[1px] bg-outline flex-1 mx-4"></span>
+                <span className="text-[10px] font-black text-success uppercase tracking-widest">{available.length} Standby</span>
+              </div>
+
+              {/* Refuellers */}
+              {rfUnits.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.25em] opacity-50 px-1 flex items-center">
+                    <span className="w-4 h-[1px] bg-primary/40 mr-2"></span>
+                    Refuellers (RF) — {rfUnits.length} units
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {rfUnits.map((eq) => (
+                      <div key={eq.id} className="bg-surface-dim/40 border border-outline p-4 rounded-2xl flex items-center space-x-3 group hover:border-primary/30 transition-all cursor-pointer">
+                        <div className="p-2 bg-primary/10 rounded-lg group-hover:scale-110 transition-transform">
+                          <Truck className="w-4 h-4 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-[900] text-on-surface tracking-tighter">{eq.name}</p>
+                          <p className="text-[8px] font-black text-success opacity-60 uppercase tracking-widest">Available</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Hydrant Dispensers */}
+              {hdUnits.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.25em] opacity-50 px-1 flex items-center">
+                    <span className="w-4 h-[1px] bg-warning/40 mr-2"></span>
+                    Hydrant Dispensers (HD) — {hdUnits.length} units
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {hdUnits.map((eq) => (
+                      <div key={eq.id} className="bg-surface-dim/40 border border-outline p-4 rounded-2xl flex items-center space-x-3 group hover:border-warning/30 transition-all cursor-pointer">
+                        <div className="p-2 bg-warning/10 rounded-lg group-hover:scale-110 transition-transform">
+                          <Droplet className="w-4 h-4 text-warning" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-[900] text-on-surface tracking-tighter">{eq.name}</p>
+                          <p className="text-[8px] font-black text-success opacity-60 uppercase tracking-widest">Available</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+
 
         {/* Tactical Quick Actions */}
         <div className="flex items-center space-x-4 mb-2 overflow-x-auto pb-2 custom-scrollbar">
@@ -237,9 +375,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ tanks, user, setActiveView
                                                 {flight.aircraftReg}
                                             </span>
                                             {flight.vehicleId && flight.status !== 'PENDING' && (
-                                                <div className="flex items-center space-x-1.5 px-2 py-1 bg-primary/10 rounded-lg text-primary border border-primary/20">
+                                                <div className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest ${equipmentBadgeClass(flight.vehicleId)}`}>
                                                     <Truck className="w-3 h-3" />
-                                                    <span className="text-[9px] font-black uppercase tracking-widest">{flight.vehicleId}</span>
+                                                    <span>{flight.vehicleId}</span>
                                                 </div>
                                             )}
                                         </div>
@@ -336,9 +474,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ tanks, user, setActiveView
                                             {job.aircraftReg}
                                         </span>
                                         {job.vehicleId && job.status !== 'PENDING' && (
-                                            <div className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-primary/10 rounded-lg text-primary border border-primary/20">
+                                            <div className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-widest ${equipmentBadgeClass(job.vehicleId)}`}>
                                                 <Truck className="w-4 h-4" />
-                                                <span className="text-[10px] font-black uppercase tracking-widest">{job.vehicleId}</span>
+                                                <span>{job.vehicleId}</span>
                                             </div>
                                         )}
                                     </div>
@@ -413,16 +551,45 @@ export const Dashboard: React.FC<DashboardProps> = ({ tanks, user, setActiveView
              </div>
              <div className="mt-4 text-[10px] font-bold opacity-40 uppercase tracking-widest text-on-surface">12 Pending / 8 In-Progress</div>
           </div>
-          <div className="card-premium p-8 group hover:border-success/30">
-             <div className="flex justify-between items-start">
-                <div>
-                   <p className="label-sm text-on-surface-dim font-bold opacity-60">Uplift Volume</p>
-                   <h3 className="text-4xl font-[900] text-on-surface mt-2 tracking-tighter">164K L</h3>
+          {(() => {
+            const categories = [
+              { label: 'Total Volume', value: '164K L', subtext: '+5.2% vs Forecast', color: 'text-success', bg: 'bg-success/10', icon: Droplet, border: 'hover:border-success/30' },
+              { label: 'International', value: '94.2K L', subtext: '+6.1% vs Forecast', color: 'text-primary', bg: 'bg-primary/10', icon: Globe, border: 'hover:border-primary/30' },
+              { label: 'Domestic', value: '34.8K L', subtext: '+2.4% vs Forecast', color: 'text-warning', bg: 'bg-warning/10', icon: MapPin, border: 'hover:border-warning/30' },
+              { label: 'Seaplane', value: '18.5K L', subtext: '+8.7% vs Forecast', color: 'text-primary', bg: 'bg-primary/10', icon: Anchor, border: 'hover:border-primary/30' },
+              { label: 'Local Sales', value: '16.5K L', subtext: '-1.2% vs Forecast', color: 'text-error', bg: 'bg-error/10', icon: ShoppingBag, border: 'hover:border-error/30' },
+            ];
+            const current = categories[rotationIndex];
+            const Icon = current.icon;
+
+            return (
+              <div className={`card-premium p-8 group transition-all duration-500 ${current.border} relative overflow-hidden`}>
+                <div className="flex justify-between items-start relative z-10 animate-in fade-in slide-in-from-right-4 duration-500">
+                  <div>
+                    <p className="label-sm text-on-surface-dim font-bold opacity-60 flex items-center">
+                      {current.label}
+                      {rotationIndex === 0 && <span className="ml-2 w-1.5 h-1.5 bg-success rounded-full animate-pulse"></span>}
+                    </p>
+                    <h3 className="text-4xl font-[900] text-on-surface mt-2 tracking-tighter">{current.value}</h3>
+                  </div>
+                  <div className={`p-3 ${current.bg} rounded-xl group-hover:scale-110 transition-transform`}>
+                    <Icon className={`w-6 h-6 ${current.color}`} />
+                  </div>
                 </div>
-                <div className="p-3 bg-success/10 rounded-xl group-hover:scale-110 transition-transform"><Droplet className="w-6 h-6 text-success" /></div>
-             </div>
-             <div className="mt-4 text-[10px] font-black text-success uppercase tracking-widest">+5.2% vs Forecast</div>
-          </div>
+                <div className="mt-4 flex justify-between items-end relative z-10 animate-in fade-in slide-in-from-bottom-2 duration-700">
+                  <div className={`text-[10px] font-black ${current.color} uppercase tracking-widest`}>{current.subtext}</div>
+                  <div className="flex space-x-1">
+                    {categories.map((_, i) => (
+                      <div key={i} className={`w-1 h-1 rounded-full transition-all duration-300 ${i === rotationIndex ? `w-3 ${current.bg.replace('/10', '')}` : 'bg-outline-variant'}`}></div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Decorative background element */}
+                <div className={`absolute -right-4 -bottom-4 w-24 h-24 ${current.bg} rounded-full blur-3xl opacity-50 group-hover:opacity-80 transition-opacity`}></div>
+              </div>
+            );
+          })()}
            <div className="card-premium p-8 group hover:border-primary/30">
              <div className="flex justify-between items-start">
                 <div>
@@ -445,25 +612,259 @@ export const Dashboard: React.FC<DashboardProps> = ({ tanks, user, setActiveView
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-           {/* Flight Volume Chart */}
-           <div className="card-premium p-8 lg:col-span-2">
-              <h3 className="headline-lg text-on-surface mb-8 tracking-tighter">Hourly Operations Activity</h3>
+        {/* Simplified Operator Status Grid for Duty Managers only */}
+        {isItpManager && (
+            <div className="card-premium p-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <div className="flex items-center justify-between mb-8">
+                    <h3 className="text-[12px] font-black text-on-surface-dim uppercase tracking-[0.3em]">Operator Oversight</h3>
+                    <span className="text-[10px] font-black text-primary uppercase tracking-widest">{operators.length} Personnel Active</span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                    {operators.map((op) => {
+                        const eqAssignment = allEquipmentAssignments.find(a => a.operator1_id === op.id || a.operator2_id === op.id);
+                        const domAssignment = allDomesticAssignments.find(a => a.operator1_id === op.id || a.operator2_id === op.id);
+                        const activeTask = flightJobs.find((j: FlightJob) => j.assignedTo === op.id && j.status === 'IN_PROGRESS');
+
+                        let statusText = 'Available';
+                        let statusColor = 'bg-on-surface-dim opacity-30';
+
+                        if (activeTask) {
+                            statusText = `Refueling ${activeTask.flightNumber}`;
+                            statusColor = 'bg-success shadow-[0_0_10px_rgba(34,197,94,0.4)] animate-pulse';
+                        } else if (domAssignment) {
+                            statusText = domAssignment.team_name;
+                            statusColor = 'bg-success';
+                        } else if (eqAssignment) {
+                            statusText = 'Available';
+                            statusColor = 'bg-success';
+                        }
+
+                        const currentVeh = activeTask?.vehicleId || eqAssignment?.equipment_id;
+
+                        return (
+                            <div key={op.id} className="flex flex-col items-center text-center p-4 bg-surface-dim border border-outline rounded-3xl group transition-all hover:bg-surface-container">
+                                <div className="relative mb-3 flex flex-col items-center">
+                                    <div className="relative">
+                                        <img src={op.avatar} alt="" className="w-12 h-12 rounded-2xl border border-outline shadow-sm group-hover:scale-110 transition-transform" />
+                                        <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-4 border-surface-dim ${statusColor}`}></div>
+                                    </div>
+                                    
+                                    {isItpManager && eqAssignment && eqAssignment.equipment_id.startsWith('RF') && (() => {
+                                        const isRequested = (alerts || []).some(a => a && !a.acknowledged && a.message.includes(`Replenishment requested for unit ${eqAssignment.equipment_id}`));
+                                        return (
+                                            <button 
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    if (isRequested || pendingRequests.has(eqAssignment.equipment_id)) return;
+                                                    
+                                                    setPendingRequests(prev => new Set(prev).add(eqAssignment.equipment_id));
+                                                    try {
+                                                        const success = await createAlert({
+                                                            severity: 'medium',
+                                                            message: `Replenishment requested for unit ${eqAssignment.equipment_id}`,
+                                                            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                                                            acknowledged: false,
+                                                            targetRole: UserRole.DEPOT_OPERATOR
+                                                        });
+                                                        
+                                                        if (success) {
+                                                            notify(`Refuel request sent to Depot Operators for ${eqAssignment.equipment_id}`, 'success');
+                                                        }
+                                                    } catch (error) {
+                                                        console.error("Failed to send refuel request", error);
+                                                        notify(`Failed to send refuel request for ${eqAssignment.equipment_id}`, 'error');
+                                                    } finally {
+                                                        setPendingRequests(prev => {
+                                                            const next = new Set(prev);
+                                                            next.delete(eqAssignment.equipment_id);
+                                                            return next;
+                                                        });
+                                                    }
+                                                }}
+                                                disabled={isRequested || pendingRequests.has(eqAssignment.equipment_id)}
+                                                title={isRequested ? 'Replenishment already requested' : 'Request Replenishment'}
+                                                className={`absolute -top-1 -right-1 p-1.5 rounded-lg border transition-all ${
+                                                    isRequested || pendingRequests.has(eqAssignment.equipment_id)
+                                                    ? 'bg-surface-lowest text-on-surface-dim opacity-30 cursor-not-allowed border-outline' 
+                                                    : 'bg-primary text-white border-primary shadow-lg hover:scale-110 active:scale-95'
+                                                }`}
+                                            >
+                                                {isRequested || pendingRequests.has(eqAssignment.equipment_id) ? <RefreshCw className="w-2.5 h-2.5 animate-spin" /> : 
+                                                 <Send className="w-2.5 h-2.5" />}
+                                            </button>
+                                        );
+                                    })()}
+                                </div>
+                                <p className="text-[10px] font-[900] text-on-surface uppercase tracking-tight line-clamp-1">{op.name.split(' ')[0]}</p>
+                                
+                                {currentVeh && (
+                                    <div className={`mt-1.5 px-2 py-0.5 rounded-md text-[8px] font-black border uppercase tracking-widest ${equipmentBadgeSoftClass(currentVeh)}`}>
+                                        {currentVeh}
+                                    </div>
+                                )}
+
+                                <p className="text-[8px] font-bold text-on-surface-dim opacity-50 uppercase tracking-widest mt-1.5 line-clamp-1">{statusText}</p>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        )}
+
+        {/* Available Equipment Section - categorised RF / HD for Managers */}
+        {equipment && equipment.length > 0 && (() => {
+          const available = equipment.filter(eq => eq.status === EqStatus.AVAILABLE);
+          const rfUnits = available.filter(eq => eq.id.startsWith('RF'));
+          const hdUnits = available.filter(eq => eq.id.startsWith('HD'));
+
+          return (
+            <div className="space-y-5 px-1 animate-in fade-in slide-in-from-bottom-2 duration-500">
+              <div className="flex items-center">
+                <h3 className="text-[12px] font-black text-on-surface-dim uppercase tracking-[0.3em]">Operational Assets</h3>
+                <span className="w-8 h-[1px] bg-outline flex-1 mx-4"></span>
+                <span className="text-[10px] font-black text-success uppercase tracking-widest">{available.length} Units Standby</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Refuellers */}
+                {rfUnits.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.25em] opacity-50 flex items-center">
+                      <span className="w-4 h-[1px] bg-primary/40 mr-2"></span>
+                      Refuellers (RF)
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {rfUnits.map((eq) => {
+                        const isRequested = alerts.some(a => !a.acknowledged && a.message.includes(`Replenishment requested for unit ${eq.id}`));
+                        
+                        return (
+                          <div key={eq.id} className="bg-surface-dim/40 border border-outline p-4 rounded-2xl flex items-center justify-between group hover:border-primary/30 transition-all">
+                            <div className="flex items-center space-x-3">
+                              <div className="p-2 bg-primary/10 rounded-lg group-hover:scale-110 transition-transform">
+                                <Truck className="w-4 h-4 text-primary" />
+                              </div>
+                              <div>
+                                <p className="text-[11px] font-[900] text-on-surface tracking-tighter">{eq.name}</p>
+                                <p className="text-[8px] font-black text-success opacity-60 uppercase tracking-widest">Standby</p>
+                              </div>
+                            </div>
+                            
+                             {isItpManager && (
+                              <button 
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (isRequested || pendingRequests.has(eq.id)) return;
+                                  
+                                  setPendingRequests(prev => new Set(prev).add(eq.id));
+                                  try {
+                                    const success = await createAlert({
+                                      severity: 'medium',
+                                      message: `Replenishment requested for unit ${eq.id}`,
+                                      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                                      acknowledged: false,
+                                      targetRole: UserRole.DEPOT_OPERATOR
+                                    });
+                                    if (success) {
+                                      notify(`Refuel request sent for ${eq.id}`, 'success');
+                                    }
+                                  } catch (error) {
+                                    console.error("Failed to send refuel request", error);
+                                    notify(`Failed to send refuel request for ${eq.id}`, 'error');
+                                  } finally {
+                                    setPendingRequests(prev => {
+                                        const next = new Set(prev);
+                                        next.delete(eq.id);
+                                        return next;
+                                    });
+                                  }
+                                }}
+                                disabled={isRequested || pendingRequests.has(eq.id)}
+                                className={`px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all shadow-sm ${
+                                  isRequested || pendingRequests.has(eq.id)
+                                  ? 'bg-surface-lowest text-on-surface-dim opacity-30 cursor-not-allowed border border-outline' 
+                                  : 'bg-primary text-white border border-primary hover:scale-105 active:scale-95'
+                                }`}
+                              >
+                                {isRequested ? 'REQUESTED' : pendingRequests.has(eq.id) ? 'SENDING...' : 'REPLENISH'}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Hydrant Dispensers */}
+                {hdUnits.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.25em] opacity-50 flex items-center">
+                      <span className="w-4 h-[1px] bg-warning/40 mr-2"></span>
+                      Hydrant Dispensers (HD)
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {hdUnits.map((eq) => (
+                        <div key={eq.id} className="bg-surface-dim/40 border border-outline p-4 rounded-2xl flex items-center space-x-3 group hover:border-warning/30 transition-all cursor-pointer">
+                          <div className="p-2 bg-warning/10 rounded-lg group-hover:scale-110 transition-transform">
+                            <Droplet className="w-4 h-4 text-warning" />
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-[900] text-on-surface tracking-tighter">{eq.name}</p>
+                            <p className="text-[8px] font-black text-success opacity-60 uppercase tracking-widest">Standby</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+           {/* International Flight Volume Chart */}
+           <div className="card-premium p-8">
+              <h3 className="headline-lg text-on-surface mb-8 tracking-tighter">International Hourly Activity</h3>
               <div className="h-72">
                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={HOURLY_DATA}>
+                    <ComposedChart data={HOURLY_DATA_INT}>
                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline)" />
                        <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{fill: 'var(--color-on-surface-dim)', fontSize: 10, fontWeight: 700}} />
-                       <YAxis axisLine={false} tickLine={false} tick={{fill: 'var(--color-on-surface-dim)', fontSize: 10, fontWeight: 700}} />
+                       <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{fill: 'var(--color-on-surface-dim)', fontSize: 10, fontWeight: 700}} />
+                       <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{fill: 'var(--color-primary)', fontSize: 10, fontWeight: 700}} />
                        <Tooltip cursor={{fill: 'var(--color-surface-dim)'}} contentStyle={{backgroundColor: 'var(--color-surface-container)', borderRadius: '12px', border: '1px solid var(--color-outline)', color: 'var(--color-on-surface)'}} />
-                       <Bar dataKey="flights" fill="var(--color-primary)" radius={[4, 4, 0, 0]} name="Flights Served" />
-                    </BarChart>
+                       <Legend verticalAlign="top" height={36}/>
+                       <Bar yAxisId="left" dataKey="flights" fill="var(--color-on-surface-dim)" opacity={0.4} radius={[4, 4, 0, 0]} name="Flights Served" />
+                       <Line yAxisId="right" type="monotone" dataKey="volume" stroke="var(--color-primary)" strokeWidth={3} dot={{fill: 'var(--color-primary)', r: 4}} activeDot={{r: 6}} name="Uplift (L)" />
+                    </ComposedChart>
                  </ResponsiveContainer>
               </div>
            </div>
 
-           {/* Performance Donut */}
+           {/* Domestic Flight Volume Chart */}
            <div className="card-premium p-8">
+              <h3 className="headline-lg text-on-surface mb-8 tracking-tighter">Domestic Hourly Activity</h3>
+              <div className="h-72">
+                 <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={HOURLY_DATA_DOM}>
+                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline)" />
+                       <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{fill: 'var(--color-on-surface-dim)', fontSize: 10, fontWeight: 700}} />
+                       <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{fill: 'var(--color-on-surface-dim)', fontSize: 10, fontWeight: 700}} />
+                       <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{fill: 'var(--color-success)', fontSize: 10, fontWeight: 700}} />
+                       <Tooltip cursor={{fill: 'var(--color-surface-dim)'}} contentStyle={{backgroundColor: 'var(--color-surface-container)', borderRadius: '12px', border: '1px solid var(--color-outline)', color: 'var(--color-on-surface)'}} />
+                       <Legend verticalAlign="top" height={36}/>
+                       <Bar yAxisId="left" dataKey="flights" fill="var(--color-on-surface-dim)" opacity={0.4} radius={[4, 4, 0, 0]} name="Flights Served" />
+                       <Line yAxisId="right" type="monotone" dataKey="volume" stroke="var(--color-success)" strokeWidth={3} dot={{fill: 'var(--color-success)', r: 4}} activeDot={{r: 6}} name="Uplift (L)" />
+                    </ComposedChart>
+                 </ResponsiveContainer>
+              </div>
+           </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+           {/* Performance Donut */}
+           <div className="card-premium p-8 lg:col-span-1">
               <h3 className="headline-lg text-on-surface mb-8 tracking-tighter">On-Time Performance</h3>
               <div className="h-64 relative">
                 <ResponsiveContainer width="100%" height="100%">
@@ -491,48 +892,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ tanks, user, setActiveView
               </div>
            </div>
         </div>
-
-        <div className="card-premium p-8">
-            <h3 className="headline-lg text-on-surface mb-6 tracking-tighter">Operator Status</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {operators.map((op) => {
-                    const eqAssignment = allEquipmentAssignments.find(a => a.operator1_id === op.id || a.operator2_id === op.id);
-                    const domAssignment = allDomesticAssignments.find(a => a.operator1_id === op.id || a.operator2_id === op.id);
-                    const activeTask = MOCK_JOBS.find(j => j.assignedTo === op.id && j.status === 'IN_PROGRESS');
-
-                    let statusText = 'Available';
-                    let subText = 'Standby';
-                    let statusColor = 'bg-on-surface-dim opacity-30';
-
-                    if (activeTask) {
-                        statusText = `Refueling ${activeTask.flightNumber}`;
-                        subText = activeTask.vehicleId || 'No Vehicle';
-                        statusColor = 'bg-success shadow-[0_0_10px_rgba(34,197,94,0.4)]';
-                    } else if (domAssignment) {
-                        statusText = domAssignment.team_name;
-                        subText = 'Domestic Ops';
-                        statusColor = 'bg-success';
-                    } else if (eqAssignment) {
-                        statusText = `Assigned ${eqAssignment.equipment_id}`;
-                        subText = 'Available';
-                        statusColor = 'bg-success';
-                    }
-
-                    return (
-                        <div key={op.id} className="flex items-center p-4 bg-surface-dim border border-outline rounded-2xl group transition-all hover:bg-surface-container">
-                            <div className={`w-3 h-3 rounded-full mr-4 ${statusColor}`}></div>
-                            <img src={op.avatar} alt="" className="w-10 h-10 rounded-xl mr-4 border border-outline shadow-sm" />
-                            <div>
-                                <p className="text-sm font-black text-on-surface uppercase tracking-tight">{op.name}</p>
-                                <p className="text-[10px] font-bold text-on-surface-dim opacity-60 uppercase tracking-widest">
-                                    {statusText} {subText !== 'Standby' ? `• ${subText}` : ''}
-                                </p>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
       </div>
   );
 
@@ -542,31 +901,158 @@ export const Dashboard: React.FC<DashboardProps> = ({ tanks, user, setActiveView
       {/* Hero Section: Active Units + Metric Summary */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
         
-        {/* Hero Card: Active Refueling Units */}
-        <div className="xl:col-span-2 card-premium p-12 relative overflow-hidden flex flex-col justify-between min-h-[400px]">
+        {/* Hero Card: Live Operations Breakdown */}
+        <div className="xl:col-span-2 card-premium p-10 relative overflow-hidden flex flex-col justify-between min-h-[400px]">
           <div className="relative z-10">
-            <p className="label-sm text-on-surface-dim opacity-40 mb-3 tracking-[0.4em]">Current Operations Overlay</p>
+            <p className="label-sm text-on-surface-dim opacity-40 mb-3 tracking-[0.4em]">Live Operations Breakdown</p>
             <h3 className="headline-lg text-on-surface pl-0 font-black tracking-tighter uppercase relative">
                 Active Refueling Units
                 <div className="absolute -left-12 top-1 w-1.5 h-6 bg-primary rounded-full"></div>
             </h3>
-            <div className="flex items-center space-x-2 mt-8">
+            <div className="flex items-center space-x-2 mt-4">
               <div className="dot-live"></div>
               <span className="text-[10px] font-black text-success uppercase tracking-widest ml-3">Live Telemetry Synchronized</span>
             </div>
           </div>
-          
-          <div className="relative z-10 flex items-baseline space-x-10 mt-12">
-            <span className="text-[160px] font-[900] text-primary leading-none tracking-tighter [text-shadow:_0_10px_40px_rgba(56,189,248,0.2)]">8</span>
-            <span className="text-sm font-black text-on-surface-dim uppercase tracking-[0.4em] mb-8 opacity-40">Boeing / Airbus on Bay</span>
-          </div>
 
-          <div className="relative z-10 flex space-x-3 h-2 w-full max-w-xl mb-4">
-            <div className="flex-1 bg-primary rounded-full shadow-premium"></div>
-            <div className="flex-1 bg-primary rounded-full shadow-premium"></div>
-            <div className="flex-1 bg-primary rounded-full shadow-premium"></div>
-            <div className="flex-1 bg-primary rounded-full shadow-premium"></div>
-            <div className="flex-1 bg-on-surface/5 rounded-full"></div>
+          <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
+            {/* HD Dispensers */}
+            <div className="bg-surface-dim/60 rounded-2xl border border-outline p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-primary/10 rounded-xl border border-primary/20">
+                    <Droplet className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-on-surface-dim opacity-60">HD Dispensers</p>
+                    <p className="text-[9px] font-bold text-primary opacity-70 tracking-widest uppercase">Hydrant Units</p>
+                  </div>
+                </div>
+                <span className="text-3xl font-[900] text-primary leading-none">3</span>
+              </div>
+              <div className="space-y-2">
+                {[{id: 'HD-01', flight: 'EK659', stand: 'D14'}, {id: 'HD-02', flight: 'SQ432', stand: 'F55'}, {id: 'HD-03', flight: 'UL102', stand: 'C12'}].map(hd => (
+                  <div key={hd.id} className="flex items-center justify-between px-3 py-2 bg-red-500/5 rounded-xl border border-red-500/10">
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-2 h-2 rounded-full animate-pulse ${equipmentDotClass(hd.id)}`}></div>
+                      <span className={`text-[11px] font-black uppercase px-2 py-0.5 rounded-md border ${equipmentBadgeClass(hd.id)}`}>{hd.id}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-bold text-on-surface-dim">{hd.flight}</span>
+                      <span className="text-[9px] text-on-surface-dim opacity-50 ml-2">Std {hd.stand}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* RF Refuellers */}
+            <div className="bg-surface-dim/60 rounded-2xl border border-outline p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-warning/10 rounded-xl border border-warning/20">
+                    <Truck className="w-5 h-5 text-warning" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-on-surface-dim opacity-60">RF Refuellers</p>
+                    <p className="text-[9px] font-bold text-warning opacity-70 tracking-widest uppercase">Mobile Units</p>
+                  </div>
+                </div>
+                <span className="text-3xl font-[900] text-warning leading-none">
+                  {equipment.filter(e => e.type === EquipmentType.REFUELLER).length}
+                </span>
+              </div>
+              <div className="space-y-4">
+                {(() => {
+                  const allRFs = equipment.filter(e => e.type === EquipmentType.REFUELLER);
+                  const activeOrRequested = allRFs.filter(rf => {
+                    const activeTask = flightJobs.find((j: FlightJob) => j.vehicleId === rf.id && j.status === 'IN_PROGRESS');
+                              const isRequested = alerts.some(a => 
+                                !a.acknowledged && 
+                                (a.message.toLowerCase().includes('replenishment requested') || a.message.toLowerCase().includes('refuel requested')) &&
+                                a.message.includes(rf.id)
+                              );
+                    const isReplenishing = rf.status === EqStatus.REFUELLING;
+                    return activeTask || isRequested || isReplenishing;
+                  });
+                  const standbyRFs = allRFs.filter(rf => !activeOrRequested.find(a => a.id === rf.id));
+
+                  return (
+                    <>
+                      {/* Active/Requested Section */}
+                      {activeOrRequested.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-[9px] font-black text-primary uppercase tracking-widest mb-3 flex items-center">
+                            <span className="w-2.5 h-2.5 bg-primary rounded-full mr-3 animate-pulse shadow-[0_0_10px_rgba(var(--color-primary-rgb),0.5)]"></span>
+                            MISSION CRITICAL: Active / Requested
+                          </p>
+                          {activeOrRequested
+                            .sort((a, b) => {
+                              const aReq = alerts.some(al => 
+                                !al.acknowledged && 
+                                (al.message.toLowerCase().includes('replenishment requested') || al.message.toLowerCase().includes('refuel requested')) &&
+                                al.message.includes(a.id)
+                              );
+                              const bReq = alerts.some(al => 
+                                !al.acknowledged && 
+                                (al.message.toLowerCase().includes('replenishment requested') || al.message.toLowerCase().includes('refuel requested')) &&
+                                al.message.includes(b.id)
+                              );
+                              return (aReq === bReq) ? 0 : aReq ? -1 : 1;
+                            })
+                            .map(rf => {
+                              const activeTask = flightJobs.find((j: FlightJob) => j.vehicleId === rf.id && j.status === 'IN_PROGRESS');
+                                        const isRequested = alerts.some(a => 
+                                !a.acknowledged && 
+                                (a.message.toLowerCase().includes('replenishment requested') || a.message.toLowerCase().includes('refuel requested')) &&
+                                a.message.includes(rf.id)
+                              );
+                              const isReplenishing = rf.status === EqStatus.REFUELLING;
+
+                              return (
+                                <div key={rf.id} className="flex items-center justify-between px-3 py-2 rounded-xl border bg-amber-500/5 border-amber-500/10 shadow-sm">
+                                  <div className="flex items-center space-x-3">
+                                    <div className={`w-2 h-2 rounded-full animate-pulse ${equipmentDotClass(rf.id)}`}></div>
+                                    <span className={`text-[11px] font-black uppercase px-2 py-0.5 rounded-md border ${equipmentBadgeClass(rf.id)}`}>{rf.id}</span>
+                                  </div>
+                                  
+                                  <div className="flex items-center space-x-3">
+                                    {isReplenishing ? (
+                                      <span className="text-[9px] font-black text-amber-600 uppercase tracking-widest bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20">Replenishing</span>
+                                    ) : isRequested ? (
+                                      <span className="text-[9px] font-black text-primary uppercase tracking-widest bg-primary/10 px-2 py-0.5 rounded-lg border border-primary/20">Requested</span>
+                                    ) : (
+                                      <div className="text-right">
+                                        <span className="text-[10px] font-bold text-on-surface-dim">{activeTask?.flightNumber}</span>
+                                        <span className="text-[9px] text-on-surface-dim opacity-50 ml-2">Std {activeTask?.stand}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      )}
+
+                      {/* Standby Section - Compact Grid */}
+                      {standbyRFs.length > 0 && (
+                        <div className="mt-6 pt-4 border-t border-outline/50">
+                          <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 mb-3">Standby Units</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {standbyRFs.map(rf => (
+                              <div key={rf.id} className="flex items-center justify-between px-2 py-1.5 rounded-lg border bg-surface-dim border-outline opacity-40 grayscale hover:opacity-100 hover:grayscale-0 transition-all group">
+                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${equipmentBadgeClass(rf.id)}`}>{rf.id}</span>
+                                <span className="text-[8px] font-bold text-on-surface-dim opacity-30 uppercase group-hover:opacity-100">Ready</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
           </div>
 
           {/* Abstract Background Element */}
@@ -578,32 +1064,35 @@ export const Dashboard: React.FC<DashboardProps> = ({ tanks, user, setActiveView
           <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-error/5 rounded-full blur-[100px] -mr-32 -mt-32"></div>
           
           <div className="flex items-center justify-between mb-10 relative z-10">
-             <h3 className="label-sm text-error font-black tracking-[0.2em]">Tactical Alerts (2)</h3>
+             <h3 className="label-sm text-error font-black tracking-[0.2em]">Tactical Alerts ({userAlerts.filter(a => !a.acknowledged).length})</h3>
              <AlertTriangle className="w-6 h-6 text-error opacity-40" />
           </div>
           
-          <div className="space-y-6 flex-1 relative z-10">
-             <div className="card-premium p-6 border-error/20 bg-surface-container/50 hover:bg-surface-container hover:scale-[1.02] transition-all cursor-pointer group/item relative overflow-hidden shadow-premium">
-                <div className="absolute top-0 left-0 w-1.5 h-full bg-error"></div>
-                <div className="flex justify-between items-start">
-                   <div>
-                      <p className="text-[11px] font-black text-error uppercase mb-1 tracking-widest">TK-8 Depletion</p>
-                      <p className="text-sm font-bold text-on-surface opacity-70">Level: 14.2% (CRITICAL)</p>
-                   </div>
-                   <Clock className="w-5 h-5 text-on-surface-dim opacity-20 group-hover/item:text-error transition-colors" />
+          <div className="space-y-6 flex-1 relative z-10 overflow-y-auto max-h-[350px] custom-scrollbar pr-2">
+             {userAlerts.length === 0 ? (
+                <div className="text-center py-10 opacity-30">
+                   <p className="text-[10px] font-black uppercase tracking-widest">No Active Alerts</p>
                 </div>
-             </div>
-             
-             <div className="card-premium p-6 border-error/20 bg-surface-container/50 hover:bg-surface-container hover:scale-[1.02] transition-all cursor-pointer group/item relative overflow-hidden shadow-premium">
-                <div className="absolute top-0 left-0 w-1.5 h-full bg-error"></div>
-                <div className="flex justify-between items-start">
-                   <div>
-                      <p className="text-[11px] font-black text-error uppercase mb-1 tracking-widest">Metering Error</p>
-                      <p className="text-sm font-bold text-on-surface opacity-70">Flow Bay 3 Calibration Fail</p>
-                   </div>
-                   <Activity className="w-5 h-5 text-on-surface-dim opacity-20 group-hover/item:text-error transition-colors" />
-                </div>
-             </div>
+             ) : (
+               userAlerts
+                .sort((a, b) => (a.acknowledged === b.acknowledged ? 0 : a.acknowledged ? 1 : -1))
+                .map(alert => (
+                  <div 
+                    key={alert.id}
+                    onClick={() => !alert.acknowledged && handleAcknowledgeAlert(alert.id)}
+                    className={`card-premium p-6 border-error/20 bg-surface-container/50 hover:bg-surface-container hover:scale-[1.02] transition-all cursor-pointer group/item relative overflow-hidden shadow-premium ${alert.acknowledged ? 'opacity-40 grayscale pointer-events-none' : ''}`}
+                  >
+                    <div className={`absolute top-0 left-0 w-1.5 h-full ${alert.severity === 'critical' ? 'bg-error' : 'bg-warning'}`}></div>
+                    <div className="flex justify-between items-start">
+                       <div>
+                          <p className={`text-[11px] font-black uppercase mb-1 tracking-widest ${alert.severity === 'critical' ? 'text-error' : 'text-warning'}`}>{alert.severity} • {alert.timestamp}</p>
+                          <p className="text-sm font-bold text-on-surface opacity-70">{alert.message}</p>
+                       </div>
+                       {alert.severity === 'critical' ? <AlertTriangle className="w-5 h-5 text-on-surface-dim opacity-20 group-hover/item:text-error transition-colors" /> : <Activity className="w-5 h-5 text-on-surface-dim opacity-20 group-hover/item:text-warning transition-colors" />}
+                    </div>
+                  </div>
+                ))
+             )}
           </div>
           
           <button className="w-full mt-10 py-5 text-[10px] font-black uppercase text-error hover:bg-error/10 border border-error/20 rounded-2xl transition-all tracking-[0.4em] relative z-10">
@@ -740,32 +1229,36 @@ export const Dashboard: React.FC<DashboardProps> = ({ tanks, user, setActiveView
 
   return (
     <div className="p-6 lg:p-12 max-w-[1600px] mx-auto pb-24">
-      {/* If ITP Operator, show specific view */}
-      {isItpOperator ? renderOperatorDashboard() : (
+      {/* ITP Manager: full ops center + all operator task boards */}
+      {isItpManager ? (
+        <div className="space-y-10">
+          {renderItpDashboard()}
+        </div>
+      ) : isItpOperator ? renderOperatorDashboard() : (
         <>
-            {/* View Switcher for Admins/Execs - Refined */}
+            {/* View Switcher for Admins/Execs */}
             {isDualRole && (
                 <div className="mb-10 flex justify-start">
                     <div className="bg-surface-dim p-2 rounded-[22px] border border-outline flex space-x-2 shadow-inner">
                         <button
-                            onClick={() => setViewMode('DEPOT')}
-                            className={`px-8 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 ${
-                                viewMode === 'DEPOT' 
-                                ? 'bg-primary text-white shadow-xl shadow-primary/30' 
-                                : 'text-on-surface-dim hover:text-on-surface'
-                            }`}
-                        >
-                            Depot Task
-                        </button>
-                        <button
                             onClick={() => setViewMode('ITP')}
                             className={`px-8 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 ${
-                                viewMode === 'ITP' 
-                                ? 'bg-primary text-white shadow-xl shadow-primary/30' 
+                                viewMode === 'ITP'
+                                ? 'bg-primary text-white shadow-xl shadow-primary/30'
                                 : 'text-on-surface-dim hover:text-on-surface'
                             }`}
                         >
-                            ITP Operations
+                            ITP Ops
+                        </button>
+                        <button
+                            onClick={() => setViewMode('DEPOT')}
+                            className={`px-8 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 ${
+                                viewMode === 'DEPOT'
+                                ? 'bg-primary text-white shadow-xl shadow-primary/30'
+                                : 'text-on-surface-dim hover:text-on-surface'
+                            }`}
+                        >
+                            Depot Ops
                         </button>
                     </div>
                 </div>

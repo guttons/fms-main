@@ -1,17 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, EQUIPMENT } from '../constants';
-import { UserRole, EquipmentType } from '../types';
+import { UserRole, EquipmentType, FlightJob } from '../types';
 import { Calendar, Plus, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
+import { useOperationalData } from '../context/OperationalDataContext';
 
 export const Schedule: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'international' | 'domestic' | 'equipment'>('international');
+  const { equipment, flightJobs, briefingInfo, updateFlightJob, addFlightJob } = useOperationalData();
+  const [activeTab, setActiveTab] = useState<'international' | 'domestic' | 'equipment' | 'status'>('international');
 
-  const [scheduledFlights, setScheduledFlights] = useState([
-    { id: 'sf1', flight: 'EK405', ac: 'B777-300', stand: 'D12', sta: '14:15', eta: '14:30', std: '15:45', assignedTo: 'u3' },
-    { id: 'sf2', flight: 'SQ321', ac: 'A350-900', stand: 'F10', sta: '15:00', eta: '15:15', std: '16:30', assignedTo: '' },
-    { id: 'sf3', flight: 'QR101', ac: 'A320', stand: 'C05', sta: '15:45', eta: '16:00', std: '17:15', assignedTo: '' },
-  ]);
+  const isDelayed = (sta?: string, eta?: string) => {
+    if (!sta || !eta) return false;
+    const [staH, staM] = sta.split(':').map(Number);
+    const [etaH, etaM] = eta.split(':').map(Number);
+    return (etaH * 60 + etaM) > (staH * 60 + staM);
+  };
+
+  const [scheduledFlights, setScheduledFlights] = useState(flightJobs);
+
+  useEffect(() => {
+    setScheduledFlights(flightJobs);
+  }, [flightJobs]);
 
   const [domesticTeams, setDomesticTeams] = useState([
     { id: 't1', name: 'Team 1', op1: '', op2: '' },
@@ -24,19 +33,25 @@ export const Schedule: React.FC = () => {
   const currentShiftLabel = isDieselTime ? 'DIESEL' : 'DAILY';
 
   const [equipmentShift, setEquipmentShift] = useState<'DAILY' | 'DIESEL'>(currentShiftLabel);
-  const [dieselNeeds, setDieselNeeds] = useState<string[]>([]);
+  const [dieselNeeds, setDieselNeeds] = useState<string[]>(briefingInfo?.dieselNeeds || []);
   
-  const rfHdEquipment = EQUIPMENT.filter(eq => 
-    eq.type === EquipmentType.REFUELLER || eq.type === EquipmentType.HYDRANT_DISPENSER
+  const rfHdEquipment = (equipment || []).filter(eq => 
+    eq && (eq.type === EquipmentType.REFUELLER || eq.type === EquipmentType.HYDRANT_DISPENSER)
   );
 
   const [equipmentAssignments, setEquipmentAssignments] = useState(
-    rfHdEquipment.map(eq => ({ id: eq.id, eqNumber: eq.id, op1: '', op2: '' }))
+    (rfHdEquipment || []).map(eq => ({ id: eq.id, eqNumber: eq.id, op1: '', op2: '', shift_type: equipmentShift }))
   );
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const operators = MOCK_USERS.filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(u.role));
   const todayDate = new Date().toISOString().split('T')[0];
+
+  useEffect(() => {
+    if (briefingInfo?.dieselNeeds) {
+      setDieselNeeds(briefingInfo.dieselNeeds);
+    }
+  }, [briefingInfo?.dieselNeeds]);
 
   useEffect(() => {
     const loadAssignments = async () => {
@@ -56,34 +71,29 @@ export const Schedule: React.FC = () => {
         // Load Equipment Assignments
         const equipmentData = await supabaseService.getEquipmentAssignments(todayDate, equipmentShift);
         
-        // Load Diesel Needs from Briefing
-        const briefingData = await supabaseService.getShiftBriefingInfo(todayDate) as any;
-        if (briefingData && briefingData.dieselNeeds) {
-          setDieselNeeds(briefingData.dieselNeeds);
-        }
-
         if (equipmentData && equipmentData.length > 0) {
           setEquipmentAssignments(prev => prev.map(eq => {
             const dbEq = equipmentData.find(d => d.equipment_id === eq.eqNumber);
             if (dbEq) {
-              return { ...eq, op1: dbEq.operator1_id || '', op2: dbEq.operator2_id || '' };
+              return { ...eq, op1: dbEq.operator1_id || '', op2: dbEq.operator2_id || '', shift_type: dbEq.shift_type };
             }
             return eq;
           }));
         } else {
           // Reset if no data for this shift
-          setEquipmentAssignments(rfHdEquipment.map(eq => ({ id: eq.id, eqNumber: eq.id, op1: '', op2: '' })));
+          setEquipmentAssignments((rfHdEquipment || []).map(eq => ({ id: eq.id, eqNumber: eq.id, op1: '', op2: '', shift_type: equipmentShift })));
         }
       } catch (error) {
         console.error("Failed to load assignments:", error);
       }
     };
     loadAssignments();
-  }, [equipmentShift, todayDate]);
+  }, [equipmentShift, todayDate, rfHdEquipment.length]);
 
   const handleAssignFlight = (flightId: string, userId: string) => {
-    setScheduledFlights(prev => prev.map(f => f.id === flightId ? { ...f, assignedTo: userId } : f));
+    updateFlightJob(flightId, { assignedTo: userId });
   };
+
 
   const handleAssignDomestic = async (teamId: string, opIndex: 1 | 2, userId: string) => {
     const updatedTeams = domesticTeams.map(t => {
@@ -126,14 +136,16 @@ export const Schedule: React.FC = () => {
   const handleAddFlight = (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
-    const newFlight = {
+    const newFlight: FlightJob = {
         id: `sf${Date.now()}`,
-        flight: formData.get('flight') as string,
-        ac: formData.get('ac') as string,
+        flightNumber: formData.get('flight') as string,
+        aircraftReg: formData.get('ac') as string,
+        aircraftType: 'B737', // Default or from form
         stand: formData.get('stand') as string,
         sta: formData.get('sta') as string,
         eta: formData.get('eta') as string,
         std: formData.get('std') as string,
+        status: 'PENDING',
         assignedTo: ''
     };
     setScheduledFlights(prev => [...prev, newFlight]);
@@ -214,6 +226,15 @@ export const Schedule: React.FC = () => {
           <Truck className="w-4 h-4 mr-2.5" />
           {currentShiftLabel}
         </button>
+        <button
+          onClick={() => setActiveTab('status')}
+          className={`flex items-center px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+            activeTab === 'status' ? 'bg-primary text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface'
+          }`}
+        >
+          <Users className="w-4 h-4 mr-2.5" />
+          Status Board
+        </button>
       </div>
 
       {/* Content */}
@@ -242,11 +263,11 @@ export const Schedule: React.FC = () => {
                             <div className="p-3 bg-surface-lowest rounded-2xl border border-outline mr-4 group-hover:border-primary/20 transition-all">
                                 <Plane className="w-5 h-5 text-primary" />
                             </div>
-                            <span className="text-xl font-[900] tracking-tighter italic">{item.flight}</span>
+                            <span className="text-xl font-[900] tracking-tighter italic">{item.flightNumber}</span>
                         </div>
                     </td>
                     <td className="px-8 py-6 whitespace-nowrap">
-                        <div className="text-sm font-black tracking-tight">{item.ac}</div>
+                        <div className="text-sm font-black tracking-tight">{item.aircraftReg}</div>
                         <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Stand {item.stand}</div>
                     </td>
                     <td className="px-8 py-6 whitespace-nowrap">
@@ -383,7 +404,7 @@ export const Schedule: React.FC = () => {
                     equipmentShift === 'DAILY' ? 'bg-primary text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface'
                   }`}
                 >
-                  Daily Ops
+                  DAILY
                 </button>
                 <button
                   onClick={() => setEquipmentShift('DIESEL')}
@@ -391,7 +412,7 @@ export const Schedule: React.FC = () => {
                     equipmentShift === 'DIESEL' ? 'bg-primary text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface'
                   }`}
                 >
-                  Diesel Shift
+                  DIESEL
                 </button>
               </div>
             </div>
@@ -427,6 +448,129 @@ export const Schedule: React.FC = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Status Board */}
+        {activeTab === 'status' && (
+          <div className="p-8 lg:p-10 space-y-10">
+            <div className="flex items-center">
+              <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
+                 <span className="w-1.5 h-6 bg-primary rounded-full mr-4"></span>
+                 Operator Task Boards
+              </h3>
+              <span className="ml-6 w-8 h-[1px] bg-outline flex-1"></span>
+              <span className="ml-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">{operators.length} Personnel Active</span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {operators.map((op) => {
+                    const opTasks = flightJobs.filter((j: any) => j.assignedTo === op.id);
+                    const activeTask = opTasks.find((j: any) => j.status === 'IN_PROGRESS');
+                    const pendingCount = opTasks.filter((j: any) => j.status === 'PENDING').length;
+                    const doneCount = opTasks.filter((j: any) => j.status === 'COMPLETED').length;
+                    
+                    const eqAssignment = equipmentAssignments.find(a => a.op1 === op.id || a.op2 === op.id);
+                    const domAssignment = domesticTeams.find(a => a.op1 === op.id || a.op2 === op.id);
+
+                    return (
+                        <div key={op.id} className="card-premium p-6 space-y-6 hover:border-primary/20 transition-all group relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            
+                            {/* Operator Header */}
+                            <div className="flex items-center justify-between relative z-10">
+                                <div className="flex items-center space-x-4">
+                                    <img src={op.avatar} alt="" className="w-12 h-12 rounded-2xl border border-outline shadow-sm group-hover:scale-105 transition-transform" />
+                                    <div>
+                                        <p className="text-[15px] font-[900] text-on-surface uppercase tracking-tight">{op.name}</p>
+                                        <p className="text-[10px] font-black text-on-surface-dim opacity-50 uppercase tracking-widest">{op.role.replace('_', ' ')}</p>
+                                    </div>
+                                </div>
+                                <div className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-full text-[9px] font-[900] border uppercase tracking-widest transition-all ${
+                                    activeTask
+                                        ? 'bg-success/10 text-success border-success/20 shadow-[0_0_12px_rgba(34,197,94,0.1)]'
+                                        : 'bg-surface-dim text-on-surface-dim border-outline opacity-50'
+                                }`}>
+                                    <div className={`w-1.5 h-1.5 rounded-full ${activeTask ? 'bg-success shadow-[0_0_8px_rgba(34,197,94,0.4)] animate-pulse' : 'bg-on-surface-dim opacity-30'}`} />
+                                    {activeTask ? `Refueling ${activeTask.flightNumber}` : 'Standby'}
+                                </div>
+                            </div>
+
+                            {/* Mini stats */}
+                            <div className="grid grid-cols-3 gap-4 relative z-10">
+                                <div className="bg-surface-dim/70 backdrop-blur-sm p-4 rounded-2xl flex flex-col items-center border border-outline/50 group-hover:border-outline transition-all">
+                                    <span className="text-xl font-[900] text-on-surface tracking-tighter leading-none mb-2">{opTasks.length}</span>
+                                    <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Total</span>
+                                </div>
+                                <div className="bg-warning/5 p-4 rounded-2xl flex flex-col items-center border border-warning/10 border-dashed group-hover:border-solid transition-all">
+                                    <span className="text-xl font-[900] text-warning tracking-tighter leading-none mb-2">{pendingCount}</span>
+                                    <span className="text-[9px] font-black text-warning opacity-60 uppercase tracking-widest">Pending</span>
+                                </div>
+                                <div className="bg-success/5 p-4 rounded-2xl flex flex-col items-center border border-success/10 border-dashed group-hover:border-solid transition-all">
+                                    <span className="text-xl font-[900] text-success tracking-tighter leading-none mb-2">{doneCount}</span>
+                                    <span className="text-[9px] font-black text-success opacity-60 uppercase tracking-widest">Done</span>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4 relative z-10">
+                                {/* Equipment/Assignment Badge */}
+                                {(eqAssignment || domAssignment) && (
+                                    <div className="flex items-center space-x-3 bg-surface-lowest border border-outline px-4 py-3 rounded-2xl">
+                                        {eqAssignment ? (
+                                            <>
+                                                <Truck className="w-4 h-4 text-on-surface-dim opacity-40" />
+                                                <span className="text-[11px] font-black text-on-surface uppercase tracking-wider">{eqAssignment.eqNumber}</span>
+                                                <span className="text-[9px] text-on-surface-dim opacity-30 uppercase tracking-widest ml-auto">{eqAssignment.shift_type || 'Active'} Shift</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Users className="w-4 h-4 text-primary opacity-60" />
+                                                <span className="text-[11px] font-black text-primary uppercase tracking-wider">{domAssignment?.name}</span>
+                                                <span className="text-[9px] text-primary opacity-40 uppercase tracking-widest ml-auto">Domestic Ops</span>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Tasks list */}
+                                {opTasks.length > 0 && (
+                                    <div className="space-y-2.5">
+                                        {opTasks.map(job => {
+                                            const delayed = isDelayed(job.sta, job.eta);
+                                            const ds = (delayed && job.status === 'PENDING') ? 'DELAYED' : job.status;
+                                            return (
+                                                <div key={job.id} className="flex items-center justify-between bg-surface-lowest border border-outline px-5 py-3.5 rounded-2xl group/task hover:border-primary/20 transition-all">
+                                                    <div className="flex items-center space-x-4">
+                                                        <Plane className="w-4 h-4 text-on-surface-dim opacity-20 group-hover/task:rotate-12 transition-transform" />
+                                                        <div>
+                                                            <div className="flex items-center space-x-3">
+                                                                <span className="text-[13px] font-[900] text-on-surface tracking-tighter uppercase italic">{job.flightNumber}</span>
+                                                                <span className="text-[10px] font-bold text-on-surface-dim opacity-40 uppercase tracking-widest">{job.aircraftType}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`text-[9px] font-black uppercase px-3 py-1 rounded-xl border transition-all ${
+                                                        ds === 'COMPLETED' ? 'text-success border-success/20 bg-success/5' :
+                                                        ds === 'DELAYED' ? 'text-error border-error/20 bg-error/10 animate-pulse' :
+                                                        ds === 'IN_PROGRESS' ? 'text-warning border-warning/20 bg-warning/5 animate-pulse' :
+                                                        'text-on-surface-dim border-outline opacity-40'
+                                                    }`}>{ds.replace('_', ' ')}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                {opTasks.length === 0 && (
+                                    <div className="px-6 py-8 border border-dashed border-outline rounded-[32px] flex flex-col items-center justify-center opacity-40">
+                                        <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.3em]">No tasks assigned today</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
           </div>
         )}

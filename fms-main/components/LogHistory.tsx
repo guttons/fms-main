@@ -25,9 +25,9 @@ export const LogHistory: React.FC = () => {
     fetchLogs();
   }, []);
 
-  const filteredLogs = logs.filter(log => 
-    log.flightNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.aircraftReg.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredLogs = (logs || []).filter(log => 
+    log && (log.flightNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    log.aircraftReg.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (

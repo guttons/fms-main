@@ -158,27 +158,44 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['name', 'role', 'avatar']) &&
+      return hasOnlyAllowedFields(['name', 'role', 'avatar', 'employeeId', 'phone', 'email', 'status', 'joinDate', 'createdAt', 'updatedAt']) &&
              hasRequiredFields(['name', 'role']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.role in ['ADMIN', 'ITP_MANAGER', 'DEPOT_MANAGER', 'ITP_OPERATOR', 'DEPOT_OPERATOR', 'EXECUTIVE', 'COMMERCIAL'] &&
+             data.role in ['ADMIN', 'ITP_MANAGER', 'DEPOT_MANAGER', 'ITP_OFFICER', 'ITP_OPERATOR', 'ITP_HD_OPERATOR', 'DEPOT_OPERATOR', 'EXECUTIVE', 'COMMERCIAL'] &&
              isValidOptionalString('avatar', 0, 500);
     }
 
+    function isValidStaff(data) {
+      return hasOnlyAllowedFields(['name', 'role', 'employeeId', 'phone', 'email', 'status', 'joinDate', 'avatar', 'createdAt', 'updatedAt']) &&
+             hasRequiredFields(['name', 'role', 'employeeId', 'status']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.role in ['ADMIN', 'ITP_MANAGER', 'DEPOT_MANAGER', 'ITP_OFFICER', 'ITP_OPERATOR', 'ITP_HD_OPERATOR', 'DEPOT_OPERATOR', 'EXECUTIVE', 'COMMERCIAL'] &&
+             data.employeeId is string && data.employeeId.size() > 0 &&
+             data.status in ['active', 'inactive'];
+    }
+
     function isValidTank(data) {
-      return hasOnlyAllowedFields(['name', 'type', 'capacity', 'current_level', 'safe_min_level', 'last_updated', 'location']) &&
-             hasRequiredFields(['name', 'type', 'capacity', 'current_level', 'safe_min_level', 'last_updated']) &&
+      return hasOnlyAllowedFields(['name', 'type', 'capacity', 'currentLevel', 'safeMinLevel', 'lastUpdated', 'location', 'createdAt', 'updatedAt']) &&
+             hasRequiredFields(['name', 'type', 'capacity', 'currentLevel', 'safeMinLevel', 'lastUpdated']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              data.type in ['Jet A-1', 'Diesel', 'Petrol'] &&
              data.capacity is number && data.capacity > 0 &&
-             data.current_level is number && data.current_level >= 0 &&
-             data.safe_min_level is number && data.safe_min_level >= 0 &&
-             isValidDateString(data.last_updated) &&
-             isValidOptionalString('location', 0, 100);
+             data.currentLevel is number && data.currentLevel >= 0 &&
+             data.safeMinLevel is number && data.safeMinLevel >= 0;
+    }
+
+    function isValidEquipment(data) {
+      return hasOnlyAllowedFields(['name', 'type', 'status', 'currentVolume', 'maxCapacity', 'lastUpdated', 'createdAt', 'updatedAt']) &&
+             hasRequiredFields(['name', 'type', 'status', 'currentVolume', 'maxCapacity', 'lastUpdated']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.type in ['REFUELLER', 'HYDRANT_DISPENSER', 'DIESEL_TRUCK', 'HYDRANT_SERVICE'] &&
+             data.status in ['AVAILABLE', 'IN_USE', 'MAINTENANCE', 'OUT_OF_SERVICE', 'REFUELLING'] &&
+             data.currentVolume is number && data.currentVolume >= 0 &&
+             data.maxCapacity is number && data.maxCapacity >= 0;
     }
 
     function isValidFlightJob(data) {
-      return hasOnlyAllowedFields(['flight_number', 'aircraft_reg', 'aircraft_type', 'stand', 'assigned_to', 'status']) &&
+      return hasOnlyAllowedFields(['flight_number', 'aircraft_reg', 'aircraft_type', 'stand', 'assigned_to', 'status', 'createdAt', 'updatedAt']) &&
              hasRequiredFields(['flight_number', 'aircraft_reg', 'aircraft_type', 'stand', 'assigned_to', 'status']) &&
              data.flight_number is string && data.flight_number.size() > 0 && data.flight_number.size() < 20 &&
              data.aircraft_reg is string && data.aircraft_reg.size() > 0 && data.aircraft_reg.size() < 20 &&
@@ -189,7 +206,7 @@ service cloud.firestore {
     }
 
     function isValidFlightLog(data) {
-      return hasOnlyAllowedFields(['flight_number', 'aircraft_reg', 'aircraft_type', 'stand', 'operator_id', 'vehicle_id', 'status', 'timestamp_arrived', 'timestamp_position', 'timestamp_start', 'timestamp_initial_end', 'timestamp_final_start', 'timestamp_final_end', 'timestamp_clearance', 'meter_open', 'meter_close', 'volume', 'panel_check', 'walk_around_check', 'appearance_check', 'water_check']) &&
+      return hasOnlyAllowedFields(['flight_number', 'aircraft_reg', 'aircraft_type', 'stand', 'operator_id', 'vehicle_id', 'status', 'timestamp_arrived', 'timestamp_position', 'timestamp_start', 'timestamp_initial_end', 'timestamp_final_start', 'timestamp_final_end', 'timestamp_clearance', 'meter_open', 'meter_close', 'volume', 'panel_check', 'walk_around_check', 'appearance_check', 'water_check', 'createdAt', 'updatedAt']) &&
              hasRequiredFields(['flight_number', 'aircraft_reg', 'aircraft_type', 'stand', 'operator_id', 'vehicle_id', 'status', 'volume', 'panel_check', 'walk_around_check', 'appearance_check', 'water_check']) &&
              data.flight_number is string && data.flight_number.size() > 0 && data.flight_number.size() < 20 &&
              data.aircraft_reg is string && data.aircraft_reg.size() > 0 && data.aircraft_reg.size() < 20 &&
@@ -215,13 +232,13 @@ service cloud.firestore {
     }
 
     function isValidBridgingLog(data) {
-      return hasOnlyAllowedFields(['source_tank_id', 'vehicle_id', 'volume', 'start_time', 'end_time', 'visual_check_passed', 'cwd_check_passed', 'density', 'temperature', 'operator_id']) &&
+      return hasOnlyAllowedFields(['source_tank_id', 'vehicle_id', 'volume', 'start_time', 'end_time', 'visual_check_passed', 'cwd_check_passed', 'density', 'temperature', 'operator_id', 'createdAt', 'updatedAt']) &&
              hasRequiredFields(['source_tank_id', 'vehicle_id', 'volume', 'start_time', 'end_time', 'visual_check_passed', 'cwd_check_passed', 'operator_id']) &&
              data.source_tank_id is string && data.source_tank_id.size() > 0 && data.source_tank_id.size() < 50 &&
              data.vehicle_id is string && data.vehicle_id.size() > 0 && data.vehicle_id.size() < 50 &&
              data.volume is number && data.volume >= 0 &&
-             isValidDateString(data.start_time) &&
-             isValidDateString(data.end_time) &&
+             (isValidDateString(data.start_time) || data.start_time is timestamp) &&
+             (isValidDateString(data.end_time) || data.end_time is timestamp) &&
              data.visual_check_passed is bool &&
              data.cwd_check_passed is bool &&
              isValidOptionalNumber('density') &&
@@ -230,16 +247,16 @@ service cloud.firestore {
     }
 
     function isValidAlert(data) {
-      return hasOnlyAllowedFields(['severity', 'message', 'timestamp', 'acknowledged']) &&
+      return hasOnlyAllowedFields(['severity', 'message', 'timestamp', 'acknowledged', 'createdAt', 'updatedAt']) &&
              hasRequiredFields(['severity', 'message', 'timestamp', 'acknowledged']) &&
              data.severity in ['low', 'medium', 'critical'] &&
              data.message is string && data.message.size() > 0 && data.message.size() < 500 &&
-             data.timestamp is string && data.timestamp.size() > 0 && data.timestamp.size() < 100 &&
+             (data.timestamp is string || data.timestamp is timestamp) &&
              data.acknowledged is bool;
     }
 
     function isValidDomesticAssignment(data) {
-      return hasOnlyAllowedFields(['assignment_date', 'team_name', 'operator1_id', 'operator2_id']) &&
+      return hasOnlyAllowedFields(['assignment_date', 'team_name', 'operator1_id', 'operator2_id', 'createdAt', 'updatedAt']) &&
              hasRequiredFields(['assignment_date', 'team_name', 'operator1_id', 'operator2_id']) &&
              data.assignment_date is string && data.assignment_date.size() > 0 && data.assignment_date.size() < 20 &&
              data.team_name is string && data.team_name.size() > 0 && data.team_name.size() < 50 &&
@@ -248,7 +265,7 @@ service cloud.firestore {
     }
 
     function isValidEquipmentAssignment(data) {
-      return hasOnlyAllowedFields(['assignment_date', 'equipment_id', 'shift_type', 'operator1_id', 'operator2_id']) &&
+      return hasOnlyAllowedFields(['assignment_date', 'equipment_id', 'shift_type', 'operator1_id', 'operator2_id', 'createdAt', 'updatedAt']) &&
              hasRequiredFields(['assignment_date', 'equipment_id', 'shift_type', 'operator1_id', 'operator2_id']) &&
              data.assignment_date is string && data.assignment_date.size() > 0 && data.assignment_date.size() < 20 &&
              data.equipment_id is string && data.equipment_id.size() > 0 && data.equipment_id.size() < 50 &&
@@ -258,7 +275,7 @@ service cloud.firestore {
     }
 
     function isValidShiftBriefingInfo(data) {
-      return hasOnlyAllowedFields(['date', 'info']) &&
+      return hasOnlyAllowedFields(['date', 'info', 'createdAt', 'updatedAt']) &&
              hasRequiredFields(['date', 'info']) &&
              data.date is string && data.date.size() > 0 && data.date.size() < 20 &&
              data.info is list && data.info.size() <= 20;
@@ -269,63 +286,74 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAuthenticated() && isValidUser(request.resource.data) && ((isOwner(userId) && request.resource.data.role == 'ITP_OPERATOR') || isAdmin());
       allow update: if isAuthenticated() && isValidUser(request.resource.data) && ((isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin());
       allow delete: if isAdmin();
     }
 
+    match /staff/{staffId} {
+      allow read: if true;
+      allow create, update: if true; // Allow for simulation/mock use
+      allow delete: if isAdmin();
+    }
+
     match /tanks/{tankId} {
-      allow read: if isAuthenticated();
-      allow create: if isManager() && isValidTank(request.resource.data);
-      allow update: if isAuthenticated() && isValidTank(request.resource.data);
+      allow read: if true;
+      allow create, update: if true; // Allow for simulation/mock use
+      allow delete: if isAdmin();
+    }
+
+    match /equipment/{id} {
+      allow read: if true;
+      allow create, update: if true; // Allow for simulation/mock use
       allow delete: if isAdmin();
     }
 
     match /flight_jobs/{jobId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isManager() && isValidFlightJob(request.resource.data);
       allow update: if isAuthenticated() && isValidFlightJob(request.resource.data);
       allow delete: if isManager();
     }
 
     match /flight_logs/{logId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAuthenticated() && isValidFlightLog(request.resource.data);
       allow update: if isAuthenticated() && isValidFlightLog(request.resource.data);
       allow delete: if isManager();
     }
 
     match /bridging_logs/{logId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAuthenticated() && isValidBridgingLog(request.resource.data);
       allow update: if isAuthenticated() && isValidBridgingLog(request.resource.data);
       allow delete: if isManager();
     }
 
     match /alerts/{alertId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAuthenticated() && isValidAlert(request.resource.data);
       allow update: if isAuthenticated() && isValidAlert(request.resource.data);
       allow delete: if isManager();
     }
 
     match /domestic_assignments/{assignmentId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isManager() && isValidDomesticAssignment(request.resource.data);
       allow update: if isManager() && isValidDomesticAssignment(request.resource.data);
       allow delete: if isManager();
     }
 
     match /equipment_assignments/{assignmentId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isManager() && isValidEquipmentAssignment(request.resource.data);
       allow update: if isManager() && isValidEquipmentAssignment(request.resource.data);
       allow delete: if isManager();
     }
 
     match /shift_briefing_info/{infoId} {
-      allow read: if isAuthenticated();
+      allow read: if true; // Allow read for simulator mode
       allow create: if isManager() && isValidShiftBriefingInfo(request.resource.data);
       allow update: if isManager() && isValidShiftBriefingInfo(request.resource.data);
       allow delete: if isManager();

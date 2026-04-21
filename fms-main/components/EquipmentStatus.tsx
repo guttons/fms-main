@@ -14,18 +14,22 @@ import {
   Search,
   Filter,
   ChevronRight,
-  ChevronDown
+  ChevronDown 
 } from 'lucide-react';
+import { useOperationalData } from '../context/OperationalDataContext';
+import { useNotification } from '../context/NotificationContext';
+import { supabaseService } from '../services/supabaseService';
 
 interface EquipmentStatusProps {
-  tanks: Tank[];
   user: User;
 }
 
-export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ tanks, user }) => {
-  const [equipment, setEquipment] = useState<Equipment[]>(EQUIPMENT);
+export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
+  const { notify } = useNotification();
+  const { equipment, tanks, updateEquipmentStatus, createAlert, alerts } = useOperationalData();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<EquipmentType | 'All'>('All');
+  const [pendingRequests, setPendingRequests] = useState<Set<string>>(new Set());
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
     [EquipmentType.REFUELLER]: true,
     [EquipmentType.HYDRANT_DISPENSER]: true,
@@ -33,23 +37,55 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ tanks, user })
     [EquipmentType.HYDRANT_SERVICE]: true,
   });
 
-  const canEdit = user.role === UserRole.ADMIN;
+  const canEdit = user.role === UserRole.ADMIN || user.role === UserRole.ITP_MANAGER;
 
   const handleStatusChange = (id: string, newStatus: EqStatus) => {
-    setEquipment(prev => prev.map(eq => 
-      eq.id === id ? { ...eq, status: newStatus, lastUpdated: new Date().toISOString() } : eq
-    ));
+    updateEquipmentStatus(id, newStatus);
   };
+
 
   const toggleCategory = (type: string) => {
     setExpandedCategories(prev => ({ ...prev, [type]: !prev[type] }));
   };
 
-  const sendRefuelRequest = (eqId: string) => {
-    alert(`Refuel request sent to Depot Operators for ${eqId}`);
+  const sendRefuelRequest = async (eqId: string) => {
+    if (pendingRequests.has(eqId)) return;
+    
+    try {
+      // Check for duplicates locally first for immediate feedback
+      const isRequested = (alerts || []).some(a => a && !a.acknowledged && a.message.includes(`Replenishment requested for unit ${eqId}`));
+      if (isRequested) {
+        notify(`A replenishment request is already active for ${eqId}`, 'warning');
+        return;
+      }
+
+      setPendingRequests(prev => new Set(prev).add(eqId));
+
+      const success = await createAlert({
+        severity: 'medium',
+        message: `Replenishment requested for unit ${eqId}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        acknowledged: false,
+        targetRole: UserRole.DEPOT_OPERATOR
+      });
+      
+      if (success) {
+        notify(`Refuel request sent to Depot Operators for ${eqId}`, 'success');
+      }
+    } catch (error) {
+      console.error("Failed to send refuel request alert", error);
+      notify(`Failed to send refuel request for ${eqId}`, 'error');
+    } finally {
+      setPendingRequests(prev => {
+        const next = new Set(prev);
+        next.delete(eqId);
+        return next;
+      });
+    }
   };
 
-  const filteredEquipment = equipment.filter(eq => {
+  const filteredEquipment = (equipment || []).filter(eq => {
+    if (!eq) return false;
     const matchesSearch = eq.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterType === 'All' || eq.type === filterType;
     return matchesSearch && matchesFilter;
@@ -236,10 +272,15 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ tanks, user })
                               {eq.type === EquipmentType.REFUELLER && canEdit && (
                                 <button 
                                   onClick={() => sendRefuelRequest(eq.id)}
-                                  className="flex items-center text-[9px] font-black text-primary hover:bg-primary hover:text-white bg-surface-lowest px-3 py-2 rounded-xl border border-outline shadow-sm transition-all active:scale-95 uppercase tracking-widest"
+                                  disabled={pendingRequests.has(eq.id) || alerts.some(a => !a.acknowledged && a.message.includes(`Replenishment requested for unit ${eq.id}`))}
+                                  className={`flex items-center text-[9px] font-black px-3 py-2 rounded-xl border border-outline shadow-sm transition-all active:scale-95 uppercase tracking-widest ${
+                                    pendingRequests.has(eq.id) || alerts.some(a => !a.acknowledged && a.message.includes(`Replenishment requested for unit ${eq.id}`))
+                                    ? 'bg-surface-lowest text-on-surface-dim opacity-30 cursor-not-allowed'
+                                    : 'text-primary hover:bg-primary hover:text-white bg-surface-lowest'
+                                  }`}
                                 >
-                                  <Send className="w-3 h-3 mr-1.5" />
-                                  REPLENISH
+                                  <Send className={`w-3 h-3 mr-1.5 ${pendingRequests.has(eq.id) ? 'animate-pulse' : ''}`} />
+                                  {pendingRequests.has(eq.id) ? 'SENDING...' : 'REPLENISH'}
                                 </button>
                               )}
                             </div>

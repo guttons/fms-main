@@ -3,14 +3,17 @@ import { FlightLog, User, FlightJob, Equipment, EquipmentStatus } from '../types
 import { MOCK_JOBS, MOCK_USERS, MOCK_DOMESTIC_FLIGHTS } from '../constants';
 import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Lock } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
+import { equipmentBadgeClass, equipmentDotClass } from '../utils/equipmentColors';
+import { useNotification } from '../context/NotificationContext';
+
+import { useOperationalData } from '../context/OperationalDataContext';
 
 interface IntoPlaneProps {
     user: User;
-    equipment: Equipment[];
-    onUpdateEquipmentStatus: (id: string, status: EquipmentStatus) => void;
     initialJob?: FlightJob | null;
     onClearInitialJob?: () => void;
 }
+
 
 // --- UI Components ---
 
@@ -38,7 +41,7 @@ const MobileHeader: React.FC<{
                               className="w-full bg-surface-dim border border-outline rounded-lg py-1.5 pl-3 pr-8 text-sm font-black text-on-surface appearance-none focus:border-primary transition-all cursor-pointer uppercase tracking-tighter disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                                {equipment
-                                 .filter(eq => eq.status === EquipmentStatus.AVAILABLE || eq.id === selectedVehicleId)
+                                 .filter(eq => (eq.id.startsWith('RF') || eq.id.startsWith('HD')) && (eq.status === EquipmentStatus.AVAILABLE || eq.id === selectedVehicleId))
                                  .map(eq => (
                                   <option key={eq.id} value={eq.id}>{eq.id} - {eq.type}</option>
                               ))}
@@ -69,10 +72,11 @@ const ScreenDashboard: React.FC<{
     selectedVehicleId: string,
     setSelectedVehicleId: (id: string) => void
 }> = ({ user, onStartJob }) => {
+  const { flightJobs, domesticFlights } = useOperationalData();
   const [viewMode, setViewMode] = useState<'INT' | 'DOM'>('INT');
   
-  const intlJobs = MOCK_JOBS;
-  const domesticJobs = MOCK_DOMESTIC_FLIGHTS.map((df: any) => ({
+  const intlJobs = flightJobs || [];
+  const domesticJobs = (domesticFlights || []).map((df: any) => ({
       id: df.id,
       flightNumber: df.flightNumber,
       aircraftReg: df.aircraftReg,
@@ -84,6 +88,8 @@ const ScreenDashboard: React.FC<{
       assignedTo: df.assignedTeam === 'Team 1' ? user.id : 'u1',
       status: df.status as any,
   }));
+
+
 
   const activeJobs = viewMode === 'INT' ? intlJobs : domesticJobs;
 
@@ -109,9 +115,9 @@ const ScreenDashboard: React.FC<{
                                <h3 className="text-3xl font-[900] text-on-surface tracking-tighter">{job.flightNumber}</h3>
                                <span className="bg-surface-dim px-2.5 py-1 rounded-lg text-[10px] font-black text-on-surface-dim border border-outline uppercase tracking-wider">{job.aircraftReg}</span>
                                {job.vehicleId && job.status !== 'PENDING' && (
-                                   <div className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-primary/10 rounded-lg text-primary border border-primary/20 shadow-sm animate-in fade-in zoom-in-95 duration-500">
+                                   <div className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border shadow-sm animate-in fade-in zoom-in-95 duration-500 ${equipmentBadgeClass(job.vehicleId)}`}>
                                        <Truck className="w-3.5 h-3.5" />
-                                       <span className="text-[10px] font-black uppercase tracking-widest leading-none">ASSET: {job.vehicleId}</span>
+                                       <span className="text-[10px] font-black uppercase tracking-widest leading-none">{job.vehicleId}</span>
                                    </div>
                                )}
                           </div>
@@ -443,7 +449,9 @@ const ScreenQC: React.FC<{
   </div>
 );
 
-export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, equipment, onUpdateEquipmentStatus, initialJob, onClearInitialJob }) => {
+export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob }) => {
+  const { notify } = useNotification();
+  const { equipment, flightJobs, updateEquipmentStatus } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(null);
   
@@ -454,6 +462,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, equipment, onUpdateE
       if (onClearInitialJob) onClearInitialJob();
     }
   }, [initialJob]);
+
   const [selectedVehicleId, setSelectedVehicleId] = useState(() => {
     const available = equipment.find(eq => eq.status === EquipmentStatus.AVAILABLE);
     return available ? available.id : 'RF-04';
@@ -476,7 +485,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, equipment, onUpdateE
 
   const startJob = (job: FlightJob) => {
     // Auto-update Equipment Status to IN_PROGRESS/IN_USE
-    onUpdateEquipmentStatus(selectedVehicleId, EquipmentStatus.IN_USE);
+    updateEquipmentStatus(selectedVehicleId, EquipmentStatus.IN_USE);
 
     setActiveFlight({
       flightNumber: job.flightNumber,
@@ -497,11 +506,21 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, equipment, onUpdateE
     setCurrentScreen('timestamps');
   };
 
+
   const handleTimestamp = (field: keyof FlightLog) => {
     setActiveFlight(prev => ({
       ...prev,
       [field]: new Date().toISOString()
     }));
+  };
+
+  const handleBackToDashboard = () => {
+    // If a job was started, release the equipment
+    if (activeFlight && selectedVehicleId) {
+      updateEquipmentStatus(selectedVehicleId, EquipmentStatus.AVAILABLE);
+    }
+    setActiveFlight(null);
+    setCurrentScreen('dashboard');
   };
 
   const handleInputChange = (field: keyof FlightLog, value: any) => {
@@ -546,18 +565,18 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, equipment, onUpdateE
       await supabaseService.createFlightLog(logToSave);
       
       // Auto-update Equipment Status back to AVAILABLE
-      onUpdateEquipmentStatus(selectedVehicleId, EquipmentStatus.AVAILABLE);
-
-      alert("Job Completed & Synced to Database!");
+      updateEquipmentStatus(selectedVehicleId, EquipmentStatus.AVAILABLE);
+      notify("Job Completed & Synced to Database!", "success");
       setActiveFlight(null);
       setCurrentScreen('dashboard');
     } catch (error) {
       console.error('Error saving flight log:', error);
-      alert('Failed to sync. Please check your secure connection.');
+      notify('Failed to sync. Please check your secure connection.', "error");
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-full flex flex-col bg-surface transition-colors duration-500">
@@ -583,7 +602,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, equipment, onUpdateE
                 activeFlight={activeFlight} 
                 onTimestamp={handleTimestamp} 
                 onNext={() => setCurrentScreen('metering')}
-                onBack={() => setCurrentScreen('dashboard')}
+                onBack={handleBackToDashboard}
               />
             )}
             {currentScreen === 'metering' && (

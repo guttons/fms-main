@@ -21,8 +21,12 @@ import {
 import { supabaseService } from '../services/supabaseService';
 import { MOCK_USERS, MOCK_JOBS, MOCK_DOMESTIC_FLIGHTS, EQUIPMENT } from '../constants';
 import { User, UserRole, EquipmentType, EquipmentStatus } from '../types';
+import { useNotification } from '../context/NotificationContext';
+import { useOperationalData } from '../context/OperationalDataContext';
 
 export const ShiftBriefing: React.FC = () => {
+  const { notify } = useNotification();
+  const { equipment, briefingInfo, updateBriefingInfo } = useOperationalData();
   const [isSaving, setIsSaving] = useState(false);
   const [briefingDate] = useState(new Date().toLocaleDateString('en-GB', { 
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' 
@@ -31,16 +35,17 @@ export const ShiftBriefing: React.FC = () => {
     hour: '2-digit', minute: '2-digit' 
   }));
 
-  // Initial Data
-  const [additionalInfo, setAdditionalInfo] = useState<{text: string, type: string, isHighAlert?: boolean}[]>([
-    { text: 'Ready before 15 mins/PPE/360 Walkaround check/Following speed limits/Marshaling when required', type: 'critical', isHighAlert: true },
-    { text: 'Officers should NOT stay inside the Bowser while refuelling is in progress', type: 'standard' },
-    { text: 'The officer and operator have the responsibility to check and complete the daily refueller check', type: 'standard' },
-    { text: 'All hose related issues must be reported with specific hose identification number clearly stated', type: 'standard' },
-    { text: 'Rf 16 & 17 check if gear changed to NEUTRAL after parking', type: 'standard' },
-  ]);
-  
-  const [dieselNeeds, setDieselNeeds] = useState<string[]>([]);
+  // Local state for editing, initialized from context
+  const [additionalInfo, setAdditionalInfo] = useState(briefingInfo?.info || []);
+  const [dieselNeeds, setDieselNeeds] = useState<string[]>(briefingInfo?.dieselNeeds || []);
+
+  // Sync local state when context changes (e.g., on load)
+  useEffect(() => {
+    if (briefingInfo) {
+      setAdditionalInfo(briefingInfo.info || []);
+      setDieselNeeds(briefingInfo.dieselNeeds || []);
+    }
+  }, [briefingInfo]);
 
   const [staffAssignments, setStaffAssignments] = useState({
     activeOperators: ['u3', 'u3b'],
@@ -59,40 +64,23 @@ export const ShiftBriefing: React.FC = () => {
 
   const [remarks, setRemarks] = useState('Safety first. Ensure all grounding cables are checked before each operation.');
 
-  const todayDate = new Date().toISOString().split('T')[0];
-
-  useEffect(() => {
-    const loadBriefing = async () => {
-      try {
-        const data = await supabaseService.getShiftBriefingInfo(todayDate) as any;
-        if (data) {
-          if (data.info && data.info.length > 0) setAdditionalInfo(data.info);
-          if (data.dieselNeeds) setDieselNeeds(data.dieselNeeds);
-        }
-      } catch (error) {
-        console.error("Failed to load shift briefing:", error);
-      }
-    };
-    loadBriefing();
-  }, [todayDate]);
-
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await supabaseService.upsertShiftBriefingInfo(todayDate, additionalInfo, dieselNeeds);
-      // In a real app, we would also save staffAssignments and tasks
-      alert('Shift briefing saved successfully!');
+      await updateBriefingInfo(additionalInfo, dieselNeeds);
+      notify('Shift briefing saved successfully!', 'success');
     } catch (error) {
       console.error("Failed to save shift briefing:", error);
-      alert('Failed to save shift briefing.');
+      notify('Failed to save shift briefing.', 'error');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const rfHdEquipment = EQUIPMENT.filter(eq => 
-    eq.type === EquipmentType.REFUELLER || eq.type === EquipmentType.HYDRANT_DISPENSER
+  const rfHdEquipment = (equipment || []).filter(eq => 
+    eq && (eq.type === EquipmentType.REFUELLER || eq.type === EquipmentType.HYDRANT_DISPENSER)
   );
+
 
   const renderStaffSelect = (value: string, roles: UserRole[], label: string, onSelect: (id: string) => void) => {
     const roleUsers = MOCK_USERS.filter(u => roles.includes(u.role));
@@ -404,9 +392,13 @@ export const ShiftBriefing: React.FC = () => {
                     
                     <button 
                       onClick={() => {
-                        setDieselNeeds(prev => 
-                          prev.includes(eq.id) ? prev.filter(id => id !== eq.id) : [...prev, eq.id]
-                        );
+                        const newDieselNeeds = dieselNeeds.includes(eq.id) 
+                          ? dieselNeeds.filter(id => id !== eq.id) 
+                          : [...dieselNeeds, eq.id];
+                        
+                        setDieselNeeds(newDieselNeeds);
+                        // Persist immediately to global context so other modules can see it
+                        updateBriefingInfo(additionalInfo, newDieselNeeds);
                       }}
                       className={`flex items-center justify-center space-x-2 py-2 rounded-xl border transition-all ${
                         needsDiesel 
@@ -415,7 +407,7 @@ export const ShiftBriefing: React.FC = () => {
                       }`}
                     >
                       <Droplet className={`w-3 h-3 ${needsDiesel ? 'animate-bounce' : ''}`} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">DIESEL TOP-UP</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest">DIESEL</span>
                     </button>
                   </div>
                 );

@@ -43,6 +43,18 @@ export interface User {
   avatar: string;
 }
 
+export interface StaffMember {
+  id: string;
+  name: string;
+  role: UserRole;
+  employeeId: string;
+  phone?: string;
+  email?: string;
+  status: 'active' | 'inactive';
+  joinDate: string;
+  avatar?: string;
+}
+
 export enum FuelType {
   JET_A1 = 'Jet A-1',
   DIESEL = 'Diesel',
@@ -133,4 +145,5 @@ export interface Alert {
   message: string;
   timestamp: string;
   acknowledged: boolean;
+  targetRole?: UserRole;
 }

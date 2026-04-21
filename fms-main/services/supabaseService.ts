@@ -1,7 +1,7 @@
 import { db, auth } from '../firebase';
-import { collection, getDocs, doc, updateDoc, addDoc, query, where, setDoc, getDoc } from 'firebase/firestore';
-import { User, Tank, FlightLog, BridgingLog, Alert, FlightJob } from '../types';
-import { TANKS, MOCK_USERS, MOCK_JOBS, RECENT_LOGS, MOCK_ALERTS, MOCK_DOMESTIC_FLIGHTS } from '../constants';
+import { collection, getDocs, doc, updateDoc, addDoc, query, where, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
+import { User, Tank, FlightLog, BridgingLog, Alert, FlightJob, Equipment } from '../types';
+import { TANKS, MOCK_USERS, MOCK_JOBS, RECENT_LOGS, MOCK_ALERTS, MOCK_DOMESTIC_FLIGHTS, EQUIPMENT } from '../constants';
 
 enum OperationType {
   CREATE = 'create',
@@ -56,8 +56,9 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 
 export const supabaseService = {
   // Users
-  async getUsers(): Promise<User[]> {
-    if (!auth.currentUser) return MOCK_USERS;
+  async getUsers(): Promise<User[] | null> {
+    if (!auth.currentUser) return null;
+
     const path = 'users';
     try {
       const querySnapshot = await getDocs(collection(db, path));
@@ -69,8 +70,9 @@ export const supabaseService = {
   },
 
   // Tanks
-  async getTanks(): Promise<Tank[]> {
-    if (!auth.currentUser) return TANKS;
+  async getTanks(): Promise<Tank[] | null> {
+    if (!auth.currentUser) return null;
+
     const path = 'tanks';
     try {
       const querySnapshot = await getDocs(collection(db, path));
@@ -108,8 +110,9 @@ export const supabaseService = {
   },
 
   // Flight Jobs
-  async getFlightJobs(): Promise<FlightJob[]> {
-    if (!auth.currentUser) return MOCK_JOBS;
+  async getFlightJobs(): Promise<FlightJob[] | null> {
+    if (!auth.currentUser) return null;
+
     const path = 'flight_jobs';
     try {
       const querySnapshot = await getDocs(collection(db, path));
@@ -132,8 +135,9 @@ export const supabaseService = {
   },
 
   // Flight Logs
-  async getFlightLogs(): Promise<FlightLog[]> {
-    if (!auth.currentUser) return RECENT_LOGS;
+  async getFlightLogs(): Promise<FlightLog[] | null> {
+    if (!auth.currentUser) return null;
+
     const path = 'flight_logs';
     try {
       const querySnapshot = await getDocs(collection(db, path));
@@ -205,8 +209,9 @@ export const supabaseService = {
   },
 
   // Bridging Logs
-  async getBridgingLogs(): Promise<BridgingLog[]> {
-    if (!auth.currentUser) return [];
+  async getBridgingLogs(): Promise<BridgingLog[] | null> {
+    if (!auth.currentUser) return null;
+
     const path = 'bridging_logs';
     try {
       const querySnapshot = await getDocs(collection(db, path));
@@ -255,8 +260,9 @@ export const supabaseService = {
   },
 
   // Alerts
-  async getAlerts(): Promise<Alert[]> {
-    if (!auth.currentUser) return MOCK_ALERTS;
+  async getAlerts(): Promise<Alert[] | null> {
+    if (!auth.currentUser) return null;
+
     const path = 'alerts';
     try {
       const querySnapshot = await getDocs(collection(db, path));
@@ -265,6 +271,19 @@ export const supabaseService = {
       handleFirestoreError(error, OperationType.LIST, path);
       throw error;
     }
+  },
+
+  subscribeToAlerts(callback: (alerts: Alert[]) => void) {
+    if (!auth.currentUser) return () => {};
+    const path = 'alerts';
+
+    const q = query(collection(db, path));
+    return onSnapshot(q, (snapshot) => {
+      const alerts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Alert));
+      callback(alerts);
+    }, (error) => {
+      console.error('Alerts Subscription Error:', error);
+    });
   },
 
   async acknowledgeAlert(id: string): Promise<void> {
@@ -279,9 +298,110 @@ export const supabaseService = {
     }
   },
 
+  async acknowledgeAllAlerts(ids: string[]): Promise<void> {
+    if (!auth.currentUser) return; // Mock success
+    const path = 'alerts/bulk';
+    try {
+      await Promise.all(ids.map(id => {
+        const alertRef = doc(db, 'alerts', id);
+        return updateDoc(alertRef, { acknowledged: true });
+      }));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+      throw error;
+    }
+  },
+
+  async createAlert(alert: Omit<Alert, 'id'>): Promise<void> {
+    const path = 'alerts';
+    try {
+      await addDoc(collection(db, path), {
+        severity: alert.severity,
+        message: alert.message,
+        timestamp: alert.timestamp,
+        acknowledged: alert.acknowledged,
+        targetRole: alert.targetRole || null,
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+      throw error;
+    }
+  },
+
+  async checkActiveReplenishRequest(eqId: string): Promise<boolean> {
+    if (!auth.currentUser) return false;
+    const path = 'alerts';
+    try {
+      const q = query(
+        collection(db, path), 
+        where('acknowledged', '==', false),
+        where('message', '==', `Replenishment requested for unit ${eqId}`)
+      );
+      const querySnapshot = await getDocs(q);
+      return !querySnapshot.empty;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, path);
+      return false;
+    }
+  },
+
+  // Equipment
+  async getEquipment(): Promise<Equipment[] | null> {
+    if (!auth.currentUser) return null;
+
+    const path = 'equipment';
+    try {
+      const querySnapshot = await getDocs(collection(db, path));
+      if (querySnapshot.empty) return EQUIPMENT;
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data
+        } as Equipment;
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, path);
+      throw error;
+    }
+  },
+
+  async updateEquipmentStatus(id: string, status: string): Promise<void> {
+    if (!auth.currentUser) return; // Mock success
+    const path = `equipment/${id}`;
+    try {
+      const eqRef = doc(db, 'equipment', id);
+      await setDoc(eqRef, {
+        status: status,
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+      throw error;
+    }
+  },
+
+  subscribeToEquipment(callback: (equipment: Equipment[]) => void) {
+    if (!auth.currentUser) return () => {};
+    const path = 'equipment';
+
+    const q = query(collection(db, path));
+    return onSnapshot(q, (snapshot) => {
+      if (snapshot.empty) {
+        callback(EQUIPMENT);
+        return;
+      }
+      const equipment = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Equipment));
+      callback(equipment);
+    }, (error) => {
+      console.error('Equipment Subscription Error:', error);
+    });
+  },
+
   // Domestic Assignments
   async getDomesticAssignments(date: string) {
-    if (!auth.currentUser) return [];
+    if (!auth.currentUser) return null;
+
     const path = 'domestic_assignments';
     try {
       const q = query(collection(db, path), where('assignment_date', '==', date));
@@ -313,7 +433,8 @@ export const supabaseService = {
 
   // Equipment Assignments
   async getEquipmentAssignments(date: string, shiftType: string) {
-    if (!auth.currentUser) return [];
+    if (!auth.currentUser) return null;
+
     const path = 'equipment_assignments';
     try {
       const q = query(collection(db, path), 
@@ -349,7 +470,8 @@ export const supabaseService = {
 
   // Shift Briefing
   async getShiftBriefingInfo(date: string) {
-    if (!auth.currentUser) return [];
+    if (!auth.currentUser) return null;
+
     const path = 'shift_briefing_info';
     try {
       const q = query(collection(db, path), where('date', '==', date));

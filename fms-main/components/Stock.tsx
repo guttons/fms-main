@@ -1,17 +1,14 @@
 import React, { useState } from 'react';
-import { FuelType, Tank } from '../types';
-import { Database, AlertTriangle, Save, RefreshCw } from 'lucide-react';
+import { FuelType } from '../types';
+import { RefreshCw, AlertTriangle, Save } from 'lucide-react';
+import { useOperationalData } from '../context/OperationalDataContext';
+import { useNotification } from '../context/NotificationContext';
 
-interface StockProps {
-  tanks: Tank[];
-  onUpdateTank: (id: string, newLevel: number) => void;
-}
-
-export const Stock: React.FC<StockProps> = ({ tanks, onUpdateTank }) => {
-  // Input styling for high contrast
-  const inputClass = "w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-aviation-500 focus:border-aviation-500 bg-white text-slate-900 text-right font-mono";
-  
+export const Stock: React.FC = () => {
+  const { notify } = useNotification();
+  const { tanks, updateTankLevel } = useOperationalData();
   const [readings, setReadings] = useState<Record<string, number>>({});
+
 
   const handleReadingChange = (id: string, value: string) => {
     setReadings(prev => ({
@@ -25,13 +22,14 @@ export const Stock: React.FC<StockProps> = ({ tanks, onUpdateTank }) => {
     Object.entries(readings).forEach(([id, level]) => {
         const numLevel = level as number;
         if (!isNaN(numLevel) && numLevel >= 0) {
-            onUpdateTank(id, numLevel);
+            updateTankLevel(id, numLevel);
             updatedCount++;
         }
     });
+
     
     if (updatedCount > 0) {
-        alert(`Successfully updated inventory for ${updatedCount} tanks.`);
+        notify(`Successfully updated inventory for ${updatedCount} tanks.`, 'success');
         setReadings({}); // Clear readings after save
     }
   };
@@ -58,7 +56,7 @@ export const Stock: React.FC<StockProps> = ({ tanks, onUpdateTank }) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {tanks.map((tank) => {
+        {(tanks || []).map((tank) => {
              const isLow = tank.currentLevel < tank.safeMinLevel;
              const fillPct = (tank.currentLevel / tank.capacity) * 100;
              const typeColor = tank.type === FuelType.JET_A1 ? 'bg-primary' : (tank.type === FuelType.DIESEL ? 'bg-warning' : 'bg-error');
