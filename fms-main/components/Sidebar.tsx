@@ -12,6 +12,7 @@ import {
   Calendar,
   Anchor,
   Sailboat,
+  Ship,
   ClipboardList,
   Truck,
   Sun,
@@ -64,8 +65,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'stock', label: 'Tank Levels', icon: Database },
           { id: 'bridging', label: 'Refueler Loading', icon: Droplet },
+          { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
           { id: 'marine', label: 'Tanker Discharge', icon: Anchor },
           { id: 'seaplane', label: 'Seaplane Ops', icon: Sailboat },
+          { id: 'equipment', label: 'Equipment Status', icon: Truck },
         ];
 
       case UserRole.DEPOT_MANAGER:
@@ -73,8 +76,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'stock', label: 'Stock Reconciliation', icon: Database },
           { id: 'bridging', label: 'Transfer Oversight', icon: Droplet },
+          { id: 'marine-loading', label: 'Marine Provisioning', icon: Ship },
           { id: 'marine', label: 'Marine Oversight', icon: Anchor },
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
+          { id: 'equipment', label: 'Equipment Status', icon: Truck },
         ];
 
       case UserRole.EXECUTIVE:
@@ -95,6 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'intoplane', label: 'Into-Plane Ops', icon: Plane },
           { id: 'stock', label: 'Stock Management', icon: Database },
           { id: 'bridging', label: 'Transfer Oversight', icon: Droplet },
+          { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
           { id: 'marine', label: 'Marine Oversight', icon: Anchor },
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
           { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },

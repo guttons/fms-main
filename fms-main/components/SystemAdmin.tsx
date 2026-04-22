@@ -783,22 +783,25 @@ export const SystemAdmin: React.FC = () => {
 
       {/* Tab Navigation */}
       <div className="bg-surface rounded-3xl border border-outline overflow-hidden shadow-sm">
-        <div className="border-b border-outline">
-          <div className="flex overflow-x-auto">
+        <div className="border-b border-outline p-4 bg-surface-dim/30 flex justify-center">
+          <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline relative flex w-full max-w-[600px] overflow-hidden shadow-inner">
+            <div 
+              className={`absolute top-1.5 bottom-1.5 rounded-xl bg-primary transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
+                ${activeTab === 'staff' ? 'left-1.5 w-[calc(33.33%-3px)] translate-x-0' : ''}
+                ${activeTab === 'equipment' ? 'left-1.5 w-[calc(33.33%-3px)] translate-x-[100%]' : ''}
+                ${activeTab === 'tanks' ? 'left-1.5 w-[calc(33.33%-3px)] translate-x-[200%]' : ''}
+              `}
+            />
             {tabs.map(tab => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2.5 px-8 py-5 text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all relative flex-shrink-0
-                  ${activeTab === tab.key
-                    ? 'text-primary bg-primary/[0.03]'
-                    : 'text-on-surface-dim opacity-50 hover:opacity-80 hover:bg-surface-dim/50'}`}
+                className={`flex-1 flex items-center justify-center gap-2.5 px-6 py-3 text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap transition-all relative z-10
+                  ${activeTab === tab.key ? 'text-white' : 'text-on-surface-dim opacity-50 hover:opacity-100'}`}
               >
                 {tab.icon}
-                {tab.label}
-                {activeTab === tab.key && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary rounded-t-full" />
-                )}
+                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="inline sm:hidden">{tab.key.toUpperCase()}</span>
               </button>
             ))}
           </div>

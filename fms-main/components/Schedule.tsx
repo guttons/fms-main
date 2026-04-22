@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, EQUIPMENT } from '../constants';
 import { UserRole, EquipmentType, FlightJob } from '../types';
-import { Calendar, Plus, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet } from 'lucide-react';
+import { Calendar, Plus, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
 
@@ -198,29 +198,39 @@ export const Schedule: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner w-fit">
+      <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner relative flex w-full md:w-fit overflow-hidden">
+        <div 
+          className={`absolute top-1.5 bottom-1.5 rounded-xl bg-primary transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
+            ${activeTab === 'international' ? 'left-1.5 w-[calc(25%-3px)] md:w-[calc(140px)] translate-x-0' : ''}
+            ${activeTab === 'domestic' ? 'left-1.5 w-[calc(25%-3px)] md:w-[calc(120px)] translate-x-[100%] md:translate-x-[140px]' : ''}
+            ${activeTab === 'equipment' ? 'left-1.5 w-[calc(25%-3px)] md:w-[calc(120px)] translate-x-[200%] md:translate-x-[260px]' : ''}
+            ${activeTab === 'status' ? 'left-1.5 w-[calc(25%-3px)] md:w-[calc(140px)] translate-x-[300%] md:translate-x-[380px]' : ''}
+          `}
+        />
         <button
           onClick={() => setActiveTab('international')}
-          className={`flex items-center px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-            activeTab === 'international' ? 'bg-primary text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface'
+          className={`flex-1 md:w-[140px] flex items-center justify-center px-4 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+            activeTab === 'international' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
           <Plane className="w-4 h-4 mr-2.5" />
-          International
+          <span className="hidden sm:inline">International</span>
+          <span className="inline sm:hidden">INTL</span>
         </button>
         <button
           onClick={() => setActiveTab('domestic')}
-          className={`flex items-center px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-            activeTab === 'domestic' ? 'bg-primary text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface'
+          className={`flex-1 md:w-[120px] flex items-center justify-center px-4 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+            activeTab === 'domestic' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
           <Users className="w-4 h-4 mr-2.5" />
-          Domestic
+          <span className="hidden sm:inline">Domestic</span>
+          <span className="inline sm:hidden">DOM</span>
         </button>
         <button
           onClick={() => setActiveTab('equipment')}
-          className={`flex items-center px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-            activeTab === 'equipment' ? 'bg-primary text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface'
+          className={`flex-1 md:w-[120px] flex items-center justify-center px-4 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+            activeTab === 'equipment' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
           <Truck className="w-4 h-4 mr-2.5" />
@@ -228,12 +238,13 @@ export const Schedule: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('status')}
-          className={`flex items-center px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-            activeTab === 'status' ? 'bg-primary text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface'
+          className={`flex-1 md:w-[140px] flex items-center justify-center px-4 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+            activeTab === 'status' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
           <Users className="w-4 h-4 mr-2.5" />
-          Status Board
+          <span className="hidden sm:inline">Status Board</span>
+          <span className="inline sm:hidden">STATUS</span>
         </button>
       </div>
 
@@ -242,65 +253,110 @@ export const Schedule: React.FC = () => {
         
         {/* International Ops */}
         {activeTab === 'international' && (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-outline">
-              <thead className="bg-surface-dim">
-                <tr>
-                  <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">FLIGHT / TASK</th>
-                  <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">PLATFORM / SECTOR</th>
-                  <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STA</th>
-                  <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">ETA</th>
-                  <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STD</th>
-                  <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">OPERATOR ASSIGNED</th>
-                  <th className="px-8 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STATUS</th>
-                </tr>
-              </thead>
-              <tbody className="bg-surface divide-y divide-outline text-on-surface">
-                {scheduledFlights.map((item) => (
-                  <tr key={item.id} className="hover:bg-primary/[0.02] transition-colors group">
-                    <td className="px-8 py-6 whitespace-nowrap">
-                        <div className="flex items-center">
-                            <div className="p-3 bg-surface-lowest rounded-2xl border border-outline mr-4 group-hover:border-primary/20 transition-all">
-                                <Plane className="w-5 h-5 text-primary" />
-                            </div>
-                            <span className="text-xl font-[900] tracking-tighter italic">{item.flightNumber}</span>
-                        </div>
-                    </td>
-                    <td className="px-8 py-6 whitespace-nowrap">
-                        <div className="text-sm font-black tracking-tight">{item.aircraftReg}</div>
-                        <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Stand {item.stand}</div>
-                    </td>
-                    <td className="px-8 py-6 whitespace-nowrap">
-                        <div className="flex items-center text-sm font-black">
-                            <Clock className="w-4 h-4 mr-2.5 text-primary opacity-40" />
-                            {(item as any).sta || '--:--'}
-                        </div>
-                    </td>
-                    <td className="px-8 py-6 whitespace-nowrap">
-                        <div className="flex items-center text-sm font-black">
-                            <Clock className="w-4 h-4 mr-2.5 text-primary" />
-                            {item.eta}
-                        </div>
-                    </td>
-                    <td className="px-8 py-6 whitespace-nowrap">
-                        <div className="flex items-center text-sm font-black">
-                            <Clock className="w-4 h-4 mr-2.5 text-primary opacity-40" />
-                            {(item as any).std || '--:--'}
-                        </div>
-                    </td>
-                    <td className="px-8 py-6 whitespace-nowrap max-w-[240px]">
-                        {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, val))}
-                    </td>
-                    <td className="px-8 py-6 whitespace-nowrap text-right text-sm font-medium">
-                        <button className="text-[10px] font-black text-on-surface-dim hover:text-primary uppercase tracking-[0.2em] transition-all">
-                            CONFIGURE
-                        </button>
-                    </td>
+          <>
+            {/* Desktop View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="min-w-full divide-y divide-outline">
+                <thead className="bg-surface-dim">
+                  <tr>
+                    <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">FLIGHT / TASK</th>
+                    <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">PLATFORM / SECTOR</th>
+                    <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STA</th>
+                    <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">ETA</th>
+                    <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STD</th>
+                    <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">OPERATOR ASSIGNED</th>
+                    <th className="px-8 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STATUS</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="bg-surface divide-y divide-outline text-on-surface">
+                  {scheduledFlights.map((item) => (
+                    <tr key={item.id} className="hover:bg-primary/[0.02] transition-colors group">
+                      <td className="px-8 py-6 whitespace-nowrap">
+                          <div className="flex items-center">
+                              <div className="p-3 bg-surface-lowest rounded-2xl border border-outline mr-4 group-hover:border-primary/20 transition-all">
+                                  <Plane className="w-5 h-5 text-primary" />
+                              </div>
+                              <span className="text-xl font-[900] tracking-tighter italic">{item.flightNumber}</span>
+                          </div>
+                      </td>
+                      <td className="px-8 py-6 whitespace-nowrap">
+                          <div className="text-sm font-black tracking-tight">{item.aircraftReg}</div>
+                          <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Stand {item.stand}</div>
+                      </td>
+                      <td className="px-8 py-6 whitespace-nowrap">
+                          <div className="flex items-center text-sm font-black">
+                              <Clock className="w-4 h-4 mr-2.5 text-primary opacity-40" />
+                              {(item as any).sta || '--:--'}
+                          </div>
+                      </td>
+                      <td className="px-8 py-6 whitespace-nowrap">
+                          <div className="flex items-center text-sm font-black">
+                              <Clock className="w-4 h-4 mr-2.5 text-primary" />
+                              {item.eta}
+                          </div>
+                      </td>
+                      <td className="px-8 py-6 whitespace-nowrap">
+                          <div className="flex items-center text-sm font-black">
+                              <Clock className="w-4 h-4 mr-2.5 text-primary opacity-40" />
+                              {(item as any).std || '--:--'}
+                          </div>
+                      </td>
+                      <td className="px-8 py-6 whitespace-nowrap max-w-[240px]">
+                          {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, val))}
+                      </td>
+                      <td className="px-8 py-6 whitespace-nowrap text-right text-sm font-medium">
+                          <button className="text-[10px] font-black text-on-surface-dim hover:text-primary uppercase tracking-[0.2em] transition-all">
+                              CONFIGURE
+                          </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile View */}
+            <div className="block md:hidden p-4 space-y-4">
+              {scheduledFlights.map((item) => (
+                <div key={item.id} className="card-premium p-6 border-outline group transition-all active:scale-[0.98]">
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="flex items-center">
+                      <div className="p-3 bg-surface-dim rounded-2xl border border-outline mr-4">
+                        <Plane className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">{item.flightNumber}</h3>
+                        <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">{item.aircraftReg} • Stand {item.stand}</p>
+                      </div>
+                    </div>
+                    <button className="p-2 text-primary opacity-40 hover:opacity-100">
+                      <Settings className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 mb-6 p-3 bg-surface-dim rounded-xl border border-outline">
+                    <div className="text-center border-r border-outline/30">
+                      <p className="text-[8px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-1">STA</p>
+                      <p className="text-[11px] font-[900] text-on-surface">{(item as any).sta || '--:--'}</p>
+                    </div>
+                    <div className="text-center border-r border-outline/30">
+                      <p className="text-[8px] font-black text-primary uppercase tracking-widest mb-1">ETA</p>
+                      <p className="text-[11px] font-[900] text-primary">{item.eta}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[8px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-1">STD</p>
+                      <p className="text-[11px] font-[900] text-on-surface">{(item as any).std || '--:--'}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Assigned Operator</label>
+                    {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, val))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {/* Domestic Ops */}
@@ -397,19 +453,22 @@ export const Schedule: React.FC = () => {
                  <span className="w-1.5 h-6 bg-primary rounded-full mr-4"></span>
                  Tactical Fleet Assignment
               </h3>
-              <div className="flex bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner">
+              <div className="flex bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner relative w-[200px] overflow-hidden">
+                <div 
+                  className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-primary rounded-xl transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${equipmentShift === 'DIESEL' ? 'translate-x-full' : 'translate-x-0'}`}
+                />
                 <button
                   onClick={() => setEquipmentShift('DAILY')}
-                  className={`px-6 py-2.5 text-[10px] font-black rounded-xl transition-all uppercase tracking-widest ${
-                    equipmentShift === 'DAILY' ? 'bg-primary text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface'
+                  className={`flex-1 py-2.5 text-[10px] font-black rounded-xl transition-all uppercase tracking-widest relative z-10 ${
+                    equipmentShift === 'DAILY' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
                   }`}
                 >
                   DAILY
                 </button>
                 <button
                   onClick={() => setEquipmentShift('DIESEL')}
-                  className={`px-6 py-2.5 text-[10px] font-black rounded-xl transition-all uppercase tracking-widest ${
-                    equipmentShift === 'DIESEL' ? 'bg-primary text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface'
+                  className={`flex-1 py-2.5 text-[10px] font-black rounded-xl transition-all uppercase tracking-widest relative z-10 ${
+                    equipmentShift === 'DIESEL' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
                   }`}
                 >
                   DIESEL

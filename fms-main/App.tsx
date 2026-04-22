@@ -14,6 +14,7 @@ import { SystemAdmin } from './components/SystemAdmin';
 import { CommercialReports } from './components/CommercialReports';
 import { Seaplane } from './components/Seaplane';
 import { EquipmentStatus } from './components/EquipmentStatus';
+import { MarineLoading } from './components/MarineLoading';
 import { Login } from './components/Login';
 import { BottomNav } from './components/BottomNav';
 import { NotificationProvider } from './context/NotificationContext';
@@ -165,6 +166,8 @@ const AppContextContent: React.FC<any> = ({
         return <Forecasting />;
       case 'bridging':
         return <Bridging />;
+      case 'marine-loading':
+        return <MarineLoading />;
       case 'marine':
         return <TankerDischarge />;
       case 'stock':
@@ -240,11 +243,16 @@ const AppContextContent: React.FC<any> = ({
             <header className="h-[var(--header-height)] bg-surface-container/70 backdrop-blur-xl border-b border-outline flex items-center justify-between px-4 lg:px-8 transition-colors duration-300">
             <div className="flex items-center flex-1 transition-all">
                 <div className="flex items-center space-x-4">
-                  <img 
-                    src={isDarkMode ? "https://lh3.googleusercontent.com/d/1Uk6kyiqhPYw2_9qnXk8612yfdw5ioz5y=s220?authuser=0" : "https://lh3.googleusercontent.com/d/1YCRXjbsAQ5LskxJcQlSUQV5QyaSX9gD2=s220?authuser=0"} 
-                    alt="MACL Logo" 
-                    className="h-12 w-auto object-contain lg:hidden"
-                  />
+                  <button 
+                    onClick={() => setIsMobileMenuOpen(true)}
+                    className="lg:hidden active:scale-95 transition-transform"
+                  >
+                    <img 
+                      src={isDarkMode ? "https://lh3.googleusercontent.com/d/1Uk6kyiqhPYw2_9qnXk8612yfdw5ioz5y=s220?authuser=0" : "https://lh3.googleusercontent.com/d/1YCRXjbsAQ5LskxJcQlSUQV5QyaSX9gD2=s220?authuser=0"} 
+                      alt="MACL Logo" 
+                      className="h-12 w-auto object-contain"
+                    />
+                  </button>
                   <div className="hidden lg:block">
                     <h1 className="text-lg font-black tracking-tighter leading-none text-primary uppercase">FUEL SERVICES</h1>
                   </div>

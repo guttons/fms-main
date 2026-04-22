@@ -6,11 +6,12 @@ import {
 } from 'recharts';
 import { MOCK_ALERTS, MOCK_USERS, MOCK_JOBS, MOCK_DOMESTIC_FLIGHTS } from '../constants';
 import { FuelType, Tank, User, UserRole, FlightJob, Equipment, EquipmentStatus as EqStatus, EquipmentType } from '../types';
-import { AlertTriangle, TrendingDown, TrendingUp, Activity, Droplet, Users, Clock, Plane, LayoutDashboard, MapPin, CheckCircle, Truck, Play, Thermometer, CloudSun, Wind, RefreshCw, Send, Globe, Anchor, ShoppingBag } from 'lucide-react';
+import { AlertTriangle, TrendingDown, TrendingUp, Activity, Droplet, Users, Clock, Plane, LayoutDashboard, MapPin, CheckCircle, Truck, Play, Thermometer, CloudSun, Wind, RefreshCw, Send, Globe, Anchor, ShoppingBag, Database } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { useNotification } from '../context/NotificationContext';
 import { equipmentBadgeClass, equipmentDotClass, equipmentBadgeSoftClass } from '../utils/equipmentColors';
+import { TankStatusGrid } from './TankStatusGrid';
 
 // Mock Data for Charts
 const HOURLY_DATA_INT = [
@@ -1201,28 +1202,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
       {/* Tank Farm Section - Secondary */}
       <div className="card-premium p-10">
-        <h4 className="label-sm text-on-surface-dim mb-10 tracking-[0.3em] font-black opacity-40">Infrastructure Asset Grid</h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8">
-          {tanks.map(tank => {
-            const isLow = tank.currentLevel < tank.safeMinLevel;
-            const fillPct = (tank.currentLevel / tank.capacity) * 100;
-            return (
-              <div key={tank.id} className="group cursor-pointer">
-                 <div className="flex justify-between items-center mb-4">
-                    <span className="text-[12px] font-black text-on-surface-dim uppercase tracking-tighter group-hover:text-primary transition-colors">{tank.name}</span>
-                    {isLow ? <AlertTriangle className="w-3.5 h-3.5 text-error animate-pulse" /> : <div className="w-2 h-2 bg-success/30 rounded-full"></div>}
-                 </div>
-                 <div className="h-2 bg-surface-dim border border-outline rounded-full overflow-hidden shadow-inner">
-                    <div 
-                      className={`h-full transition-all duration-[2000ms] cubic-bezier(0.16, 1, 0.3, 1) ${isLow ? 'bg-error shadow-[0_0_12px_rgba(239,68,68,0.5)]' : 'bg-primary shadow-premium'}`} 
-                      style={{ width: `${fillPct}%` }}
-                    ></div>
-                 </div>
-                 <p className="text-[10px] font-black text-on-surface-dim mt-3 opacity-30 uppercase tracking-widest">{fillPct.toFixed(0)}% Utilized</p>
-              </div>
-            );
-          })}
+        <div className="flex items-center justify-between mb-10">
+          <div>
+            <h3 className="headline-lg text-on-surface tracking-tighter uppercase italic">Infrastructure Asset Grid</h3>
+            <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.4em] mt-2 opacity-40">Live Tank Farm Telemetry</p>
+          </div>
+          <div className="px-4 py-2 bg-surface-dim border border-outline rounded-xl flex items-center space-x-3">
+             <Database className="w-4 h-4 text-primary" />
+             <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest">{tanks.length} Units Online</span>
+          </div>
         </div>
+        
+        <TankStatusGrid tanks={tanks || []} />
       </div>
     </div>
   );
@@ -1239,28 +1230,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
             {/* View Switcher for Admins/Execs */}
             {isDualRole && (
                 <div className="mb-10 flex justify-start">
-                    <div className="bg-surface-dim p-2 rounded-[22px] border border-outline flex space-x-2 shadow-inner">
-                        <button
-                            onClick={() => setViewMode('ITP')}
-                            className={`px-8 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 ${
-                                viewMode === 'ITP'
-                                ? 'bg-primary text-white shadow-xl shadow-primary/30'
-                                : 'text-on-surface-dim hover:text-on-surface'
-                            }`}
-                        >
-                            ITP Ops
-                        </button>
-                        <button
-                            onClick={() => setViewMode('DEPOT')}
-                            className={`px-8 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 ${
-                                viewMode === 'DEPOT'
-                                ? 'bg-primary text-white shadow-xl shadow-primary/30'
-                                : 'text-on-surface-dim hover:text-on-surface'
-                            }`}
-                        >
-                            Depot Ops
-                        </button>
-                    </div>
+                        <div className="bg-surface-dim p-1.5 rounded-[22px] border border-outline flex relative w-full sm:w-[320px] shadow-inner overflow-hidden">
+                            <div 
+                                className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-primary rounded-[18px] transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${viewMode === 'DEPOT' ? 'translate-x-full' : 'translate-x-0'}`}
+                            />
+                            <button
+                                onClick={() => setViewMode('ITP')}
+                                className={`flex-1 py-3 px-6 rounded-[18px] text-[10px] font-black uppercase tracking-[0.2em] relative z-10 transition-colors duration-300 ${viewMode === 'ITP' ? 'text-white' : 'text-on-surface-dim opacity-60'}`}
+                            >
+                                ITP Ops
+                            </button>
+                            <button
+                                onClick={() => setViewMode('DEPOT')}
+                                className={`flex-1 py-3 px-6 rounded-[18px] text-[10px] font-black uppercase tracking-[0.2em] relative z-10 transition-colors duration-300 ${viewMode === 'DEPOT' ? 'text-white' : 'text-on-surface-dim opacity-60'}`}
+                            >
+                                Depot Ops
+                            </button>
+                        </div>
                 </div>
             )}
 

@@ -16,6 +16,7 @@ import {
   ChevronRight,
   ChevronDown 
 } from 'lucide-react';
+import { TankStatusGrid } from './TankStatusGrid';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { useNotification } from '../context/NotificationContext';
 import { supabaseService } from '../services/supabaseService';
@@ -37,7 +38,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
     [EquipmentType.HYDRANT_SERVICE]: true,
   });
 
-  const canEdit = user.role === UserRole.ADMIN || user.role === UserRole.ITP_MANAGER;
+  const canEdit = user.role === UserRole.ADMIN || user.role === UserRole.ITP_MANAGER || user.role === UserRole.DEPOT_MANAGER;
 
   const handleStatusChange = (id: string, newStatus: EqStatus) => {
     updateEquipmentStatus(id, newStatus);
@@ -156,19 +157,35 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <div className="relative">
-              <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim opacity-40 pointer-events-none" />
-              <select 
-                className="pl-12 pr-10 py-3 bg-surface-dim border border-outline rounded-xl text-[10px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none appearance-none w-full sm:w-52 transition-all cursor-pointer"
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value as any)}
+            <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline relative flex w-full sm:w-auto overflow-x-auto no-scrollbar shadow-inner">
+              <div 
+                className={`absolute top-1.5 bottom-1.5 rounded-xl bg-primary transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
+                  ${filterType === 'All' ? 'left-1.5 w-[80px] translate-x-0' : ''}
+                  ${filterType === EquipmentType.REFUELLER ? 'left-1.5 w-[110px] translate-x-[80px]' : ''}
+                  ${filterType === EquipmentType.HYDRANT_DISPENSER ? 'left-1.5 w-[110px] translate-x-[190px]' : ''}
+                  ${filterType === EquipmentType.DIESEL_TRUCK ? 'left-1.5 w-[110px] translate-x-[300px]' : ''}
+                  ${filterType === EquipmentType.HYDRANT_SERVICE ? 'left-1.5 w-[110px] translate-x-[410px]' : ''}
+                `}
+              />
+              <button
+                onClick={() => setFilterType('All')}
+                className={`w-[80px] flex-shrink-0 flex items-center justify-center py-2.5 text-[9px] font-black uppercase tracking-widest transition-all relative z-10 ${
+                  filterType === 'All' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+                }`}
               >
-                <option value="All">ALL ASSETS</option>
-                {Object.values(EquipmentType).map(type => (
-                  <option key={type} value={type}>{type}s</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim opacity-40 pointer-events-none" />
+                ALL
+              </button>
+              {Object.values(EquipmentType).map((type, idx) => (
+                <button
+                  key={type}
+                  onClick={() => setFilterType(type)}
+                  className={`w-[110px] flex-shrink-0 flex items-center justify-center py-2.5 text-[9px] font-black uppercase tracking-widest transition-all relative z-10 ${
+                    filterType === type ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+                  }`}
+                >
+                  {type.replace('_', ' ')}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -353,58 +370,22 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
       </section>
 
       {/* Tank Levels Overview */}
-      <section>
-        <div className="flex items-center justify-between mb-4 mt-8">
-          <h2 className="text-lg font-bold text-on-surface flex items-center tracking-tight">
-            <Database className="w-4 h-4 mr-2 text-primary" />
-            Terminal Tank Status
-          </h2>
+      <section className="mt-16">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h2 className="headline-lg text-on-surface flex items-center tracking-tighter uppercase italic underline decoration-primary underline-offset-8">
+              Terminal Tank Farm
+            </h2>
+            <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.4em] mt-3 opacity-40">Infrastructure Asset Live Stream</p>
+          </div>
+          <div className="flex items-center space-x-3 bg-surface-dim p-2 rounded-2xl border border-outline">
+            <Database className="w-4 h-4 text-primary" />
+            <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest">{(tanks || []).length} Total Tanks</span>
+          </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {tanks.map(tank => {
-            const percentage = (tank.currentLevel / tank.capacity) * 100;
-            const isLow = tank.currentLevel < tank.safeMinLevel;
-            
-            return (
-              <div key={tank.id} className="card-premium p-5 group relative overflow-hidden transition-all hover:scale-[1.02]">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="text-sm font-black text-on-surface uppercase tracking-tighter">{tank.name}</h3>
-                    <p className="text-[9px] font-black text-primary opacity-60 uppercase tracking-widest">{tank.type}</p>
-                  </div>
-                  <div className={`text-[9px] font-black px-2.5 py-1 rounded-lg uppercase border shadow-sm ${
-                    tank.type === 'Jet A-1' ? 'bg-primary/10 text-primary border-primary/20' : 
-                    tank.type === 'Diesel' ? 'bg-warning/10 text-warning border-warning/20' : 'bg-success/10 text-success border-success/20'
-                  }`}>
-                    {tank.type === 'Jet A-1' ? 'JET' : tank.type}
-                  </div>
-                </div>
-                <div className="flex items-end justify-between mb-3">
-                  <span className="text-2xl font-[900] text-on-surface tracking-tighter tabular-nums">{tank.currentLevel.toLocaleString()}</span>
-                  <span className="text-[9px] font-black text-on-surface-dim mb-1 opacity-40 uppercase tracking-[0.2em]">/ {tank.capacity.toLocaleString()} L</span>
-                </div>
-                <div className="w-full bg-surface-dim h-2 rounded-full overflow-hidden border border-outline mb-3 relative shadow-inner">
-                  <div 
-                    className={`h-full transition-all duration-1000 ease-out relative ${isLow ? 'bg-error shadow-[0_0_12px_rgba(239,68,68,0.5)]' : 'bg-primary shadow-sm'}`}
-                    style={{ width: `${percentage}%` }}
-                  >
-                    <div className="absolute top-0 right-0 w-6 h-full bg-white/10 skew-x-[-20deg]"></div>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-50">Load: {Math.round(percentage)}%</span>
-                  {isLow && (
-                    <span className="text-[9px] text-error font-black flex items-center animate-pulse">
-                      <AlertCircle className="w-3 h-3 mr-1" /> CRITICAL
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        
+        <TankStatusGrid tanks={tanks || []} />
       </section>
     </div>
-
   );
 };
