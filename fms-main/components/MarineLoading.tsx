@@ -279,20 +279,6 @@ export const MarineLoading: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="mt-8">
-                        <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Fuel Grade</label>
-                        <select 
-                            name="product"
-                            required
-                            value={formData.product}
-                            onChange={handleInputChange}
-                            className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all appearance-none"
-                        >
-                            <option value="Jet A-1">JET A-1 (AVIATION SPIRIT)</option>
-                            <option value="Diesel">DIESEL (GASOIL)</option>
-                        </select>
-                    </div>
-
                     <div className="mt-10">
                         <label className="block text-[10px] font-black text-on-surface uppercase mb-4 tracking-widest text-center">Transfer Volume (Liters)</label>
                         <div className="relative max-w-md mx-auto">

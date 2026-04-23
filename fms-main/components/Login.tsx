@@ -4,6 +4,7 @@ import { auth } from '../firebase';
 import { signInWithPopup, OAuthProvider } from 'firebase/auth';
 import { User, UserRole } from '../types';
 import { MOCK_USERS } from '../constants';
+import { Logo } from './Logo';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -47,17 +48,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       
       <div className="max-w-md w-full bg-surface-container p-12 lg:p-14 border border-outline shadow-premium rounded-[48px] relative z-10 fade-in backdrop-blur-2xl">
         <div className="text-center">
-          <div className="mx-auto mb-10">
-            <img 
-              src="https://lh3.googleusercontent.com/d/1YCRXjbsAQ5LskxJcQlSUQV5QyaSX9gD2=s220?authuser=0" 
-              alt="MACL Logo" 
-              className="logo-light h-24 w-auto mx-auto object-contain"
-            />
-            <img 
-              src="https://lh3.googleusercontent.com/d/1Uk6kyiqhPYw2_9qnXk8612yfdw5ioz5y=s220?authuser=0" 
-              alt="MACL Logo" 
-              className="logo-dark h-24 w-auto mx-auto object-contain"
-            />
+          <div className="mx-auto mb-10 flex justify-center">
+            <Logo className="h-24 w-auto object-contain text-primary" />
           </div>
           <h2 className="headline-xl text-on-surface tracking-tighter mb-2 uppercase">
             FUEL SERVICES

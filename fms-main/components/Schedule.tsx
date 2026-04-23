@@ -8,6 +8,7 @@ import { useOperationalData } from '../context/OperationalDataContext';
 export const Schedule: React.FC = () => {
   const { equipment, flightJobs, briefingInfo, updateFlightJob, addFlightJob } = useOperationalData();
   const [activeTab, setActiveTab] = useState<'international' | 'domestic' | 'equipment' | 'status'>('international');
+  const [configuringFlightId, setConfiguringFlightId] = useState<string | null>(null);
 
   const isDelayed = (sta?: string, eta?: string) => {
     if (!sta || !eta) return false;
@@ -40,7 +41,7 @@ export const Schedule: React.FC = () => {
   );
 
   const [equipmentAssignments, setEquipmentAssignments] = useState(
-    (rfHdEquipment || []).map(eq => ({ id: eq.id, eqNumber: eq.id, op1: '', op2: '', shift_type: equipmentShift }))
+    (rfHdEquipment || []).map(eq => ({ id: eq.id, eqNumber: eq.id, op1: '', op2: '', shift_type: equipmentShift, eqType: eq.type }))
   );
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -81,7 +82,7 @@ export const Schedule: React.FC = () => {
           }));
         } else {
           // Reset if no data for this shift
-          setEquipmentAssignments((rfHdEquipment || []).map(eq => ({ id: eq.id, eqNumber: eq.id, op1: '', op2: '', shift_type: equipmentShift })));
+          setEquipmentAssignments((rfHdEquipment || []).map(eq => ({ id: eq.id, eqNumber: eq.id, op1: '', op2: '', shift_type: equipmentShift, eqType: eq.type })));
         }
       } catch (error) {
         console.error("Failed to load assignments:", error);
@@ -90,8 +91,8 @@ export const Schedule: React.FC = () => {
     loadAssignments();
   }, [equipmentShift, todayDate, rfHdEquipment.length]);
 
-  const handleAssignFlight = (flightId: string, userId: string) => {
-    updateFlightJob(flightId, { assignedTo: userId });
+  const handleAssignFlight = (flightId: string, field: 'assignedTo' | 'assignedOfficer' | 'equipmentUsage', value: string) => {
+    updateFlightJob(flightId, { [field]: value });
   };
 
 
@@ -204,7 +205,7 @@ export const Schedule: React.FC = () => {
             ${activeTab === 'international' ? 'left-1.5 w-[calc(25%-3px)] md:w-[calc(140px)] translate-x-0' : ''}
             ${activeTab === 'domestic' ? 'left-1.5 w-[calc(25%-3px)] md:w-[calc(120px)] translate-x-[100%] md:translate-x-[140px]' : ''}
             ${activeTab === 'equipment' ? 'left-1.5 w-[calc(25%-3px)] md:w-[calc(120px)] translate-x-[200%] md:translate-x-[260px]' : ''}
-            ${activeTab === 'status' ? 'left-1.5 w-[calc(25%-3px)] md:w-[calc(140px)] translate-x-[300%] md:translate-x-[380px]' : ''}
+            ${activeTab === 'status' ? 'left-1.5 w-[calc(25%-3px)] md:w-[calc(160px)] translate-x-[300%] md:translate-x-[380px]' : ''}
           `}
         />
         <button
@@ -213,9 +214,9 @@ export const Schedule: React.FC = () => {
             activeTab === 'international' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
-          <Plane className="w-4 h-4 mr-2.5" />
-          <span className="hidden sm:inline">International</span>
-          <span className="inline sm:hidden">INTL</span>
+          <Plane className="w-4 h-4 mr-2.5 shrink-0" />
+          <span className="hidden sm:block whitespace-nowrap">International</span>
+          <span className="block sm:hidden">INT</span>
         </button>
         <button
           onClick={() => setActiveTab('domestic')}
@@ -223,9 +224,9 @@ export const Schedule: React.FC = () => {
             activeTab === 'domestic' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
-          <Users className="w-4 h-4 mr-2.5" />
-          <span className="hidden sm:inline">Domestic</span>
-          <span className="inline sm:hidden">DOM</span>
+          <Users className="w-4 h-4 mr-2.5 shrink-0" />
+          <span className="hidden sm:block whitespace-nowrap">Domestic</span>
+          <span className="block sm:hidden">DOM</span>
         </button>
         <button
           onClick={() => setActiveTab('equipment')}
@@ -233,18 +234,19 @@ export const Schedule: React.FC = () => {
             activeTab === 'equipment' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
-          <Truck className="w-4 h-4 mr-2.5" />
-          {currentShiftLabel}
+          <Truck className="w-4 h-4 mr-2.5 shrink-0" />
+          <span className="hidden sm:block whitespace-nowrap">{currentShiftLabel}</span>
+          <span className="block sm:hidden">{currentShiftLabel}</span>
         </button>
         <button
           onClick={() => setActiveTab('status')}
-          className={`flex-1 md:w-[140px] flex items-center justify-center px-4 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+          className={`flex-1 md:w-[160px] flex items-center justify-center px-4 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
             activeTab === 'status' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
-          <Users className="w-4 h-4 mr-2.5" />
-          <span className="hidden sm:inline">Status Board</span>
-          <span className="inline sm:hidden">STATUS</span>
+          <Users className="w-4 h-4 mr-2.5 shrink-0" />
+          <span className="hidden sm:block whitespace-nowrap">Status Board</span>
+          <span className="block sm:hidden">STATUS</span>
         </button>
       </div>
 
@@ -302,12 +304,38 @@ export const Schedule: React.FC = () => {
                           </div>
                       </td>
                       <td className="px-8 py-6 whitespace-nowrap max-w-[240px]">
-                          {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, val))}
+                          {item.equipmentUsage === 'REFUELLER' ? (
+                            <div className="flex space-x-2">
+                                <div className="flex-1">
+                                    <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OPERATOR</label>
+                                    {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val))}
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OFFICER</label>
+                                    {renderOperatorSelect(item.assignedOfficer || '', (val) => handleAssignFlight(item.id, 'assignedOfficer', val))}
+                                </div>
+                            </div>
+                          ) : (
+                            <div>
+                                <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OPERATOR</label>
+                                {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val))}
+                            </div>
+                          )}
                       </td>
                       <td className="px-8 py-6 whitespace-nowrap text-right text-sm font-medium">
-                          <button className="text-[10px] font-black text-on-surface-dim hover:text-primary uppercase tracking-[0.2em] transition-all">
-                              CONFIGURE
-                          </button>
+                          {!item.equipmentUsage && configuringFlightId !== item.id ? (
+                              <button 
+                                  onClick={() => setConfiguringFlightId(item.id)}
+                                  className="text-[10px] font-black text-on-surface-dim hover:text-primary uppercase tracking-[0.2em] transition-all"
+                              >
+                                  CONFIGURE
+                              </button>
+                          ) : (
+                              <div className="flex justify-end items-center space-x-2">
+                                  <button onClick={() => { handleAssignFlight(item.id, 'equipmentUsage', 'HYDRANT'); setConfiguringFlightId(null); }} className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all ${item.equipmentUsage === 'HYDRANT' ? 'bg-cyan-500 text-white border-cyan-500 shadow-[0_0_12px_rgba(6,182,212,0.4)]' : 'bg-surface-dim text-on-surface-dim border-outline hover:text-cyan-500 hover:border-cyan-500/50'}`}>HD</button>
+                                  <button onClick={() => { handleAssignFlight(item.id, 'equipmentUsage', 'REFUELLER'); setConfiguringFlightId(null); }} className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all ${item.equipmentUsage === 'REFUELLER' ? 'bg-amber-500 text-white border-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.4)]' : 'bg-surface-dim text-on-surface-dim border-outline hover:text-amber-500 hover:border-amber-500/50'}`}>RF</button>
+                              </div>
+                          )}
                       </td>
                     </tr>
                   ))}
@@ -350,8 +378,30 @@ export const Schedule: React.FC = () => {
                   </div>
 
                   <div className="space-y-3">
-                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Assigned Operator</label>
-                    {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, val))}
+                    <div className="flex justify-between items-center">
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Assigned Crew</label>
+                        <div className="flex space-x-2">
+                            <button onClick={() => handleAssignFlight(item.id, 'equipmentUsage', 'HYDRANT')} className={`px-2 py-1 text-[8px] font-black uppercase rounded transition-all ${item.equipmentUsage === 'HYDRANT' ? 'bg-cyan-500 text-white shadow-[0_0_8px_rgba(6,182,212,0.4)]' : 'bg-surface-dim text-on-surface-dim hover:text-cyan-500'}`}>HD</button>
+                            <button onClick={() => handleAssignFlight(item.id, 'equipmentUsage', 'REFUELLER')} className={`px-2 py-1 text-[8px] font-black uppercase rounded transition-all ${item.equipmentUsage === 'REFUELLER' ? 'bg-amber-500 text-white shadow-[0_0_8px_rgba(245,158,11,0.4)]' : 'bg-surface-dim text-on-surface-dim hover:text-amber-500'}`}>RF</button>
+                        </div>
+                    </div>
+                    {item.equipmentUsage === 'REFUELLER' ? (
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OPERATOR</label>
+                                {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val))}
+                            </div>
+                            <div>
+                                <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OFFICER</label>
+                                {renderOperatorSelect(item.assignedOfficer || '', (val) => handleAssignFlight(item.id, 'assignedOfficer', val))}
+                            </div>
+                        </div>
+                    ) : (
+                        <div>
+                            <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OPERATOR</label>
+                            {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val))}
+                        </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -476,37 +526,50 @@ export const Schedule: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              {equipmentAssignments
-                .filter(eq => equipmentShift === 'DAILY' || dieselNeeds.includes(eq.eqNumber))
-                .map(eq => (
-                <div key={eq.id} className="card-premium p-6 group transition-all hover:scale-[1.02]">
-                  <div className="flex items-center justify-between mb-8">
-                    <div className="flex items-center">
-                      <div className="p-3 bg-surface-dim rounded-2xl border border-outline mr-4 group-hover:border-primary/30 transition-all">
-                        <Truck className="w-5 h-5 text-on-surface" />
-                      </div>
-                      <h4 className="text-xl font-[900] text-on-surface italic uppercase tracking-tighter">{eq.eqNumber}</h4>
+            <div className="space-y-12">
+              {['Refueller', 'Hydrant Dispenser'].map(type => {
+                const eqs = equipmentAssignments.filter(eq => (equipmentShift === 'DAILY' || dieselNeeds.includes(eq.eqNumber)) && eq.eqType === type);
+                if (eqs.length === 0) return null;
+                return (
+                  <div key={type}>
+                    <h4 className="text-xs font-black text-on-surface-dim uppercase tracking-[0.3em] mb-6 border-b border-outline pb-2">
+                        {type === 'Refueller' ? 'Refuellers (RF)' : 'Hydrant Dispensers (HD)'}
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                      {eqs.map(eq => (
+                        <div key={eq.id} className="card-premium p-6 group transition-all hover:scale-[1.02]">
+                          <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center">
+                              <div className="p-3 bg-surface-dim rounded-2xl border border-outline mr-4 group-hover:border-primary/30 transition-all">
+                                <Truck className="w-5 h-5 text-on-surface" />
+                              </div>
+                              <h4 className="text-xl font-[900] text-on-surface italic uppercase tracking-tighter">{eq.eqNumber}</h4>
+                            </div>
+                            {dieselNeeds.includes(eq.eqNumber) && (
+                              <div className="flex items-center space-x-1 px-2 py-1 bg-amber-500/10 text-amber-500 rounded-lg border border-amber-500/20 shadow-sm animate-pulse">
+                                <Droplet className="w-3 h-3" />
+                                <span className="text-[8px] font-black uppercase tracking-widest">DIESEL</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="space-y-6">
+                            <div>
+                              <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Operator</label>
+                              {renderOperatorSelect(eq.op1, (val) => handleAssignEquipment(eq.id, 1, val))}
+                            </div>
+                            {type === 'Refueller' && (
+                              <div>
+                                <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Officer</label>
+                                {renderOperatorSelect(eq.op2, (val) => handleAssignEquipment(eq.id, 2, val))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    {dieselNeeds.includes(eq.eqNumber) && (
-                      <div className="flex items-center space-x-1 px-2 py-1 bg-amber-500/10 text-amber-500 rounded-lg border border-amber-500/20 shadow-sm animate-pulse">
-                        <Droplet className="w-3 h-3" />
-                        <span className="text-[8px] font-black uppercase tracking-widest">DIESEL</span>
-                      </div>
-                    )}
                   </div>
-                  <div className="space-y-6">
-                    <div>
-                      <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Primary Pilot</label>
-                      {renderOperatorSelect(eq.op1, (val) => handleAssignEquipment(eq.id, 1, val))}
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Support Specialist</label>
-                      {renderOperatorSelect(eq.op2, (val) => handleAssignEquipment(eq.id, 2, val))}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -525,7 +588,7 @@ export const Schedule: React.FC = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {operators.map((op) => {
-                    const opTasks = flightJobs.filter((j: any) => j.assignedTo === op.id);
+                    const opTasks = flightJobs.filter((j: any) => j.assignedTo === op.id || j.assignedOfficer === op.id);
                     const activeTask = opTasks.find((j: any) => j.status === 'IN_PROGRESS');
                     const pendingCount = opTasks.filter((j: any) => j.status === 'PENDING').length;
                     const doneCount = opTasks.filter((j: any) => j.status === 'COMPLETED').length;
@@ -534,13 +597,13 @@ export const Schedule: React.FC = () => {
                     const domAssignment = domesticTeams.find(a => a.op1 === op.id || a.op2 === op.id);
 
                     return (
-                        <div key={op.id} className="card-premium p-6 space-y-6 hover:border-primary/20 transition-all group relative overflow-hidden">
+                        <div key={op.id} className="card-premium p-4 sm:p-6 space-y-4 sm:space-y-6 hover:border-primary/20 transition-all group relative overflow-hidden">
                             <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                             
                             {/* Operator Header */}
                             <div className="flex items-center justify-between relative z-10">
                                 <div className="flex items-center space-x-4">
-                                    <img src={op.avatar} alt="" className="w-12 h-12 rounded-2xl border border-outline shadow-sm group-hover:scale-105 transition-transform" />
+                                    <img src={op.avatar} alt="" className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl border border-outline shadow-sm group-hover:scale-105 transition-transform shrink-0" />
                                     <div>
                                         <p className="text-[15px] font-[900] text-on-surface uppercase tracking-tight">{op.name}</p>
                                         <p className="text-[10px] font-black text-on-surface-dim opacity-50 uppercase tracking-widest">{op.role.replace('_', ' ')}</p>
@@ -551,24 +614,28 @@ export const Schedule: React.FC = () => {
                                         ? 'bg-success/10 text-success border-success/20 shadow-[0_0_12px_rgba(34,197,94,0.1)]'
                                         : 'bg-surface-dim text-on-surface-dim border-outline opacity-50'
                                 }`}>
-                                    <div className={`w-1.5 h-1.5 rounded-full ${activeTask ? 'bg-success shadow-[0_0_8px_rgba(34,197,94,0.4)] animate-pulse' : 'bg-on-surface-dim opacity-30'}`} />
-                                    {activeTask ? `Refueling ${activeTask.flightNumber}` : 'Standby'}
+                                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeTask ? 'bg-success shadow-[0_0_8px_rgba(34,197,94,0.4)] animate-pulse' : 'bg-on-surface-dim opacity-30'}`} />
+                                    <span className="whitespace-nowrap">
+                                      {activeTask ? (
+                                        <><span className="hidden sm:inline">Refueling </span>{activeTask.flightNumber}{activeTask.vehicleId && <span className="ml-1 opacity-60">({activeTask.vehicleId})</span>}</>
+                                      ) : 'Standby'}
+                                    </span>
                                 </div>
                             </div>
 
                             {/* Mini stats */}
-                            <div className="grid grid-cols-3 gap-4 relative z-10">
-                                <div className="bg-surface-dim/70 backdrop-blur-sm p-4 rounded-2xl flex flex-col items-center border border-outline/50 group-hover:border-outline transition-all">
-                                    <span className="text-xl font-[900] text-on-surface tracking-tighter leading-none mb-2">{opTasks.length}</span>
-                                    <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Total</span>
+                            <div className="grid grid-cols-3 gap-2 sm:gap-4 relative z-10">
+                                <div className="bg-surface-dim/70 backdrop-blur-sm p-3 sm:p-4 rounded-xl sm:rounded-2xl flex flex-col items-center border border-outline/50 group-hover:border-outline transition-all">
+                                    <span className="text-lg sm:text-xl font-[900] text-on-surface tracking-tighter leading-none mb-1 sm:mb-2">{opTasks.length}</span>
+                                    <span className="text-[8px] sm:text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Total</span>
                                 </div>
-                                <div className="bg-warning/5 p-4 rounded-2xl flex flex-col items-center border border-warning/10 border-dashed group-hover:border-solid transition-all">
-                                    <span className="text-xl font-[900] text-warning tracking-tighter leading-none mb-2">{pendingCount}</span>
-                                    <span className="text-[9px] font-black text-warning opacity-60 uppercase tracking-widest">Pending</span>
+                                <div className="bg-warning/5 p-3 sm:p-4 rounded-xl sm:rounded-2xl flex flex-col items-center border border-warning/10 border-dashed group-hover:border-solid transition-all">
+                                    <span className="text-lg sm:text-xl font-[900] text-warning tracking-tighter leading-none mb-1 sm:mb-2">{pendingCount}</span>
+                                    <span className="text-[8px] sm:text-[9px] font-black text-warning opacity-60 uppercase tracking-widest">Pending</span>
                                 </div>
-                                <div className="bg-success/5 p-4 rounded-2xl flex flex-col items-center border border-success/10 border-dashed group-hover:border-solid transition-all">
-                                    <span className="text-xl font-[900] text-success tracking-tighter leading-none mb-2">{doneCount}</span>
-                                    <span className="text-[9px] font-black text-success opacity-60 uppercase tracking-widest">Done</span>
+                                <div className="bg-success/5 p-3 sm:p-4 rounded-xl sm:rounded-2xl flex flex-col items-center border border-success/10 border-dashed group-hover:border-solid transition-all">
+                                    <span className="text-lg sm:text-xl font-[900] text-success tracking-tighter leading-none mb-1 sm:mb-2">{doneCount}</span>
+                                    <span className="text-[8px] sm:text-[9px] font-black text-success opacity-60 uppercase tracking-widest">Done</span>
                                 </div>
                             </div>
 
@@ -579,7 +646,7 @@ export const Schedule: React.FC = () => {
                                         {eqAssignment ? (
                                             <>
                                                 <Truck className="w-4 h-4 text-on-surface-dim opacity-40" />
-                                                <span className="text-[11px] font-black text-on-surface uppercase tracking-wider">{eqAssignment.eqNumber}</span>
+                                                <span className="text-[11px] font-black text-on-surface uppercase tracking-wider">{eqAssignment.eqNumber} <span className="opacity-50 text-[9px]">({eqAssignment.eqType})</span></span>
                                                 <span className="text-[9px] text-on-surface-dim opacity-30 uppercase tracking-widest ml-auto">{eqAssignment.shift_type || 'Active'} Shift</span>
                                             </>
                                         ) : (
@@ -599,17 +666,20 @@ export const Schedule: React.FC = () => {
                                             const delayed = isDelayed(job.sta, job.eta);
                                             const ds = (delayed && job.status === 'PENDING') ? 'DELAYED' : job.status;
                                             return (
-                                                <div key={job.id} className="flex items-center justify-between bg-surface-lowest border border-outline px-5 py-3.5 rounded-2xl group/task hover:border-primary/20 transition-all">
-                                                    <div className="flex items-center space-x-4">
-                                                        <Plane className="w-4 h-4 text-on-surface-dim opacity-20 group-hover/task:rotate-12 transition-transform" />
-                                                        <div>
-                                                            <div className="flex items-center space-x-3">
-                                                                <span className="text-[13px] font-[900] text-on-surface tracking-tighter uppercase italic">{job.flightNumber}</span>
-                                                                <span className="text-[10px] font-bold text-on-surface-dim opacity-40 uppercase tracking-widest">{job.aircraftType}</span>
-                                                            </div>
+                                                <div key={job.id} className="flex items-center justify-between bg-surface-lowest border border-outline p-4 sm:px-5 sm:py-3.5 rounded-xl sm:rounded-2xl group/task hover:border-primary/20 transition-all gap-2">
+                                                    <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
+                                                        <Plane className="w-4 h-4 text-on-surface-dim opacity-20 group-hover/task:rotate-12 transition-transform shrink-0" />
+                                                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 min-w-0">
+                                                            <span className="text-[11px] sm:text-[13px] font-[900] text-on-surface tracking-tighter uppercase italic">{job.flightNumber}</span>
+                                                            <span className="text-[9px] sm:text-[10px] font-bold text-on-surface-dim opacity-40 uppercase tracking-widest truncate">{job.aircraftType}</span>
+                                                            {job.vehicleId && (
+                                                                <span className="text-[8px] sm:text-[9px] font-black text-primary uppercase tracking-widest bg-primary/10 px-1.5 sm:px-2 py-0.5 rounded-md border border-primary/20 shrink-0">
+                                                                    {job.vehicleId}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
-                                                    <span className={`text-[9px] font-black uppercase px-3 py-1 rounded-xl border transition-all ${
+                                                    <span className={`text-[8px] sm:text-[9px] font-black uppercase px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl border transition-all shrink-0 ${
                                                         ds === 'COMPLETED' ? 'text-success border-success/20 bg-success/5' :
                                                         ds === 'DELAYED' ? 'text-error border-error/20 bg-error/10 animate-pulse' :
                                                         ds === 'IN_PROGRESS' ? 'text-warning border-warning/20 bg-warning/5 animate-pulse' :

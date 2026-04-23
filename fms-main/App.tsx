@@ -16,6 +16,7 @@ import { Seaplane } from './components/Seaplane';
 import { EquipmentStatus } from './components/EquipmentStatus';
 import { MarineLoading } from './components/MarineLoading';
 import { Login } from './components/Login';
+import { Logo } from './components/Logo';
 import { BottomNav } from './components/BottomNav';
 import { NotificationProvider } from './context/NotificationContext';
 import { OperationalDataProvider, useOperationalData } from './context/OperationalDataContext';
@@ -60,16 +61,21 @@ const App: React.FC = () => {
   const lastScrollYRef = React.useRef(0);
   useEffect(() => {
     const handleScroll = () => {
-      const currentScrollY = scrollRef.current?.scrollTop || 0;
-      const scrollDelta = currentScrollY - lastScrollYRef.current;
-      const isMobile = window.innerWidth < 1024;
-      const threshold = isMobile ? 30 : 100;
+      if (!scrollRef.current) return;
       
-      // Hide if scrolling down and passed the threshold
-      // Show if scrolling up or at the very top
-      if (scrollDelta > 0 && currentScrollY > threshold) {
+      const currentScrollY = scrollRef.current.scrollTop;
+      const isMobile = window.innerWidth < 1024;
+      
+      if (!isMobile) {
+        setShowHeader(true);
+        return;
+      }
+
+      // Hide if scrolling down and passed a small threshold
+      // Show if scrolling up significantly or at the very top
+      if (currentScrollY > lastScrollYRef.current && currentScrollY > 20) {
         setShowHeader(false);
-      } else if (scrollDelta < -10 || currentScrollY <= 10) {
+      } else if (currentScrollY < lastScrollYRef.current - 10 || currentScrollY <= 10) {
         setShowHeader(true);
       }
       
@@ -120,13 +126,24 @@ const App: React.FC = () => {
   );
 };
 
-// Sub-component to consume context
 const AppContextContent: React.FC<any> = ({ 
   currentUser, activeView, setActiveView, isMobileMenuOpen, setIsMobileMenuOpen,
   isDarkMode, setIsDarkMode, showHeader, scrollRef, pendingJob, setPendingJob,
   showAlertsPanel, setShowAlertsPanel, isSettingsOpen, setIsSettingsOpen, handleLogout
 }) => {
-  const { alerts, acknowledgeAlert, acknowledgeAllAlerts } = useOperationalData();
+  const { alerts, acknowledgeAlert, acknowledgeAllAlerts, equipment, flightJobs } = useOperationalData();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  const searchResults = React.useMemo(() => {
+    if (!searchQuery.trim()) return { equipment: [], jobs: [], personnel: [] };
+    const lower = searchQuery.toLowerCase();
+    return {
+      equipment: (equipment || []).filter(e => e.id.toLowerCase().includes(lower) || e.type.toLowerCase().includes(lower)),
+      jobs: (flightJobs || []).filter(j => j.flightNumber.toLowerCase().includes(lower) || j.aircraftReg.toLowerCase().includes(lower) || j.aircraftType.toLowerCase().includes(lower)),
+      personnel: MOCK_USERS.filter(u => u.name.toLowerCase().includes(lower) || u.role.toLowerCase().includes(lower))
+    };
+  }, [searchQuery, equipment, flightJobs]);
 
   // Filter alerts by role
   const userAlerts = (alerts || []).filter(a => {
@@ -247,11 +264,7 @@ const AppContextContent: React.FC<any> = ({
                     onClick={() => setIsMobileMenuOpen(true)}
                     className="lg:hidden active:scale-95 transition-transform"
                   >
-                    <img 
-                      src={isDarkMode ? "https://lh3.googleusercontent.com/d/1Uk6kyiqhPYw2_9qnXk8612yfdw5ioz5y=s220?authuser=0" : "https://lh3.googleusercontent.com/d/1YCRXjbsAQ5LskxJcQlSUQV5QyaSX9gD2=s220?authuser=0"} 
-                      alt="MACL Logo" 
-                      className="h-12 w-auto object-contain"
-                    />
+                    <Logo className="h-12 w-auto object-contain text-primary" />
                   </button>
                   <div className="hidden lg:block">
                     <h1 className="text-lg font-black tracking-tighter leading-none text-primary uppercase">FUEL SERVICES</h1>
@@ -259,10 +272,14 @@ const AppContextContent: React.FC<any> = ({
                 </div>
 
                 {/* Global Search */}
-                <div className="hidden lg:flex ml-10 items-center bg-surface-dim border border-outline rounded-[18px] px-5 py-2.5 w-96 max-w-xl group focus-within:border-primary transition-all">
+                <div className="hidden lg:flex ml-10 items-center bg-surface-dim border border-outline rounded-[18px] px-5 py-2.5 w-96 max-w-xl group focus-within:border-primary transition-all relative z-[60]">
                   <Search className="w-4 h-4 text-on-surface-dim opacity-40 mr-3" />
                   <input 
                     type="text" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
                     placeholder="Search operations, assets, personnel..." 
                     className="bg-transparent border-none outline-none text-sm w-full font-bold placeholder:opacity-30 text-on-surface"
                   />
@@ -270,6 +287,63 @@ const AppContextContent: React.FC<any> = ({
                     <div className="dot-live"></div>
                     <span className="text-[9px] font-black opacity-30 uppercase whitespace-nowrap tracking-widest text-on-surface">Live</span>
                   </div>
+
+                  {/* Search Dropdown */}
+                  {isSearchFocused && searchQuery.trim().length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-surface-container border border-outline rounded-2xl shadow-premium overflow-hidden max-h-[400px] overflow-y-auto animate-in fade-in slide-in-from-top-2 z-[100]">
+                      <div className="p-2 space-y-2">
+                        {searchResults.jobs.length > 0 && (
+                          <div>
+                            <div className="px-3 py-1.5 text-[10px] font-black opacity-40 uppercase tracking-widest">Active Jobs</div>
+                            {searchResults.jobs.slice(0, 3).map(j => (
+                              <button key={j.id} className="w-full text-left px-3 py-2 hover:bg-surface-dim rounded-xl flex items-center group">
+                                <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center mr-3 font-bold text-xs">{j.flightNumber.substring(0, 2)}</div>
+                                <div>
+                                  <div className="text-sm font-bold group-hover:text-primary transition-colors">{j.flightNumber}</div>
+                                  <div className="text-[10px] opacity-60 font-medium">Aircraft {j.aircraftType} • Stand {j.stand}</div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {searchResults.equipment.length > 0 && (
+                          <div>
+                            <div className="px-3 py-1.5 text-[10px] font-black opacity-40 uppercase tracking-widest">Equipment</div>
+                            {searchResults.equipment.slice(0, 3).map(e => (
+                              <button key={e.id} className="w-full text-left px-3 py-2 hover:bg-surface-dim rounded-xl flex items-center group">
+                                <div className="w-8 h-8 rounded-full bg-warning/10 text-warning flex items-center justify-center mr-3 font-bold text-xs">{e.id.substring(0, 2)}</div>
+                                <div>
+                                  <div className="text-sm font-bold group-hover:text-warning transition-colors">{e.id}</div>
+                                  <div className="text-[10px] opacity-60 font-medium uppercase">{e.type.replace('_', ' ')} • {e.status}</div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {searchResults.personnel.length > 0 && (
+                          <div>
+                            <div className="px-3 py-1.5 text-[10px] font-black opacity-40 uppercase tracking-widest">Personnel</div>
+                            {searchResults.personnel.slice(0, 3).map(p => (
+                              <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-surface-dim rounded-xl flex items-center group">
+                                <img src={p.avatar} alt={p.name} className="w-8 h-8 rounded-full mr-3 border border-outline" />
+                                <div>
+                                  <div className="text-sm font-bold group-hover:text-primary transition-colors">{p.name}</div>
+                                  <div className="text-[10px] opacity-60 font-medium uppercase">{p.role.replace('_', ' ')}</div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {searchResults.jobs.length === 0 && searchResults.equipment.length === 0 && searchResults.personnel.length === 0 && (
+                          <div className="p-6 text-center">
+                            <Search className="w-6 h-6 mx-auto opacity-20 mb-2" />
+                            <div className="text-sm font-bold opacity-60">No results found</div>
+                            <div className="text-[10px] opacity-40 mt-1 uppercase tracking-widest">Try a different term</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -278,7 +352,10 @@ const AppContextContent: React.FC<any> = ({
 
                   <div className="relative">
                     <button 
-                      onClick={() => setShowAlertsPanel(!showAlertsPanel)}
+                      onClick={() => {
+                        setShowAlertsPanel(!showAlertsPanel);
+                        if (isSettingsOpen) setIsSettingsOpen(false);
+                      }}
                       className={`relative p-3 bg-surface-dim hover:bg-surface-container border border-outline rounded-xl transition-all active:scale-90 group ${showAlertsPanel ? 'text-primary border-primary/40' : 'text-on-surface-dim hover:text-primary'}`}
                     >
                       <Bell className="w-5 h-5 group-hover:rotate-12 transition-transform" />
@@ -291,8 +368,10 @@ const AppContextContent: React.FC<any> = ({
 
                     {/* Alerts Dropdown Panel */}
                     {showAlertsPanel && (
-                      <div className="absolute right-0 mt-4 w-96 max-h-[500px] bg-surface-container border border-outline rounded-2xl shadow-premium z-[100] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-4 duration-300">
-                        <div className="px-6 py-4 bg-surface-dim border-b border-outline flex items-center justify-between">
+                      <>
+                        <div className="fixed inset-0 z-[90] sm:hidden" onClick={() => setShowAlertsPanel(false)} />
+                        <div className="fixed inset-x-4 top-20 sm:absolute sm:inset-auto sm:right-0 sm:top-auto sm:mt-4 w-auto sm:w-96 max-h-[80vh] sm:max-h-[500px] bg-surface-container border border-outline rounded-2xl shadow-premium z-[100] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-4 duration-300">
+                          <div className="px-5 py-4 bg-surface-dim border-b border-outline flex items-center justify-between">
                           <h3 className="text-[10px] font-black uppercase tracking-widest text-on-surface flex items-center">
                             <Bell className="w-3.5 h-3.5 mr-2 text-primary" />
                             Tactical Updates
@@ -347,15 +426,105 @@ const AppContextContent: React.FC<any> = ({
                           </div>
                         )}
                       </div>
+                      </>
                     )}
                   </div>
 
-                  <div className="flex items-center space-x-4 bg-surface-dim p-1.5 pr-5 rounded-2xl border border-outline hover:border-primary cursor-pointer transition-all active:scale-95 group">
-                    <img src={currentUser.avatar} alt="" className="w-9 h-9 rounded-xl border-2 border-surface-container shadow-xl transform transition-transform group-hover:scale-105" />
-                    <div className="hidden xl:block">
-                      <p className="text-[11px] font-black text-on-surface leading-tight tracking-tight uppercase">{currentUser.name}</p>
-                      <p className="text-[9px] font-bold text-on-surface-dim opacity-50 uppercase tracking-widest">{currentUser.role.replace('_', ' ')}</p>
+                  <div className="relative">
+                    <div 
+                      onClick={() => {
+                        setIsSettingsOpen(!isSettingsOpen);
+                        if (showAlertsPanel) setShowAlertsPanel(false);
+                      }}
+                      className={`flex items-center space-x-4 bg-surface-dim p-1.5 pr-5 rounded-2xl border transition-all cursor-pointer active:scale-95 group ${isSettingsOpen ? 'border-primary shadow-[0_0_15px_rgba(6,182,212,0.15)]' : 'border-outline hover:border-primary'}`}
+                    >
+                      <img src={currentUser.avatar} alt="" className="w-9 h-9 rounded-xl border-2 border-surface-container shadow-xl transform transition-transform group-hover:scale-105" />
+                      <div className="hidden xl:block">
+                        <p className="text-[11px] font-black text-on-surface leading-tight tracking-tight uppercase">{currentUser.name}</p>
+                        <p className="text-[9px] font-bold text-on-surface-dim opacity-50 uppercase tracking-widest">{currentUser.role.replace('_', ' ')}</p>
+                      </div>
                     </div>
+
+                    {/* System Settings Dropdown Panel */}
+                    {isSettingsOpen && (
+                      <>
+                        <div className="fixed inset-0 z-[90] sm:hidden" onClick={() => setIsSettingsOpen(false)} />
+                        <div className="fixed inset-x-4 top-20 sm:absolute sm:inset-auto sm:right-0 sm:top-auto sm:mt-4 w-auto sm:w-96 max-h-[85vh] sm:max-h-[600px] bg-surface-container border border-outline rounded-2xl shadow-premium z-[100] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-4 duration-300">
+                          <div className="px-5 py-4 bg-surface-dim border-b border-outline flex items-center justify-between">
+                            <h3 className="text-[10px] font-black uppercase tracking-widest text-on-surface flex items-center">
+                              <UserIcon className="w-3.5 h-3.5 mr-2 text-primary" />
+                              System Settings
+                            </h3>
+                            <button onClick={() => setIsSettingsOpen(false)} className="text-on-surface-dim hover:text-primary transition-colors">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                          
+                          <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5">
+                            {/* Appearance Section */}
+                            <div className="p-4 bg-surface-dim/40 border border-outline/50 rounded-xl hover:border-primary/30 transition-all group">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                  <div className={`p-2.5 rounded-lg transition-all ${isDarkMode ? 'bg-primary/10 text-primary' : 'bg-warning/10 text-warning'}`}>
+                                    {isDarkMode ? <Moon className="w-4 h-4 shadow-glow" /> : <Sun className="w-4 h-4" />}
+                                  </div>
+                                  <div>
+                                    <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight">Appearance</h4>
+                                    <p className="text-[9px] font-bold text-on-surface-dim opacity-50">Toggle dark mode</p>
+                                  </div>
+                                </div>
+                                <button 
+                                  onClick={() => setIsDarkMode(!isDarkMode)}
+                                  className={`relative w-12 h-6 rounded-full transition-all duration-500 overflow-hidden group-active:scale-90 border border-outline/50 ${isDarkMode ? 'bg-primary shadow-glow' : 'bg-surface-container-high'}`}
+                                >
+                                  <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-all duration-500 shadow-lg ${isDarkMode ? 'translate-x-6' : 'translate-x-0'}`} />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Language Section */}
+                            <div className="p-4 bg-surface-dim/40 border border-outline/50 rounded-xl opacity-50 cursor-not-allowed">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                  <div className="p-2.5 bg-surface-container rounded-lg text-on-surface-dim">
+                                    <Search className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight">Regional Language</h4>
+                                    <p className="text-[9px] font-bold text-on-surface-dim opacity-50 italic">Dhivehi support coming</p>
+                                  </div>
+                                </div>
+                                <span className="text-[8px] font-black uppercase tracking-widest text-on-surface-dim">Locked</span>
+                              </div>
+                            </div>
+
+                            {/* User Profile Summary */}
+                            <div className="pt-5 border-t border-outline">
+                              <div className="flex items-center space-x-3">
+                                <img src={currentUser.avatar} alt="" className="w-10 h-10 rounded-xl border border-primary/20 shadow-md" />
+                                <div>
+                                  <p className="text-[8px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 mb-0.5">Authenticated User</p>
+                                  <h4 className="text-xs font-[900] text-on-surface tracking-tight uppercase leading-none">{currentUser.name}</h4>
+                                  <p className="text-[9px] font-bold text-primary opacity-80 mt-1 uppercase tracking-tighter">{currentUser.role.replace('_', ' ')}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="p-4 bg-surface-dim/40 border-t border-outline">
+                             <button 
+                              onClick={() => {
+                                setIsSettingsOpen(false);
+                                handleLogout();
+                              }}
+                              className="w-full py-2.5 bg-surface-container border border-outline text-on-surface hover:text-error hover:border-error/30 text-[9px] font-black uppercase tracking-[0.2em] rounded-xl transition-all"
+                             >
+                               Secure Logout
+                             </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -364,7 +533,7 @@ const AppContextContent: React.FC<any> = ({
 
           {/* Main Content Scroll Area */}
           <main ref={scrollRef as any} className="flex-1 overflow-y-auto relative canvas scroll-smooth overscroll-none">
-            <div className="fade-in">
+            <div key={activeView} className="animate-in fade-in slide-in-from-bottom-2 duration-200 ease-out">
               {renderContent()}
             </div>
           </main>
@@ -387,94 +556,7 @@ const AppContextContent: React.FC<any> = ({
           isVisible={showHeader}
         />
 
-        {/* Universal System Settings Modal */}
-        {isSettingsOpen && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 lg:p-8">
-            {/* Backdrop */}
-            <div 
-              className="absolute inset-0 bg-surface/60 backdrop-blur-md animate-in fade-in duration-300"
-              onClick={() => setIsSettingsOpen(false)}
-            />
-            
-            {/* Modal Content */}
-            <div className="relative w-full max-w-xl bg-surface-container border border-outline rounded-[32px] shadow-premium overflow-hidden animate-in zoom-in-95 fade-in duration-300">
-              <div className="p-8">
-                <div className="flex items-center justify-between mb-8">
-                  <div>
-                    <h2 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-2">Platform Preferences</h2>
-                    <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase underline decoration-primary underline-offset-8">System Settings</h3>
-                  </div>
-                  <button 
-                    onClick={() => setIsSettingsOpen(false)}
-                    className="p-3 bg-surface-dim hover:bg-surface-container border border-outline rounded-2xl text-on-surface-dim hover:text-primary transition-all active:scale-95"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
 
-                <div className="space-y-6">
-                  {/* Appearance Section */}
-                  <div className="p-6 bg-surface-dim/40 border border-outline/50 rounded-2xl hover:border-primary/30 transition-all group">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className={`p-3 rounded-xl transition-all ${isDarkMode ? 'bg-primary/10 text-primary' : 'bg-warning/10 text-warning'}`}>
-                          {isDarkMode ? <Moon className="w-5 h-5 shadow-glow" /> : <Sun className="w-5 h-5" />}
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-black text-on-surface uppercase tracking-tight">Appearance</h4>
-                          <p className="text-[11px] font-bold text-on-surface-dim opacity-50">Toggle between high-contrast light and dark modes</p>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={() => setIsDarkMode(!isDarkMode)}
-                        className={`relative w-14 h-8 rounded-full transition-all duration-500 overflow-hidden group-active:scale-90 border border-outline/50 ${isDarkMode ? 'bg-primary shadow-glow' : 'bg-surface-container-high'}`}
-                      >
-                        <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-all duration-500 shadow-lg ${isDarkMode ? 'translate-x-6' : 'translate-x-0'}`} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Language Section (Placeholder) */}
-                  <div className="p-6 bg-surface-dim/40 border border-outline/50 rounded-2xl opacity-50 cursor-not-allowed">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="p-3 bg-surface-container rounded-xl text-on-surface-dim">
-                          <Search className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-black text-on-surface uppercase tracking-tight">Regional Language</h4>
-                          <p className="text-[11px] font-bold text-on-surface-dim opacity-50 italic">Dhivehi support coming soon</p>
-                        </div>
-                      </div>
-                      <span className="text-[9px] font-black uppercase tracking-widest text-on-surface-dim">Locked</span>
-                    </div>
-                  </div>
-
-                  {/* User Profile Summary */}
-                  <div className="mt-8 pt-8 border-t border-outline">
-                    <div className="flex items-center space-x-4">
-                      <img src={currentUser.avatar} alt="" className="w-12 h-12 rounded-2xl border-2 border-primary/20 shadow-xl" />
-                      <div>
-                        <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 mb-0.5">Authenticated User</p>
-                        <h4 className="text-base font-[900] text-on-surface tracking-tight uppercase leading-none">{currentUser.name}</h4>
-                        <p className="text-[11px] font-bold text-primary opacity-80 mt-1 uppercase tracking-tighter">{currentUser.role.replace('_', ' ')}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-12">
-                   <button 
-                    onClick={() => setIsSettingsOpen(false)}
-                    className="w-full py-4 bg-primary text-white text-[10px] font-black uppercase tracking-[0.3em] rounded-2xl shadow-glow hover:brightness-110 active:scale-[0.98] transition-all"
-                   >
-                     Apply Preferences
-                   </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
   );
 };

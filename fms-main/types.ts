@@ -81,6 +81,8 @@ export interface FlightJob {
   eta?: string;
   std?: string;
   assignedTo: string; // User ID
+  assignedOfficer?: string; // Officer User ID for Refueller
+  equipmentUsage?: 'HYDRANT' | 'REFUELLER';
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
   vehicleId?: string;
   remarks?: string;

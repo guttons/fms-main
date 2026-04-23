@@ -734,7 +734,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                       <span className="w-4 h-[1px] bg-primary/40 mr-2"></span>
                       Refuellers (RF)
                     </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       {rfUnits.map((eq) => {
                         const isRequested = alerts.some(a => !a.acknowledged && a.message.includes(`Replenishment requested for unit ${eq.id}`));
                         

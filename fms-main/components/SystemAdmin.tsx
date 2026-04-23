@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users, Server, ShieldCheck, Activity, Database,
-  Plus, Pencil, Trash2, X, Check, Loader2, AlertTriangle,
+  Plus, Pencil, Trash2, X, Check, AlertTriangle,
   Truck, Fuel, ChevronDown, Phone, Mail, IdCard, UserCheck, UserX,
   RefreshCw
 } from 'lucide-react';
 import { UserRole, EquipmentType, EquipmentStatus, FuelType } from '../types';
 import type { StaffMember, Equipment, Tank } from '../types';
+import { MOCK_USERS } from '../constants';
+import { Logo } from './Logo';
 import {
   subscribeToStaff, addStaff, updateStaff, deleteStaff,
   subscribeToEquipment, addEquipment, updateEquipment, deleteEquipment,
@@ -216,7 +218,7 @@ const StaffTab: React.FC<{ push: (msg: string, type?: NotificationType) => void;
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-primary animate-spin" /></div>
+        <div className="flex items-center justify-center py-20"><Logo className="w-12 h-12 text-primary animate-pulse drop-shadow-[0_0_15px_rgba(1,155,201,0.5)]" /></div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-on-surface-dim opacity-40">
           <Users className="w-12 h-12 mb-4" />
@@ -333,7 +335,7 @@ const StaffTab: React.FC<{ push: (msg: string, type?: NotificationType) => void;
             <div className="flex gap-3 pt-2">
               <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 rounded-xl border border-outline text-[11px] font-black uppercase tracking-widest text-on-surface-dim hover:bg-surface-dim transition-all">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 px-4 py-3 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                {saving && <Logo className="w-4 h-4 animate-pulse" />}
                 {editing ? 'Save Changes' : 'Add Staff'}
               </button>
             </div>
@@ -413,7 +415,7 @@ const EquipmentTab: React.FC<{ push: (msg: string, type?: NotificationType) => v
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-primary animate-spin" /></div>
+        <div className="flex items-center justify-center py-20"><Logo className="w-12 h-12 text-primary animate-pulse drop-shadow-[0_0_15px_rgba(1,155,201,0.5)]" /></div>
       ) : Object.keys(grouped).length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-on-surface-dim opacity-40">
           <Truck className="w-12 h-12 mb-4" />
@@ -502,7 +504,7 @@ const EquipmentTab: React.FC<{ push: (msg: string, type?: NotificationType) => v
             <div className="flex gap-3 pt-2">
               <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 rounded-xl border border-outline text-[11px] font-black uppercase tracking-widest text-on-surface-dim hover:bg-surface-dim transition-all">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 px-4 py-3 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                {saving && <Logo className="w-4 h-4 animate-pulse" />}
                 {editing ? 'Save Changes' : 'Add Equipment'}
               </button>
             </div>
@@ -579,7 +581,7 @@ const TanksTab: React.FC<{ push: (msg: string, type?: NotificationType) => void;
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-primary animate-spin" /></div>
+        <div className="flex items-center justify-center py-20"><Logo className="w-12 h-12 text-primary animate-pulse drop-shadow-[0_0_15px_rgba(1,155,201,0.5)]" /></div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-on-surface-dim opacity-40">
           <Fuel className="w-12 h-12 mb-4" />
@@ -683,7 +685,7 @@ const TanksTab: React.FC<{ push: (msg: string, type?: NotificationType) => void;
             <div className="flex gap-3 pt-2">
               <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 rounded-xl border border-outline text-[11px] font-black uppercase tracking-widest text-on-surface-dim hover:bg-surface-dim transition-all">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 px-4 py-3 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                {saving && <Logo className="w-4 h-4 animate-pulse" />}
                 {editing ? 'Save Changes' : 'Add Tank'}
               </button>
             </div>

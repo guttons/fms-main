@@ -20,6 +20,7 @@ import {
   ToggleRight,
   ToggleLeft
 } from 'lucide-react';
+import { Logo } from './Logo';
 
 interface SidebarProps {
   user: User;
@@ -127,16 +128,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="h-[72px] flex items-center justify-between px-8 bg-surface-dim/20 border-b border-outline">
           <h1 className="text-2xl font-[1000] text-primary uppercase tracking-tighter leading-none italic">FMS</h1>
           <div className="hidden lg:flex items-center space-x-3">
-            <img 
-              src="https://lh3.googleusercontent.com/d/1YCRXjbsAQ5LskxJcQlSUQV5QyaSX9gD2=s220?authuser=0" 
-              alt="MACL Logo" 
-              className="logo-light h-14 w-auto object-contain"
-            />
-            <img 
-              src="https://lh3.googleusercontent.com/d/1Uk6kyiqhPYw2_9qnXk8612yfdw5ioz5y=s220?authuser=0" 
-              alt="MACL Logo" 
-              className="logo-dark h-14 w-auto object-contain"
-            />
+            <Logo className="h-14 w-auto object-contain text-primary" />
           </div>
         </div>
 

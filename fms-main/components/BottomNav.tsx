@@ -94,15 +94,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             <button
               key={item.id}
               onClick={() => setActiveView(item.id)}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 py-1 transition-all duration-300 relative active:scale-90 ${
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 py-1 transition-all duration-200 relative active:scale-95 ${
                 isActive ? 'text-primary' : 'text-on-surface-dim'
               }`}
             >
-              <div className={`relative p-2 rounded-2xl transition-all duration-500 ease-out ${isActive ? 'bg-primary/10 shadow-glow scale-110' : 'opacity-60 scale-100 hover:bg-primary/5'}`}>
-                <Icon className={`w-5 h-5 transition-transform duration-500 ${isActive ? 'scale-110' : 'scale-100'}`} />
+              <div className={`relative p-2 rounded-2xl transition-all duration-300 ease-out ${isActive ? 'bg-primary/10 shadow-glow scale-110' : 'opacity-60 scale-100 hover:bg-primary/5'}`}>
+                <Icon className={`w-5 h-5 transition-transform duration-300 ${isActive ? 'scale-110' : 'scale-100'}`} />
               </div>
               {isActive && (
-                <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-5 h-1 bg-primary rounded-full shadow-glow animate-in fade-in zoom-in duration-500" />
+                <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-5 h-1 bg-primary rounded-full shadow-glow animate-in fade-in zoom-in duration-200 ease-out" />
               )}
             </button>
           );
@@ -111,10 +111,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         {/* More Menu Button */}
         <button
           onClick={onMenuClick}
-          className="flex flex-col items-center justify-center flex-1 min-w-0 py-1 text-on-surface-dim group active:scale-90 transition-all rounded-full"
+          className="flex flex-col items-center justify-center flex-1 min-w-0 py-1 text-on-surface-dim group active:scale-95 transition-all duration-200 rounded-full"
         >
-          <div className="p-2 rounded-2xl opacity-60 group-hover:bg-primary/5 transition-all">
-            <PanelLeft className="w-5 h-5 transition-transform" />
+          <div className="p-2 rounded-2xl opacity-60 group-hover:bg-primary/5 transition-all duration-300 ease-out">
+            <PanelLeft className="w-5 h-5 transition-transform duration-300" />
           </div>
         </button>
       </div>

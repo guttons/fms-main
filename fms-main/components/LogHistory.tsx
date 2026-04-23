@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MOCK_USERS } from '../constants';
-import { FileText, Search, Download, Filter, Loader2 } from 'lucide-react';
+import { FileText, Search, Download, Filter } from 'lucide-react';
+import { Logo } from './Logo';
 import { supabaseService } from '../services/supabaseService';
 import { FlightLog } from '../types';
 
@@ -67,7 +68,7 @@ export const LogHistory: React.FC = () => {
       <div className="card-premium overflow-hidden">
         {loading ? (
           <div className="p-32 flex flex-col items-center justify-center">
-            <Loader2 className="w-10 h-10 text-primary animate-spin mb-6" />
+            <Logo className="w-12 h-12 text-primary animate-pulse drop-shadow-[0_0_15px_rgba(1,155,201,0.5)] mb-6" />
             <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.3em] opacity-40 animate-pulse">Syncing Archive Database...</p>
           </div>
         ) : (

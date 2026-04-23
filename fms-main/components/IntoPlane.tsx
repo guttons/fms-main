@@ -26,43 +26,55 @@ const MobileHeader: React.FC<{
     setSelectedVehicleId: (id: string) => void,
     equipment: Equipment[]
 }> = ({ user, isOnline, activeFlight, selectedVehicleId, setSelectedVehicleId, equipment }) => (
-  <div className="bg-surface-container text-on-surface p-5 border-b border-outline sticky top-0 z-30 transition-colors shadow-sm">
-    <div className="flex justify-between items-center">
-          <div className="relative group flex-1">
-              <div className="flex items-center">
-                  <Truck className="w-5 h-5 mr-3 text-primary animate-pulse" />
-                  <div className="flex flex-col flex-1">
-                      <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em] opacity-80 leading-none mb-2">Active Refueling Unit</span>
-                      <div className="relative w-full max-w-[210px]">
-                          <select 
-                              value={activeFlight?.vehicleId || selectedVehicleId}
-                              disabled={!!activeFlight}
-                              onChange={(e) => setSelectedVehicleId(e.target.value)}
-                              className="w-full bg-surface-dim border border-outline rounded-lg py-1.5 pl-3 pr-8 text-sm font-black text-on-surface appearance-none focus:border-primary transition-all cursor-pointer uppercase tracking-tighter disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                               {equipment
-                                 .filter(eq => (eq.id.startsWith('RF') || eq.id.startsWith('HD')) && (eq.status === EquipmentStatus.AVAILABLE || eq.id === selectedVehicleId))
-                                 .map(eq => (
-                                  <option key={eq.id} value={eq.id}>{eq.id} - {eq.type}</option>
-                              ))}
-                          </select>
-                          <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim rotate-90 pointer-events-none" />
-                      </div>
+  <div className="bg-surface-container text-on-surface p-4 border-b border-outline sticky top-0 z-30 transition-colors shadow-sm flex items-center justify-between gap-3 overflow-hidden">
+      <div className="flex items-center flex-1 min-w-0">
+          <Truck className="w-5 h-5 mr-3 text-primary animate-pulse flex-shrink-0" />
+          
+          <div className={`flex flex-col ${activeFlight ? 'w-auto md:w-48' : 'w-48 md:w-64'} transition-all flex-shrink-0`}>
+              <span className="text-[9px] font-black text-primary uppercase tracking-[0.2em] opacity-80 leading-none mb-1">Unit</span>
+              
+              {activeFlight && (
+                  <div className="md:hidden flex items-center h-[30px]">
+                      <span className="bg-surface-dim border border-outline rounded-lg px-2.5 py-1 text-[11px] font-black text-on-surface opacity-60 uppercase tracking-widest leading-none">
+                          {activeFlight.vehicleId}
+                      </span>
                   </div>
+              )}
+
+              <div className={`relative w-full ${activeFlight ? 'hidden md:block' : 'block'}`}>
+                  <select 
+                      value={activeFlight?.vehicleId || selectedVehicleId}
+                      disabled={!!activeFlight}
+                      onChange={(e) => setSelectedVehicleId(e.target.value)}
+                      className="w-full bg-surface-dim border border-outline rounded-lg py-1.5 pl-2 md:pl-3 pr-6 md:pr-8 text-[11px] font-black text-on-surface appearance-none focus:border-primary transition-all cursor-pointer uppercase tracking-tighter disabled:opacity-50 disabled:cursor-not-allowed text-ellipsis overflow-hidden whitespace-nowrap"
+                  >
+                       {equipment
+                         .filter(eq => (eq.id.startsWith('RF') || eq.id.startsWith('HD')) && (eq.status === EquipmentStatus.AVAILABLE || eq.id === selectedVehicleId))
+                         .map(eq => (
+                          <option key={eq.id} value={eq.id}>{eq.id} - {eq.type}</option>
+                      ))}
+                  </select>
+                  <ChevronRight className="absolute right-1.5 md:right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-on-surface-dim rotate-90 pointer-events-none" />
               </div>
           </div>
-          <div className={`flex items-center px-4 py-1.5 rounded-full text-[10px] font-black border transition-all ${isOnline ? 'bg-success/10 text-success border-success/20' : 'bg-warning/10 text-warning border-warning/20'}`}>
-              <div className={`w-2 h-2 rounded-full mr-2 ${isOnline ? 'bg-success shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-warning shadow-[0_0_8px_rgba(245,158,11,0.4)]'}`}></div>
-              {isOnline ? 'SYNCED' : 'OFFLINE'}
-          </div>
+
+          {activeFlight && (
+              <div className="flex items-center ml-3 pl-3 border-l border-outline min-w-0 flex-1">
+                  <span className="text-xl font-[900] text-primary tracking-tighter leading-none mr-3 flex-shrink-0">{activeFlight.flightNumber}</span>
+                  <span className="text-[11px] font-black text-on-surface-dim uppercase tracking-widest flex-shrink-0 truncate">
+                      <span className="text-on-surface">{activeFlight.stand}</span>
+                      {activeFlight.aircraftType && <span className="mx-1.5 opacity-50">•</span>}
+                      {activeFlight.aircraftType && <span className="text-on-surface">{activeFlight.aircraftType}</span>}
+                      {activeFlight.aircraftReg && <span className="mx-1.5 opacity-50">•</span>}
+                      {activeFlight.aircraftReg && <span className="text-primary">{activeFlight.aircraftReg}</span>}
+                  </span>
+              </div>
+          )}
       </div>
-      {activeFlight && (
-          <div className="mt-4 pt-4 border-t border-outline flex justify-between items-center text-[12px] font-bold">
-              <span className="font-black text-primary tracking-tight">{activeFlight.flightNumber}</span>
-              <span className="text-on-surface-dim opacity-60 uppercase tracking-wider">Stand {activeFlight.stand}</span>
-              <span className="bg-primary/10 text-primary px-3 py-1 rounded-lg text-[10px] font-black border border-primary/10">{activeFlight.aircraftReg}</span>
-          </div>
-      )}
+
+      <div className="flex items-center flex-shrink-0 ml-1">
+          <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-success shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-warning shadow-[0_0_8px_rgba(245,158,11,0.4)]'}`} title={isOnline ? 'Synced' : 'Offline'}></div>
+      </div>
   </div>
 );
 
