@@ -11,7 +11,7 @@ import {
   serverTimestamp,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import type { StaffMember, Equipment, Tank } from '../types';
 import { EquipmentStatus, EquipmentType, FuelType, UserRole } from '../types';
 
@@ -34,6 +34,7 @@ const toISOString = (val: unknown): string => {
 export function subscribeToStaff(
   callback: (staff: StaffMember[]) => void
 ): Unsubscribe {
+  if (!auth.currentUser) return () => {};
   const q = query(staffCol, orderBy('name'));
   return onSnapshot(q, (snap) => {
     const staff = snap.docs.map((d) => {
@@ -84,6 +85,7 @@ export async function deleteStaff(id: string): Promise<void> {
 export function subscribeToEquipment(
   callback: (equipment: Equipment[]) => void
 ): Unsubscribe {
+  if (!auth.currentUser) return () => {};
   const q = query(equipmentCol, orderBy('name'));
   return onSnapshot(q, (snap) => {
     const equipment = snap.docs.map((d) => {
@@ -135,6 +137,7 @@ export async function deleteEquipment(id: string): Promise<void> {
 export function subscribeToTanks(
   callback: (tanks: Tank[]) => void
 ): Unsubscribe {
+  if (!auth.currentUser) return () => {};
   const q = query(tanksCol, orderBy('name'));
   return onSnapshot(q, (snap) => {
     const tanks = snap.docs.map((d) => {

@@ -64,8 +64,12 @@ export const TANKS: Tank[] = [
 
 export const EQUIPMENT: Equipment[] = [
   // Refuellers
-  ...['RF-02', 'RF-04', 'RF-06', 'RF-07', 'RF-10', 'RF-11', 'RF-12', 'RF-14', 'RF-15', 'RF-16', 'RF-17'].map(id => ({
-    id, name: id, type: EquipmentType.REFUELLER, status: EquipmentStatus.AVAILABLE, currentVolume: 15000, maxCapacity: 35000, lastUpdated: new Date().toISOString()
+  ...Object.entries({
+    'RF-02': 58000, 'RF-04': 19000, 'RF-06': 58000, 'RF-07': 58000, 'RF-10': 58000,
+    'RF-11': 58000, 'RF-12': 16400, 'RF-14': 20000, 'RF-15': 20000, 'RF-16': 19000, 'RF-17': 19000
+  }).map(([id, maxCapacity], idx) => ({
+    id, name: id, type: EquipmentType.REFUELLER, status: EquipmentStatus.AVAILABLE, 
+    currentVolume: Math.floor(maxCapacity * (0.2 + (idx * 0.07) % 0.6)), maxCapacity, lastUpdated: new Date().toISOString()
   })),
   // Hydrant dispensers
   ...['HD-01', 'HD-02', 'HD-03', 'HD-04'].map(id => ({

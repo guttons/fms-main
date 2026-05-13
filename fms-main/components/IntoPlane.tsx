@@ -26,16 +26,16 @@ const MobileHeader: React.FC<{
     setSelectedVehicleId: (id: string) => void,
     equipment: Equipment[]
 }> = ({ user, isOnline, activeFlight, selectedVehicleId, setSelectedVehicleId, equipment }) => (
-  <div className="bg-surface-container text-on-surface p-4 border-b border-outline sticky top-0 z-30 transition-colors shadow-sm flex items-center justify-between gap-3 overflow-hidden">
+  <div className="bg-surface-container-lowest-container text-on-surface p-4 border-b border-outline sticky top-0 z-30 transition-colors shadow-sm flex items-center justify-between gap-3 overflow-hidden">
       <div className="flex items-center flex-1 min-w-0">
           <Truck className="w-5 h-5 mr-3 text-primary animate-pulse flex-shrink-0" />
           
-          <div className={`flex flex-col ${activeFlight ? 'w-auto md:w-48' : 'w-48 md:w-64'} transition-all flex-shrink-0`}>
-              <span className="text-[9px] font-black text-primary uppercase tracking-[0.2em] opacity-80 leading-none mb-1">Unit</span>
+          <div className="flex items-center flex-shrink-0">
+              <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em] opacity-80 leading-none mr-3 hidden sm:block">Unit</span>
               
               {activeFlight && (
                   <div className="md:hidden flex items-center h-[30px]">
-                      <span className="bg-surface-dim border border-outline rounded-lg px-2.5 py-1 text-[11px] font-black text-on-surface opacity-60 uppercase tracking-widest leading-none">
+                      <span className="bg-surface-container-low border-transparent rounded-lg px-2.5 py-1 text-[11px] font-black text-on-surface opacity-60 uppercase tracking-widest leading-none">
                           {activeFlight.vehicleId}
                       </span>
                   </div>
@@ -46,22 +46,22 @@ const MobileHeader: React.FC<{
                       value={activeFlight?.vehicleId || selectedVehicleId}
                       disabled={!!activeFlight}
                       onChange={(e) => setSelectedVehicleId(e.target.value)}
-                      className="w-full bg-surface-dim border border-outline rounded-lg py-1.5 pl-2 md:pl-3 pr-6 md:pr-8 text-[11px] font-black text-on-surface appearance-none focus:border-primary transition-all cursor-pointer uppercase tracking-tighter disabled:opacity-50 disabled:cursor-not-allowed text-ellipsis overflow-hidden whitespace-nowrap"
+                      className="bg-surface-container-highest border border-outline rounded-lg py-2 pl-3 pr-8 text-[12px] font-bold text-on-surface shadow-sm appearance-none focus:border-primary transition-all cursor-pointer uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap min-w-[140px]"
                   >
                        {equipment
                          .filter(eq => (eq.id.startsWith('RF') || eq.id.startsWith('HD')) && (eq.status === EquipmentStatus.AVAILABLE || eq.id === selectedVehicleId))
                          .map(eq => (
-                          <option key={eq.id} value={eq.id}>{eq.id} - {eq.type}</option>
+                          <option key={eq.id} value={eq.id} className="text-on-surface bg-surface-container-low">{eq.id} - {eq.type}</option>
                       ))}
                   </select>
-                  <ChevronRight className="absolute right-1.5 md:right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-on-surface-dim rotate-90 pointer-events-none" />
+                  <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim rotate-90 pointer-events-none" />
               </div>
           </div>
 
           {activeFlight && (
-              <div className="flex items-center ml-3 pl-3 border-l border-outline min-w-0 flex-1">
-                  <span className="text-xl font-[900] text-primary tracking-tighter leading-none mr-3 flex-shrink-0">{activeFlight.flightNumber}</span>
-                  <span className="text-[11px] font-black text-on-surface-dim uppercase tracking-widest flex-shrink-0 truncate">
+              <div className="flex flex-col md:flex-row md:items-center justify-center ml-3 pl-3 border-l border-outline min-w-0 flex-1">
+                  <span className="text-xl font-[900] text-primary tracking-tighter leading-none mb-1 md:mb-0 md:mr-3 flex-shrink-0">{activeFlight.flightNumber}</span>
+                  <span className="text-[11px] font-black text-on-surface-dim uppercase tracking-widest truncate">
                       <span className="text-on-surface">{activeFlight.stand}</span>
                       {activeFlight.aircraftType && <span className="mx-1.5 opacity-50">•</span>}
                       {activeFlight.aircraftType && <span className="text-on-surface">{activeFlight.aircraftType}</span>}
@@ -119,38 +119,65 @@ const ScreenDashboard: React.FC<{
       const displayStatus = (delayed && job.status === 'PENDING') ? 'DELAYED' : job.status;
       
       return (
-          <div key={job.id} className={`card-premium p-6 border-l-[6px] relative overflow-hidden transition-all shrink-0 ${isAssignedToMe ? 'border-primary ring-1 ring-primary/5' : 'border-outline opacity-60'}`}>
+          <div key={job.id} className={`bg-surface-container-lowest p-6 rounded-2xl relative overflow-hidden transition-all shrink-0 border ${isAssignedToMe ? 'border-primary border-l-[6px] shadow-sm' : 'border-outline opacity-80'}`}>
               <div className="relative z-10">
-                  <div className="flex justify-between items-start mb-6">
-                      <div>
-                          <div className="flex items-center space-x-3">
-                               <h3 className="text-3xl font-[900] text-on-surface tracking-tighter">{job.flightNumber}</h3>
-                               <span className="bg-surface-dim px-2.5 py-1 rounded-lg text-[10px] font-black text-on-surface-dim border border-outline uppercase tracking-wider">{job.aircraftReg}</span>
+                  <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
+                      <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                               <h3 className="text-2xl sm:text-3xl font-[900] text-on-surface tracking-tighter truncate">{job.flightNumber}</h3>
                                {job.vehicleId && job.status !== 'PENDING' && (
-                                   <div className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border shadow-sm animate-in fade-in zoom-in-95 duration-500 ${equipmentBadgeClass(job.vehicleId)}`}>
-                                       <Truck className="w-3.5 h-3.5" />
-                                       <span className="text-[10px] font-black uppercase tracking-widest leading-none">{job.vehicleId}</span>
+                                   <div className={`flex items-center space-x-1 px-2 py-1 rounded-md border shadow-sm animate-in fade-in zoom-in-95 duration-500 shrink-0 ${equipmentBadgeClass(job.vehicleId)}`}>
+                                       <Truck className="w-3 h-3" />
+                                       <span className="text-[9px] font-black uppercase tracking-widest leading-none">{job.vehicleId}</span>
                                    </div>
                                )}
                           </div>
-                          <div className="flex items-center mt-2 text-on-surface-dim text-[12px] font-bold">
-                               <MapPin className="w-4 h-4 mr-2 text-primary opacity-60" />
-                               Stand {job.stand}
-                               <span className="mx-3 opacity-20">|</span>
-                               <span className="opacity-60">{job.aircraftType}</span>
+                          <div className="flex flex-wrap items-center mt-2 text-on-surface-dim text-[11px] sm:text-[12px] font-bold gap-x-2.5 gap-y-1.5">
+                               <div className="flex items-center whitespace-nowrap">
+                                   <MapPin className="w-3.5 h-3.5 mr-1.5 text-primary opacity-60 shrink-0" />
+                                   <span>Stand {job.stand}</span>
+                               </div>
+                               <span className="opacity-20 shrink-0">|</span>
+                               <span className="opacity-60 whitespace-nowrap">{job.aircraftType}</span>
+                               <span className="opacity-20 shrink-0">|</span>
+                               <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black text-on-surface-dim border-transparent uppercase tracking-wider whitespace-nowrap">{job.aircraftReg}</span>
+                               <span className="opacity-20 shrink-0">|</span>
+                               <div className="flex items-center text-on-surface-dim font-bold">
+                                   <div className="w-5 h-5 rounded-md bg-surface-container-low border-transparent flex items-center justify-center mr-2 text-[10px] font-black">
+                                       {assigneeName.charAt(0)}
+                                   </div>
+                                   <span className="text-[11px] uppercase tracking-tight">{assigneeName}</span>
+                               </div>
                           </div>
                       </div>
-                      <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
-                          displayStatus === 'COMPLETED' ? 'bg-success/10 text-success border-success/10' : 
-                          displayStatus === 'DELAYED' ? 'bg-error/10 text-error border-error/10 animate-pulse' :
-                          displayStatus === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/10 animate-pulse' : 'bg-surface-dim text-on-surface-dim border-outline'
-                      }`}>
-                          {displayStatus.replace('_', ' ')}
-                      </span>
+                      
+                      <div className="flex items-center gap-4">
+                           <div className="hidden md:flex items-center gap-6 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/50 px-4 py-2.5 rounded-xl">
+                               <div className="flex items-center gap-2">
+                                   <span className="opacity-40">STA</span>
+                                   <span className="text-on-surface text-xs font-[900] tracking-tight">{job.sta || '--:--'}</span>
+                               </div>
+                               <div className="flex items-center gap-2">
+                                   <span className="text-primary opacity-60">ETA</span>
+                                   <span className={`${delayed ? 'text-error' : 'text-primary'} text-xs font-[900] tracking-tight transition-colors`}>{job.eta || '--:--'}</span>
+                               </div>
+                               <div className="flex items-center gap-2">
+                                   <span className="text-warning opacity-60">STD</span>
+                                   <span className="text-warning text-xs font-[900] tracking-tight">{job.std || '--:--'}</span>
+                               </div>
+                           </div>
+                           <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border shrink-0 text-center whitespace-nowrap ${
+                               displayStatus === 'COMPLETED' ? 'bg-success/10 text-success border-success/10' : 
+                               displayStatus === 'DELAYED' ? 'bg-error/10 text-error border-error/10 animate-pulse' :
+                               displayStatus === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/10 animate-pulse' : 'bg-surface-container-low text-on-surface-dim border-outline'
+                           }`}>
+                               {displayStatus.replace('_', ' ')}
+                           </span>
+                      </div>
                   </div>
 
-                   {/* Flight Times Display */}
-                   <div className="grid grid-cols-3 gap-2 mb-6 text-[10px] font-black uppercase tracking-widest bg-surface-dim/50 p-3 rounded-xl border border-outline">
+                   {/* Flight Times Display (Mobile Only) */}
+                   <div className="md:hidden grid grid-cols-3 gap-2 mb-6 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/50 p-3 rounded-xl border-transparent">
                        <div className="flex flex-col">
                            <span className="opacity-40 mb-1">STA</span>
                            <span className="text-on-surface text-sm font-[900] tracking-tight">{job.sta || '--:--'}</span>
@@ -166,18 +193,10 @@ const ScreenDashboard: React.FC<{
                    </div>
                   
                   <div className="flex justify-between items-center border-t border-outline pt-6">
-                      <div className="flex items-center text-sm">
-                          {isAssignedToMe ? (
-                              <div className="flex items-center text-primary font-black bg-primary/5 px-4 py-2 rounded-xl border border-primary/5 text-[11px] uppercase tracking-wider">
-                                  <UserIcon className="w-4 h-4 mr-3" />
-                                  My Task
-                              </div>
-                          ) : (
-                              <div className="flex items-center text-on-surface-dim opacity-60 font-bold">
-                                  <div className="w-8 h-8 rounded-xl bg-surface-dim border border-outline flex items-center justify-center mr-3 text-[12px] font-black">
-                                      {assigneeName.charAt(0)}
-                                  </div>
-                                  <span className="text-[12px] uppercase tracking-tight">{assigneeName}</span>
+                      <div className="flex items-center">
+                          {isAssignedToMe && (
+                              <div className="flex items-center justify-center text-primary bg-primary/10 w-10 h-10 rounded-xl border border-primary/20" title="My Task">
+                                  <UserIcon className="w-5 h-5" />
                               </div>
                           )}
                       </div>
@@ -185,15 +204,14 @@ const ScreenDashboard: React.FC<{
                       <button 
                           onClick={() => onStartJob(job)}
                           disabled={!isAssignedToMe || job.status === 'COMPLETED'}
-                          className={`px-6 py-3 rounded-xl font-black text-[11px] uppercase tracking-widest shadow-sm transition-all flex items-center
+                          className={`px-6 py-3 rounded-xl font-black text-[11px] uppercase tracking-widest shadow-sm transition-all flex items-center justify-center
                               ${isAssignedToMe && job.status !== 'COMPLETED'
-                                  ? 'bg-primary text-white hover:scale-[1.05] active:scale-95 shadow-premium' 
-                                  : 'bg-surface-dim text-on-surface-dim opacity-40 cursor-not-allowed border border-outline'
+                                  ? 'kinetic-gradient hover:scale-[1.05] active:scale-95 shadow-premium' 
+                                  : 'bg-surface-container-low text-on-surface-dim opacity-40 cursor-not-allowed border-transparent'
                               }
                           `}
                       >
-                          {!isAssignedToMe ? <Lock className="w-4 h-4 mr-2" /> : null}
-                          {job.status === 'COMPLETED' ? 'VIEW LOG' : (!isAssignedToMe ? 'LOCKED' : 'START JOB')}
+                          {job.status === 'COMPLETED' ? 'VIEW LOG' : (!isAssignedToMe ? <Lock className="w-4 h-4" /> : 'START JOB')}
                       </button>
                   </div>
               </div>
@@ -205,9 +223,9 @@ const ScreenDashboard: React.FC<{
     <div className="p-5 flex flex-col space-y-8 pb-24">
       {/* Category Toggle */}
       <div className="flex justify-center mt-2 mb-4">
-          <div className="bg-surface-dim p-1.5 rounded-[22px] border border-outline flex relative w-full max-w-[320px] shadow-inner">
+          <div className="bg-surface-container-low p-1.5 rounded-[22px] border-transparent flex relative w-full max-w-[320px] shadow-inner">
               <div 
-                  className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-primary rounded-[18px] transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${viewMode === 'DOM' ? 'translate-x-full' : 'translate-x-0'}`}
+                  className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] kinetic-gradient rounded-[18px] transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${viewMode === 'DOM' ? 'translate-x-full' : 'translate-x-0'}`}
               />
               <button 
                   onClick={() => setViewMode('INT')}
@@ -258,7 +276,7 @@ const ScreenTimestamps: React.FC<{
               className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group shadow-ambient
                   ${activeFlight?.timestampPosition 
                       ? 'bg-success/5 border-success text-on-surface' 
-                      : 'bg-surface-container border-outline hover:border-primary active:scale-[0.98]'}
+                      : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
               `}
           >
               <div className="relative z-10">
@@ -284,8 +302,8 @@ const ScreenTimestamps: React.FC<{
                   ${activeFlight?.timestampStart 
                       ? 'bg-success/5 border-success text-on-surface' 
                       : !activeFlight?.timestampPosition
-                          ? 'bg-surface-dim border-outline opacity-40 cursor-not-allowed'
-                          : 'bg-surface-container border-outline hover:border-primary active:scale-[0.98]'}
+                          ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
+                          : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
               `}
           >
               <div className="relative z-10">
@@ -308,7 +326,7 @@ const ScreenTimestamps: React.FC<{
       <button 
           onClick={onNext}
           disabled={!activeFlight?.timestampStart}
-          className="mt-8 w-full bg-primary text-white p-6 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-40 disabled:grayscale hover:shadow-premium active:scale-95 transition-all"
+          className="mt-8 w-full kinetic-gradient p-6 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-40 disabled:grayscale hover:shadow-premium active:scale-95 transition-all"
       >
           Proceed to Metering <ChevronRight className="ml-3 w-5 h-5" />
       </button>
@@ -348,7 +366,7 @@ const ScreenMetering: React.FC<{
               className={`w-full p-6 rounded-2xl border-2 font-black text-[11px] uppercase tracking-widest flex items-center justify-center transition-all
                   ${activeFlight?.timestampInitialEnd 
                       ? 'bg-success/5 border-success text-success' 
-                      : 'bg-surface-container border-outline text-on-surface hover:border-primary active:scale-95'}`}
+                      : 'bg-surface-container-lowest-container border-outline text-on-surface hover:border-primary active:scale-95'}`}
           >
               <Pause className="w-5 h-5 mr-3" />
               {activeFlight?.timestampInitialEnd ? `Initial End: ${new Date(activeFlight.timestampInitialEnd).toLocaleTimeString()}` : 'Log Initial End'}
@@ -377,10 +395,10 @@ const ScreenMetering: React.FC<{
                </button>
                {showTopUp && (
                    <div className="grid grid-cols-2 gap-4 mt-6 animate-in fade-in slide-in-from-top-4 duration-400">
-                       <button onClick={() => onTimestamp('timestampFinalStart')} className={`p-4 rounded-xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${activeFlight?.timestampFinalStart ? 'bg-success/5 border-success text-success' : 'bg-surface-dim border-outline text-on-surface-dim hover:text-on-surface'}`}>
+                       <button onClick={() => onTimestamp('timestampFinalStart')} className={`p-4 rounded-xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${activeFlight?.timestampFinalStart ? 'bg-success/5 border-success text-success' : 'bg-surface-container-low border-outline text-on-surface-dim hover:text-on-surface'}`}>
                            {activeFlight?.timestampFinalStart ? 'Started' : 'Final Start'}
                        </button>
-                       <button onClick={() => onTimestamp('timestampFinalEnd')} className={`p-4 rounded-xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${activeFlight?.timestampFinalEnd ? 'bg-success/5 border-success text-success' : 'bg-surface-dim border-outline text-on-surface-dim hover:text-on-surface'}`}>
+                       <button onClick={() => onTimestamp('timestampFinalEnd')} className={`p-4 rounded-xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${activeFlight?.timestampFinalEnd ? 'bg-success/5 border-success text-success' : 'bg-surface-container-low border-outline text-on-surface-dim hover:text-on-surface'}`}>
                            {activeFlight?.timestampFinalEnd ? 'Ended' : 'Final End'}
                        </button>
                    </div>
@@ -392,7 +410,7 @@ const ScreenMetering: React.FC<{
           <button 
               onClick={onNext}
               disabled={!activeFlight?.meterClose}
-              className="w-full bg-primary text-white p-6 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-40 disabled:grayscale shadow-premium active:scale-95 transition-all"
+              className="w-full kinetic-gradient p-6 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-40 disabled:grayscale shadow-premium active:scale-95 transition-all"
           >
               Final Compliance <ChevronRight className="ml-3 w-5 h-5" />
           </button>
@@ -415,7 +433,7 @@ const ScreenQC: React.FC<{
 
        <div className="space-y-4 card-premium p-8 border-outline shadow-inner">
           {['panelCheck', 'walkAroundCheck', 'appearanceCheck', 'waterCheck'].map((check) => (
-              <label key={check} className="flex items-center justify-between p-5 bg-surface-dim border border-outline rounded-2xl hover:bg-surface-container transition-all cursor-pointer group">
+              <label key={check} className="flex items-center justify-between p-5 bg-surface-container-low border-transparent rounded-2xl hover:bg-surface-container-lowest-container transition-all cursor-pointer group">
                   <span className="font-black text-[13px] text-on-surface uppercase tracking-tight group-hover:text-primary transition-colors">
                       {check.replace(/([A-Z])/g, ' $1').trim()}
                   </span>
@@ -423,7 +441,7 @@ const ScreenQC: React.FC<{
                       type="checkbox" 
                       checked={!!activeFlight?.[check as keyof FlightLog]} 
                       onChange={(e) => onInputChange(check as keyof FlightLog, e.target.checked)}
-                      className="w-7 h-7 text-primary rounded-xl focus:ring-0 border-outline bg-surface transition-all"
+                      className="w-7 h-7 text-primary rounded-xl focus:ring-0 border-outline bg-surface-container-lowest transition-all"
                   />
               </label>
           ))}
@@ -431,7 +449,7 @@ const ScreenQC: React.FC<{
           <div className="pt-6">
               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Task Remarks & Feedback</label>
               <textarea 
-                  className="w-full bg-surface-dim border-2 border-outline rounded-2xl p-5 text-sm font-bold text-on-surface outline-none focus:border-primary transition-all min-h-[120px] placeholder:opacity-20"
+                  className="w-full bg-surface-container-low border-2 border-outline rounded-2xl p-5 text-sm font-bold text-on-surface outline-none focus:border-primary transition-all min-h-[120px] placeholder:opacity-20"
                   placeholder="Enter any operational remarks, delays, or equipment issues..."
                   value={activeFlight?.remarks || ''}
                   onChange={(e) => onInputChange('remarks', e.target.value)}
@@ -448,7 +466,7 @@ const ScreenQC: React.FC<{
            <button 
               onClick={onSubmit}
               disabled={loading}
-              className="w-full bg-primary text-white p-7 rounded-3xl font-[900] text-[15px] uppercase tracking-[0.3em] flex items-center justify-center shadow-premium hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+              className="w-full kinetic-gradient p-7 rounded-3xl font-[900] text-[15px] uppercase tracking-[0.3em] flex items-center justify-center shadow-premium hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
            >
               {loading ? 'ENCRYPTING & SYNCING...' : (
                   <>
@@ -591,7 +609,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
 
   return (
-    <div className="min-h-full flex flex-col bg-surface transition-colors duration-500">
+    <div className="min-h-full flex flex-col bg-surface-container-lowest transition-colors duration-500">
         <MobileHeader 
           user={user} 
           isOnline={isOnline} 
@@ -641,5 +659,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     </div>
   );
 };
+
+
 
 

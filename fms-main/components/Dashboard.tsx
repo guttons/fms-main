@@ -347,7 +347,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
         {myDomesticTeam && (
             <div className="space-y-4">
                 <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Domestic Operations</h3>
-                <div className="bg-white rounded-xl shadow-sm border-l-4 border-l-blue-500 overflow-hidden flex flex-col md:flex-row mb-4">
+                <div className="bg-surface-dim rounded-xl shadow-sm border border-outline border-l-4 border-l-primary overflow-hidden flex flex-col md:flex-row mb-4">
                     <div className="p-6 flex-1">
                         <div className="flex items-center space-x-3 mb-2">
                             <div className="p-2 bg-blue-50 rounded-lg">
@@ -425,7 +425,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                         })}
                     </div>
                 ) : (
-                    <div className="bg-white p-6 text-center rounded-xl border border-dashed border-gray-300">
+                    <div className="bg-surface-dim p-6 text-center rounded-xl border border-dashed border-outline">
                         <p className="text-slate-500 font-medium">No domestic flights currently scheduled for {myDomesticTeam.team_name}.</p>
                     </div>
                 )}
@@ -437,7 +437,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
             <div className="space-y-4">
                 <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Equipment Assignments</h3>
                 {myEquipment.map((eq: any, index: number) => (
-                    <div key={index} className="bg-white rounded-xl shadow-sm border-l-4 border-l-orange-500 overflow-hidden flex flex-col md:flex-row">
+                    <div key={index} className="bg-surface-dim rounded-xl shadow-sm border border-outline border-l-4 border-l-warning overflow-hidden flex flex-col md:flex-row">
                         <div className="p-6 flex-1">
                             <div className="flex justify-between items-start mb-2">
                                 <div className="flex items-center space-x-3">
@@ -535,7 +535,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
               <h2 className="headline-lg text-on-surface">Into-Plane Operations Center</h2>
               <p className="text-on-surface-dim font-medium">Real-time tactical flight refueling oversight</p>
            </div>
-           <div className="px-5 py-2.5 bg-brand-blue dark:bg-primary text-white rounded-2xl text-[10px] font-black border border-outline shadow-xl uppercase tracking-[0.2em] w-fit">
+           <div className="px-5 py-2.5 kinetic-gradient text-white rounded-2xl text-[10px] font-black border border-outline shadow-xl uppercase tracking-[0.2em] w-fit">
               Shift: Morning (06:00 - 14:00)
            </div>
         </div>
@@ -1232,7 +1232,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                 <div className="mb-10 flex justify-start">
                         <div className="bg-surface-dim p-1.5 rounded-[22px] border border-outline flex relative w-full sm:w-[320px] shadow-inner overflow-hidden">
                             <div 
-                                className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-primary rounded-[18px] transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${viewMode === 'DEPOT' ? 'translate-x-full' : 'translate-x-0'}`}
+                                className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] kinetic-gradient rounded-[18px] transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${viewMode === 'DEPOT' ? 'translate-x-full' : 'translate-x-0'}`}
                             />
                             <button
                                 onClick={() => setViewMode('ITP')}

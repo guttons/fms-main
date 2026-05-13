@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { FuelType, BridgingLog, UserRole } from '../types';
+import { FuelType, BridgingLog, UserRole, EquipmentType, EquipmentStatus } from '../types';
 import { Droplet, Truck, CheckCircle, AlertTriangle, Save, Clock, ArrowRight, History, FileText } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useNotification } from '../context/NotificationContext';
 import { useOperationalData } from '../context/OperationalDataContext';
 
 export const Bridging: React.FC = () => {
-  const { tanks, updateTankLevel, alerts, acknowledgeAlert, createAlert } = useOperationalData();
+  const { tanks, updateTankLevel, alerts, acknowledgeAlert, createAlert, equipment } = useOperationalData();
   const [logs, setLogs] = useState<BridgingLog[]>([]);
   const { notify } = useNotification();
 
-  // Filter alerts for replenishment requests
+  const availableRefuelers = (equipment || [])
+    .filter(eq => eq.type === EquipmentType.REFUELLER && eq.status === EquipmentStatus.AVAILABLE);
+
+  // Filter alerts for replenishment requests to highlight them
   const requestedRFs = Array.from(new Set(
     (alerts || [])
       .filter(a => a && !a.acknowledged && (
@@ -32,10 +35,7 @@ export const Bridging: React.FC = () => {
     }
   };
 
-  
-  // Standardized Input Classes for High Contrast
-  const inputClass = "w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aviation-500 focus:border-aviation-500 bg-white text-slate-900 placeholder:text-slate-400";
-  const labelClass = "block text-sm font-bold text-slate-800 mb-2";
+
 
   const [formData, setFormData] = useState({
     sourceTankId: '',
@@ -77,8 +77,11 @@ export const Bridging: React.FC = () => {
   };
 
   const setNow = (field: 'startTime' | 'endTime') => {
-    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    setFormData(prev => ({ ...prev, [field]: now }));
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    const timeStr = `${hours}:${minutes}`;
+    setFormData(prev => ({ ...prev, [field]: timeStr }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -165,7 +168,7 @@ export const Bridging: React.FC = () => {
         </p>
         <button 
           onClick={() => setSuccess(false)}
-          className="mt-12 px-10 py-4 bg-primary text-white font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-premium hover:scale-105 active:scale-95 transition-all"
+          className="mt-12 px-10 py-4 kinetic-gradient text-white font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-premium hover:scale-105 active:scale-95 transition-all"
         >
           INITIATE NEW LOAD
         </button>
@@ -233,12 +236,14 @@ export const Bridging: React.FC = () => {
                                 onChange={handleInputChange}
                                 className="w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all appearance-none"
                             >
-                                <option value="">SELECT REQUESTED RF...</option>
-                                {requestedRFs.length === 0 ? (
-                                    <option disabled>NO ACTIVE REQUESTS</option>
+                                <option value="">SELECT RF UNIT...</option>
+                                {availableRefuelers.length === 0 ? (
+                                    <option disabled>NO AVAILABLE REFUELERS</option>
                                 ) : (
-                                    requestedRFs.map(rfId => (
-                                        <option key={rfId} value={rfId}>{rfId}</option>
+                                    availableRefuelers.map(rf => (
+                                        <option key={rf.id} value={rf.id}>
+                                            {rf.id} ({rf.currentVolume.toLocaleString()} / {rf.maxCapacity.toLocaleString()}L) {requestedRFs.includes(rf.id) ? '⚠ REPLENISH' : ''}
+                                        </option>
                                     ))
                                 )}
                             </select>
@@ -250,8 +255,8 @@ export const Bridging: React.FC = () => {
                         <ArrowRight className="w-8 h-8 transform rotate-90 md:rotate-0" />
                     </div>
 
-                    <div className="mt-4">
-                        <label className="block text-[10px] font-black text-on-surface uppercase mb-4 tracking-widest text-center">Fuel Volume Provision (L)</label>
+                    <div className="mt-4 p-8 bg-surface-dim/30 rounded-[40px] border border-outline shadow-inner">
+                        <label className="block text-[10px] font-black text-on-surface uppercase mb-4 tracking-widest text-center opacity-60">Fuel Volume Provision (L)</label>
                         <div className="relative max-w-md mx-auto">
                             <input 
                                 type="number" 
@@ -261,7 +266,7 @@ export const Bridging: React.FC = () => {
                                 placeholder="0"
                                 value={formData.volume}
                                 onChange={handleInputChange}
-                                className="w-full px-10 py-6 bg-surface-lowest border border-outline rounded-[32px] text-5xl font-[900] text-primary tracking-tighter text-center outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all font-mono shadow-inner"
+                                className="w-full px-10 py-6 bg-surface-lowest border border-outline/50 rounded-[32px] text-5xl font-[900] text-primary tracking-tighter text-center outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all font-mono shadow-premium"
                             />
                             <span className="absolute right-10 top-1/2 transform -translate-y-1/2 text-[10px] font-black text-on-surface-dim uppercase opacity-30">LTRS</span>
                         </div>
@@ -290,7 +295,7 @@ export const Bridging: React.FC = () => {
                                     <button 
                                         type="button"
                                         onClick={() => setNow('startTime')}
-                                        className="px-5 bg-surface-dim border border-outline rounded-2xl hover:bg-primary hover:text-white transition-all text-on-surface-dim group active:scale-95"
+                                        className="px-5 bg-surface-dim border border-outline rounded-2xl hover:bg-primary hover:text-white transition-all text-on-surface-dim group active:scale-95 shadow-sm"
                                     >
                                         <Clock className="w-4 h-4 group-hover:animate-spin-slow" />
                                     </button>
@@ -310,7 +315,7 @@ export const Bridging: React.FC = () => {
                                     <button 
                                         type="button"
                                         onClick={() => setNow('endTime')}
-                                        className="px-5 bg-surface-dim border border-outline rounded-2xl hover:bg-primary hover:text-white transition-all text-on-surface-dim group active:scale-95"
+                                        className="px-5 bg-surface-dim border border-outline rounded-2xl hover:bg-primary hover:text-white transition-all text-on-surface-dim group active:scale-95 shadow-sm"
                                     >
                                         <Clock className="w-4 h-4 group-hover:animate-spin-slow" />
                                     </button>
@@ -371,7 +376,7 @@ export const Bridging: React.FC = () => {
                 <button 
                     type="submit" 
                     disabled={loading || !formData.visualCheckPassed || !formData.cwdCheckPassed}
-                    className="w-full py-6 bg-primary text-white rounded-[32px] font-[900] text-sm uppercase tracking-[0.4em] shadow-premium hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-20 disabled:scale-100 disabled:grayscale flex items-center justify-center"
+                    className="w-full py-6 kinetic-gradient text-white rounded-[32px] font-[900] text-sm uppercase tracking-[0.4em] shadow-premium hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-20 disabled:scale-100 disabled:grayscale flex items-center justify-center"
                 >
                     {loading ? 'SYNCHRONIZING...' : (
                     <>

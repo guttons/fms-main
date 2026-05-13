@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Hexagon, Lock, User as UserIcon, ShieldCheck, AlertCircle } from 'lucide-react';
 import { auth } from '../firebase';
-import { signInWithPopup, OAuthProvider } from 'firebase/auth';
+import { signInWithPopup, OAuthProvider, signInAnonymously } from 'firebase/auth';
 import { User, UserRole } from '../types';
 import { MOCK_USERS } from '../constants';
 import { Logo } from './Logo';
@@ -36,8 +36,23 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     }
   };
 
-  const handleMockLogin = (user: User) => {
-    onLogin(user);
+  const handleMockLogin = async (user: User) => {
+    setIsLoggingIn(true);
+    try {
+      // Attempt to sign in anonymously for Firestore context
+      try {
+        await signInAnonymously(auth);
+      } catch (authErr: any) {
+        console.warn("Simulator: Anonymous login restricted/failed. Proceeding with mock session.", authErr);
+        // We continue anyway so the user can enter the dashboard
+      }
+      onLogin(user);
+    } catch (err: any) {
+      console.error("Simulator login failed:", err);
+      setError("Failed to initialize simulator session.");
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
   return (
@@ -46,7 +61,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-primary/10 rounded-full blur-[140px] -mr-96 -mt-96 animate-pulse"></div>
       <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] -ml-64 -mb-64"></div>
       
-      <div className="max-w-md w-full bg-surface-container p-12 lg:p-14 border border-outline shadow-premium rounded-[48px] relative z-10 fade-in backdrop-blur-2xl">
+      <div className="max-w-md w-full bg-surface p-12 lg:p-14 border border-outline shadow-premium rounded-[48px] relative z-10 fade-in">
         <div className="text-center">
           <div className="mx-auto mb-10 flex justify-center">
             <Logo className="h-24 w-auto object-contain text-primary" />
@@ -72,8 +87,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <button
                 onClick={handleMicrosoftLogin}
                 disabled={isLoggingIn}
-                style={{ backgroundColor: '#019BC9' }}
-                className="group relative w-full flex justify-center py-5 px-4 text-white text-[11px] font-black rounded-[22px] hover:scale-[1.02] active:scale-95 transition-all duration-300 disabled:opacity-50 uppercase tracking-[0.2em] shadow-premium"
+                className="group kinetic-gradient relative w-full flex justify-center py-5 px-4 text-white text-[11px] font-black rounded-[22px] hover:scale-[1.02] active:scale-95 transition-all duration-300 disabled:opacity-50 uppercase tracking-[0.2em] shadow-premium"
               >
                 <div className="absolute left-6 inset-y-0 flex items-center">
                   <Lock className="h-4 w-4 text-white/40 group-hover:text-white transition-colors" />

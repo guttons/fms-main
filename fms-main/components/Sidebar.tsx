@@ -120,13 +120,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside className={`
-      fixed inset-y-0 left-0 z-[60] w-[var(--sidebar-width)] bg-surface-container border-r border-outline transform transition-transform duration-300 ease-in-out
+      fixed inset-y-0 left-0 z-[60] w-[var(--sidebar-width)] bg-surface border-r border-outline transform transition-transform duration-300 ease-in-out
       ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-0 shadow-sm transition-colors duration-500
     `}>
       <div className="h-full flex flex-col">
         {/* Brand */}
         <div className="h-[72px] flex items-center justify-between px-8 bg-surface-dim/20 border-b border-outline">
-          <h1 className="text-2xl font-[1000] text-primary uppercase tracking-tighter leading-none italic">FMS</h1>
+          <h1 className="text-5xl font-[1000] text-primary uppercase tracking-[-0.05em] leading-none italic drop-shadow-[0_0_12px_rgba(var(--color-primary),0.2)]">FMS</h1>
           <div className="hidden lg:flex items-center space-x-3">
             <Logo className="h-14 w-auto object-contain text-primary" />
           </div>

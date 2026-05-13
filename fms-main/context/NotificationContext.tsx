@@ -56,25 +56,25 @@ const Toast: React.FC<{ notification: Notification; onClose: () => void }> = ({ 
   const config = {
     success: {
       icon: <Check className="w-5 h-5" />,
-      classes: 'bg-white border-success/30 text-success shadow-success/10',
+      classes: 'bg-surface border-success/30 text-success shadow-success/10',
       iconClasses: 'bg-success/10 text-success',
       label: 'Success'
     },
     error: {
       icon: <AlertOctagon className="w-5 h-5" />,
-      classes: 'bg-white border-error/30 text-error shadow-error/10',
+      classes: 'bg-surface border-error/30 text-error shadow-error/10',
       iconClasses: 'bg-error/10 text-error',
       label: 'Error'
     },
     warning: {
       icon: <AlertTriangle className="w-5 h-5" />,
-      classes: 'bg-white border-warning/30 text-warning shadow-warning/10',
+      classes: 'bg-surface border-warning/30 text-warning shadow-warning/10',
       iconClasses: 'bg-warning/10 text-warning',
       label: 'Warning'
     },
     info: {
       icon: <Info className="w-5 h-5" />,
-      classes: 'bg-white border-primary/30 text-primary shadow-primary/10',
+      classes: 'bg-surface border-primary/30 text-primary shadow-primary/10',
       iconClasses: 'bg-primary/10 text-primary',
       label: 'Info'
     }
@@ -94,7 +94,7 @@ const Toast: React.FC<{ notification: Notification; onClose: () => void }> = ({ 
       </div>
       <button
         onClick={onClose}
-        className="flex items-center justify-center p-1 rounded-lg hover:bg-black/5 transition-colors"
+        className="flex items-center justify-center p-1 rounded-lg hover:bg-surface-dim transition-colors"
       >
         <X className="w-4 h-4 opacity-40 group-hover:opacity-100" />
       </button>

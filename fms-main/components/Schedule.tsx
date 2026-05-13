@@ -189,7 +189,7 @@ export const Schedule: React.FC = () => {
           {activeTab === 'international' && (
             <button 
                 onClick={() => setIsModalOpen(true)}
-                className="flex items-center px-6 py-3 bg-primary text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all"
+                className="flex items-center px-6 py-3 kinetic-gradient text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all"
             >
                 <Plus className="w-4 h-4 mr-2" />
                 NEW TASK
@@ -201,7 +201,7 @@ export const Schedule: React.FC = () => {
       {/* Tabs */}
       <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner relative flex w-full md:w-fit overflow-hidden">
         <div 
-          className={`absolute top-1.5 bottom-1.5 rounded-xl bg-primary transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
+          className={`absolute top-1.5 bottom-1.5 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
             ${activeTab === 'international' ? 'left-1.5 w-[calc(25%-3px)] md:w-[calc(140px)] translate-x-0' : ''}
             ${activeTab === 'domestic' ? 'left-1.5 w-[calc(25%-3px)] md:w-[calc(120px)] translate-x-[100%] md:translate-x-[140px]' : ''}
             ${activeTab === 'equipment' ? 'left-1.5 w-[calc(25%-3px)] md:w-[calc(120px)] translate-x-[200%] md:translate-x-[260px]' : ''}
@@ -505,7 +505,7 @@ export const Schedule: React.FC = () => {
               </h3>
               <div className="flex bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner relative w-[200px] overflow-hidden">
                 <div 
-                  className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-primary rounded-xl transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${equipmentShift === 'DIESEL' ? 'translate-x-full' : 'translate-x-0'}`}
+                  className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] kinetic-gradient rounded-xl transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${equipmentShift === 'DIESEL' ? 'translate-x-full' : 'translate-x-0'}`}
                 />
                 <button
                   onClick={() => setEquipmentShift('DAILY')}
@@ -708,8 +708,8 @@ export const Schedule: React.FC = () => {
 
       {/* Add Flight Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-surface/20 backdrop-blur-xl p-4">
-            <div className="bg-surface-lowest rounded-[40px] shadow-2xl w-full max-w-lg p-10 border border-outline relative overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-surface/20 backdrop-blur-xl p-4" onClick={() => setIsModalOpen(false)}>
+            <div className="bg-surface-lowest rounded-[40px] shadow-2xl w-full max-w-lg p-10 border border-outline relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
                 <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
                 
                 <h3 className="text-3xl font-[900] text-on-surface mb-8 tracking-tighter uppercase italic relative z-10">INITIATE TASK</h3>
@@ -752,7 +752,7 @@ export const Schedule: React.FC = () => {
                         </button>
                         <button 
                             type="submit" 
-                            className="px-10 py-4 bg-primary text-white font-[900] text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-premium hover:scale-105 active:scale-95 transition-all"
+                            className="px-10 py-4 kinetic-gradient text-white font-[900] text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-premium hover:scale-105 active:scale-95 transition-all"
                         >
                             CONFIRM DEPLOYMENT
                         </button>

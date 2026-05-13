@@ -87,19 +87,30 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
 
   const filteredEquipment = (equipment || []).filter(eq => {
     if (!eq) return false;
-    const matchesSearch = eq.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (eq.name || eq.id || '').toLowerCase().includes((searchTerm || '').toLowerCase());
     const matchesFilter = filterType === 'All' || eq.type === filterType;
     return matchesSearch && matchesFilter;
   });
 
   const getStatusColor = (status: EqStatus) => {
     switch (status) {
-      case EqStatus.AVAILABLE: return 'bg-green-100 text-green-700 border-green-200';
-      case EqStatus.IN_USE: return 'bg-blue-100 text-blue-700 border-blue-200';
-      case EqStatus.MAINTENANCE: return 'bg-orange-100 text-orange-700 border-orange-200';
-      case EqStatus.OUT_OF_SERVICE: return 'bg-red-100 text-red-700 border-red-200';
-      case EqStatus.REFUELLING: return 'bg-purple-100 text-purple-700 border-purple-200';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
+      case EqStatus.AVAILABLE: return 'bg-success/10 text-success border-success/20';
+      case EqStatus.IN_USE: return 'bg-primary/10 text-primary border-primary/20';
+      case EqStatus.MAINTENANCE: return 'bg-warning/10 text-warning border-warning/20';
+      case EqStatus.OUT_OF_SERVICE: return 'bg-error/10 text-error border-error/20';
+      case EqStatus.REFUELLING: return 'bg-warning/10 text-warning border-warning/20';
+      default: return 'bg-surface-dim text-on-surface-dim border-outline';
+    }
+  };
+
+  const getStatusGradient = (status: EqStatus) => {
+    switch (status) {
+      case EqStatus.AVAILABLE: return 'gradient-success';
+      case EqStatus.IN_USE: return 'kinetic-gradient';
+      case EqStatus.MAINTENANCE: return 'gradient-warning';
+      case EqStatus.OUT_OF_SERVICE: return 'gradient-error';
+      case EqStatus.REFUELLING: return 'gradient-warning';
+      default: return 'kinetic-gradient';
     }
   };
 
@@ -134,8 +145,8 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
 
       {/* Equipment Management */}
       <section>
-        <div className="flex flex-col xl:flex-row xl:items-end justify-between mb-8 gap-6 border-b border-outline pb-6">
-          <div>
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between mb-8 gap-6 border-b border-outline pb-6">
+          <div className="min-w-[300px]">
             <h2 className="headline-lg tracking-tighter mb-2 uppercase flex items-center">
               EQUIPMENT <span className="text-primary italic font-medium ml-3">COMMAND</span>
             </h2>
@@ -146,7 +157,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
             </div>
           </div>
           
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 flex flex-col sm:flex-row justify-center items-center gap-4">
             <div className="relative group">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim opacity-40 group-focus-within:text-primary transition-colors" />
               <input 
@@ -159,12 +170,12 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
             </div>
             <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline relative flex w-full sm:w-auto overflow-x-auto no-scrollbar shadow-inner">
               <div 
-                className={`absolute top-1.5 bottom-1.5 rounded-xl bg-primary transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
+                className={`absolute top-1.5 bottom-1.5 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
                   ${filterType === 'All' ? 'left-1.5 w-[80px] translate-x-0' : ''}
                   ${filterType === EquipmentType.REFUELLER ? 'left-1.5 w-[110px] translate-x-[80px]' : ''}
-                  ${filterType === EquipmentType.HYDRANT_DISPENSER ? 'left-1.5 w-[110px] translate-x-[190px]' : ''}
-                  ${filterType === EquipmentType.DIESEL_TRUCK ? 'left-1.5 w-[110px] translate-x-[300px]' : ''}
-                  ${filterType === EquipmentType.HYDRANT_SERVICE ? 'left-1.5 w-[110px] translate-x-[410px]' : ''}
+                  ${filterType === EquipmentType.HYDRANT_DISPENSER ? 'left-1.5 w-[160px] translate-x-[190px]' : ''}
+                  ${filterType === EquipmentType.DIESEL_TRUCK ? 'left-1.5 w-[120px] translate-x-[350px]' : ''}
+                  ${filterType === EquipmentType.HYDRANT_SERVICE ? 'left-1.5 w-[150px] translate-x-[470px]' : ''}
                 `}
               />
               <button
@@ -175,17 +186,22 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
               >
                 ALL
               </button>
-              {Object.values(EquipmentType).map((type, idx) => (
-                <button
-                  key={type}
-                  onClick={() => setFilterType(type)}
-                  className={`w-[110px] flex-shrink-0 flex items-center justify-center py-2.5 text-[9px] font-black uppercase tracking-widest transition-all relative z-10 ${
-                    filterType === type ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
-                  }`}
-                >
-                  {type.replace('_', ' ')}
-                </button>
-              ))}
+              {Object.values(EquipmentType).map((type, idx) => {
+                const width = type === EquipmentType.REFUELLER ? 'w-[110px]' : 
+                             type === EquipmentType.HYDRANT_DISPENSER ? 'w-[160px]' :
+                             type === EquipmentType.DIESEL_TRUCK ? 'w-[120px]' : 'w-[150px]';
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setFilterType(type)}
+                    className={`${width} flex-shrink-0 flex items-center justify-center py-2.5 text-[9px] font-black uppercase tracking-widest transition-all relative z-10 ${
+                      filterType === type ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+                    }`}
+                  >
+                    {type.replace('_', ' ')}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -270,7 +286,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                                         onClick={() => handleStatusChange(eq.id, status)}
                                         className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all border uppercase tracking-tight ${
                                           eq.status === status 
-                                            ? 'bg-primary text-white border-primary shadow-sm scale-[1.02]' 
+                                            ? `${getStatusGradient(status)} text-white border-transparent shadow-sm scale-[1.02]` 
                                             : 'bg-surface-dim text-on-surface-dim border-outline hover:text-primary hover:border-primary/30'
                                         }`}
                                       >
@@ -293,7 +309,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                                   className={`flex items-center text-[9px] font-black px-3 py-2 rounded-xl border border-outline shadow-sm transition-all active:scale-95 uppercase tracking-widest ${
                                     pendingRequests.has(eq.id) || alerts.some(a => !a.acknowledged && a.message.includes(`Replenishment requested for unit ${eq.id}`))
                                     ? 'bg-surface-lowest text-on-surface-dim opacity-30 cursor-not-allowed'
-                                    : 'text-primary hover:bg-primary hover:text-white bg-surface-lowest'
+                                    : 'text-primary hover:kinetic-gradient hover:text-white hover:border-transparent bg-surface-lowest'
                                   }`}
                                 >
                                   <Send className={`w-3 h-3 mr-1.5 ${pendingRequests.has(eq.id) ? 'animate-pulse' : ''}`} />

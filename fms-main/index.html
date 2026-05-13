@@ -12,32 +12,32 @@
           extend: {
             colors: {
               surface: 'var(--color-surface)',
-              'surface-container': 'var(--color-surface-container)',
               'surface-dim': 'var(--color-surface-dim)',
+              'surface-lowest': 'var(--color-surface-container-lowest)',
+              'surface-container-low': 'var(--color-surface-container-low)',
+              'surface-container-lowest': 'var(--color-surface-container-lowest)',
+              'surface-container-highest': 'var(--color-surface-container-highest)',
               on: {
                 surface: 'var(--color-on-surface)',
                 'surface-dim': 'var(--color-on-surface-dim)',
-                primary: {
-                  container: 'var(--color-on-primary-container)',
-                }
               },
               primary: {
                 DEFAULT: 'var(--color-primary)',
                 container: 'var(--color-primary-container)',
               },
+              tertiary: 'var(--color-tertiary)',
               error: 'var(--color-error)',
               success: 'var(--color-success)',
               warning: 'var(--color-warning)',
               outline: 'var(--color-outline)',
               'outline-variant': 'var(--color-outline-variant)',
-              'surface-lowest': 'var(--color-surface-lowest)',
             },
             fontFamily: {
               sans: ['Inter', 'system-ui', 'sans-serif'],
             },
             boxShadow: {
               ambient: 'var(--shadow-md)',
-              premium: 'var(--shadow-lg)',
+              premium: 'var(--shadow-premium)',
             }
           }
         }

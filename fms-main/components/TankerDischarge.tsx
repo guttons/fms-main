@@ -23,7 +23,7 @@ export const TankerDischarge: React.FC = () => {
   const [logs, setLogs] = useState<DischargeLog[]>(MOCK_DISCHARGE_LOGS);
 
   // High contrast standard inputs
-  const inputClass = "w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aviation-500 focus:border-aviation-500 bg-white text-slate-900 placeholder:text-slate-400";
+  const inputClass = "w-full p-3 border border-outline rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary bg-surface-dim text-on-surface placeholder:text-on-surface-dim/40 transition-colors";
   const labelClass = "block text-sm font-bold text-slate-800 mb-2";
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -54,7 +54,7 @@ export const TankerDischarge: React.FC = () => {
 
   if (success) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-12 text-center animate-in fade-in zoom-in duration-500 bg-surface">
+      <div className="flex flex-col items-center justify-center h-full p-12 text-center animate-in fade-in zoom-in duration-500 bg-surface-container-lowest">
         <div className="w-32 h-32 bg-primary/10 rounded-[40px] flex items-center justify-center mb-8 border border-primary/20 shadow-premium">
           <Anchor className="w-12 h-12 text-primary shadow-glow" />
         </div>
@@ -64,7 +64,7 @@ export const TankerDischarge: React.FC = () => {
         </p>
         <button 
           onClick={() => { setSuccess(false); setValidated(false); }}
-          className="mt-12 px-10 py-4 bg-primary text-white font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-premium hover:scale-105 active:scale-95 transition-all"
+          className="mt-12 px-10 py-4 kinetic-gradient font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-premium hover:scale-105 active:scale-95 transition-all"
         >
           REFIRM DEPLOYMENT
         </button>
@@ -86,8 +86,8 @@ export const TankerDischarge: React.FC = () => {
           </div>
         </div>
         <div className="flex space-x-3">
-            <span className="px-4 py-1.5 bg-surface-dim border border-outline rounded-xl text-[9px] font-black uppercase tracking-widest text-on-surface-dim opacity-60">Diesel Gasoil</span>
-            <span className="px-4 py-1.5 bg-surface-dim border border-outline rounded-xl text-[9px] font-black uppercase tracking-widest text-on-surface-dim opacity-60">Mogas Petrol</span>
+            <span className="px-4 py-1.5 bg-surface-container-low border-transparent rounded-xl text-[9px] font-black uppercase tracking-widest text-on-surface-dim opacity-60">Diesel Gasoil</span>
+            <span className="px-4 py-1.5 bg-surface-container-low border-transparent rounded-xl text-[9px] font-black uppercase tracking-widest text-on-surface-dim opacity-60">Mogas Petrol</span>
         </div>
       </div>
 
@@ -105,16 +105,16 @@ export const TankerDischarge: React.FC = () => {
                         <div className="space-y-6">
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Tactical Vessel Identity</label>
-                                <input type="text" className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="E.G. MT OCEAN PRIDE" required />
+                                <input type="text" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="E.G. MT OCEAN PRIDE" required />
                             </div>
                             <div className="grid grid-cols-2 gap-5">
                                 <div>
                                     <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">BoL Identity</label>
-                                    <input type="text" className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="BOL-8821" required />
+                                    <input type="text" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="BOL-8821" required />
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Resource Type</label>
-                                    <select className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all appearance-none" required>
+                                    <select className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all appearance-none" required>
                                         <option value="diesel">DIESEL (GASOIL)</option>
                                         <option value="petrol">PETROL (MOGAS)</option>
                                     </select>
@@ -122,7 +122,7 @@ export const TankerDischarge: React.FC = () => {
                             </div>
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">BoL Quantity (MT)</label>
-                                <input type="number" className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none text-right font-mono transition-all" placeholder="0.000" step="0.001" required />
+                                <input type="number" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none text-right font-mono transition-all" placeholder="0.000" step="0.001" required />
                             </div>
                         </div>
                     </div>
@@ -136,19 +136,19 @@ export const TankerDischarge: React.FC = () => {
                         <div className="grid grid-cols-2 gap-5">
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">SG @ 15°C</label>
-                                <input type="number" className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="0.8400" step="0.0001" required />
+                                <input type="number" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="0.8400" step="0.0001" required />
                             </div>
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Flash Point (°C)</label>
-                                <input type="number" className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="60.0" step="0.1" required />
+                                <input type="number" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="60.0" step="0.1" required />
                             </div>
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Observed Temp (°C)</label>
-                                <input type="number" className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="28.5" step="0.1" required />
+                                <input type="number" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="28.5" step="0.1" required />
                             </div>
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">H2O Content (PPM)</label>
-                                <input type="number" className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="0" required />
+                                <input type="number" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="0" required />
                             </div>
                         </div>
                     </div>
@@ -162,7 +162,7 @@ export const TankerDischarge: React.FC = () => {
                             Discharge Validation
                         </h3>
 
-                        <div className="bg-surface-dim rounded-3xl border border-outline p-6 mb-8 shadow-inner">
+                        <div className="bg-surface-container-low rounded-3xl border-transparent p-6 mb-8 shadow-inner">
                             <div className="flex justify-between items-center mb-4 text-[10px] font-black text-on-surface-dim uppercase tracking-widest">
                                 <span>Receipt Destination</span>
                                 <span className="text-primary">STORAGE SECTOR A</span>
@@ -171,21 +171,21 @@ export const TankerDischarge: React.FC = () => {
                                 <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Available Ullage</span>
                                 <span className="text-lg font-[900] text-success tracking-tighter">38,000 L</span>
                             </div>
-                            <div className="w-full bg-surface-lowest rounded-full h-2 border border-outline overflow-hidden shadow-inner">
+                            <div className="w-full bg-surface-container-lowest-lowest rounded-full h-2 border-transparent overflow-hidden shadow-inner">
                                 <div className="bg-success h-full transition-all duration-1000 shadow-glow" style={{ width: '24%' }}></div>
                             </div>
                         </div>
 
                         {!validated ? (
-                            <div className="text-center py-10 space-y-6">
-                                <AlertOctagon className="w-16 h-16 text-warning mx-auto opacity-40 animate-pulse" />
+                            <div className="text-center py-10 space-y-6 alert-critical bg-error/5 rounded-2xl mx-2">
+                                <AlertOctagon className="w-16 h-16 text-error mx-auto opacity-80 pulse-critical rounded-full" />
                                 <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-60 leading-relaxed px-4">
                                     SYNCHRONIZE FIGURES AGAINST CALIBRATION CHARTS BEFORE PROCEEDING.
                                 </p>
                                 <button 
                                     type="button" 
                                     onClick={handleValidate}
-                                    className="w-full py-5 bg-surface-dim border border-outline text-on-surface font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl hover:bg-primary hover:text-white transition-all shadow-premium"
+                                    className="w-full py-5 kinetic-gradient text-white font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-premium"
                                 >
                                     ENGAGE VALIDATION
                                 </button>
@@ -199,14 +199,14 @@ export const TankerDischarge: React.FC = () => {
                                 
                                 <div>
                                     <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Final Receipt Vol (L)</label>
-                                    <input type="number" className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-xl font-[900] text-primary tracking-tighter outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all text-right font-mono" placeholder="0" required />
+                                    <input type="number" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-xl font-[900] text-primary tracking-tighter outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all text-right font-mono" placeholder="0" required />
                                 </div>
 
                                 <div className="pt-6">
                                     <button 
                                         type="submit"
                                         disabled={loading}
-                                        className="w-full py-5 bg-primary text-white rounded-2xl font-[900] text-[12px] uppercase tracking-[0.3em] shadow-premium hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+                                        className="w-full py-5 kinetic-gradient rounded-2xl font-[900] text-[12px] uppercase tracking-[0.3em] shadow-premium hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
                                     >
                                         {loading ? 'SYNCHRONIZING...' : 'INITIATE DISCHARGE'}
                                     </button>
@@ -221,7 +221,7 @@ export const TankerDischarge: React.FC = () => {
         {/* Oversight / History Panel */}
         <div className="xl:col-span-1 h-full">
              <div className="card-premium h-full flex flex-col overflow-hidden">
-                <div className="px-8 py-6 border-b border-outline bg-surface-dim/30 flex items-center justify-between">
+                <div className="px-8 py-6 border-b border-outline bg-surface-container-low/30 flex items-center justify-between">
                     <h3 className="text-[10px] font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
                         <History className="w-4 h-4 mr-3 text-primary" />
                         Marine Oversight
@@ -258,7 +258,7 @@ export const TankerDischarge: React.FC = () => {
                         </div>
                     )}
                 </div>
-                <div className="p-6 border-t border-outline bg-surface-dim/30">
+                <div className="p-6 border-t border-outline bg-surface-container-low/30">
                     <button className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-[0.3em] transition-all w-full flex items-center justify-center">
                         <FileText className="w-3.5 h-3.5 mr-3" />
                         ACCESS TASK ARCHIVE
@@ -270,3 +270,4 @@ export const TankerDischarge: React.FC = () => {
     </div>
   );
 };
+

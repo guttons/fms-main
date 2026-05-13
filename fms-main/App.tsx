@@ -57,6 +57,57 @@ const App: React.FC = () => {
     };
   }, []);
 
+
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setActiveView('dashboard');
+  };
+
+  if (!currentUser) {
+    return (
+      <NotificationProvider>
+        <Login onLogin={setCurrentUser} />
+      </NotificationProvider>
+    );
+  }
+
+  return (
+    <NotificationProvider>
+      <OperationalDataProvider user={currentUser}>
+        <AppContextContent 
+          currentUser={currentUser}
+          activeView={activeView}
+          setActiveView={setActiveView}
+          isMobileMenuOpen={isMobileMenuOpen}
+          setIsMobileMenuOpen={setIsMobileMenuOpen}
+          isDarkMode={isDarkMode}
+          setIsDarkMode={setIsDarkMode}
+          showHeader={showHeader}
+          setShowHeader={setShowHeader}
+          scrollRef={scrollRef}
+          pendingJob={pendingJob}
+          setPendingJob={setPendingJob}
+          showAlertsPanel={showAlertsPanel}
+          setShowAlertsPanel={setShowAlertsPanel}
+          isSettingsOpen={isSettingsOpen}
+          setIsSettingsOpen={setIsSettingsOpen}
+          handleLogout={handleLogout}
+        />
+      </OperationalDataProvider>
+    </NotificationProvider>
+  );
+};
+
+const AppContextContent: React.FC<any> = ({ 
+  currentUser, activeView, setActiveView, isMobileMenuOpen, setIsMobileMenuOpen,
+  isDarkMode, setIsDarkMode, showHeader, setShowHeader, scrollRef, pendingJob, setPendingJob,
+  showAlertsPanel, setShowAlertsPanel, isSettingsOpen, setIsSettingsOpen, handleLogout
+}) => {
+  const { alerts, acknowledgeAlert, acknowledgeAllAlerts, equipment, flightJobs } = useOperationalData();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
   // Header scroll listener
   const lastScrollYRef = React.useRef(0);
   useEffect(() => {
@@ -85,55 +136,7 @@ const App: React.FC = () => {
     const mainElement = scrollRef.current;
     mainElement?.addEventListener('scroll', handleScroll, { passive: true });
     return () => mainElement?.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setActiveView('dashboard');
-  };
-
-  if (!currentUser) {
-    return (
-      <NotificationProvider>
-        <Login onLogin={setCurrentUser} />
-      </NotificationProvider>
-    );
-  }
-
-  return (
-    <NotificationProvider>
-      <OperationalDataProvider user={currentUser}>
-        <AppContextContent 
-          currentUser={currentUser}
-          activeView={activeView}
-          setActiveView={setActiveView}
-          isMobileMenuOpen={isMobileMenuOpen}
-          setIsMobileMenuOpen={setIsMobileMenuOpen}
-          isDarkMode={isDarkMode}
-          setIsDarkMode={setIsDarkMode}
-          showHeader={showHeader}
-          scrollRef={scrollRef}
-          pendingJob={pendingJob}
-          setPendingJob={setPendingJob}
-          showAlertsPanel={showAlertsPanel}
-          setShowAlertsPanel={setShowAlertsPanel}
-          isSettingsOpen={isSettingsOpen}
-          setIsSettingsOpen={setIsSettingsOpen}
-          handleLogout={handleLogout}
-        />
-      </OperationalDataProvider>
-    </NotificationProvider>
-  );
-};
-
-const AppContextContent: React.FC<any> = ({ 
-  currentUser, activeView, setActiveView, isMobileMenuOpen, setIsMobileMenuOpen,
-  isDarkMode, setIsDarkMode, showHeader, scrollRef, pendingJob, setPendingJob,
-  showAlertsPanel, setShowAlertsPanel, isSettingsOpen, setIsSettingsOpen, handleLogout
-}) => {
-  const { alerts, acknowledgeAlert, acknowledgeAllAlerts, equipment, flightJobs } = useOperationalData();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  }, [scrollRef, setShowHeader]);
 
   const searchResults = React.useMemo(() => {
     if (!searchQuery.trim()) return { equipment: [], jobs: [], personnel: [] };
@@ -230,6 +233,10 @@ const AppContextContent: React.FC<any> = ({
         {/* Content Area */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative transition-colors duration-500">
           
+          {(showAlertsPanel || isSettingsOpen) && (
+             <div className="absolute inset-0 z-40" onClick={() => { setShowAlertsPanel(false); setIsSettingsOpen(false); }} />
+          )}
+
           {/* Animated Combined Header Container */}
           <div className={`transition-all duration-500 transform sticky top-0 z-50 ${showHeader ? 'translate-y-0' : '-translate-y-full'}`}>
             {/* Phase 1: Critical Alert Bar */}
@@ -248,7 +255,7 @@ const AppContextContent: React.FC<any> = ({
                   <span className="text-[10px] font-bold opacity-60 uppercase tracking-widest hidden md:block">Primary Loop: Offline</span>
                   <button 
                     onClick={() => acknowledgeAllAlerts(activeCriticalAlerts.map(a => a.id))}
-                    className="text-[10px] font-black uppercase tracking-tighter bg-white/10 hover:bg-white/20 px-3 py-1 rounded-sm transition-colors active:scale-95"
+                    className="text-[10px] font-black uppercase tracking-tighter kinetic-gradient px-4 py-1.5 rounded-lg transition-all active:scale-95 shadow-lg"
                   >
                     Acknowledge All
                   </button>
@@ -257,7 +264,7 @@ const AppContextContent: React.FC<any> = ({
             </div>
 
             {/* Phase 2: FUEL SERVICES Header */}
-            <header className="h-[var(--header-height)] bg-surface-container/70 backdrop-blur-xl border-b border-outline flex items-center justify-between px-4 lg:px-8 transition-colors duration-300">
+            <header className="h-[var(--header-height)] bg-surface border-b border-outline flex items-center justify-between px-4 lg:px-8 transition-colors duration-300">
             <div className="flex items-center flex-1 transition-all">
                 <div className="flex items-center space-x-4">
                   <button 
@@ -369,8 +376,8 @@ const AppContextContent: React.FC<any> = ({
                     {/* Alerts Dropdown Panel */}
                     {showAlertsPanel && (
                       <>
-                        <div className="fixed inset-0 z-[90] sm:hidden" onClick={() => setShowAlertsPanel(false)} />
-                        <div className="fixed inset-x-4 top-20 sm:absolute sm:inset-auto sm:right-0 sm:top-auto sm:mt-4 w-auto sm:w-96 max-h-[80vh] sm:max-h-[500px] bg-surface-container border border-outline rounded-2xl shadow-premium z-[100] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-4 duration-300">
+                        <div className="fixed inset-0 z-[90]" onClick={() => setShowAlertsPanel(false)} />
+                        <div className="fixed inset-x-4 top-20 sm:absolute sm:inset-auto sm:right-0 sm:top-auto sm:mt-4 w-auto sm:w-96 max-h-[80vh] sm:max-h-[500px] bg-surface border border-outline rounded-2xl shadow-premium z-[100] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-4 duration-300">
                           <div className="px-5 py-4 bg-surface-dim border-b border-outline flex items-center justify-between">
                           <h3 className="text-[10px] font-black uppercase tracking-widest text-on-surface flex items-center">
                             <Bell className="w-3.5 h-3.5 mr-2 text-primary" />
@@ -448,8 +455,8 @@ const AppContextContent: React.FC<any> = ({
                     {/* System Settings Dropdown Panel */}
                     {isSettingsOpen && (
                       <>
-                        <div className="fixed inset-0 z-[90] sm:hidden" onClick={() => setIsSettingsOpen(false)} />
-                        <div className="fixed inset-x-4 top-20 sm:absolute sm:inset-auto sm:right-0 sm:top-auto sm:mt-4 w-auto sm:w-96 max-h-[85vh] sm:max-h-[600px] bg-surface-container border border-outline rounded-2xl shadow-premium z-[100] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-4 duration-300">
+                        <div className="fixed inset-0 z-[90]" onClick={() => setIsSettingsOpen(false)} />
+                        <div className="fixed inset-x-4 top-20 sm:absolute sm:inset-auto sm:right-0 sm:top-auto sm:mt-4 w-auto sm:w-96 max-h-[85vh] sm:max-h-[600px] bg-surface border border-outline rounded-2xl shadow-premium z-[100] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-4 duration-300">
                           <div className="px-5 py-4 bg-surface-dim border-b border-outline flex items-center justify-between">
                             <h3 className="text-[10px] font-black uppercase tracking-widest text-on-surface flex items-center">
                               <UserIcon className="w-3.5 h-3.5 mr-2 text-primary" />
@@ -475,7 +482,7 @@ const AppContextContent: React.FC<any> = ({
                                 </div>
                                 <button 
                                   onClick={() => setIsDarkMode(!isDarkMode)}
-                                  className={`relative w-12 h-6 rounded-full transition-all duration-500 overflow-hidden group-active:scale-90 border border-outline/50 ${isDarkMode ? 'bg-primary shadow-glow' : 'bg-surface-container-high'}`}
+                                  className={`relative w-12 h-6 rounded-full transition-all duration-500 overflow-hidden group-active:scale-90 border border-outline/50 ${isDarkMode ? 'kinetic-gradient shadow-glow' : 'bg-surface-container-high'}`}
                                 >
                                   <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-all duration-500 shadow-lg ${isDarkMode ? 'translate-x-6' : 'translate-x-0'}`} />
                                 </button>

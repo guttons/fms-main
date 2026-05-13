@@ -9,6 +9,15 @@ export const Forecasting: React.FC = () => {
   const [activeScenarioId, setActiveScenarioId] = useState<string>('nominal');
   const activeScenario = FORECAST_DATA.find(s => s.id === activeScenarioId) || FORECAST_DATA[0];
 
+  const getScenarioGradient = (id: string) => {
+    switch (id) {
+      case 'nominal': return 'kinetic-gradient';
+      case 'upper': return 'gradient-error';
+      case 'lower': return 'gradient-warning';
+      default: return 'kinetic-gradient';
+    }
+  };
+
   return (
     <div className="p-6 lg:p-10 space-y-10">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-outline pb-10">
@@ -27,7 +36,7 @@ export const Forecasting: React.FC = () => {
             <RefreshCw className="w-4 h-4 mr-3 text-primary opacity-60" />
             RECALCULATE
           </button>
-          <button className="flex items-center px-6 py-3 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all">
+          <button className="flex items-center px-6 py-3 kinetic-gradient text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all border-none">
             <Download className="w-4 h-4 mr-3" />
             EXPORT DATA
           </button>
@@ -42,7 +51,7 @@ export const Forecasting: React.FC = () => {
             onClick={() => setActiveScenarioId(scenario.id)}
             className={`card-premium p-8 text-left transition-all relative overflow-hidden group ${
               activeScenarioId === scenario.id 
-                ? 'border-primary ring-2 ring-primary/20 bg-primary/[0.02]' 
+                ? 'border-primary shadow-lg' 
                 : 'hover:border-primary/40'
             }`}
           >
@@ -52,9 +61,9 @@ export const Forecasting: React.FC = () => {
                </div>
             )}
             <div className="flex items-center space-x-4 mb-4">
-              <span className={`text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-xl border ${
+              <span className={`text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-xl border transition-all ${
                 activeScenarioId === scenario.id 
-                  ? 'bg-primary text-white border-primary shadow-sm' 
+                  ? `${getScenarioGradient(scenario.id)} text-white border-transparent shadow-md` 
                   : 'bg-surface-dim text-on-surface-dim border-outline'
               }`}>
                 {scenario.name}
@@ -144,7 +153,7 @@ export const Forecasting: React.FC = () => {
           <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 mb-3">Depletion Zero-Point</p>
           <p className="text-3xl font-[900] text-on-surface tracking-tighter italic uppercase">NOV 24, 2026</p>
           <div className="mt-4 flex items-center text-[10px] font-black text-success uppercase tracking-widest">
-             <div className="w-1.5 h-1.5 bg-success rounded-full mr-2 shadow-glow"></div>
+             <div className="w-1.5 h-1.5 bg-success rounded-full mr-2"></div>
              +2 DAYS DRIFT POSITIVE
           </div>
         </div>

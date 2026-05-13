@@ -56,8 +56,8 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 
 export const supabaseService = {
   // Users
-  async getUsers(): Promise<User[] | null> {
-    if (!auth.currentUser) return null;
+  async getUsers(): Promise<User[]> {
+    if (!auth.currentUser) return [];
 
     const path = 'users';
     try {
@@ -70,8 +70,8 @@ export const supabaseService = {
   },
 
   // Tanks
-  async getTanks(): Promise<Tank[] | null> {
-    if (!auth.currentUser) return null;
+  async getTanks(): Promise<Tank[]> {
+    if (!auth.currentUser) return [];
 
     const path = 'tanks';
     try {
@@ -110,8 +110,8 @@ export const supabaseService = {
   },
 
   // Flight Jobs
-  async getFlightJobs(): Promise<FlightJob[] | null> {
-    if (!auth.currentUser) return null;
+  async getFlightJobs(): Promise<FlightJob[]> {
+    if (!auth.currentUser) return [];
 
     const path = 'flight_jobs';
     try {
@@ -135,8 +135,8 @@ export const supabaseService = {
   },
 
   // Flight Logs
-  async getFlightLogs(): Promise<FlightLog[] | null> {
-    if (!auth.currentUser) return null;
+  async getFlightLogs(): Promise<FlightLog[]> {
+    if (!auth.currentUser) return [];
 
     const path = 'flight_logs';
     try {
@@ -209,8 +209,8 @@ export const supabaseService = {
   },
 
   // Bridging Logs
-  async getBridgingLogs(): Promise<BridgingLog[] | null> {
-    if (!auth.currentUser) return null;
+  async getBridgingLogs(): Promise<BridgingLog[]> {
+    if (!auth.currentUser) return [];
 
     const path = 'bridging_logs';
     try {
@@ -260,8 +260,8 @@ export const supabaseService = {
   },
 
   // Alerts
-  async getAlerts(): Promise<Alert[] | null> {
-    if (!auth.currentUser) return null;
+  async getAlerts(): Promise<Alert[]> {
+    if (!auth.currentUser) return [];
 
     const path = 'alerts';
     try {
@@ -313,6 +313,10 @@ export const supabaseService = {
   },
 
   async createAlert(alert: Omit<Alert, 'id'>): Promise<void> {
+    if (!auth.currentUser) {
+      console.warn("User not authenticated. Simulating successful alert creation locally.");
+      return;
+    }
     const path = 'alerts';
     try {
       await addDoc(collection(db, path), {
@@ -346,8 +350,8 @@ export const supabaseService = {
   },
 
   // Equipment
-  async getEquipment(): Promise<Equipment[] | null> {
-    if (!auth.currentUser) return null;
+  async getEquipment(): Promise<Equipment[]> {
+    if (!auth.currentUser) return [];
 
     const path = 'equipment';
     try {
@@ -414,7 +418,7 @@ export const supabaseService = {
   },
 
   async upsertDomesticAssignment(date: string, teamName: string, op1: string, op2: string) {
-    if (!auth.currentUser) return; // Mock success
+    if (!auth.currentUser) return; 
     const docId = `${date}_${teamName}`;
     const path = `domestic_assignments/${docId}`;
     try {
@@ -491,7 +495,7 @@ export const supabaseService = {
   },
 
   async upsertShiftBriefingInfo(date: string, info: any[], dieselNeeds: string[]) {
-    if (!auth.currentUser) return; // Mock success
+    if (!auth.currentUser) return;
     const docId = date;
     const path = `shift_briefing_info/${docId}`;
     try {

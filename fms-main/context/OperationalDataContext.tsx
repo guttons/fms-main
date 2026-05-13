@@ -36,7 +36,15 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   const [equipment, setEquipment] = useState<Equipment[]>(() => {
     try {
       const saved = localStorage.getItem('fms_equipment');
-      return saved ? JSON.parse(saved) : EQUIPMENT;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Merge saved data with mock data to ensure structural integrity (e.g., missing 'type' or 'maxCapacity')
+        return EQUIPMENT.map(mock => {
+          const live = parsed.find((p: any) => p.id === mock.id);
+          return live ? { ...mock, ...live } : mock;
+        });
+      }
+      return EQUIPMENT;
     } catch (e) {
       console.error("Local storage parse failed for equipment", e);
       return EQUIPMENT;
@@ -143,7 +151,14 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       if (fetchedTanks && fetchedTanks.length > 0) setTanks(fetchedTanks);
       if (fetchedJobs && fetchedJobs.length > 0) setFlightJobs(fetchedJobs);
       if (fetchedBriefing && typeof fetchedBriefing === 'object') setBriefingInfo(fetchedBriefing as any);
-      if (fetchedEq && fetchedEq.length > 0) setEquipment(fetchedEq);
+      if (fetchedEq && fetchedEq.length > 0) {
+        setEquipment(prev => {
+          return EQUIPMENT.map(mock => {
+            const live = fetchedEq.find(f => f.id === mock.id);
+            return live ? { ...mock, ...live } : mock;
+          });
+        });
+      }
       if (fetchedAlerts && Array.isArray(fetchedAlerts)) setAlerts(fetchedAlerts);
       
     } catch (error) {
@@ -182,7 +197,12 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     const unsubscribeEquipment = supabaseService.subscribeToEquipment((updatedEq) => {
       console.log("SYNC: Equipment received from Firestore. Count:", updatedEq.length);
       if (updatedEq && updatedEq.length > 0) {
-        setEquipment(updatedEq);
+        setEquipment(prev => {
+          return EQUIPMENT.map(mock => {
+            const live = updatedEq.find(f => f.id === mock.id);
+            return live ? { ...mock, ...live } : mock;
+          });
+        });
       }
     });
 
@@ -264,7 +284,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       }
       
       // Also check existing alerts
-      const alreadyRequested = alerts.some(a => 
+      const alreadyRequested = (alerts || []).some(a => 
         !a.acknowledged && a.message.includes(`unit ${vehicleId}`)
       );
       
@@ -277,7 +297,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
 
     // GENERAL DUPLICATE GUARD: Check current state + pending Ref
-    const isDuplicate = alerts.some(a => 
+    const isDuplicate = (alerts || []).some(a => 
       !a.acknowledged && 
       a.message === alertData.message && 
       a.targetRole === alertData.targetRole
@@ -294,7 +314,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       await supabaseService.createAlert(alertData);
       // Immediately refresh alerts for local consistency
       const updatedAlerts = await supabaseService.getAlerts();
-      setAlerts(updatedAlerts);
+      setAlerts(updatedAlerts || []);
       return true;
     } catch (error) {
       console.error('Failed to create alert:', error);

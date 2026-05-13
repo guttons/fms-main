@@ -6,9 +6,7 @@ export const Seaplane: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
 
-    // High contrast inputs for better visibility on tablets
-    const inputClass = "w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aviation-500 focus:border-aviation-500 bg-white text-slate-900 placeholder:text-slate-400 font-medium text-lg transition-shadow";
-    const labelClass = "block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide";
+
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -31,7 +29,7 @@ export const Seaplane: React.FC = () => {
                 </p>
                 <button 
                   onClick={() => { setSuccess(false); }}
-                  className="mt-12 px-10 py-4 bg-primary text-white font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-premium hover:scale-105 active:scale-95 transition-all"
+                  className="mt-12 px-10 py-4 kinetic-gradient text-white font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-premium hover:scale-105 active:scale-95 transition-all"
                 >
                   NEW LOG ENTRY
                 </button>
@@ -105,7 +103,7 @@ export const Seaplane: React.FC = () => {
                 </div>
 
                 {/* Volume Input - Prominent */}
-                <div className="mb-10 p-10 bg-surface-dim rounded-[32px] border border-outline shadow-inner relative overflow-hidden">
+                <div className="mb-10 p-10 bg-surface-dim/30 rounded-[40px] border border-outline shadow-inner relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-4 opacity-5">
                        <Sailboat className="w-32 h-32 text-on-surface" />
                     </div>
@@ -130,7 +128,7 @@ export const Seaplane: React.FC = () => {
                     <button 
                         type="submit" 
                         disabled={loading}
-                        className="w-full md:w-auto px-12 py-5 bg-primary text-white rounded-2xl font-[900] text-[12px] uppercase tracking-[0.4em] shadow-premium hover:scale-105 active:scale-95 transition-all flex items-center justify-center disabled:opacity-20"
+                        className="w-full md:w-auto px-12 py-5 kinetic-gradient text-white rounded-2xl font-[900] text-[12px] uppercase tracking-[0.4em] shadow-premium hover:scale-105 active:scale-95 transition-all flex items-center justify-center disabled:opacity-20"
                     >
                         {loading ? 'SYNCHRONIZING...' : (
                             <>

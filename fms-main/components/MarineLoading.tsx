@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Ship, Truck, CheckCircle, AlertTriangle, Save, Clock, ArrowRight, History, FileText, Anchor, Droplet } from 'lucide-react';
 import { useOperationalData } from '../context/OperationalDataContext';
-import { EquipmentType, UserRole, FuelType } from '../types';
+import { EquipmentType, UserRole, FuelType, EquipmentStatus } from '../types';
 import { useNotification } from '../context/NotificationContext';
 import { supabaseService } from '../services/supabaseService';
 
@@ -55,7 +55,7 @@ const MOCK_MARINE_LOGS: MarineLoadingLog[] = [
 ];
 
 export const MarineLoading: React.FC = () => {
-  const { equipment, createAlert } = useOperationalData();
+  const { equipment, createAlert, alerts } = useOperationalData();
   const { notify } = useNotification();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -74,7 +74,22 @@ export const MarineLoading: React.FC = () => {
     waterCheck: false,
   });
 
-  const refuellers = equipment.filter(e => e.type === EquipmentType.REFUELLER);
+  const availableRefuelers = (equipment || [])
+    .filter(eq => eq.type === EquipmentType.REFUELLER && eq.status === EquipmentStatus.AVAILABLE);
+
+  // Filter alerts for replenishment requests to highlight them
+  const requestedRFs = Array.from(new Set(
+    (alerts || [])
+      .filter(a => a && !a.acknowledged && (
+        a.message.toLowerCase().includes('replenishment requested') || 
+        a.message.toLowerCase().includes('refuel requested')
+      ))
+      .map(a => {
+        const match = a.message.match(/unit\s+(RF-\d+)/i);
+        return match ? match[1].toUpperCase() : null;
+      })
+      .filter(Boolean) as string[]
+  ));
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -101,8 +116,11 @@ export const MarineLoading: React.FC = () => {
   };
 
   const setNow = (field: 'startTime' | 'endTime') => {
-    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    setFormData(prev => ({ ...prev, [field]: now }));
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    const timeStr = `${hours}:${minutes}`;
+    setFormData(prev => ({ ...prev, [field]: timeStr }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -225,9 +243,15 @@ export const MarineLoading: React.FC = () => {
                                     className="w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all appearance-none"
                                 >
                                     <option value="">SELECT RF UNIT...</option>
-                                    {refuellers.map(rf => (
-                                        <option key={rf.id} value={rf.id}>{rf.id} ({rf.currentVolume.toLocaleString()}L)</option>
-                                    ))}
+                                    {availableRefuelers.length === 0 ? (
+                                        <option disabled>NO AVAILABLE REFUELERS</option>
+                                    ) : (
+                                        availableRefuelers.map(rf => (
+                                            <option key={rf.id} value={rf.id}>
+                                                {rf.id} (FUEL: {rf.currentVolume.toLocaleString()} / CAP: {rf.maxCapacity.toLocaleString()}L) {requestedRFs.includes(rf.id) ? '⚠ REPLENISH' : ''}
+                                            </option>
+                                        ))
+                                    )}
                                 </select>
                             </div>
                         </div>
@@ -279,8 +303,8 @@ export const MarineLoading: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="mt-10">
-                        <label className="block text-[10px] font-black text-on-surface uppercase mb-4 tracking-widest text-center">Transfer Volume (Liters)</label>
+                    <div className="mt-10 p-8 bg-surface-dim/30 rounded-[40px] border border-outline shadow-inner">
+                        <label className="block text-[10px] font-black text-on-surface uppercase mb-4 tracking-widest text-center opacity-60">Transfer Volume (Liters)</label>
                         <div className="relative max-w-md mx-auto">
                             <input 
                                 type="number" 
@@ -290,7 +314,7 @@ export const MarineLoading: React.FC = () => {
                                 placeholder="0"
                                 value={formData.volume}
                                 readOnly
-                                className="w-full px-10 py-6 bg-surface-lowest border border-outline rounded-[32px] text-5xl font-[900] text-primary tracking-tighter text-center outline-none transition-all font-mono shadow-inner opacity-80"
+                                className="w-full px-10 py-6 bg-surface-lowest border border-outline/50 rounded-[32px] text-5xl font-[900] text-primary tracking-tighter text-center outline-none transition-all font-mono shadow-premium opacity-80"
                             />
                             <span className="absolute right-10 top-1/2 transform -translate-y-1/2 text-[10px] font-black text-on-surface-dim uppercase opacity-30">LTRS</span>
                         </div>
@@ -319,7 +343,7 @@ export const MarineLoading: React.FC = () => {
                                     <button 
                                         type="button"
                                         onClick={() => setNow('startTime')}
-                                        className="px-5 bg-surface-dim border border-outline rounded-2xl hover:bg-primary hover:text-white transition-all text-on-surface-dim group active:scale-95"
+                                        className="px-5 bg-surface-dim border border-outline rounded-2xl hover:bg-primary hover:text-white transition-all text-on-surface-dim group active:scale-95 shadow-sm"
                                     >
                                         <Clock className="w-4 h-4 group-hover:animate-spin-slow" />
                                     </button>
@@ -339,7 +363,7 @@ export const MarineLoading: React.FC = () => {
                                     <button 
                                         type="button"
                                         onClick={() => setNow('endTime')}
-                                        className="px-5 bg-surface-dim border border-outline rounded-2xl hover:bg-primary hover:text-white transition-all text-on-surface-dim group active:scale-95"
+                                        className="px-5 bg-surface-dim border border-outline rounded-2xl hover:bg-primary hover:text-white transition-all text-on-surface-dim group active:scale-95 shadow-sm"
                                     >
                                         <Clock className="w-4 h-4 group-hover:animate-spin-slow" />
                                     </button>
@@ -400,7 +424,7 @@ export const MarineLoading: React.FC = () => {
                 <button 
                     type="submit" 
                     disabled={loading || !formData.visualCheck || !formData.waterCheck}
-                    className="w-full py-6 bg-primary text-white rounded-[32px] font-[900] text-sm uppercase tracking-[0.4em] shadow-premium hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-20 disabled:scale-100 disabled:grayscale flex items-center justify-center"
+                    className="w-full py-6 kinetic-gradient text-white rounded-[32px] font-[900] text-sm uppercase tracking-[0.4em] shadow-premium hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-20 disabled:scale-100 disabled:grayscale flex items-center justify-center"
                 >
                     {loading ? 'SYNCHRONIZING...' : (
                     <>

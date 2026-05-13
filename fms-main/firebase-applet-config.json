@@ -1,10 +1,10 @@
 {
-  "projectId": "gen-lang-client-0450462509",
-  "appId": "1:1054175576505:web:250b3cbaf875d30c897668",
-  "apiKey": "AIzaSyDdkYIKnvqDuy-lP-ufd44satRN754yxTA",
-  "authDomain": "gen-lang-client-0450462509.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-33c4281f-0775-47e6-8ef8-70101a5f9ef5",
-  "storageBucket": "gen-lang-client-0450462509.firebasestorage.app",
-  "messagingSenderId": "1054175576505",
-  "measurementId": ""
+  "projectId": "macl-fms",
+  "appId": "1:473266747099:web:06e8a3cce1fc302e93befe",
+  "apiKey": "AIzaSyA_LZ-iZ6G9wv2EdeL91JSebaAkezqraXs",
+  "authDomain": "macl-fms.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "macl-fms.firebasestorage.app",
+  "messagingSenderId": "473266747099",
+  "measurementId": "G-TT5Y2K2PV6"
 }
