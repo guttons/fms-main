@@ -297,7 +297,7 @@ const AppContextContent: React.FC<any> = ({
 
                   {/* Search Dropdown */}
                   {isSearchFocused && searchQuery.trim().length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-2 bg-surface-container border border-outline rounded-2xl shadow-premium overflow-hidden max-h-[400px] overflow-y-auto animate-in fade-in slide-in-from-top-2 z-[100]">
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-surface-lowest border border-outline rounded-2xl shadow-premium overflow-hidden max-h-[400px] overflow-y-auto animate-in fade-in slide-in-from-top-2 z-[100]">
                       <div className="p-2 space-y-2">
                         {searchResults.jobs.length > 0 && (
                           <div>
