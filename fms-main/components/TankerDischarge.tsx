@@ -58,7 +58,7 @@ export const TankerDischarge: React.FC = () => {
         <div className="w-32 h-32 bg-primary/10 rounded-[40px] flex items-center justify-center mb-8 border border-primary/20 shadow-premium">
           <Anchor className="w-12 h-12 text-primary shadow-glow" />
         </div>
-        <h2 className="text-4xl font-[900] text-on-surface mb-4 tracking-tighter uppercase italic">TASK COMPLETE</h2>
+        <h2 className="text-2xl sm:text-4xl font-[900] text-on-surface mb-4 tracking-tighter uppercase italic">TASK COMPLETE</h2>
         <p className="text-on-surface-dim max-w-md uppercase tracking-widest text-[10px] font-black opacity-60">
           Bulk import successfully logged to primary registry. Stock levels for Main Tank Farm synchronized.
         </p>

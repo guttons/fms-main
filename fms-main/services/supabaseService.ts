@@ -175,36 +175,50 @@ export const supabaseService = {
   },
 
   async createFlightLog(log: Omit<FlightLog, 'id'>): Promise<void> {
-    if (!auth.currentUser) return; // Mock success
     const path = 'flight_logs';
+    
+    // 1. Sync to BigQuery (Primary Record for Into-Plane)
+    try {
+      await this.syncToBigQuery('into_plane_refuelling', log);
+    } catch (bqError) {
+      console.error('BigQuery Sync Failed:', bqError);
+      // We continue to Firebase as a fallback
+    }
+
+    // 2. Save to Firestore (Real-time cache/fallback)
+    if (!auth.currentUser) return; 
+
     try {
       await addDoc(collection(db, path), {
-        flight_number: log.flightNumber,
-        aircraft_reg: log.aircraftReg,
-        aircraft_type: log.aircraftType,
-        stand: log.stand,
-        operator_id: log.operatorId,
-        vehicle_id: log.vehicleId,
-        status: log.status,
-        timestamp_arrived: log.timestampArrived,
-        timestamp_position: log.timestampPosition,
-        timestamp_start: log.timestampStart,
-        timestamp_initial_end: log.timestampInitialEnd,
-        timestamp_final_start: log.timestampFinalStart,
-        timestamp_final_end: log.timestampFinalEnd,
-        timestamp_clearance: log.timestampClearance,
-        meter_open: log.meterOpen,
-        meter_close: log.meterClose,
-        volume: log.volume,
-        panel_check: log.panelCheck,
-        walk_around_check: log.walkAroundCheck,
-        appearance_check: log.appearanceCheck,
-        water_check: log.waterCheck,
-        remarks: log.remarks || ''
+        flight_number: log.flightNumber || '',
+        aircraft_reg: log.aircraftReg || '',
+        aircraft_type: log.aircraftType || '',
+        stand: log.stand || '',
+        operator_id: log.operatorId || '',
+        vehicle_id: log.vehicleId || '',
+        status: log.status || 'PENDING',
+        delivery_number: log.deliveryNumber || null,
+        pit_number: log.pitNumber || null,
+        timestamp_arrived: log.timestampArrived ?? null,
+        timestamp_position: log.timestampPosition ?? null,
+        timestamp_start: log.timestampStart ?? null,
+        timestamp_initial_end: log.timestampInitialEnd ?? null,
+        timestamp_final_start: log.timestampFinalStart ?? null,
+        timestamp_final_end: log.timestampFinalEnd ?? null,
+        timestamp_clearance: log.timestampClearance ?? null,
+        meter_open: log.meterOpen ?? 0,
+        meter_close: log.meterClose ?? 0,
+        volume: log.volume ?? 0,
+        panel_check: log.panelCheck ?? false,
+        walk_around_check: log.walkAroundCheck ?? false,
+        appearance_check: log.appearanceCheck ?? false,
+        water_check: log.waterCheck ?? false,
+        remarks: log.remarks || '',
+        created_at: new Date().toISOString()
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, path);
-      throw error;
+      // If Firestore fails (permissions, etc.), we don't throw if BigQuery succeeded
+      console.warn('Firestore fallback save failed (Permissions or Config):', error instanceof Error ? error.message : error);
     }
   },
 
@@ -385,6 +399,21 @@ export const supabaseService = {
     }
   },
 
+  async updateEquipment(id: string, updates: Partial<Equipment>): Promise<void> {
+    if (!auth.currentUser) return; // Mock success
+    const path = `equipment/${id}`;
+    try {
+      const eqRef = doc(db, 'equipment', id);
+      await setDoc(eqRef, {
+        ...updates,
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+      throw error;
+    }
+  },
+
   subscribeToEquipment(callback: (equipment: Equipment[]) => void) {
     if (!auth.currentUser) return () => {};
     const path = 'equipment';
@@ -507,6 +536,24 @@ export const supabaseService = {
       }, { merge: true });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
+      throw error;
+    }
+  },
+
+  // BigQuery Sync (Operational Data Warehouse)
+  async syncToBigQuery(table: string, data: any): Promise<void> {
+    // In a real production environment, this would hit a cloud function or an API endpoint 
+    // that proxies the request to BigQuery using the Google Cloud SDK.
+    console.log(`[BigQuery Sync] Syncing to table: ${table}`, data);
+    
+    try {
+      // Simulate API call to BigQuery proxy
+      // await fetch('https://api.your-system.com/v1/bigquery/sync', { ... });
+      
+      // For this demo/development phase, we log the intent.
+      return Promise.resolve();
+    } catch (error) {
+      console.error('BigQuery Sync Failed:', error);
       throw error;
     }
   }

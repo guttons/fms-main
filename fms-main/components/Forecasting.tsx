@@ -32,11 +32,11 @@ export const Forecasting: React.FC = () => {
           </div>
         </div>
         <div className="flex space-x-4">
-          <button className="flex items-center px-6 py-3 bg-surface-dim border border-outline rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/5 transition-all text-on-surface-dim">
+          <button className="flex items-center px-4 py-2 lg:px-6 lg:py-3 bg-surface-dim border border-outline rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/5 transition-all text-on-surface-dim">
             <RefreshCw className="w-4 h-4 mr-3 text-primary opacity-60" />
             RECALCULATE
           </button>
-          <button className="flex items-center px-6 py-3 kinetic-gradient text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all border-none">
+          <button className="flex items-center px-4 py-2 lg:px-6 lg:py-3 kinetic-gradient text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all border-none">
             <Download className="w-4 h-4 mr-3" />
             EXPORT DATA
           </button>

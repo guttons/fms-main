@@ -86,6 +86,8 @@ export interface FlightJob {
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
   vehicleId?: string;
   remarks?: string;
+  deliveryNumber?: string;
+  pitNumber?: string;
 }
 
 export interface FlightLog {
@@ -97,6 +99,8 @@ export interface FlightLog {
   operatorId: string;
   vehicleId: string; // From Mobile_Equipment Table
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
+  deliveryNumber?: string;
+  pitNumber?: string;
   
   // Granular Timestamps
   timestampArrived?: string;      // Arrived at Stand

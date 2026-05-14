@@ -162,13 +162,13 @@ export const Bridging: React.FC = () => {
         <div className="w-32 h-32 bg-primary/10 rounded-[40px] flex items-center justify-center mb-8 border border-primary/20 shadow-premium">
           <Truck className="w-12 h-12 text-primary shadow-glow" />
         </div>
-        <h2 className="text-4xl font-[900] text-on-surface mb-4 tracking-tighter uppercase italic">TRANSFER LOGGED</h2>
+        <h2 className="text-2xl sm:text-4xl font-[900] text-on-surface mb-4 tracking-tighter uppercase italic">TRANSFER LOGGED</h2>
         <p className="text-on-surface-dim max-w-md uppercase tracking-widest text-[10px] font-black opacity-60">
           Refueler {formData.vehicleId} loaded with {formData.volume}L. Inventory databases synchronized across all sectors.
         </p>
         <button 
           onClick={() => setSuccess(false)}
-          className="mt-12 px-10 py-4 kinetic-gradient text-white font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-premium hover:scale-105 active:scale-95 transition-all"
+          className="mt-12 px-10 py-4 bg-primary text-white font-black text-[11px] uppercase rounded-2xl transition-all"
         >
           INITIATE NEW LOAD
         </button>
@@ -177,8 +177,8 @@ export const Bridging: React.FC = () => {
   }
 
   return (
-    <div className="p-6 lg:p-10 space-y-10">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-outline pb-10">
+    <div className="p-4 lg:p-10 space-y-6 lg:space-y-10">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 lg:gap-10 border-b border-outline pb-6 lg:pb-10">
         <div>
           <h1 className="headline-lg tracking-tighter mb-2 uppercase flex items-center">
             REFUELER <span className="text-primary italic font-medium ml-3">LOADING</span>
@@ -189,18 +189,18 @@ export const Bridging: React.FC = () => {
              <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Jet A-1 Bridging Protocol</span>
           </div>
         </div>
-        <div className="px-6 py-3 bg-surface-dim border border-outline rounded-2xl text-[10px] font-black uppercase tracking-widest text-on-surface-dim flex items-center shadow-inner">
+        <div className="px-6 py-3 bg-surface-container-low p-1.5 rounded-[22px] border-transparent flex relative w-full max-w-[320px] text-on-surface-dim items-center">
            <Droplet className="w-4 h-4 mr-3 text-primary" />
            RESOURCE: JET A-1
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-10">
         {/* Input Form */}
         <div className="xl:col-span-2">
-            <form onSubmit={handleSubmit} className="space-y-10">
+            <form onSubmit={handleSubmit} className="space-y-6 lg:space-y-10">
                 {/* Source & Destination */}
-                <div className="card-premium p-8">
+                <div className="card-premium p-6 lg:p-8">
                     <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] mb-8 flex items-center">
                         <ArrowRight className="w-4 h-4 mr-3 text-primary opacity-60" />
                         Transfer Mapping
@@ -255,27 +255,31 @@ export const Bridging: React.FC = () => {
                         <ArrowRight className="w-8 h-8 transform rotate-90 md:rotate-0" />
                     </div>
 
-                    <div className="mt-4 p-8 bg-surface-dim/30 rounded-[40px] border border-outline shadow-inner">
+                    <div className="mt-4 p-4 lg:p-8 bg-surface-dim/30 rounded-[32px] lg:rounded-[40px] border border-outline">
                         <label className="block text-[10px] font-black text-on-surface uppercase mb-4 tracking-widest text-center opacity-60">Fuel Volume Provision (L)</label>
-                        <div className="relative max-w-md mx-auto">
+                        <div className="relative w-full max-w-md mx-auto">
                             <input 
-                                type="number" 
+                                type="text" 
                                 name="volume"
                                 required
-                                min="1"
-                                placeholder="0"
-                                value={formData.volume}
-                                onChange={handleInputChange}
-                                className="w-full px-10 py-6 bg-surface-lowest border border-outline/50 rounded-[32px] text-5xl font-[900] text-primary tracking-tighter text-center outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all font-mono shadow-premium"
+                                placeholder="0,000"
+                                value={formData.volume ? parseInt(formData.volume.toString().replace(/,/g, '')).toLocaleString() : ''}
+                                onChange={(e) => {
+                                    const val = e.target.value.replace(/,/g, '');
+                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                        setFormData(prev => ({ ...prev, volume: val }));
+                                    }
+                                }}
+                                className="w-full px-6 lg:px-10 py-4 lg:py-6 bg-surface-lowest border border-outline/50 rounded-[24px] lg:rounded-[32px] text-3xl lg:text-5xl font-[900] text-primary tracking-tighter text-center outline-none focus:border-primary transition-all font-mono"
                             />
-                            <span className="absolute right-10 top-1/2 transform -translate-y-1/2 text-[10px] font-black text-on-surface-dim uppercase opacity-30">LTRS</span>
+                            <span className="absolute right-6 lg:right-10 top-1/2 transform -translate-y-1/2 text-[10px] font-black text-on-surface-dim uppercase opacity-30">LTRS</span>
                         </div>
                     </div>
                 </div>
 
                 {/* Operations Timing & QC in a grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                    <div className="card-premium p-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-10">
+                    <div className="card-premium p-6 lg:p-8">
                         <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] mb-8 flex items-center">
                             <Clock className="w-4 h-4 mr-3 text-primary opacity-60" />
                             Chronology
@@ -295,9 +299,9 @@ export const Bridging: React.FC = () => {
                                     <button 
                                         type="button"
                                         onClick={() => setNow('startTime')}
-                                        className="px-5 bg-surface-dim border border-outline rounded-2xl hover:bg-primary hover:text-white transition-all text-on-surface-dim group active:scale-95 shadow-sm"
+                                        className="px-5 bg-surface-dim border border-outline rounded-2xl hover:bg-primary hover:text-white transition-all text-on-surface-dim group active:scale-95"
                                     >
-                                        <Clock className="w-4 h-4 group-hover:animate-spin-slow" />
+                                        <Clock className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
@@ -315,9 +319,9 @@ export const Bridging: React.FC = () => {
                                     <button 
                                         type="button"
                                         onClick={() => setNow('endTime')}
-                                        className="px-5 bg-surface-dim border border-outline rounded-2xl hover:bg-primary hover:text-white transition-all text-on-surface-dim group active:scale-95 shadow-sm"
+                                        className="px-5 bg-surface-dim border border-outline rounded-2xl hover:bg-primary hover:text-white transition-all text-on-surface-dim group active:scale-95"
                                     >
-                                        <Clock className="w-4 h-4 group-hover:animate-spin-slow" />
+                                        <Clock className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
@@ -368,15 +372,15 @@ export const Bridging: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="bg-warning/10 p-6 rounded-3xl border border-warning/20 text-[10px] font-[900] uppercase tracking-widest text-warning flex items-start shadow-sm">
-                    <AlertTriangle className="w-5 h-5 mr-4 flex-shrink-0 animate-pulse" />
+                <div className="bg-warning/10 p-6 rounded-3xl border border-warning/20 text-[10px] font-[900] uppercase tracking-widest text-warning flex items-start">
+                    <AlertTriangle className="w-5 h-5 mr-4 flex-shrink-0" />
                     <p className="leading-relaxed">Bonding protocol must be established before transfer. Confirm emergency stop accessibility and sector clear.</p>
                 </div>
 
                 <button 
                     type="submit" 
                     disabled={loading || !formData.visualCheckPassed || !formData.cwdCheckPassed}
-                    className="w-full py-6 kinetic-gradient text-white rounded-[32px] font-[900] text-sm uppercase tracking-[0.4em] shadow-premium hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-20 disabled:scale-100 disabled:grayscale flex items-center justify-center"
+                    className="w-full py-6 bg-primary text-white rounded-[32px] font-[900] text-sm uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-20 disabled:scale-100 disabled:grayscale flex items-center justify-center"
                 >
                     {loading ? 'SYNCHRONIZING...' : (
                     <>
@@ -412,7 +416,7 @@ export const Bridging: React.FC = () => {
                                         </div>
                                         <div className="flex justify-between items-center">
                                             <span className="text-xl font-[900] text-on-surface tracking-tighter italic">
-                                                {log.volume.toLocaleString()} <span className="text-[10px] opacity-20">L</span>
+                                                {(typeof log.volume === 'number' ? log.volume : parseInt(log.volume)).toLocaleString()} <span className="text-[10px] opacity-20">L</span>
                                             </span>
                                             <span className="text-[9px] font-black px-4 py-1 rounded-full bg-success/10 text-success border border-success/20 uppercase tracking-[0.2em]">
                                                 PASSED

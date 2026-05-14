@@ -127,7 +127,11 @@ const inputCls = "w-full bg-surface-container-low rounded-xl px-4 py-3 text-sm f
 const selectCls = `${inputCls} appearance-none cursor-pointer`;
 
 // ─── STAFF TAB ─────────────────────────────────────────────────────────────────
-const StaffTab: React.FC<{ push: (msg: string, type?: NotificationType) => void; confirm: (msg: string, cb: () => void) => void }> = ({ push, confirm }) => {
+const StaffTab: React.FC<{ 
+  push: (msg: string, type?: NotificationType) => void; 
+  confirm: (msg: string, cb: () => void) => void;
+  currentUser?: any;
+}> = ({ push, confirm, currentUser }) => {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -176,9 +180,23 @@ const StaffTab: React.FC<{ push: (msg: string, type?: NotificationType) => void;
   };
 
   const handleDelete = (s: StaffMember) => {
+    if (currentUser && s.id === currentUser.id) {
+      push('Security Protocol: Cannot remove your own active administrative account.', 'error');
+      return;
+    }
+
     confirm(`Remove ${s.name} (${s.employeeId}) from the system?`, async () => {
-      try { await deleteStaff(s.id); push('Staff member removed', 'success'); }
-      catch { push('Failed to remove staff member', 'error'); }
+      try { 
+        await deleteStaff(s.id); 
+        push('Staff member removed', 'success'); 
+      }
+      catch (error: any) { 
+        console.error("Staff Deletion Failed:", error);
+        const msg = error?.message?.includes('permission') 
+          ? 'Permission Denied: Your account does not have authorization to delete records.' 
+          : 'Failed to remove staff member. System error logged.';
+        push(msg, 'error'); 
+      }
     });
   };
 
@@ -383,14 +401,20 @@ const EquipmentTab: React.FC<{ push: (msg: string, type?: NotificationType) => v
         push('Equipment added', 'success');
       }
       setShowModal(false);
-    } catch { push('Failed to save. Check Firestore permissions.', 'error'); }
+    } catch (e: any) {
+      const msg = e?.message?.includes('permission') ? 'Permission Denied: Unauthorized to modify equipment.' : 'Failed to save. Check Firestore permissions.';
+      push(msg, 'error');
+    }
     finally { setSaving(false); }
   };
 
   const handleDelete = (eq: Equipment) => {
     confirm(`Remove ${eq.name} from the fleet registry?`, async () => {
       try { await deleteEquipment(eq.id); push('Equipment removed', 'success'); }
-      catch { push('Failed to remove equipment', 'error'); }
+      catch (e: any) { 
+        const msg = e?.message?.includes('permission') ? 'Permission Denied: Unauthorized to delete records.' : 'Failed to remove equipment.';
+        push(msg, 'error'); 
+      }
     });
   };
 
@@ -553,14 +577,20 @@ const TanksTab: React.FC<{ push: (msg: string, type?: NotificationType) => void;
         push('Tank added', 'success');
       }
       setShowModal(false);
-    } catch { push('Failed to save. Check Firestore permissions.', 'error'); }
+    } catch (e: any) {
+      const msg = e?.message?.includes('permission') ? 'Permission Denied: Unauthorized to modify tanks.' : 'Failed to save. Check Firestore permissions.';
+      push(msg, 'error');
+    }
     finally { setSaving(false); }
   };
 
   const handleDelete = (t: Tank) => {
     confirm(`Remove tank "${t.name}" from the inventory?`, async () => {
       try { await deleteTank(t.id); push('Tank removed', 'success'); }
-      catch { push('Failed to remove tank', 'error'); }
+      catch (e: any) { 
+        const msg = e?.message?.includes('permission') ? 'Permission Denied: Unauthorized to delete records.' : 'Failed to remove tank.';
+        push(msg, 'error'); 
+      }
     });
   };
 
@@ -698,7 +728,7 @@ const TanksTab: React.FC<{ push: (msg: string, type?: NotificationType) => void;
 };
 
 // ─── MAIN COMPONENT ────────────────────────────────────────────────────────────
-export const SystemAdmin: React.FC = () => {
+export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) => {
   const [activeTab, setActiveTab] = useState<Tab>('staff');
   const { notify } = useNotification();
   const [confirm, setConfirm] = useState<ConfirmState>({ open: false, message: '', onConfirm: () => {} });
@@ -836,8 +866,9 @@ export const SystemAdmin: React.FC = () => {
           </div>
         </div>
 
-        <div className="p-6 lg:p-8">
-          {activeTab === 'staff' && <StaffTab push={notify} confirm={confirmAction} />}
+        {/* Dynamic Content */}
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-700 p-6 lg:p-8">
+          {activeTab === 'staff' && <StaffTab push={notify} confirm={confirmAction} currentUser={currentUser} />}
           {activeTab === 'equipment' && <EquipmentTab push={notify} confirm={confirmAction} />}
           {activeTab === 'tanks' && <TanksTab push={notify} confirm={confirmAction} />}
         </div>

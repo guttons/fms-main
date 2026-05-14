@@ -120,8 +120,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside className={`
-      fixed inset-y-0 left-0 z-[60] w-[var(--sidebar-width)] bg-surface border-r border-outline transform transition-transform duration-300 ease-in-out
-      ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-0 shadow-sm transition-colors duration-500
+      fixed inset-y-0 left-0 z-[60] w-[var(--sidebar-width)] bg-surface border-r border-outline transform transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
+      ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-0 shadow-sm transition-colors duration-500
     `}>
       <div className="h-full flex flex-col">
         {/* Brand */}

@@ -96,7 +96,7 @@ html, body {
 
 .card-premium {
   background-color: var(--color-surface-container-lowest);
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 0.75rem; /* Max xl */
   box-shadow: var(--shadow-premium);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -109,7 +109,10 @@ html, body {
 .btn-command, .kinetic-gradient, .gradient-primary {
   background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
   color: white;
-  padding: 0.75rem 1.5rem;
+  padding: 0.5rem 1rem;
+  @media (min-width: 1024px) {
+    padding: 0.75rem 1.5rem;
+  }
   border-radius: 0.75rem; /* Max xl */
   font-weight: 700;
   font-size: 0.875rem;
@@ -212,6 +215,22 @@ html, body {
   75%, 100% { transform: scale(3); opacity: 0; }
 }
 
+/* Bell Animation */
+@keyframes bell-swing {
+  0% { transform: rotate(0); }
+  5% { transform: rotate(20deg); }
+  10% { transform: rotate(-15deg); }
+  15% { transform: rotate(10deg); }
+  20% { transform: rotate(-5deg); }
+  25% { transform: rotate(0); }
+  100% { transform: rotate(0); }
+}
+
+.animate-bell {
+  animation: bell-swing 3s ease infinite;
+  transform-origin: top center;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -220,6 +239,11 @@ html, body {
   border-radius: 10px; 
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-on-surface-dim); }
+
+/* Hide datalist arrows */
+input::-webkit-calendar-picker-indicator {
+    display: none !important;
+}
 
 /* Animation Utils */
 .fade-in { animation: fadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1); }

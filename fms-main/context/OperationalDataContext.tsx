@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert } from '../types';
+import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightLog } from '../types';
 import { EQUIPMENT, TANKS, MOCK_JOBS, MOCK_DOMESTIC_FLIGHTS, MOCK_ALERTS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
 import { auth } from '../firebase';
@@ -17,8 +17,10 @@ interface OperationalDataContextType {
   domesticFlights: any[];
   briefingInfo: ShiftBriefingInfo;
   alerts: Alert[];
+  flightLogs: FlightLog[];
   isAlertsLoading: boolean;
   updateEquipmentStatus: (id: string, status: EqStatus) => void;
+  updateEquipment: (id: string, updates: Partial<Equipment>) => Promise<void>;
   updateTankLevel: (id: string, newLevel: number) => Promise<void>;
   updateBriefingInfo: (info: any[], dieselNeeds: string[]) => Promise<void>;
   updateFlightJob: (id: string, updates: Partial<FlightJob>) => void;
@@ -102,6 +104,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       return [];
     }
   });
+  const [flightLogs, setFlightLogs] = useState<FlightLog[]>([]);
   const [isAlertsLoading, setIsAlertsLoading] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -140,12 +143,13 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     try {
       setIsLoading(true);
       setIsAlertsLoading(true);
-      const [fetchedTanks, fetchedJobs, fetchedBriefing, fetchedAlerts, fetchedEq] = await Promise.all([
+      const [fetchedTanks, fetchedJobs, fetchedBriefing, fetchedAlerts, fetchedEq, fetchedLogs] = await Promise.all([
         supabaseService.getTanks(),
         supabaseService.getFlightJobs(),
         supabaseService.getShiftBriefingInfo(new Date().toISOString().split('T')[0]),
         supabaseService.getAlerts(),
-        supabaseService.getEquipment()
+        supabaseService.getEquipment(),
+        supabaseService.getFlightLogs()
       ]);
 
       if (fetchedTanks && fetchedTanks.length > 0) setTanks(fetchedTanks);
@@ -160,6 +164,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         });
       }
       if (fetchedAlerts && Array.isArray(fetchedAlerts)) setAlerts(fetchedAlerts);
+      if (fetchedLogs && Array.isArray(fetchedLogs)) setFlightLogs(fetchedLogs);
       
     } catch (error) {
       console.error('Error refreshing operational data:', error);
@@ -223,6 +228,20 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         await supabaseService.updateEquipmentStatus(id, status);
       } catch (error) {
         console.error('Failed to sync equipment status to Firestore:', error);
+      }
+    }
+  };
+
+  const updateEquipment = async (id: string, updates: Partial<Equipment>) => {
+    setEquipment(prev => prev.map(eq => 
+      eq.id === id ? { ...eq, ...updates, lastUpdated: new Date().toISOString() } : eq
+    ));
+
+    if (auth.currentUser) {
+      try {
+        await supabaseService.updateEquipment(id, updates);
+      } catch (error) {
+        console.error('Failed to sync equipment update to Firestore:', error);
       }
     }
   };
@@ -353,6 +372,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       domesticFlights: domesticFlights || [],
       briefingInfo: briefingInfo || { info: [], dieselNeeds: [] },
       updateEquipmentStatus,
+      updateEquipment,
       updateTankLevel,
       updateBriefingInfo,
       updateFlightJob,
@@ -363,6 +383,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       refreshData,
       isLoading,
       alerts: alerts || [],
+      flightLogs: flightLogs || [],
       isAlertsLoading
     }}>
       {children}

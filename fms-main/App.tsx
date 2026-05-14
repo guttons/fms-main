@@ -199,7 +199,7 @@ const AppContextContent: React.FC<any> = ({
       case 'briefing':
         return <ShiftBriefing />;
       case 'admin':
-        return currentUser.role === UserRole.ADMIN ? <SystemAdmin /> : <Dashboard user={currentUser} setActiveView={setActiveView} onStartJob={() => {}} />;
+        return currentUser.role === UserRole.ADMIN ? <SystemAdmin currentUser={currentUser} /> : <Dashboard user={currentUser} setActiveView={setActiveView} onStartJob={() => {}} />;
       case 'reports':
         return <CommercialReports />;
       case 'equipment':
@@ -234,16 +234,16 @@ const AppContextContent: React.FC<any> = ({
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative transition-colors duration-500">
           
           {(showAlertsPanel || isSettingsOpen) && (
-             <div className="absolute inset-0 z-40" onClick={() => { setShowAlertsPanel(false); setIsSettingsOpen(false); }} />
+             <div className="fixed inset-0 bg-black/20 backdrop-blur-md z-40 transition-all duration-500 lg:hidden" onClick={() => { setShowAlertsPanel(false); setIsSettingsOpen(false); }} />
           )}
 
           {/* Animated Combined Header Container */}
-          <div className={`transition-all duration-500 transform sticky top-0 z-50 ${showHeader ? 'translate-y-0' : '-translate-y-full'}`}>
+          <div className={`transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] sticky top-0 z-50 ${showHeader ? 'translate-y-0 opacity-100 max-h-[200px]' : '-translate-y-full opacity-0 max-h-0 overflow-hidden pointer-events-none'}`}>
             {/* Phase 1: Critical Alert Bar */}
             <div className={`transition-all duration-700 ease-in-out overflow-hidden shadow-lg ${activeCriticalAlerts.length > 0 ? 'h-10 opacity-100' : 'h-0 opacity-0 pointer-events-none'}`}>
               <div className="h-10 bg-error text-white flex items-center justify-between px-6 relative">
                 <div className="flex items-center space-x-3">
-                  <AlertCircle className="w-4 h-4 animate-pulse" />
+                  <AlertCircle className="w-4 h-4" />
                   <span className="text-[10px] font-extrabold uppercase tracking-[0.2em]">
                     Critical Alert: <span className="opacity-80 font-medium ml-2">
                       {activeCriticalAlerts[0]?.message}
@@ -297,7 +297,7 @@ const AppContextContent: React.FC<any> = ({
 
                   {/* Search Dropdown */}
                   {isSearchFocused && searchQuery.trim().length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-2 bg-surface-lowest border border-outline rounded-2xl shadow-premium overflow-hidden max-h-[400px] overflow-y-auto animate-in fade-in slide-in-from-top-2 z-[100]">
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-surface-lowest border border-outline rounded-xl transition-allow-hidden max-h-[400px] overflow-y-auto animate-in fade-in slide-in-from-top-2 z-[100]">
                       <div className="p-2 space-y-2">
                         {searchResults.jobs.length > 0 && (
                           <div>
@@ -365,9 +365,9 @@ const AppContextContent: React.FC<any> = ({
                       }}
                       className={`relative p-3 bg-surface-dim hover:bg-surface-container border border-outline rounded-xl transition-all active:scale-90 group ${showAlertsPanel ? 'text-primary border-primary/40' : 'text-on-surface-dim hover:text-primary'}`}
                     >
-                      <Bell className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                      <Bell className={`w-5 h-5 ${unacknowledgedCount > 0 ? 'animate-bell text-primary' : ''}`} />
                       {unacknowledgedCount > 0 && (
-                        <span className="absolute top-2.5 right-2.5 w-4 h-4 bg-error text-white text-[8px] font-black rounded-full border-2 border-surface-dim flex items-center justify-center animate-in zoom-in duration-300">
+                        <span className="absolute top-2.5 right-2.5 w-4 h-4 bg-error text-white text-[8px] font-black rounded-full border-2 border-surface-dim flex items-center justify-center">
                           {unacknowledgedCount}
                         </span>
                       )}
@@ -377,7 +377,7 @@ const AppContextContent: React.FC<any> = ({
                     {showAlertsPanel && (
                       <>
                         <div className="fixed inset-0 z-[90]" onClick={() => setShowAlertsPanel(false)} />
-                        <div className="fixed inset-x-4 top-20 sm:absolute sm:inset-auto sm:right-0 sm:top-auto sm:mt-4 w-auto sm:w-96 max-h-[80vh] sm:max-h-[500px] bg-surface border border-outline rounded-2xl shadow-premium z-[100] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-4 duration-300">
+                        <div className="fixed inset-x-4 top-20 sm:absolute sm:inset-auto sm:right-0 sm:top-auto sm:mt-4 w-auto sm:w-96 max-h-[80vh] sm:max-h-[500px] bg-surface border border-outline rounded-xl z-[100] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-4 duration-300">
                           <div className="px-5 py-4 bg-surface-dim border-b border-outline flex items-center justify-between">
                           <h3 className="text-[10px] font-black uppercase tracking-widest text-on-surface flex items-center">
                             <Bell className="w-3.5 h-3.5 mr-2 text-primary" />
@@ -443,9 +443,9 @@ const AppContextContent: React.FC<any> = ({
                         setIsSettingsOpen(!isSettingsOpen);
                         if (showAlertsPanel) setShowAlertsPanel(false);
                       }}
-                      className={`flex items-center space-x-4 bg-surface-dim p-1.5 pr-5 rounded-2xl border transition-all cursor-pointer active:scale-95 group ${isSettingsOpen ? 'border-primary shadow-[0_0_15px_rgba(6,182,212,0.15)]' : 'border-outline hover:border-primary'}`}
+                      className={`flex items-center space-x-4 bg-surface-dim p-1.5 pr-5 rounded-xl border transition-all cursor-pointer active:scale-95 group ${isSettingsOpen ? 'border-primary' : 'border-outline hover:border-primary'}`}
                     >
-                      <img src={currentUser.avatar} alt="" className="w-9 h-9 rounded-xl border-2 border-surface-container shadow-xl transform transition-transform group-hover:scale-105" />
+                      <img src={currentUser.avatar} alt="" className="w-9 h-9 rounded-lg border border-surface-container" />
                       <div className="hidden xl:block">
                         <p className="text-[11px] font-black text-on-surface leading-tight tracking-tight uppercase">{currentUser.name}</p>
                         <p className="text-[9px] font-bold text-on-surface-dim opacity-50 uppercase tracking-widest">{currentUser.role.replace('_', ' ')}</p>
@@ -456,7 +456,7 @@ const AppContextContent: React.FC<any> = ({
                     {isSettingsOpen && (
                       <>
                         <div className="fixed inset-0 z-[90]" onClick={() => setIsSettingsOpen(false)} />
-                        <div className="fixed inset-x-4 top-20 sm:absolute sm:inset-auto sm:right-0 sm:top-auto sm:mt-4 w-auto sm:w-96 max-h-[85vh] sm:max-h-[600px] bg-surface border border-outline rounded-2xl shadow-premium z-[100] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-4 duration-300">
+                        <div className="fixed inset-x-4 top-20 sm:absolute sm:inset-auto sm:right-0 sm:top-auto sm:mt-4 w-auto sm:w-96 max-h-[85vh] sm:max-h-[600px] bg-surface border border-outline rounded-xl z-[100] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-4 duration-300">
                           <div className="px-5 py-4 bg-surface-dim border-b border-outline flex items-center justify-between">
                             <h3 className="text-[10px] font-black uppercase tracking-widest text-on-surface flex items-center">
                               <UserIcon className="w-3.5 h-3.5 mr-2 text-primary" />
@@ -469,11 +469,10 @@ const AppContextContent: React.FC<any> = ({
                           
                           <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5">
                             {/* Appearance Section */}
-                            <div className="p-4 bg-surface-dim/40 border border-outline/50 rounded-xl hover:border-primary/30 transition-all group">
-                              <div className="flex items-center justify-between">
+                            <div className="p-4 bg-surface-dim/40 rounded-[32px] font-[900] text-sm uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-20 disabled:scale-100 disabled:grayscale flex items-center justify-between">
                                 <div className="flex items-center space-x-3">
                                   <div className={`p-2.5 rounded-lg transition-all ${isDarkMode ? 'bg-primary/10 text-primary' : 'bg-warning/10 text-warning'}`}>
-                                    {isDarkMode ? <Moon className="w-4 h-4 shadow-glow" /> : <Sun className="w-4 h-4" />}
+                                    {isDarkMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
                                   </div>
                                   <div>
                                     <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight">Appearance</h4>
@@ -482,27 +481,10 @@ const AppContextContent: React.FC<any> = ({
                                 </div>
                                 <button 
                                   onClick={() => setIsDarkMode(!isDarkMode)}
-                                  className={`relative w-12 h-6 rounded-full transition-all duration-500 overflow-hidden group-active:scale-90 border border-outline/50 ${isDarkMode ? 'kinetic-gradient shadow-glow' : 'bg-surface-container-high'}`}
+                                  className={`relative w-12 h-6 rounded-full transition-all duration-500 overflow-hidden group-active:scale-90 border border-outline/50 ${isDarkMode ? 'kinetic-gradient' : 'bg-surface-container-high'}`}
                                 >
                                   <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-all duration-500 shadow-lg ${isDarkMode ? 'translate-x-6' : 'translate-x-0'}`} />
                                 </button>
-                              </div>
-                            </div>
-
-                            {/* Language Section */}
-                            <div className="p-4 bg-surface-dim/40 border border-outline/50 rounded-xl opacity-50 cursor-not-allowed">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3">
-                                  <div className="p-2.5 bg-surface-container rounded-lg text-on-surface-dim">
-                                    <Search className="w-4 h-4" />
-                                  </div>
-                                  <div>
-                                    <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight">Regional Language</h4>
-                                    <p className="text-[9px] font-bold text-on-surface-dim opacity-50 italic">Dhivehi support coming</p>
-                                  </div>
-                                </div>
-                                <span className="text-[8px] font-black uppercase tracking-widest text-on-surface-dim">Locked</span>
-                              </div>
                             </div>
 
                             {/* User Profile Summary */}
@@ -539,7 +521,7 @@ const AppContextContent: React.FC<any> = ({
           </div>
 
           {/* Main Content Scroll Area */}
-          <main ref={scrollRef as any} className="flex-1 overflow-y-auto relative canvas scroll-smooth overscroll-none">
+          <main ref={scrollRef as any} className="flex-1 overflow-y-auto relative canvas scroll-smooth overscroll-none pb-32 lg:pb-10">
             <div key={activeView} className="animate-in fade-in slide-in-from-bottom-2 duration-200 ease-out">
               {renderContent()}
             </div>

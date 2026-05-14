@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { FlightLog, User, FlightJob, Equipment, EquipmentStatus } from '../types';
-import { MOCK_JOBS, MOCK_USERS, MOCK_DOMESTIC_FLIGHTS } from '../constants';
+import { MOCK_JOBS, MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, PIT_MAPPING } from '../constants';
 import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Lock } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
-import { equipmentBadgeClass, equipmentDotClass } from '../utils/equipmentColors';
+import { equipmentBadgeClass, equipmentDotClass, getEquipmentHexColor } from '../utils/equipmentColors';
 import { useNotification } from '../context/NotificationContext';
 
 import { useOperationalData } from '../context/OperationalDataContext';
@@ -26,7 +26,7 @@ const MobileHeader: React.FC<{
     setSelectedVehicleId: (id: string) => void,
     equipment: Equipment[]
 }> = ({ user, isOnline, activeFlight, selectedVehicleId, setSelectedVehicleId, equipment }) => (
-  <div className="bg-surface-container-lowest-container text-on-surface p-4 border-b border-outline sticky top-0 z-30 transition-colors shadow-sm flex items-center justify-between gap-3 overflow-hidden">
+  <div className="bg-surface text-on-surface p-4 border-b border-outline sticky top-0 z-30 transition-colors shadow-sm flex items-center justify-between gap-3 overflow-hidden">
       <div className="flex items-center flex-1 min-w-0">
           <Truck className="w-5 h-5 mr-3 text-primary animate-pulse flex-shrink-0" />
           
@@ -35,7 +35,10 @@ const MobileHeader: React.FC<{
               
               {activeFlight && (
                   <div className="md:hidden flex items-center h-[30px]">
-                      <span className="bg-surface-container-low border-transparent rounded-lg px-2.5 py-1 text-[11px] font-black text-on-surface opacity-60 uppercase tracking-widest leading-none">
+                      <span 
+                        className="bg-surface-container-low border-transparent rounded-lg px-2.5 py-1 text-[11px] font-black uppercase tracking-widest leading-none shadow-sm"
+                        style={{ color: getEquipmentHexColor(activeFlight.vehicleId) }}
+                      >
                           {activeFlight.vehicleId}
                       </span>
                   </div>
@@ -46,13 +49,21 @@ const MobileHeader: React.FC<{
                       value={activeFlight?.vehicleId || selectedVehicleId}
                       disabled={!!activeFlight}
                       onChange={(e) => setSelectedVehicleId(e.target.value)}
-                      className="bg-surface-container-highest border border-outline rounded-lg py-2 pl-3 pr-8 text-[12px] font-bold text-on-surface shadow-sm appearance-none focus:border-primary transition-all cursor-pointer uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap min-w-[140px]"
+                      style={{ color: getEquipmentHexColor(activeFlight?.vehicleId || selectedVehicleId) }}
+                      className="bg-surface-container-highest border border-outline rounded-lg py-2 pl-3 pr-8 text-[12px] font-bold shadow-sm appearance-none focus:border-primary transition-all cursor-pointer uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap w-fit"
                   >
                        {equipment
                          .filter(eq => (eq.id.startsWith('RF') || eq.id.startsWith('HD')) && (eq.status === EquipmentStatus.AVAILABLE || eq.id === selectedVehicleId))
                          .map(eq => (
-                          <option key={eq.id} value={eq.id} className="text-on-surface bg-surface-container-low">{eq.id} - {eq.type}</option>
-                      ))}
+                            <option 
+                              key={eq.id} 
+                              value={eq.id} 
+                              style={{ color: getEquipmentHexColor(eq.id) }}
+                              className="bg-surface-container-low font-bold uppercase"
+                            >
+                              {eq.id}
+                            </option>
+                       ))}
                   </select>
                   <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim rotate-90 pointer-events-none" />
               </div>
@@ -73,7 +84,7 @@ const MobileHeader: React.FC<{
       </div>
 
       <div className="flex items-center flex-shrink-0 ml-1">
-          <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-success shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-warning shadow-[0_0_8px_rgba(245,158,11,0.4)]'}`} title={isOnline ? 'Synced' : 'Offline'}></div>
+          <div className={`w-2.5 h-2.5 rounded-full ${equipmentDotClass(activeFlight?.vehicleId || selectedVehicleId)} shadow-premium`} title={isOnline ? 'Synced' : 'Offline'}></div>
       </div>
   </div>
 );
@@ -84,8 +95,10 @@ const ScreenDashboard: React.FC<{
     selectedVehicleId: string,
     setSelectedVehicleId: (id: string) => void
 }> = ({ user, onStartJob }) => {
+  const { notify } = useNotification();
   const { flightJobs, domesticFlights } = useOperationalData();
   const [viewMode, setViewMode] = useState<'INT' | 'DOM'>('INT');
+  const [filterMyTasks, setFilterMyTasks] = useState(false);
   
   const intlJobs = flightJobs || [];
   const domesticJobs = (domesticFlights || []).map((df: any) => ({
@@ -103,7 +116,11 @@ const ScreenDashboard: React.FC<{
 
 
 
-  const activeJobs = viewMode === 'INT' ? intlJobs : domesticJobs;
+
+  const filteredIntlJobs = filterMyTasks ? intlJobs.filter(j => j.assignedTo === user.id) : intlJobs;
+  const filteredDomesticJobs = filterMyTasks ? domesticJobs.filter(j => j.assignedTo === user.id) : domesticJobs;
+
+  const activeJobs = viewMode === 'INT' ? filteredIntlJobs : filteredDomesticJobs;
 
   const isDelayed = (sta?: string, eta?: string) => {
       if (!sta || !eta) return false;
@@ -121,7 +138,7 @@ const ScreenDashboard: React.FC<{
       return (
           <div key={job.id} className={`bg-surface-container-lowest p-6 rounded-2xl relative overflow-hidden transition-all shrink-0 border ${isAssignedToMe ? 'border-primary border-l-[6px] shadow-sm' : 'border-outline opacity-80'}`}>
               <div className="relative z-10">
-                  <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
+                  <div className="flex justify-between items-start mb-6 gap-4">
                       <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                                <h3 className="text-2xl sm:text-3xl font-[900] text-on-surface tracking-tighter truncate">{job.flightNumber}</h3>
@@ -136,83 +153,76 @@ const ScreenDashboard: React.FC<{
                                <div className="flex items-center whitespace-nowrap">
                                    <MapPin className="w-3.5 h-3.5 mr-1.5 text-primary opacity-60 shrink-0" />
                                    <span>Stand {job.stand}</span>
-                               </div>
+                                </div>
                                <span className="opacity-20 shrink-0">|</span>
                                <span className="opacity-60 whitespace-nowrap">{job.aircraftType}</span>
                                <span className="opacity-20 shrink-0">|</span>
                                <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black text-on-surface-dim border-transparent uppercase tracking-wider whitespace-nowrap">{job.aircraftReg}</span>
-                               <span className="opacity-20 shrink-0">|</span>
-                               <div className="flex items-center text-on-surface-dim font-bold">
-                                   <div className="w-5 h-5 rounded-md bg-surface-container-low border-transparent flex items-center justify-center mr-2 text-[10px] font-black">
-                                       {assigneeName.charAt(0)}
-                                   </div>
-                                   <span className="text-[11px] uppercase tracking-tight">{assigneeName}</span>
-                               </div>
                           </div>
                       </div>
-                      
-                      <div className="flex items-center gap-4">
-                           <div className="hidden md:flex items-center gap-6 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/50 px-4 py-2.5 rounded-xl">
-                               <div className="flex items-center gap-2">
-                                   <span className="opacity-40">STA</span>
-                                   <span className="text-on-surface text-xs font-[900] tracking-tight">{job.sta || '--:--'}</span>
+                                         <div className="flex items-center gap-3 shrink-0">
+                           {/* Indicators & Actions */}
+                            {isAssignedToMe && (
+                               <div className="flex items-center justify-center text-primary bg-primary/10 w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl border border-primary/20" title="My Task">
+                                   <UserIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                                </div>
-                               <div className="flex items-center gap-2">
-                                   <span className="text-primary opacity-60">ETA</span>
-                                   <span className={`${delayed ? 'text-error' : 'text-primary'} text-xs font-[900] tracking-tight transition-colors`}>{job.eta || '--:--'}</span>
-                               </div>
-                               <div className="flex items-center gap-2">
-                                   <span className="text-warning opacity-60">STD</span>
-                                   <span className="text-warning text-xs font-[900] tracking-tight">{job.std || '--:--'}</span>
-                               </div>
-                           </div>
-                           <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border shrink-0 text-center whitespace-nowrap ${
-                               displayStatus === 'COMPLETED' ? 'bg-success/10 text-success border-success/10' : 
-                               displayStatus === 'DELAYED' ? 'bg-error/10 text-error border-error/10 animate-pulse' :
-                               displayStatus === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/10 animate-pulse' : 'bg-surface-container-low text-on-surface-dim border-outline'
-                           }`}>
-                               {displayStatus.replace('_', ' ')}
-                           </span>
+                           )}
+
+                           <button 
+                               onClick={() => {
+                                   if (job.status === 'COMPLETED') {
+                                       notify(`Log for ${job.flightNumber} is already finalized.`, "info");
+                                   } else if (isAssignedToMe) {
+                                       onStartJob(job);
+                                   }
+                               }}
+                               disabled={!isAssignedToMe && job.status !== 'COMPLETED'}
+                               className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm
+                                   ${job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/20' : 
+                                     isAssignedToMe ? 'kinetic-gradient text-white hover:scale-[1.05] active:scale-95 shadow-premium' : 'bg-surface-container-low text-on-surface-dim opacity-40 border-outline'}
+                               `}
+                               title={job.status === 'COMPLETED' ? 'View Log' : (!isAssignedToMe ? 'Locked' : 'Start Job')}
+                           >
+                               {job.status === 'COMPLETED' ? <ChevronRight className="!w-7 !h-7 stroke-[3]" /> : 
+                                (!isAssignedToMe ? <Lock className="!w-6 !h-6 stroke-[2.5]" /> : <Play className="!w-7 !h-7 !fill-white !text-white stroke-[2.5] ml-0.5" />)}
+                           </button>
                       </div>
                   </div>
 
-                   {/* Flight Times Display (Mobile Only) */}
-                   <div className="md:hidden grid grid-cols-3 gap-2 mb-6 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/50 p-3 rounded-xl border-transparent">
-                       <div className="flex flex-col">
-                           <span className="opacity-40 mb-1">STA</span>
-                           <span className="text-on-surface text-sm font-[900] tracking-tight">{job.sta || '--:--'}</span>
-                       </div>
-                       <div className="flex flex-col">
-                           <span className="opacity-40 mb-1 text-primary">ETA</span>
-                           <span className={`${delayed ? 'text-error' : 'text-primary'} text-sm font-[900] tracking-tight transition-colors`}>{job.eta || '--:--'}</span>
-                       </div>
-                       <div className="flex flex-col">
-                           <span className="opacity-40 mb-1 text-warning">STD</span>
-                           <span className="text-warning text-sm font-[900] tracking-tight">{job.std || '--:--'}</span>
-                       </div>
-                   </div>
-                  
-                  <div className="flex justify-between items-center border-t border-outline pt-6">
-                      <div className="flex items-center">
-                          {isAssignedToMe && (
-                              <div className="flex items-center justify-center text-primary bg-primary/10 w-10 h-10 rounded-xl border border-primary/20" title="My Task">
-                                  <UserIcon className="w-5 h-5" />
-                              </div>
-                          )}
+                  <div className="mt-6 pt-6 border-t border-outline/50 space-y-4">
+                      {/* Row 1: Tactical Times */}
+                      <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/30 px-3 py-2 rounded-xl border border-outline/10 w-fit">
+                          <div className="flex items-center gap-2">
+                              <span className="opacity-40">STA</span>
+                              <span className="text-on-surface text-xs font-black tracking-tight">{job.sta || '--:--'}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                              <span className="text-primary opacity-60">ETA</span>
+                              <span className={`${delayed ? 'text-error' : 'text-primary'} text-xs font-black tracking-tight`}>{job.eta || '--:--'}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                              <span className="text-warning opacity-60">STD</span>
+                              <span className="text-warning text-xs font-black tracking-tight">{job.std || '--:--'}</span>
+                          </div>
                       </div>
-                      
-                      <button 
-                          onClick={() => onStartJob(job)}
-                          disabled={!isAssignedToMe || job.status === 'COMPLETED'}
-                          className={`px-6 py-3 rounded-xl font-black text-[11px] uppercase tracking-widest shadow-sm transition-all flex items-center justify-center
-                              ${isAssignedToMe && job.status !== 'COMPLETED'
-                                  ? 'kinetic-gradient hover:scale-[1.05] active:scale-95 shadow-premium' 
-                                  : 'bg-surface-container-low text-on-surface-dim opacity-40 cursor-not-allowed border-transparent'
-                              }
-                          `}
-                      >
-                          {job.status === 'COMPLETED' ? 'VIEW LOG' : (!isAssignedToMe ? <Lock className="w-4 h-4" /> : 'START JOB')}
-                      </button>
+
+                      {/* Row 2: Operator (Left) & Status (Right) */}
+                      <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center text-on-surface-dim font-bold">
+                               <div className="w-5 h-5 rounded-md bg-surface-container-low border-transparent flex items-center justify-center mr-2 text-[10px] font-black">
+                                   {assigneeName.charAt(0)}
+                               </div>
+                               <span className="text-[10px] uppercase tracking-tight">{assigneeName}</span>
+                          </div>
+                          
+                          <span className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border shrink-0 ${
+                              displayStatus === 'COMPLETED' ? 'bg-success/10 text-success border-success/10' : 
+                              displayStatus === 'DELAYED' ? 'bg-error/10 text-error border-error/10' :
+                              displayStatus === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/10' : 'bg-surface-container-low text-on-surface-dim border-outline'
+                          }`}>
+                              {displayStatus.replace('_', ' ')}
+                          </span>
+                      </div>
                   </div>
               </div>
           </div>
@@ -223,23 +233,40 @@ const ScreenDashboard: React.FC<{
     <div className="p-5 flex flex-col space-y-8 pb-24">
       {/* Category Toggle */}
       <div className="flex justify-center mt-2 mb-4">
-          <div className="bg-surface-container-low p-1.5 rounded-[22px] border-transparent flex relative w-full max-w-[320px] shadow-inner">
+          <div className="bg-surface-container-low p-1 rounded-[22px] border-transparent flex relative w-full max-w-[320px] h-[38px]">
               <div 
-                  className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] kinetic-gradient rounded-[18px] transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${viewMode === 'DOM' ? 'translate-x-full' : 'translate-x-0'}`}
+                  className={`absolute top-1 bottom-1 w-[calc(50%-4px)] kinetic-gradient rounded-[18px] transition-all duration-300 ${viewMode === 'DOM' ? 'translate-x-full' : 'translate-x-0'}`}
               />
               <button 
                   onClick={() => setViewMode('INT')}
-                  className={`flex-1 py-3 px-6 rounded-[18px] text-[10px] font-black uppercase tracking-[0.2em] relative z-10 transition-colors duration-300 ${viewMode === 'INT' ? 'text-white' : 'text-on-surface-dim opacity-60'}`}
+                  className={`flex-1 flex items-center justify-center rounded-[18px] text-[10px] font-black uppercase tracking-[0.2em] relative z-10 transition-colors duration-300 ${viewMode === 'INT' ? 'text-white' : 'text-on-surface-dim opacity-60'}`}
               >
-                  International
+                  <span className="hidden sm:inline">International</span>
+                  <span className="sm:hidden">INT</span>
               </button>
               <button 
                   onClick={() => setViewMode('DOM')}
-                  className={`flex-1 py-3 px-6 rounded-[18px] text-[10px] font-black uppercase tracking-[0.2em] relative z-10 transition-colors duration-300 ${viewMode === 'DOM' ? 'text-white' : 'text-on-surface-dim opacity-60'}`}
+                  className={`flex-1 flex items-center justify-center rounded-[18px] text-[10px] font-black uppercase tracking-[0.2em] relative z-10 transition-colors duration-300 ${viewMode === 'DOM' ? 'text-white' : 'text-on-surface-dim opacity-60'}`}
               >
-                  Domestic
+                  <span className="hidden sm:inline">Domestic</span>
+                  <span className="sm:hidden">DOM</span>
               </button>
           </div>
+
+          <button 
+              onClick={() => setFilterMyTasks(!filterMyTasks)}
+              className={`ml-3 px-4 h-[38px] rounded-[22px] border transition-all flex items-center gap-2 justify-center sm:justify-start
+                  ${filterMyTasks 
+                      ? 'kinetic-gradient text-white border-transparent shadow-premium' 
+                      : 'bg-surface-container-low text-on-surface-dim border-outline opacity-70 hover:opacity-100'}
+              `}
+              title={filterMyTasks ? 'Showing My Tasks' : 'Showing All Tasks'}
+          >
+              <UserIcon className="w-4 h-4" />
+              <span className="hidden sm:inline text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
+                  {filterMyTasks ? 'My Tasks Only' : 'All Tasks'}
+              </span>
+          </button>
       </div>
 
       <div className="space-y-4">
@@ -260,27 +287,112 @@ const ScreenDashboard: React.FC<{
 const ScreenTimestamps: React.FC<{ 
   activeFlight: Partial<FlightLog> | null, 
   onTimestamp: (field: keyof FlightLog) => void, 
+  onInputChange: (field: keyof FlightLog, value: any) => void,
   onNext: () => void, 
   onBack: () => void 
-}> = ({ activeFlight, onTimestamp, onNext, onBack }) => (
+}> = ({ activeFlight, onTimestamp, onInputChange, onNext, onBack }) => (
   <div className="p-5 flex flex-col h-full min-h-[calc(100vh-140px)] pb-32">
       <button onClick={onBack} className="flex items-center text-on-surface-dim hover:text-primary mb-6 font-black text-[11px] uppercase tracking-widest transition-colors">
           <ChevronLeft className="w-4 h-4 mr-2" /> Back to Schedule
       </button>
-      <h2 className="text-on-surface text-2xl font-black mb-8 tracking-tighter uppercase">Ramp Arrival <span className="text-primary italic">& Setup</span></h2>
+      <h2 className="text-on-surface text-xl sm:text-2xl font-black mb-8 tracking-tighter uppercase italic">Ramp Arrival <span className="text-primary">& Setup</span></h2>
       
       <div className="space-y-6 flex-1">
+          <div className="card-premium p-6 border-outline overflow-hidden">
+              <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Delivery Ticket Number</label>
+              <div className="flex items-center gap-2 max-w-full overflow-hidden">
+                  <span className="text-2xl sm:text-3xl font-mono font-black text-on-surface-dim opacity-30 shrink-0">MLE-</span>
+                  <input 
+                      type="text" 
+                      maxLength={6}
+                      className="flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-error placeholder:text-error/20"
+                      placeholder="000000"
+                      value={activeFlight?.deliveryNumber?.replace('MLE-', '') || ''}
+                      onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                          onInputChange('deliveryNumber', val ? `MLE-${val}` : '');
+                      }}
+                  />
+              </div>
+          </div>
+
+          {activeFlight?.vehicleId?.startsWith('HD') && (
+            <div className="card-premium p-6 border-outline overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
+                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Hydrant PIT Number</label>
+                <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2 max-w-full overflow-hidden">
+                        <span className="text-2xl sm:text-3xl font-mono font-black text-primary opacity-30 shrink-0">J</span>
+                        <input 
+                            type="text" 
+                            className="flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-primary placeholder:text-primary/10 uppercase"
+                            placeholder="000-0"
+                            value={activeFlight?.pitNumber?.startsWith('J') ? activeFlight.pitNumber.substring(1) : (activeFlight?.pitNumber || '')}
+                            onChange={(e) => {
+                                const val = e.target.value.toUpperCase().replace(/^J/, '');
+                                onInputChange('pitNumber', val ? `J${val}` : '');
+                            }}
+                            list="pit-suggestions"
+                        />
+                        <datalist id="pit-suggestions">
+                            {PIT_MAPPING.map((m, idx) => (
+                                <option key={idx} value={m.pit}>{m.stand}</option>
+                            ))}
+                        </datalist>
+                    </div>
+                    {activeFlight.stand && (
+                        <div className="flex flex-wrap gap-2 pt-2">
+                            {PIT_MAPPING.filter(m => m.stand === activeFlight.stand).map((m, idx) => (
+                                <button 
+                                    key={idx}
+                                    onClick={() => onInputChange('pitNumber', m.pit)}
+                                    className="px-3 py-1.5 bg-surface-container-low rounded-lg text-[10px] font-black text-primary border border-primary/20 hover:bg-primary/10 transition-colors"
+                                >
+                                    {m.pit}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+          )}
           <button 
-              onClick={() => onTimestamp('timestampPosition')}
-              disabled={!!activeFlight?.timestampPosition}
-              className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group shadow-ambient
-                  ${activeFlight?.timestampPosition 
+              onClick={() => onTimestamp('timestampArrived')}
+              disabled={!!activeFlight?.timestampArrived}
+              className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
+                  ${activeFlight?.timestampArrived 
                       ? 'bg-success/5 border-success text-on-surface' 
                       : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
               `}
           >
               <div className="relative z-10">
                   <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Alpha</span>
+                  <span className={`block text-3xl font-[900] tracking-tighter ${activeFlight?.timestampArrived ? 'text-success' : 'text-on-surface'}`}>
+                      LOG ARRIVED
+                  </span>
+                  {activeFlight?.timestampArrived && (
+                      <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
+                           <Clock className="w-4 h-4 mr-2 opacity-60"/>
+                           {new Date(activeFlight.timestampArrived).toLocaleTimeString()}
+                      </span>
+                  )}
+              </div>
+              {!activeFlight?.timestampArrived && <MapPin className="absolute right-6 bottom-6 w-16 h-16 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
+              {activeFlight?.timestampArrived && <CheckCircle className="absolute right-6 bottom-6 w-16 h-16 text-success opacity-10" />}
+          </button>
+
+          <button 
+              onClick={() => onTimestamp('timestampPosition')}
+              disabled={!activeFlight?.timestampArrived || !!activeFlight?.timestampPosition}
+              className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
+                  ${activeFlight?.timestampPosition 
+                      ? 'bg-success/5 border-success text-on-surface' 
+                      : !activeFlight?.timestampArrived
+                          ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
+                          : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
+              `}
+          >
+              <div className="relative z-10">
+                  <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Bravo</span>
                   <span className={`block text-3xl font-[900] tracking-tighter ${activeFlight?.timestampPosition ? 'text-success' : 'text-on-surface'}`}>
                       LOG POSITION
                   </span>
@@ -295,19 +407,36 @@ const ScreenTimestamps: React.FC<{
               {activeFlight?.timestampPosition && <CheckCircle className="absolute right-6 bottom-6 w-16 h-16 text-success opacity-10" />}
           </button>
 
+          <div className="card-premium p-6 border-outline">
+              <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Operation Gamma: Opening Totalizer</label>
+              <input 
+                  type="text" 
+                  disabled={!activeFlight?.timestampPosition || !!activeFlight?.timestampStart}
+                  className="w-full text-4xl sm:text-6xl font-mono font-black py-4 bg-transparent outline-none border-b-4 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-10 disabled:opacity-20"
+                  placeholder="000,000"
+                  value={activeFlight?.meterOpen ? activeFlight.meterOpen.toLocaleString() : ''}
+                  onChange={(e) => {
+                      const val = e.target.value.replace(/,/g, '');
+                      if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                          onInputChange('meterOpen' as any, val === '' ? 0 : parseFloat(val));
+                      }
+                  }}
+              />
+          </div>
+
           <button 
               onClick={() => onTimestamp('timestampStart')}
-              disabled={!activeFlight?.timestampPosition || !!activeFlight?.timestampStart}
-              className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group shadow-ambient
+              disabled={!activeFlight?.timestampPosition || !activeFlight?.meterOpen || !!activeFlight?.timestampStart}
+              className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                   ${activeFlight?.timestampStart 
                       ? 'bg-success/5 border-success text-on-surface' 
-                      : !activeFlight?.timestampPosition
+                      : (!activeFlight?.timestampPosition || !activeFlight?.meterOpen)
                           ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
                           : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
               `}
           >
               <div className="relative z-10">
-                  <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Bravo</span>
+                  <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Delta</span>
                   <span className={`block text-3xl font-[900] tracking-tighter ${activeFlight?.timestampStart ? 'text-success' : 'text-on-surface'}`}>
                       COMMENCE FUELING
                   </span>
@@ -325,8 +454,8 @@ const ScreenTimestamps: React.FC<{
 
       <button 
           onClick={onNext}
-          disabled={!activeFlight?.timestampStart}
-          className="mt-8 w-full kinetic-gradient p-6 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-40 disabled:grayscale hover:shadow-premium active:scale-95 transition-all"
+          disabled={!activeFlight?.timestampStart || activeFlight?.deliveryNumber?.replace('MLE-', '').length !== 6}
+          className="mt-8 w-full kinetic-gradient text-white p-4 lg:p-6 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-40 disabled:grayscale active:scale-95 transition-all shadow-premium"
       >
           Proceed to Metering <ChevronRight className="ml-3 w-5 h-5" />
       </button>
@@ -346,17 +475,22 @@ const ScreenMetering: React.FC<{
        <button onClick={onBack} className="flex items-center text-on-surface-dim hover:text-primary mb-6 font-black text-[11px] uppercase tracking-widest transition-colors">
           <ChevronLeft className="w-4 h-4 mr-2" /> Back to Timestamps
        </button>
-       <h2 className="text-on-surface text-2xl font-black mb-8 tracking-tighter uppercase">Metering <span className="text-primary italic">& Volume</span></h2>
+       <h2 className="text-on-surface text-xl sm:text-2xl font-black mb-8 tracking-tighter uppercase">Metering <span className="text-primary italic">& Volume</span></h2>
 
        <div className="space-y-8">
-          <div className="card-premium p-6 border-outline">
+          <div className="p-6 border border-outline rounded-3xl">
               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Opening Totalizer</label>
               <input 
-                  type="number" 
-                  className="w-full text-5xl font-mono font-black py-4 bg-transparent outline-none border-b-4 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-10"
-                  placeholder="000000"
-                  value={activeFlight?.meterOpen || ''}
-                  onChange={(e) => onInputChange('meterOpen', parseFloat(e.target.value))}
+                  type="text" 
+                  className="w-full text-4xl sm:text-6xl font-mono font-black py-4 bg-transparent outline-none border-b-4 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-10"
+                  placeholder="000,000"
+                  value={activeFlight?.meterOpen ? activeFlight.meterOpen.toLocaleString() : ''}
+                  onChange={(e) => {
+                      const val = e.target.value.replace(/,/g, '');
+                      if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                          onInputChange('meterOpen', val === '' ? 0 : parseFloat(val));
+                      }
+                  }}
               />
           </div>
 
@@ -372,22 +506,32 @@ const ScreenMetering: React.FC<{
               {activeFlight?.timestampInitialEnd ? `Initial End: ${new Date(activeFlight.timestampInitialEnd).toLocaleTimeString()}` : 'Log Initial End'}
           </button>
 
-          <div className="card-premium p-6 border-outline">
-              <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Closing Totalizer</label>
-              <input 
-                  type="number" 
-                  className="w-full text-5xl font-mono font-black py-4 bg-transparent outline-none border-b-4 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-10"
-                  placeholder="000000"
-                  value={activeFlight?.meterClose || ''}
-                  onChange={(e) => onInputChange('meterClose', parseFloat(e.target.value))}
-              />
+          <div className="mt-4 p-4 lg:p-8 bg-surface-dim/30 rounded-[32px] lg:rounded-[40px] border border-outline">
+               <label className="block text-[10px] font-black text-on-surface uppercase mb-6 tracking-widest text-center opacity-60">Manual Volume Entry (L)</label>
+               <div className="relative w-full max-w-md mx-auto">
+                   <input 
+                       type="text" 
+                       className="w-full px-6 lg:px-10 py-4 lg:py-6 bg-surface-lowest border border-outline/50 rounded-[24px] lg:rounded-[32px] text-4xl sm:text-6xl font-[900] text-primary tracking-tighter text-center outline-none focus:border-primary transition-all font-mono"
+                       placeholder="0,000"
+                       value={activeFlight?.volume ? activeFlight.volume.toLocaleString() : ''}
+                       onChange={(e) => {
+                           const val = e.target.value.replace(/,/g, '');
+                           if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                               onInputChange('volume', val === '' ? 0 : parseFloat(val));
+                           }
+                       }}
+                   />
+                   <span className="absolute right-6 lg:right-10 top-1/2 transform -translate-y-1/2 text-[10px] font-black text-on-surface-dim uppercase opacity-30">LTRS</span>
+               </div>
           </div>
 
-          <div className="bg-primary/5 p-8 rounded-[32px] border border-primary/20 text-center relative overflow-hidden group">
-               <span className="block text-[10px] font-black text-primary uppercase tracking-[0.4em] mb-3">Live Volume Derived</span>
-               <span className="block text-5xl font-[900] text-primary tracking-tighter group-hover:scale-110 transition-transform">{activeFlight?.volume?.toLocaleString() || 0} <span className="text-2xl font-black opacity-40 italic">L</span></span>
-               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+          <div className="card-premium p-6 border-outline bg-surface-dim/40">
+              <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Calculated Closing Totalizer</label>
+              <div className="text-4xl sm:text-6xl font-mono font-black py-4 text-on-surface-dim tracking-tight">
+                  {((typeof activeFlight?.meterOpen === 'number' ? activeFlight.meterOpen : 0) + (typeof activeFlight?.volume === 'number' ? activeFlight.volume : 0)).toLocaleString()}
+              </div>
           </div>
+       </div>
 
           <div className="border-t border-outline pt-6">
                <button onClick={() => setShowTopUp(!showTopUp)} className="text-primary font-black text-[11px] uppercase tracking-widest flex items-center hover:scale-105 transition-transform">
@@ -404,13 +548,12 @@ const ScreenMetering: React.FC<{
                    </div>
                )}
           </div>
-       </div>
 
        <div className="mt-auto pt-10">
-          <button 
+           <button 
               onClick={onNext}
-              disabled={!activeFlight?.meterClose}
-              className="w-full kinetic-gradient p-6 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-40 disabled:grayscale shadow-premium active:scale-95 transition-all"
+              disabled={!activeFlight?.volume || activeFlight.volume <= 0}
+              className="w-full kinetic-gradient p-4 lg:p-6 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-40 disabled:grayscale shadow-premium active:scale-95 transition-all"
           >
               Final Compliance <ChevronRight className="ml-3 w-5 h-5" />
           </button>
@@ -429,7 +572,7 @@ const ScreenQC: React.FC<{
        <button onClick={onBack} className="flex items-center text-on-surface-dim hover:text-primary mb-6 font-black text-[11px] uppercase tracking-widest transition-colors">
           <ChevronLeft className="w-4 h-4 mr-2" /> Back to Metering
        </button>
-       <h2 className="text-on-surface text-2xl font-black mb-8 tracking-tighter uppercase">JIG <span className="text-primary italic">Compliance Protocol</span></h2>
+       <h2 className="text-on-surface text-xl sm:text-2xl font-black mb-8 tracking-tighter uppercase">JIG <span className="text-primary italic">Compliance Protocol</span></h2>
 
        <div className="space-y-4 card-premium p-8 border-outline shadow-inner">
           {['panelCheck', 'walkAroundCheck', 'appearanceCheck', 'waterCheck'].map((check) => (
@@ -441,7 +584,7 @@ const ScreenQC: React.FC<{
                       type="checkbox" 
                       checked={!!activeFlight?.[check as keyof FlightLog]} 
                       onChange={(e) => onInputChange(check as keyof FlightLog, e.target.checked)}
-                      className="w-7 h-7 text-primary rounded-xl focus:ring-0 border-outline bg-surface-container-lowest transition-all"
+                      className="!w-5 !h-5 text-primary rounded-lg focus:ring-0 border-outline bg-surface-container-lowest transition-all"
                   />
               </label>
           ))}
@@ -465,12 +608,12 @@ const ScreenQC: React.FC<{
            
            <button 
               onClick={onSubmit}
-              disabled={loading}
-              className="w-full kinetic-gradient p-7 rounded-3xl font-[900] text-[15px] uppercase tracking-[0.3em] flex items-center justify-center shadow-premium hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+              disabled={loading || !activeFlight?.panelCheck || !activeFlight?.walkAroundCheck || !activeFlight?.appearanceCheck || !activeFlight?.waterCheck}
+              className="w-full kinetic-gradient p-5 lg:p-7 rounded-3xl font-[900] text-[14px] lg:text-[15px] uppercase tracking-[0.3em] flex items-center justify-center shadow-premium hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 disabled:grayscale"
            >
               {loading ? 'ENCRYPTING & SYNCING...' : (
                   <>
-                      <Save className="w-6 h-6 mr-4" />
+                      <Save className="w-5 h-5 lg:w-6 lg:h-6 mr-4" />
                       AUTHORIZE TASK COMPLETE
                   </>
               )}
@@ -481,7 +624,7 @@ const ScreenQC: React.FC<{
 
 export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob }) => {
   const { notify } = useNotification();
-  const { equipment, flightJobs, updateEquipmentStatus } = useOperationalData();
+  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(null);
   
@@ -493,20 +636,28 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     }
   }, [initialJob]);
 
-  const [selectedVehicleId, setSelectedVehicleId] = useState(() => {
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>(() => {
+    if (initialJob?.vehicleId) return initialJob.vehicleId;
     const available = equipment.find(eq => eq.status === EquipmentStatus.AVAILABLE);
     return available ? available.id : 'RF-04';
   });
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showTopUp, setShowTopUp] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
 
-  // Network listener
+  useEffect(() => {
+    if (initialJob && initialJob.vehicleId) {
+      setSelectedVehicleId(initialJob.vehicleId);
+    }
+  }, [initialJob]);
+
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
+
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
@@ -517,6 +668,16 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     // Auto-update Equipment Status to IN_PROGRESS/IN_USE
     updateEquipmentStatus(selectedVehicleId, EquipmentStatus.IN_USE);
 
+    // Fetch last meterClose for this vehicle
+    const vehicleLogs = (flightLogs || []).filter(log => log.vehicleId === selectedVehicleId && log.status === 'COMPLETED');
+    const lastLog = [...vehicleLogs].sort((a, b) => {
+       const timeA = a.timestampFinalEnd ? new Date(a.timestampFinalEnd).getTime() : 0;
+       const timeB = b.timestampFinalEnd ? new Date(b.timestampFinalEnd).getTime() : 0;
+       return timeB - timeA;
+    })[0];
+    
+    const initialMeter = lastLog?.meterClose || undefined;
+
     setActiveFlight({
       flightNumber: job.flightNumber,
       aircraftReg: job.aircraftReg,
@@ -525,7 +686,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       operatorId: user.id,
       vehicleId: selectedVehicleId,
       status: 'PENDING',
-      meterOpen: undefined,
+      meterOpen: initialMeter,
       volume: 0,
       panelCheck: false,
       walkAroundCheck: false,
@@ -535,7 +696,6 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     });
     setCurrentScreen('timestamps');
   };
-
 
   const handleTimestamp = (field: keyof FlightLog) => {
     setActiveFlight(prev => ({
@@ -556,9 +716,15 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   const handleInputChange = (field: keyof FlightLog, value: any) => {
     setActiveFlight(prev => {
       const updated = { ...prev, [field]: value };
-      if ((field === 'meterClose' || field === 'meterOpen') && updated.meterClose !== undefined && updated.meterOpen !== undefined) {
-        updated.volume = (updated.meterClose as number) - (updated.meterOpen as number);
+      
+      // Auto-sync Stand with PIT Number
+      if (field === 'pitNumber' && value) {
+        const mapping = PIT_MAPPING.find(m => m.pit === value || m.pit === `J${value}`);
+        if (mapping && mapping.stand !== prev?.stand) {
+          updated.stand = mapping.stand;
+        }
       }
+      
       return updated;
     });
   };
@@ -584,18 +750,36 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         timestampFinalEnd: activeFlight.timestampFinalEnd,
         timestampClearance: activeFlight.timestampClearance || new Date().toISOString(),
         meterOpen: activeFlight.meterOpen,
-        meterClose: activeFlight.meterClose,
         volume: activeFlight.volume || 0,
         panelCheck: activeFlight.panelCheck || false,
         walkAroundCheck: activeFlight.walkAroundCheck || false,
         appearanceCheck: activeFlight.appearanceCheck || false,
         waterCheck: activeFlight.waterCheck || false,
+        remarks: activeFlight.remarks || '',
+        meterClose: (activeFlight.meterOpen || 0) + (activeFlight.volume || 0),
+        deliveryNumber: activeFlight.deliveryNumber,
+        pitNumber: activeFlight.pitNumber
       };
 
       await supabaseService.createFlightLog(logToSave);
       
-      // Auto-update Equipment Status back to AVAILABLE
-      updateEquipmentStatus(selectedVehicleId, EquipmentStatus.AVAILABLE);
+      // Update Refueller Payload/Inventory if applicable
+      if (selectedVehicleId.startsWith('RF')) {
+        const vehicle = equipment.find(eq => eq.id === selectedVehicleId);
+        if (vehicle && vehicle.currentVolume !== undefined) {
+          const newVolume = Math.max(0, vehicle.currentVolume - (activeFlight.volume || 0));
+          await updateEquipment(selectedVehicleId, { 
+            currentVolume: newVolume,
+            status: EquipmentStatus.AVAILABLE 
+          });
+        } else {
+          updateEquipmentStatus(selectedVehicleId, EquipmentStatus.AVAILABLE);
+        }
+      } else {
+        // Just release hydrant/service equipment
+        updateEquipmentStatus(selectedVehicleId, EquipmentStatus.AVAILABLE);
+      }
+
       notify("Job Completed & Synced to Database!", "success");
       setActiveFlight(null);
       setCurrentScreen('dashboard');
@@ -631,6 +815,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
               <ScreenTimestamps 
                 activeFlight={activeFlight} 
                 onTimestamp={handleTimestamp} 
+                onInputChange={handleInputChange}
                 onNext={() => setCurrentScreen('metering')}
                 onBack={handleBackToDashboard}
               />

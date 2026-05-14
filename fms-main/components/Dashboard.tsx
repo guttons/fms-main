@@ -172,10 +172,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
     const hasAnyTasks = myTasks.length > 0 || myDomesticTeam || myEquipment;
 
     return (
-      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-4xl mx-auto">
+      <div className="space-y-4 lg:space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-4xl mx-auto p-4 lg:p-0">
         {/* Welcome Message - above all others */}
-        <div className={`transition-all duration-1000 overflow-hidden ${showWelcome ? 'max-h-40 opacity-100 mb-6' : 'max-h-0 opacity-0 mb-0'}`}>
-           <div className="card-premium p-8 border-outline flex items-center justify-between shadow-glow">
+        <div className={`transition-all duration-1000 overflow-hidden ${showWelcome ? 'max-h-40 opacity-100 mb-4 lg:mb-6' : 'max-h-0 opacity-0 mb-0'}`}>
+           <div className="card-premium p-6 lg:p-8 border-outline flex items-center justify-between shadow-glow">
                <div>
                    <h2 className="title-lg text-on-surface">Operations Hub</h2>
                    <p className="text-on-surface-dim font-bold italic tracking-tight">Welcome back, <span className="text-primary">{user.name}</span></p>
@@ -188,8 +188,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
         </div>
 
         {/* Modern Stats Panel */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="card-premium p-6 border-outline flex flex-col justify-center items-center text-center group hover:bg-primary/5 transition-colors">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4">
+            <div className="card-premium p-4 lg:p-6 border-outline flex flex-col justify-center items-center text-center group hover:bg-primary/5 transition-colors">
                 <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">Avg Refuel Time</span>
                 <div className="flex items-baseline space-x-1">
                     <span className="text-2xl font-black text-on-surface">18</span>
@@ -263,9 +263,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                     <span className="w-4 h-[1px] bg-primary/40 mr-2"></span>
                     Refuellers (RF) — {rfUnits.length} units
                   </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {rfUnits.map((eq) => (
-                      <div key={eq.id} className="bg-surface-dim/40 border border-outline p-4 rounded-2xl flex items-center space-x-3 group hover:border-primary/30 transition-all cursor-pointer">
+                      <div key={eq.id} className="bg-surface-dim border border-white/10 p-4 lg:p-5 rounded-2xl flex items-center space-x-3 group hover:border-primary/50 transition-all cursor-pointer shadow-premium hover:shadow-glow">
                         <div className="p-2 bg-primary/10 rounded-lg group-hover:scale-110 transition-transform">
                           <Truck className="w-4 h-4 text-primary" />
                         </div>
@@ -286,9 +286,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                     <span className="w-4 h-[1px] bg-warning/40 mr-2"></span>
                     Hydrant Dispensers (HD) — {hdUnits.length} units
                   </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {hdUnits.map((eq) => (
-                      <div key={eq.id} className="bg-surface-dim/40 border border-outline p-4 rounded-2xl flex items-center space-x-3 group hover:border-warning/30 transition-all cursor-pointer">
+                      <div key={eq.id} className="bg-surface-dim border border-white/10 p-4 lg:p-5 rounded-2xl flex items-center space-x-3 group hover:border-warning/50 transition-all cursor-pointer shadow-premium hover:shadow-glow-warning">
                         <div className="p-2 bg-warning/10 rounded-lg group-hover:scale-110 transition-transform">
                           <Droplet className="w-4 h-4 text-warning" />
                         </div>
@@ -309,13 +309,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
         {/* Tactical Quick Actions */}
         <div className="flex items-center space-x-4 mb-2 overflow-x-auto pb-2 custom-scrollbar">
-            <button className="flex-shrink-0 bg-error/10 text-error border border-error/20 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all">
+            <button className="flex-shrink-0 bg-error/10 text-error border border-error/20 px-3 py-2 lg:px-4 lg:py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all">
                 Emergency Stop
             </button>
-            <button className="flex-shrink-0 bg-primary/10 text-primary border border-primary/20 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all">
+            <button className="flex-shrink-0 bg-primary/10 text-primary border border-primary/20 px-3 py-2 lg:px-4 lg:py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all">
                 Request Backup
             </button>
-            <button className="flex-shrink-0 bg-surface-dim text-on-surface-dim border border-outline px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all">
+            <button className="flex-shrink-0 bg-surface-dim text-on-surface-dim border border-outline px-3 py-2 lg:px-4 lg:py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all">
                 Report Hazard
             </button>
         </div>
@@ -409,13 +409,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                      {flight.status !== 'COMPLETED' ? (
                                         <button 
                                           onClick={() => onStartJob?.(flight as any)}
-                                          className="btn-command w-full text-xs py-4 flex items-center justify-center group"
+                                          className="btn-command w-full text-[10px] py-3 lg:py-4 flex items-center justify-center group"
                                         >
-                                            <Play className="w-4 h-4 mr-2 group-hover:scale-125 transition-transform" />
+                                            <Play className="w-3 h-3 mr-2 group-hover:scale-125 transition-transform" />
                                             START JOB
                                         </button>
                                      ) : (
-                                        <button disabled className="w-full bg-surface-lowest text-on-surface-dim opacity-50 font-black py-4 rounded-2xl text-[10px] cursor-not-allowed uppercase tracking-[0.2em]">
+                                        <button disabled className="w-full bg-surface-lowest text-on-surface-dim opacity-50 font-black py-3 lg:py-4 rounded-2xl text-[10px] cursor-not-allowed uppercase tracking-[0.2em]">
                                             TASK LOGGED
                                         </button>
                                      )}
@@ -464,60 +464,89 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                 {myTasks.map((job) => {
                     const delayed = isDelayed(job.sta, job.eta);
                     const displayStatus = (delayed && job.status === 'PENDING') ? 'DELAYED' : job.status;
+                    const assigneeName = MOCK_USERS.find(u => u.id === job.assignedTo)?.name || 'Unknown';
                     
                     return (
-                        <div key={job.id} className="card-premium border-l-4 border-l-primary overflow-hidden flex flex-col md:flex-row active:scale-[0.99] transition-transform">
-                            <div className="p-6 flex-1">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div className="flex items-center space-x-3">
-                                        <span className="text-3xl font-black text-on-surface">{job.flightNumber}</span>
-                                        <span className="bg-surface-dim text-on-surface-dim px-2.5 py-1 rounded-lg text-[10px] font-black border border-outline uppercase tracking-wider">
-                                            {job.aircraftReg}
-                                        </span>
-                                        {job.vehicleId && job.status !== 'PENDING' && (
-                                            <div className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-widest ${equipmentBadgeClass(job.vehicleId)}`}>
-                                                <Truck className="w-4 h-4" />
-                                                <span>{job.vehicleId}</span>
-                                            </div>
-                                        )}
+                        <div key={job.id} className="card-premium border-l-4 border-l-primary overflow-hidden active:scale-[0.99] transition-transform">
+                            <div className="p-6">
+                                <div className="flex justify-between items-start mb-6 gap-4">
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <span className="text-3xl font-black text-on-surface">{job.flightNumber}</span>
+                                            <span className="bg-surface-dim text-on-surface-dim px-2.5 py-1 rounded-lg text-[10px] font-black border border-outline uppercase tracking-wider">
+                                                {job.aircraftReg}
+                                            </span>
+                                            {job.vehicleId && job.status !== 'PENDING' && (
+                                                <div className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-widest ${equipmentBadgeClass(job.vehicleId)}`}>
+                                                    <Truck className="w-4 h-4" />
+                                                    <span>{job.vehicleId}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-2">{job.aircraftType} • Stand {job.stand}</p>
                                     </div>
-                                    <span className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
-                                        displayStatus === 'COMPLETED' ? 'bg-success/10 text-success border-success/10' : 
-                                        displayStatus === 'DELAYED' ? 'bg-error/10 text-error border-error/10 animate-pulse' :
-                                        displayStatus === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/10 animate-pulse' : 'bg-surface-dim text-on-surface-dim border-outline'
-                                    }`}>
-                                        {displayStatus.replace('_', ' ')}
-                                    </span>
+                                    
+                                    <div className="flex items-center gap-3 shrink-0">
+                                         {/* My Task Indicator */}
+                                         <div className="flex items-center justify-center text-primary bg-primary/10 w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl border border-primary/20" title="Assigned to you">
+                                             <Users className="w-4 h-4 sm:w-5 sm:h-5" />
+                                         </div>
+
+                                         {job.status !== 'COMPLETED' ? (
+                                            <button 
+                                              onClick={() => onStartJob?.(job)}
+                                              className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-lg sm:rounded-xl group shadow-premium kinetic-gradient text-white hover:scale-[1.05] active:scale-95 transition-all"
+                                              title="Start Job"
+                                            >
+                                                <Play className="!w-7 !h-7 !fill-white !text-white stroke-[2.5] ml-0.5 group-hover:scale-110 transition-transform" />
+                                            </button>
+                                         ) : (
+                                            <div 
+                                                onClick={() => notify(`Details for ${job.flightNumber} are in the history log.`, "info")}
+                                                className="w-10 h-10 sm:w-12 sm:h-12 bg-success/10 text-success border border-success/20 flex items-center justify-center rounded-lg sm:rounded-xl opacity-80 cursor-pointer" 
+                                                title="Task Completed"
+                                            >
+                                                <CheckCircle className="!w-7 !h-7 stroke-[2.5]" />
+                                            </div>
+                                         )}
+                                    </div>
                                 </div>
-                                <div className="grid grid-cols-3 gap-2 mt-6 text-[10px] font-black uppercase tracking-widest bg-surface-dim/40 p-4 rounded-2xl border border-outline">
-                                     <div className="flex flex-col">
-                                         <span className="opacity-40 mb-1">STA</span>
-                                         <span className="text-on-surface text-sm font-black tracking-tight">{job.sta || '--:--'}</span>
+
+                                <div className="mt-6 pt-6 border-t border-outline/30 space-y-4">
+                                    {/* Row 1: Tactical Times */}
+                                    <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-widest bg-surface-dim/40 px-4 py-2.5 rounded-2xl border border-outline/50 w-fit">
+                                         <div className="flex flex-col">
+                                             <span className="opacity-40 mb-1">STA</span>
+                                             <span className="text-on-surface text-sm font-black tracking-tight">{job.sta || '--:--'}</span>
+                                         </div>
+                                         <div className="flex flex-col">
+                                             <span className="opacity-40 mb-1 text-primary">ETA</span>
+                                             <span className={`${delayed ? 'text-error' : 'text-primary'} text-sm font-black tracking-tight transition-colors`}>{job.eta || '--:--'}</span>
+                                         </div>
+                                         <div className="flex flex-col">
+                                             <span className="opacity-40 mb-1 text-warning">STD</span>
+                                             <span className="text-warning text-sm font-black tracking-tight">{job.std || '--:--'}</span>
+                                         </div>
                                      </div>
-                                     <div className="flex flex-col">
-                                         <span className="opacity-40 mb-1 text-primary">ETA</span>
-                                         <span className={`${delayed ? 'text-error' : 'text-primary'} text-sm font-black tracking-tight transition-colors`}>{job.eta || '--:--'}</span>
-                                     </div>
-                                     <div className="flex flex-col">
-                                         <span className="opacity-40 mb-1 text-warning">STD</span>
-                                         <span className="text-warning text-sm font-black tracking-tight">{job.std || '--:--'}</span>
+
+                                     {/* Row 2: Operator (Left) & Status (Right) */}
+                                     <div className="flex items-center justify-between gap-4">
+                                         <div className="flex items-center text-on-surface-dim font-bold">
+                                             <div className="w-5 h-5 rounded-md bg-surface-dim border-transparent flex items-center justify-center mr-2 text-[10px] font-black">
+                                                 {assigneeName.charAt(0)}
+                                             </div>
+                                             <span className="text-[10px] uppercase tracking-tight">{assigneeName}</span>
+                                         </div>
+                                         
+                                         <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
+                                             displayStatus === 'COMPLETED' ? 'bg-success/10 text-success border-success/10' : 
+                                             displayStatus === 'DELAYED' ? 'bg-error/10 text-error border-error/10 animate-pulse' :
+                                             displayStatus === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/10 animate-pulse' : 'bg-surface-dim text-on-surface-dim border-outline'
+                                         }`}>
+                                             {displayStatus.replace('_', ' ')}
+                                         </span>
                                      </div>
                                  </div>
-                            </div>
-                            <div className="bg-surface-dim p-6 flex flex-col justify-center border-t md:border-t-0 md:border-l border-outline w-full md:w-48">
-                                 {job.status !== 'COMPLETED' ? (
-                                    <button 
-                                      onClick={() => onStartJob?.(job)}
-                                      className="btn-command w-full text-xs py-4 flex items-center justify-center group"
-                                    >
-                                        <Play className="w-4 h-4 mr-2 group-hover:scale-125 transition-transform" />
-                                        START JOB
-                                    </button>
-                                 ) : (
-                                    <button disabled className="w-full bg-surface-lowest text-on-surface-dim opacity-50 font-black py-4 rounded-2xl text-[10px] cursor-not-allowed uppercase tracking-[0.2em]">
-                                        TASK LOGGED
-                                    </button>
-                                 )}
                             </div>
                         </div>
                     );

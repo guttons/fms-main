@@ -60,22 +60,37 @@ export function subscribeToStaff(
 export async function addStaff(
   member: Omit<StaffMember, 'id'>
 ): Promise<void> {
-  await addDoc(staffCol, {
-    ...member,
-    joinDate: serverTimestamp(),
-    createdAt: serverTimestamp(),
-  });
+  try {
+    await addDoc(staffCol, {
+      ...member,
+      joinDate: serverTimestamp(),
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Firestore Add Staff Error:", error);
+    throw error;
+  }
 }
 
 export async function updateStaff(
   id: string,
   updates: Partial<Omit<StaffMember, 'id'>>
 ): Promise<void> {
-  await updateDoc(doc(staffCol, id), { ...updates, updatedAt: serverTimestamp() });
+  try {
+    await updateDoc(doc(staffCol, id), { ...updates, updatedAt: serverTimestamp() });
+  } catch (error) {
+    console.error("Firestore Update Staff Error:", error);
+    throw error;
+  }
 }
 
 export async function deleteStaff(id: string): Promise<void> {
-  await deleteDoc(doc(staffCol, id));
+  try {
+    await deleteDoc(doc(staffCol, id));
+  } catch (error) {
+    console.error("Firestore Delete Staff Error:", error);
+    throw error;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,25 +124,40 @@ export function subscribeToEquipment(
 export async function addEquipment(
   eq: Omit<Equipment, 'id' | 'lastUpdated'>
 ): Promise<void> {
-  await addDoc(equipmentCol, {
-    ...eq,
-    lastUpdated: serverTimestamp(),
-    createdAt: serverTimestamp(),
-  });
+  try {
+    await addDoc(equipmentCol, {
+      ...eq,
+      lastUpdated: serverTimestamp(),
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Firestore Add Equipment Error:", error);
+    throw error;
+  }
 }
 
 export async function updateEquipment(
   id: string,
   updates: Partial<Omit<Equipment, 'id'>>
 ): Promise<void> {
-  await updateDoc(doc(equipmentCol, id), {
-    ...updates,
-    lastUpdated: serverTimestamp(),
-  });
+  try {
+    await updateDoc(doc(equipmentCol, id), {
+      ...updates,
+      lastUpdated: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Firestore Update Equipment Error:", error);
+    throw error;
+  }
 }
 
 export async function deleteEquipment(id: string): Promise<void> {
-  await deleteDoc(doc(equipmentCol, id));
+  try {
+    await deleteDoc(doc(equipmentCol, id));
+  } catch (error) {
+    console.error("Firestore Delete Equipment Error:", error);
+    throw error;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -161,23 +191,38 @@ export function subscribeToTanks(
 export async function addTank(
   tank: Omit<Tank, 'id' | 'lastUpdated'>
 ): Promise<void> {
-  await addDoc(tanksCol, {
-    ...tank,
-    lastUpdated: serverTimestamp(),
-    createdAt: serverTimestamp(),
-  });
+  try {
+    await addDoc(tanksCol, {
+      ...tank,
+      lastUpdated: serverTimestamp(),
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Firestore Add Tank Error:", error);
+    throw error;
+  }
 }
 
 export async function updateTank(
   id: string,
   updates: Partial<Omit<Tank, 'id'>>
 ): Promise<void> {
-  await updateDoc(doc(tanksCol, id), {
-    ...updates,
-    lastUpdated: serverTimestamp(),
-  });
+  try {
+    await updateDoc(doc(tanksCol, id), {
+      ...updates,
+      lastUpdated: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Firestore Update Tank Error:", error);
+    throw error;
+  }
 }
 
 export async function deleteTank(id: string): Promise<void> {
-  await deleteDoc(doc(tanksCol, id));
+  try {
+    await deleteDoc(doc(tanksCol, id));
+  } catch (error) {
+    console.error("Firestore Delete Tank Error:", error);
+    throw error;
+  }
 }

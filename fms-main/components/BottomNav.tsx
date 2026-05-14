@@ -79,14 +79,26 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   };
 
   const navItems = getNavItems();
+  const activeIndex = navItems.findIndex(item => item.id === activeView);
 
   if (navItems.length === 0) return null;
 
   return (
-    <div className={`fixed bottom-6 left-6 right-6 bg-surface border border-white/5 lg:hidden z-50 px-4 rounded-[32px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6),0_0_20px_rgba(0,0,0,0.2)] transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-      isVisible ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-32 opacity-0 scale-95 pointer-events-none'
+    <div className={`fixed bottom-6 left-6 right-6 bg-surface border border-white/5 lg:hidden z-50 px-4 rounded-[32px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6),0_0_20px_rgba(0,0,0,0.2)] transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+      isVisible ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-32 opacity-0 scale-90 pointer-events-none'
     }`}>
-      <div className="flex items-center justify-around h-16">
+      <div className="flex items-center justify-around h-16 relative">
+        {/* Sliding Indicator Background */}
+        {activeIndex !== -1 && (
+          <div 
+            className="absolute bottom-1 h-1 bg-primary rounded-full shadow-glow transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] z-10"
+            style={{ 
+              width: '24px',
+              left: `calc(${(activeIndex / (navItems.length + 1)) * 100}% + ${(100 / (navItems.length + 1)) / 2}% - 12px)` 
+            }}
+          />
+        )}
+
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeView === item.id;
@@ -94,16 +106,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             <button
               key={item.id}
               onClick={() => setActiveView(item.id)}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 py-1 transition-all duration-200 relative active:scale-95 ${
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 py-1 transition-all duration-300 relative active:scale-95 ${
                 isActive ? 'text-primary' : 'text-on-surface-dim'
               }`}
             >
-              <div className={`relative p-2 rounded-2xl transition-all duration-300 ease-out ${isActive ? 'bg-primary/10 shadow-glow scale-110' : 'opacity-60 scale-100 hover:bg-primary/5'}`}>
-                <Icon className={`w-5 h-5 transition-transform duration-300 ${isActive ? 'scale-110' : 'scale-100'}`} />
+              <div className={`relative p-2 rounded-2xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${isActive ? 'bg-primary/10 shadow-glow scale-110' : 'opacity-60 scale-100 hover:bg-primary/5'}`}>
+                <Icon className={`w-5 h-5 transition-transform duration-500 ${isActive ? 'scale-110' : 'scale-100'}`} />
               </div>
-              {isActive && (
-                <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-5 h-1 bg-primary rounded-full shadow-glow animate-in fade-in zoom-in duration-200 ease-out" />
-              )}
             </button>
           );
         })}
@@ -111,10 +120,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         {/* More Menu Button */}
         <button
           onClick={onMenuClick}
-          className="flex flex-col items-center justify-center flex-1 min-w-0 py-1 text-on-surface-dim group active:scale-95 transition-all duration-200 rounded-full"
+          className="flex flex-col items-center justify-center flex-1 min-w-0 py-1 text-on-surface-dim group active:scale-95 transition-all duration-300 rounded-full"
         >
-          <div className="p-2 rounded-2xl opacity-60 group-hover:bg-primary/5 transition-all duration-300 ease-out">
-            <PanelLeft className="w-5 h-5 transition-transform duration-300" />
+          <div className="p-2 rounded-2xl opacity-60 group-hover:bg-primary/5 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">
+            <PanelLeft className="w-5 h-5 transition-transform duration-500" />
           </div>
         </button>
       </div>

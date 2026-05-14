@@ -23,7 +23,7 @@ export const Seaplane: React.FC = () => {
                 <div className="w-32 h-32 bg-primary/10 rounded-[40px] flex items-center justify-center mb-8 border border-primary/20 shadow-premium">
                   <CheckCircle className="w-12 h-12 text-primary shadow-glow" />
                 </div>
-                <h2 className="text-4xl font-[900] text-on-surface mb-4 tracking-tighter uppercase italic">LOG SYNCHRONIZED</h2>
+                <h2 className="text-2xl sm:text-4xl font-[900] text-on-surface mb-4 tracking-tighter uppercase italic">LOG SYNCHRONIZED</h2>
                 <p className="text-on-surface-dim max-w-md uppercase tracking-widest text-[10px] font-black opacity-60">
                   Daily hydrant volume recorded and distributed to global inventory. Task integrity verified.
                 </p>
@@ -38,27 +38,27 @@ export const Seaplane: React.FC = () => {
     }
 
     return (
-        <div className="p-6 lg:p-10 space-y-10">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-outline pb-10">
+        <div className="p-4 lg:p-10 space-y-6 lg:space-y-10">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 lg:gap-8 border-b border-outline pb-6 lg:pb-10">
                 <div className="flex items-center">
-                    <div className="p-5 bg-primary/10 rounded-3xl mr-6 border border-primary/20 shadow-sm transition-all group-hover:shadow-glow">
-                        <Sailboat className="w-10 h-10 text-primary" />
+                    <div className="p-4 lg:p-5 bg-primary/10 rounded-2xl lg:rounded-3xl mr-4 lg:mr-6 border border-primary/20 shadow-sm transition-all group-hover:shadow-glow">
+                        <Sailboat className="w-8 h-8 lg:w-10 lg:h-10 text-primary" />
                     </div>
                     <div>
-                        <h1 className="headline-lg tracking-tighter mb-2 uppercase flex items-center">
-                            SEAPLANE <span className="text-primary italic font-medium ml-3">OPERATIONS</span>
+                        <h1 className="headline-lg tracking-tighter mb-1 lg:mb-2 uppercase flex items-center">
+                            SEAPLANE <span className="text-primary italic font-medium ml-2 lg:ml-3">OPERATIONS</span>
                         </h1>
-                        <div className="flex items-center space-x-3">
-                            <span className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-[0.3em] font-mono">Registry: WATERBORNE OPS</span>
-                            <div className="h-1 w-1 rounded-full bg-on-surface-dim opacity-20"></div>
-                            <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Hydrant Volume Management</span>
+                        <div className="flex flex-wrap items-center gap-2 lg:gap-3">
+                            <span className="text-[9px] lg:text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-[0.2em] lg:tracking-[0.3em] font-mono whitespace-nowrap">Registry: WATERBORNE OPS</span>
+                            <div className="hidden lg:block h-1 w-1 rounded-full bg-on-surface-dim opacity-20"></div>
+                            <span className="text-[9px] lg:text-[10px] font-black text-primary uppercase tracking-[0.2em] lg:tracking-[0.3em] whitespace-nowrap">Hydrant Volume Management</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="card-premium p-10">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-10">
+            <form onSubmit={handleSubmit} className="card-premium p-6 lg:p-10">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-10 mb-6 lg:mb-10">
                      {/* Operator Selection */}
                      <div>
                         <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-4 tracking-widest opacity-40">Tactical Operator Identification</label>
@@ -103,20 +103,20 @@ export const Seaplane: React.FC = () => {
                 </div>
 
                 {/* Volume Input - Prominent */}
-                <div className="mb-10 p-10 bg-surface-dim/30 rounded-[40px] border border-outline shadow-inner relative overflow-hidden">
+                <div className="mb-6 lg:mb-10 p-6 lg:p-10 bg-surface-dim/30 rounded-[32px] lg:rounded-[40px] border border-outline shadow-inner relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-4 opacity-5">
-                       <Sailboat className="w-32 h-32 text-on-surface" />
+                       <Sailboat className="w-16 lg:w-32 h-16 lg:h-32 text-on-surface" />
                     </div>
                     <label className="block text-[10px] font-bold text-on-surface uppercase mb-6 tracking-[0.3em] font-mono opacity-60 text-center">TOTAL DAILY FLOW COLLECTION (LITERS)</label>
-                    <div className="relative max-w-lg mx-auto">
+                    <div className="relative w-full">
                         <input 
                             required 
                             type="number" 
                             min="1"
-                            className="w-full text-6xl font-[900] p-10 bg-surface-lowest border border-outline rounded-[40px] focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none text-primary tracking-tighter text-center transition-all font-mono shadow-premium"
+                            className="w-full text-4xl lg:text-6xl font-[900] p-6 lg:p-10 bg-surface-lowest border border-outline rounded-[32px] lg:rounded-[40px] focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none text-primary tracking-tighter text-center transition-all font-mono shadow-premium"
                             placeholder="0" 
                         />
-                        <span className="absolute right-10 top-1/2 transform -translate-y-1/2 text-[10px] font-black text-on-surface-dim uppercase opacity-30 tracking-[0.2em]">LTRS</span>
+                        <span className="absolute right-6 lg:right-10 top-1/2 transform -translate-y-1/2 text-[10px] font-black text-on-surface-dim uppercase opacity-30 tracking-[0.2em]">LTRS</span>
                     </div>
                     <div className="mt-8 flex items-center justify-center text-warning text-[10px] font-black uppercase tracking-widest space-x-3">
                         <AlertTriangle className="w-4 h-4 animate-pulse" />
