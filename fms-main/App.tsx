@@ -23,6 +23,7 @@ import { OperationalDataProvider, useOperationalData } from './context/Operation
 import { MOCK_USERS } from './constants';
 import { User, UserRole, FlightJob } from './types';
 import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, CheckCircle } from 'lucide-react';
+import { updatePWAManifestAndTheme } from './utils/pwa';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -43,6 +44,7 @@ const App: React.FC = () => {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+    updatePWAManifestAndTheme(isDarkMode);
   }, [isDarkMode]);
   
   // Network listener
