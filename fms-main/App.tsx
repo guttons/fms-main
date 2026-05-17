@@ -114,7 +114,10 @@ const AppContextContent: React.FC<any> = ({
     const handleScroll = () => {
       if (!scrollRef.current) return;
       
-      const currentScrollY = scrollRef.current.scrollTop;
+      const mainElement = scrollRef.current;
+      const currentScrollY = Math.max(0, mainElement.scrollTop);
+      // Add a small 50px buffer to maxScroll to be completely safe against rounding errors
+      const maxScroll = Math.max(0, mainElement.scrollHeight - mainElement.clientHeight) - 50;
       const isMobile = window.innerWidth < 1024;
       
       if (!isMobile) {
@@ -123,11 +126,17 @@ const AppContextContent: React.FC<any> = ({
       }
 
       // Hide if scrolling down and passed a small threshold
-      // Show if scrolling up significantly or at the very top
       if (currentScrollY > lastScrollYRef.current && currentScrollY > 20) {
+        // Only hide if we aren't rubber-banding at the very top
         setShowHeader(false);
-      } else if (currentScrollY < lastScrollYRef.current - 10 || currentScrollY <= 10) {
-        setShowHeader(true);
+      } 
+      // Show if scrolling up significantly OR at the very top
+      else if (currentScrollY < lastScrollYRef.current - 10 || currentScrollY <= 10) {
+        // Guard against iOS bottom overscroll bounce.
+        // Don't reveal the header if we are bouncing below the max scroll depth.
+        if (currentScrollY <= maxScroll || currentScrollY <= 10) {
+          setShowHeader(true);
+        }
       }
       
       lastScrollYRef.current = currentScrollY;
@@ -193,7 +202,7 @@ const AppContextContent: React.FC<any> = ({
       case 'stock':
         return <Stock />;
       case 'history':
-        return <LogHistory />;
+        return <LogHistory user={currentUser} />;
       case 'schedule':
         return <Schedule />;
       case 'briefing':
@@ -237,8 +246,10 @@ const AppContextContent: React.FC<any> = ({
              <div className="fixed inset-0 bg-black/20 backdrop-blur-md z-40 transition-all duration-500 lg:hidden" onClick={() => { setShowAlertsPanel(false); setIsSettingsOpen(false); }} />
           )}
 
-          {/* Animated Combined Header Container */}
-          <div className={`transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] sticky top-0 z-50 ${showHeader ? 'translate-y-0 opacity-100 max-h-[200px]' : '-translate-y-full opacity-0 max-h-0 overflow-hidden pointer-events-none'}`}>
+          {/* Main Content Scroll Area */}
+          <main ref={scrollRef as any} className="flex-1 overflow-y-auto relative canvas scroll-smooth overscroll-none pb-32 lg:pb-10">
+            {/* Animated Combined Header Container */}
+            <div className={`transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] sticky top-0 z-50 ${showHeader ? 'translate-y-0' : '-translate-y-full'}`}>
             {/* Phase 1: Critical Alert Bar */}
             <div className={`transition-all duration-700 ease-in-out overflow-hidden shadow-lg ${activeCriticalAlerts.length > 0 ? 'h-10 opacity-100' : 'h-0 opacity-0 pointer-events-none'}`}>
               <div className="h-10 bg-error text-white flex items-center justify-between px-6 relative">
@@ -518,11 +529,9 @@ const AppContextContent: React.FC<any> = ({
                 </div>
               </div>
             </header>
-          </div>
+            </div>
 
-          {/* Main Content Scroll Area */}
-          <main ref={scrollRef as any} className="flex-1 overflow-y-auto relative canvas scroll-smooth overscroll-none pb-32 lg:pb-10">
-            <div key={activeView} className="animate-in fade-in slide-in-from-bottom-2 duration-200 ease-out">
+            <div key={activeView} className="animate-in fade-in duration-300 ease-out">
               {renderContent()}
             </div>
           </main>

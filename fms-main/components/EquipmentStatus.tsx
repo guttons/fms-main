@@ -14,7 +14,10 @@ import {
   Search,
   Filter,
   ChevronRight,
-  ChevronDown 
+  ChevronDown,
+  FileText,
+  Download,
+  X
 } from 'lucide-react';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { useNotification } from '../context/NotificationContext';
@@ -26,8 +29,18 @@ interface EquipmentStatusProps {
 
 export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
   const { notify } = useNotification();
-  const { equipment, updateEquipmentStatus, createAlert, alerts } = useOperationalData();
+  const { equipment, updateEquipmentStatus, updateEquipment, createAlert, alerts } = useOperationalData();
   const [searchTerm, setSearchTerm] = useState('');
+  const [editingMaintEq, setEditingMaintEq] = useState<Equipment | null>(null);
+  
+  // Form state for maintenance modal
+  const [maintForm, setMaintForm] = useState({
+    jobType: 'MAINTENANCE',
+    description: '',
+    actionRequiredBy: 'FUEL',
+    breakdownDate: new Date().toISOString().split('T')[0],
+    expectedReturnDate: ''
+  });
   const [filterType, setFilterType] = useState<EquipmentType | 'All'>('All');
   const [pendingRequests, setPendingRequests] = useState<Set<string>>(new Set());
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
@@ -40,7 +53,11 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
   const canEdit = user.role === UserRole.ADMIN || user.role === UserRole.ITP_MANAGER || user.role === UserRole.DEPOT_MANAGER;
 
   const handleStatusChange = (id: string, newStatus: EqStatus) => {
-    updateEquipmentStatus(id, newStatus);
+    if (newStatus === EqStatus.AVAILABLE || newStatus === EqStatus.IN_USE) {
+      updateEquipment(id, { status: newStatus, maintenanceDetails: undefined });
+    } else {
+      updateEquipmentStatus(id, newStatus);
+    }
   };
 
 
@@ -64,7 +81,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
       const success = await createAlert({
         severity: 'medium',
         message: `Replenishment requested for unit ${eqId}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
         acknowledged: false,
         targetRole: UserRole.DEPOT_OPERATOR
       });
@@ -139,6 +156,149 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
     return acc;
   }, {} as Record<string, { inService: Equipment[], outOfService: Equipment[] }>);
 
+  const exportToPDF = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      notify('Please allow popups to generate PDF report', 'warning');
+      return;
+    }
+
+    const today = new Date();
+    const formattedDate = `${today.getDate()}-${today.toLocaleString('default', { month: 'short' })}-${today.getFullYear().toString().slice(-2)} ${today.getHours().toString().padStart(2, '0')}:${today.getMinutes().toString().padStart(2, '0')}`;
+
+    const pdfEquipment = (equipment || []).filter(eq => 
+      eq.type !== EquipmentType.DIESEL_TRUCK && 
+      eq.type !== EquipmentType.HYDRANT_SERVICE
+    );
+    const inServiceEquipment = pdfEquipment.filter(eq => !isOutOfService(eq.status)).sort((a, b) => a.name.localeCompare(b.name));
+    const outOfServiceEquipment = pdfEquipment.filter(eq => isOutOfService(eq.status)).sort((a, b) => a.name.localeCompare(b.name));
+
+    const inServiceHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>EQUIPMENT<br/>NO.</th>
+            <th>CAPACITY<br/>(LITRES)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${inServiceEquipment.map(eq => `
+            <tr>
+              <td class="text-success">${eq.name}</td>
+              <td class="text-success">${eq.maxCapacity > 0 ? eq.maxCapacity.toLocaleString() : '-'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+
+    const outOfServiceHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>EQUIPMENT<br/>NO.</th>
+            <th>CAPACITY<br/>(LITRES)</th>
+            <th style="background-color: #f1f5f9;">JOB TYPE</th>
+            <th style="background-color: #f1f5f9;">DETAIL DESCRIPTION</th>
+            <th style="background-color: #fde047; color: #000;">ACTION REQUIRED BY</th>
+            <th style="background-color: #e2e8f0;">BREAKDOWN<br/>DATE</th>
+            <th style="background-color: #e2e8f0;">EXPECTED DATE<br/>BACK IN SERVICE</th>
+            <th style="background-color: #e2e8f0;">NO. OF<br/>DAYS</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${outOfServiceEquipment.map(eq => {
+            const m = eq.maintenanceDetails;
+            let days = '';
+            if (m?.breakdownDate) {
+               const breakdown = new Date(m.breakdownDate);
+               const diffTime = Math.abs(today.getTime() - breakdown.getTime());
+               const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+               days = diffDays.toString();
+            }
+            return `
+            <tr>
+              <td class="text-error">${eq.name}</td>
+              <td class="text-error">${eq.maxCapacity > 0 ? eq.maxCapacity.toLocaleString() : '-'}</td>
+              <td class="text-error">${m?.jobType || ''}</td>
+              <td class="text-error">${m?.description || ''}</td>
+              <td class="text-error">${m?.actionRequiredBy || ''}</td>
+              <td>${m?.breakdownDate ? new Date(m.breakdownDate).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: '2-digit'}).replace(/ /g, '-') : ''}</td>
+              <td>${m?.expectedReturnDate ? new Date(m.expectedReturnDate).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: '2-digit'}).replace(/ /g, '-') : ''}</td>
+              <td class="text-error">${days}</td>
+            </tr>
+          `}).join('')}
+        </tbody>
+      </table>
+    `;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Fuel Services</title>
+        <style>
+          @page { size: A4 landscape; margin: 0; }
+          body { font-family: 'Arial', sans-serif; font-size: 11px; margin: 0; padding: 15mm; color: #000; }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }
+          .title-area { display: flex; flex-direction: column; gap: 5px; }
+          .title { font-size: 18px; font-weight: bold; text-transform: uppercase; }
+          .date { font-size: 13px; font-weight: bold; }
+          
+          .tables-container { display: flex; gap: 30px; align-items: flex-start; }
+          
+          .section-title { font-size: 18px; font-weight: bold; text-transform: uppercase; margin-bottom: 10px; }
+          .text-success { color: #22c55e; font-weight: bold; }
+          .text-error { color: #ef4444; font-weight: bold; }
+          
+          .data-table { border-collapse: collapse; width: 100%; }
+          .data-table th, .data-table td { border: 1px solid #000; padding: 6px; text-align: center; }
+          .data-table th { background-color: #e2e8f0; font-weight: bold; }
+          
+          .left-col { width: 250px; flex-shrink: 0; }
+          .right-col { flex-grow: 1; }
+          
+          .logo { height: 40px; font-size: 24px; font-weight: bold; color: #0284c7; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="title-area">
+            <div class="title">REFUELLING EQUIPMENT STATUS</div>
+            <div class="date">DATE & TIME: &nbsp;&nbsp;&nbsp;${formattedDate}</div>
+          </div>
+          <div class="logo">
+            <img src="https://static.routesonline.com/images/cached/organisation-14252-scaled-300x130.png" alt="MACL Logo" style="height: 50px;" />
+          </div>
+        </div>
+
+        <div class="tables-container">
+          <div class="left-col">
+            <div class="section-title text-success">IN SERVICE</div>
+            ${inServiceHTML}
+          </div>
+          
+          <div class="right-col">
+            <div class="section-title text-error">OUT OF SERVICE</div>
+            ${outOfServiceHTML}
+          </div>
+        </div>
+
+        <script>
+          window.onload = () => {
+            window.print();
+            setTimeout(() => window.close(), 500);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
   return (
     <div className="p-4 lg:p-10 space-y-6 lg:space-y-10">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 lg:gap-10 border-b border-outline pb-6 lg:pb-10">
@@ -153,17 +313,29 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
           </div>
         </div>
         
-        <div className="flex flex-col sm:flex-row items-center gap-3 lg:gap-4">
-          <div className="relative group w-full sm:w-auto">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim opacity-40 group-focus-within:text-primary transition-colors" />
-            <input 
-              type="text" 
-              placeholder="ID SEARCH..."
-              className="pl-12 pr-6 py-2 lg:py-2.5 bg-surface-dim border border-outline rounded-xl text-[10px] font-black uppercase tracking-widest placeholder:opacity-20 focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none w-full sm:w-48 lg:w-56 transition-all"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+        <div className="flex flex-col sm:flex-row items-center gap-3 lg:gap-4 w-full sm:w-auto">
+          <div className="flex w-full sm:w-auto items-center gap-2">
+            <div className="relative group flex-1 sm:flex-none">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim opacity-40 group-focus-within:text-primary transition-colors" />
+              <input 
+                type="text" 
+                placeholder="ID SEARCH..."
+                className="pl-12 pr-6 py-2 lg:py-2.5 bg-surface-dim border border-outline rounded-xl text-[10px] font-black uppercase tracking-widest placeholder:opacity-20 focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none w-full sm:w-48 lg:w-56 transition-all"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            
+            <button
+              onClick={exportToPDF}
+              className="flex items-center justify-center p-2 lg:px-4 lg:py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl hover:bg-primary hover:text-white transition-all shadow-sm active:scale-95 flex-shrink-0"
+              title="Export Status (PDF)"
+            >
+              <FileText className="w-5 h-5 lg:w-4 lg:h-4 lg:mr-2" />
+              <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">Export Status (PDF)</span>
+            </button>
           </div>
+          
           <div className="bg-surface-dim p-1 rounded-2xl border border-outline relative flex w-full sm:w-auto overflow-x-auto no-scrollbar shadow-inner">
             <div 
               className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
@@ -204,7 +376,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
 
       <div className="space-y-4 lg:space-y-6">
         {Object.entries(equipmentByType).map(([type, statusGroups]) => (
-          <div key={type} className="bg-surface-lowest rounded-2xl lg:rounded-3xl p-4 lg:p-8 border border-outline shadow-sm relative overflow-hidden group/section">
+          <div key={`${type}-${filterType}`} className="bg-surface-lowest rounded-2xl lg:rounded-3xl p-4 lg:p-8 border border-outline shadow-sm relative overflow-hidden group/section animate-in fade-in slide-in-from-left-4 duration-500">
             <div className="absolute top-0 right-0 w-[200px] lg:w-[300px] h-[200px] lg:h-[300px] bg-primary/5 rounded-full blur-[60px] lg:blur-[80px] -mr-20 lg:-mr-32 -mt-20 lg:-mt-32 pointer-events-none group-hover/section:bg-primary/10 transition-all duration-700"></div>
             
             <div 
@@ -296,7 +468,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
 
                           <div className="bg-surface-dim/40 p-4 border-t border-outline flex justify-between items-center group-hover:bg-primary/5 transition-colors">
                             <span className="text-[9px] font-black text-on-surface-dim opacity-30 uppercase tracking-widest">
-                              {new Date(eq.lastUpdated).toLocaleTimeString()}
+                              {new Date(eq.lastUpdated).toLocaleTimeString([], { hour12: false })}
                             </span>
                             {eq.type === EquipmentType.REFUELLER && canEdit && (
                               <button 
@@ -362,6 +534,23 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                                     </button>
                                   ))}
                                 </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingMaintEq(eq);
+                                    setMaintForm({
+                                      jobType: eq.maintenanceDetails?.jobType || 'MAINTENANCE',
+                                      description: eq.maintenanceDetails?.description || '',
+                                      actionRequiredBy: eq.maintenanceDetails?.actionRequiredBy || 'FUEL',
+                                      breakdownDate: eq.maintenanceDetails?.breakdownDate || new Date().toISOString().split('T')[0],
+                                      expectedReturnDate: eq.maintenanceDetails?.expectedReturnDate || ''
+                                    });
+                                  }}
+                                  className="w-full mt-4 py-2.5 rounded-xl text-[9px] font-black transition-all border uppercase tracking-[0.2em] bg-surface-lowest text-on-surface-dim border-outline hover:border-warning/30 hover:text-warning flex items-center justify-center group/btn"
+                                >
+                                  <FileText className="w-3.5 h-3.5 mr-2 group-hover/btn:scale-110 transition-transform" />
+                                  Edit Maint. Details
+                                </button>
                               </div>
                             )}
                           </div>
@@ -380,6 +569,100 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
         ))}
       </div>
       
+      {editingMaintEq && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-surface/20 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="bg-surface-dim border border-outline rounded-3xl w-full max-w-md shadow-premium overflow-hidden">
+            <div className="p-6 border-b border-outline flex justify-between items-center bg-surface-lowest">
+              <div>
+                <h3 className="text-xl font-[900] text-on-surface tracking-tighter uppercase italic">{editingMaintEq.name} Maintenance</h3>
+                <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest mt-1 opacity-60">Update Log Details</p>
+              </div>
+              <button 
+                onClick={() => setEditingMaintEq(null)}
+                className="p-2 hover:bg-surface-container rounded-xl transition-colors"
+              >
+                <X className="w-5 h-5 text-on-surface-dim" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-2 tracking-[0.2em]">Job Type</label>
+                <select 
+                  className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-sm text-on-surface focus:border-primary outline-none"
+                  value={maintForm.jobType}
+                  onChange={e => setMaintForm({...maintForm, jobType: e.target.value as any})}
+                >
+                  <option value="MAINTENANCE">MAINTENANCE</option>
+                  <option value="BREAKDOWN">BREAKDOWN</option>
+                  <option value="ROUTINE SERVICE">ROUTINE SERVICE</option>
+                  <option value="MAINTENANCE WORK">MAINTENANCE WORK</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-2 tracking-[0.2em]">Detail Description</label>
+                <input 
+                  type="text"
+                  className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-sm text-on-surface focus:border-primary outline-none"
+                  value={maintForm.description}
+                  onChange={e => setMaintForm({...maintForm, description: e.target.value})}
+                  placeholder="E.g. Lock issue & gear transmission"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-2 tracking-[0.2em]">Action Required By</label>
+                <select 
+                  className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-sm text-on-surface focus:border-primary outline-none"
+                  value={maintForm.actionRequiredBy}
+                  onChange={e => setMaintForm({...maintForm, actionRequiredBy: e.target.value as any})}
+                >
+                  <option value="FUEL">FUEL</option>
+                  <option value="PROCUREMENT">PROCUREMENT</option>
+                  <option value="MECHANICAL">MECHANICAL</option>
+                  <option value="FUEL MAINTENANCE">FUEL MAINTENANCE</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-2 tracking-[0.2em]">Breakdown Date</label>
+                  <input 
+                    type="date"
+                    className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-sm text-on-surface focus:border-primary outline-none"
+                    value={maintForm.breakdownDate}
+                    onChange={e => setMaintForm({...maintForm, breakdownDate: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-2 tracking-[0.2em]">Expected Return</label>
+                  <input 
+                    type="date"
+                    className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-sm text-on-surface focus:border-primary outline-none"
+                    value={maintForm.expectedReturnDate}
+                    onChange={e => setMaintForm({...maintForm, expectedReturnDate: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-outline flex justify-end gap-3 bg-surface-lowest">
+              <button 
+                onClick={() => setEditingMaintEq(null)}
+                className="px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-on-surface-dim hover:text-on-surface transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  updateEquipment(editingMaintEq.id, { maintenanceDetails: maintForm });
+                  notify('Maintenance details updated', 'success');
+                  setEditingMaintEq(null);
+                }}
+                className="px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest kinetic-gradient text-white hover:opacity-90 transition-opacity shadow-premium"
+              >
+                Save Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

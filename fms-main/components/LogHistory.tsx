@@ -1,30 +1,57 @@
 import React, { useState, useEffect } from 'react';
 import { MOCK_USERS } from '../constants';
-import { FileText, Search, Download, Filter } from 'lucide-react';
+import { FileText, Search, Download, Filter, X } from 'lucide-react';
 import { Logo } from './Logo';
 import { supabaseService } from '../services/supabaseService';
-import { FlightLog } from '../types';
+import { FlightLog, User, UserRole } from '../types';
 
-export const LogHistory: React.FC = () => {
+interface LogHistoryProps {
+  user?: User;
+}
+
+export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   const [logs, setLogs] = useState<FlightLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  const [editingLog, setEditingLog] = useState<FlightLog | null>(null);
+  const [editForm, setEditForm] = useState({ volume: 0, status: 'PENDING' });
+  const [saving, setSaving] = useState(false);
+
+  const canEdit = user?.role === UserRole.ITP_MANAGER || user?.role === UserRole.ADMIN;
+
+  const fetchLogs = async () => {
+    try {
+      setLoading(true);
+      const fetchedLogs = await supabaseService.getFlightLogs();
+      setLogs(fetchedLogs);
+    } catch (error) {
+      console.error('Error fetching logs from Firebase:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchLogs = async () => {
-      try {
-        setLoading(true);
-        const fetchedLogs = await supabaseService.getFlightLogs();
-        setLogs(fetchedLogs);
-      } catch (error) {
-        console.error('Error fetching logs from Firebase:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchLogs();
   }, []);
+
+  const handleSaveEdit = async () => {
+    if (!editingLog) return;
+    setSaving(true);
+    try {
+      await supabaseService.updateFlightLog(editingLog.id, {
+        volume: Number(editForm.volume),
+        status: editForm.status as any
+      });
+      setEditingLog(null);
+      await fetchLogs();
+    } catch (error) {
+      console.error('Error updating log:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const filteredLogs = (logs || []).filter(log => 
     log && (log.flightNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -95,7 +122,7 @@ export const LogHistory: React.FC = () => {
                       return (
                         <tr key={log.id} className="hover:bg-primary/[0.02] transition-colors group">
                           <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
-                              {log.timestampStart ? new Date(log.timestampStart).toLocaleString() : 'PENDING SYNC'}
+                              {log.timestampStart ? new Date(log.timestampStart).toLocaleString([], { hour12: false }) : 'PENDING SYNC'}
                           </td>
                           <td className="px-10 py-6">
                               <div className="text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">{log.flightNumber}</div>
@@ -117,7 +144,19 @@ export const LogHistory: React.FC = () => {
                               </span>
                           </td>
                           <td className="px-10 py-6 text-right">
-                              <button className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-[0.3em] transition-all">DETAILS</button>
+                              {canEdit ? (
+                                <button 
+                                  onClick={() => {
+                                    setEditingLog(log);
+                                    setEditForm({ volume: log.volume, status: log.status });
+                                  }} 
+                                  className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-[0.3em] transition-all"
+                                >
+                                  EDIT
+                                </button>
+                              ) : (
+                                <button className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-[0.3em] transition-all opacity-50 cursor-not-allowed">DETAILS</button>
+                              )}
                           </td>
                         </tr>
                       );
@@ -128,6 +167,56 @@ export const LogHistory: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Edit Modal */}
+      {editingLog && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface-container rounded-[32px] p-8 w-full max-w-lg border border-outline shadow-2xl relative animate-in zoom-in-95 duration-300">
+            <button 
+              onClick={() => setEditingLog(null)}
+              className="absolute top-6 right-6 p-2 rounded-xl bg-surface-dim text-on-surface hover:bg-error/10 hover:text-error transition-all"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="headline-sm text-on-surface mb-2 tracking-tighter">Edit Flight Log</h3>
+            <p className="text-[11px] font-black text-primary uppercase tracking-[0.2em] mb-8">{editingLog.flightNumber} • {editingLog.aircraftReg}</p>
+
+            <div className="space-y-5">
+              <div>
+                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-widest mb-2">Volume (Liters)</label>
+                <input 
+                  type="number"
+                  value={editForm.volume}
+                  onChange={e => setEditForm({...editForm, volume: e.target.valueAsNumber || 0})}
+                  className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-widest mb-2">Status</label>
+                <select 
+                  value={editForm.status}
+                  onChange={e => setEditForm({...editForm, status: e.target.value})}
+                  className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                >
+                  <option value="PENDING">PENDING</option>
+                  <option value="IN_PROGRESS">IN_PROGRESS</option>
+                  <option value="COMPLETED">COMPLETED</option>
+                </select>
+              </div>
+
+              <button 
+                onClick={handleSaveEdit}
+                disabled={saving}
+                className="w-full mt-4 kinetic-gradient text-white font-black uppercase tracking-[0.2em] py-4 rounded-xl shadow-premium hover:shadow-glow transition-all active:scale-95 text-[11px] disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save Log Record'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

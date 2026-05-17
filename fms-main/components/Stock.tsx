@@ -103,7 +103,7 @@ export const Stock: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center space-x-4 bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner">
-             <span className="text-[10px] font-black text-on-surface-dim px-4 uppercase tracking-widest opacity-60">Last Sync: {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+             <span className="text-[10px] font-black text-on-surface-dim px-4 uppercase tracking-widest opacity-60">Last Sync: {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false})}</span>
              <button className="p-3 hover:bg-surface-lowest rounded-xl border border-outline bg-surface-dim transition-all active:scale-95 shadow-sm">
                 <RefreshCw className="w-4 h-4 text-primary" />
              </button>

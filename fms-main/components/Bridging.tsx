@@ -122,7 +122,7 @@ export const Bridging: React.FC = () => {
         await createAlert({
           severity: 'low',
           message: `Refueller ${formData.vehicleId} replenished with ${formData.volume}L`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
           acknowledged: false,
           targetRole: UserRole.ITP_MANAGER
         });

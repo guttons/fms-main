@@ -843,34 +843,46 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
       {/* Tab Navigation */}
       <div className="bg-surface-container-lowest rounded-3xl border-transparent overflow-hidden shadow-sm">
         <div className="border-b border-outline p-4 bg-surface-container-low/30 flex justify-center">
-          <div className="bg-surface-container-low p-1.5 rounded-2xl border-transparent relative flex w-full max-w-[600px] overflow-hidden shadow-inner">
+          <div className="bg-surface-container-low p-1.5 rounded-2xl border-transparent relative grid grid-cols-3 w-full max-w-[600px] shadow-inner">
             <div 
-              className={`absolute top-1.5 bottom-1.5 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
-                ${activeTab === 'staff' ? 'left-1.5 w-[calc(33.33%-3px)] translate-x-0' : ''}
-                ${activeTab === 'equipment' ? 'left-1.5 w-[calc(33.33%-3px)] translate-x-[100%]' : ''}
-                ${activeTab === 'tanks' ? 'left-1.5 w-[calc(33.33%-3px)] translate-x-[200%]' : ''}
+              className={`absolute top-1.5 bottom-1.5 w-[calc(33.333%-4px)] rounded-xl kinetic-gradient transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform
+                ${activeTab === 'staff' ? 'left-1.5 translate-x-[0%]' : ''}
+                ${activeTab === 'equipment' ? 'left-1.5 translate-x-[100%]' : ''}
+                ${activeTab === 'tanks' ? 'left-1.5 translate-x-[200%]' : ''}
               `}
             />
             {tabs.map(tab => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex-1 flex items-center justify-center gap-2.5 px-6 py-3 text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap transition-all relative z-10
+                className={`flex items-center justify-center gap-1.5 sm:gap-2.5 px-1 sm:px-6 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest sm:tracking-[0.2em] transition-all relative z-10 overflow-hidden
                   ${activeTab === tab.key ? 'text-white' : 'text-on-surface-dim opacity-50 hover:opacity-100'}`}
               >
                 {tab.icon}
-                <span className="hidden sm:inline">{tab.label}</span>
-                <span className="inline sm:hidden">{tab.key.toUpperCase()}</span>
+                <span className="hidden sm:inline truncate">{tab.label}</span>
+                <span className="inline sm:hidden truncate">{tab.key.toUpperCase()}</span>
               </button>
             ))}
           </div>
         </div>
 
         {/* Dynamic Content */}
-        <div className="animate-in fade-in slide-in-from-bottom-2 duration-700 p-6 lg:p-8">
-          {activeTab === 'staff' && <StaffTab push={notify} confirm={confirmAction} currentUser={currentUser} />}
-          {activeTab === 'equipment' && <EquipmentTab push={notify} confirm={confirmAction} />}
-          {activeTab === 'tanks' && <TanksTab push={notify} confirm={confirmAction} />}
+        <div className="p-6 lg:p-8 overflow-hidden">
+          {activeTab === 'staff' && (
+            <div key="staff" className="animate-in fade-in slide-in-from-left-4 duration-500">
+              <StaffTab push={notify} confirm={confirmAction} currentUser={currentUser} />
+            </div>
+          )}
+          {activeTab === 'equipment' && (
+            <div key="equipment" className="animate-in fade-in slide-in-from-right-4 duration-500">
+              <EquipmentTab push={notify} confirm={confirmAction} />
+            </div>
+          )}
+          {activeTab === 'tanks' && (
+            <div key="tanks" className="animate-in fade-in slide-in-from-right-4 duration-500">
+              <TanksTab push={notify} confirm={confirmAction} />
+            </div>
+          )}
         </div>
       </div>
 

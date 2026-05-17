@@ -222,6 +222,24 @@ export const supabaseService = {
     }
   },
 
+  async updateFlightLog(id: string, updates: Partial<FlightLog>): Promise<void> {
+    if (!auth.currentUser) return;
+    const path = `flight_logs/${id}`;
+    try {
+      const logRef = doc(db, 'flight_logs', id);
+      const dbUpdates: any = {};
+      if (updates.status !== undefined) dbUpdates.status = updates.status;
+      if (updates.volume !== undefined) dbUpdates.volume = updates.volume;
+      if (updates.meterOpen !== undefined) dbUpdates.meter_open = updates.meterOpen;
+      if (updates.meterClose !== undefined) dbUpdates.meter_close = updates.meterClose;
+      
+      await updateDoc(logRef, dbUpdates);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+      throw error;
+    }
+  },
+
   // Bridging Logs
   async getBridgingLogs(): Promise<BridgingLog[]> {
     if (!auth.currentUser) return [];

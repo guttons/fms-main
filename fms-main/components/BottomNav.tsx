@@ -84,8 +84,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   if (navItems.length === 0) return null;
 
   return (
-    <div className={`fixed bottom-6 left-6 right-6 bg-surface border border-white/5 lg:hidden z-50 px-4 rounded-[32px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6),0_0_20px_rgba(0,0,0,0.2)] transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-      isVisible ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-32 opacity-0 scale-90 pointer-events-none'
+    <div className={`fixed bottom-6 left-6 right-6 bg-surface border border-white/5 lg:hidden z-50 px-4 rounded-[32px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6),0_0_20px_rgba(0,0,0,0.2)] transition-[transform,opacity,visibility] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+      isVisible ? 'translate-y-0 opacity-100 scale-100 visible' : 'translate-y-32 opacity-0 scale-90 invisible pointer-events-none'
     }`}>
       <div className="flex items-center justify-around h-16 relative">
         {/* Sliding Indicator Background */}

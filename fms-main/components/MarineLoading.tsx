@@ -55,7 +55,7 @@ const MOCK_MARINE_LOGS: MarineLoadingLog[] = [
 ];
 
 export const MarineLoading: React.FC = () => {
-  const { equipment, createAlert, alerts } = useOperationalData();
+  const { equipment, createAlert, alerts, flightLogs } = useOperationalData();
   const { notify } = useNotification();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -73,6 +73,36 @@ export const MarineLoading: React.FC = () => {
     visualCheck: false,
     waterCheck: false,
   });
+
+  // Pre-enter opening totalizer based on Refueller's last completed log close reading
+  useEffect(() => {
+    if (formData.refuellerId) {
+      const vehicleLogs = (flightLogs || []).filter(
+        log => log.vehicleId === formData.refuellerId && log.status === 'COMPLETED'
+      );
+      const lastLog = [...vehicleLogs].sort((a, b) => {
+         const timeA = a.timestampFinalEnd ? new Date(a.timestampFinalEnd).getTime() : 0;
+         const timeB = b.timestampFinalEnd ? new Date(b.timestampFinalEnd).getTime() : 0;
+         return timeB - timeA;
+      })[0];
+      
+      const initialMeter = lastLog?.meterClose || 0;
+      setFormData(prev => {
+        const vol = parseFloat(prev.volume.toString().replace(/,/g, '')) || 0;
+        return {
+          ...prev,
+          meterOpen: initialMeter.toString(),
+          meterClose: (initialMeter + vol).toString()
+        };
+      });
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        meterOpen: '',
+        meterClose: ''
+      }));
+    }
+  }, [formData.refuellerId, flightLogs]);
 
   const availableRefuelers = (equipment || [])
     .filter(eq => eq.type === EquipmentType.REFUELLER && eq.status === EquipmentStatus.AVAILABLE);
@@ -101,14 +131,11 @@ export const MarineLoading: React.FC = () => {
         [name]: type === 'checkbox' ? checked : value
       };
 
-      // Auto-calculate volume if meters are provided
-      if (name === 'meterOpen' || name === 'meterClose') {
-        const open = parseFloat(name === 'meterOpen' ? value : updated.meterOpen);
-        const close = parseFloat(name === 'meterClose' ? value : updated.meterClose);
-        
-        if (!isNaN(open) && !isNaN(close)) {
-          updated.volume = (close - open).toString();
-        }
+      // Auto-calculate closing totalizer if meterOpen or volume changes
+      if (name === 'meterOpen' || name === 'volume') {
+        const open = parseFloat(name === 'meterOpen' ? value.replace(/,/g, '') : updated.meterOpen.toString().replace(/,/g, '')) || 0;
+        const vol = parseFloat(name === 'volume' ? value.replace(/,/g, '') : updated.volume.toString().replace(/,/g, '')) || 0;
+        updated.meterClose = (open + vol).toString();
       }
 
       return updated;
@@ -151,7 +178,7 @@ export const MarineLoading: React.FC = () => {
       await createAlert({
         severity: 'low',
         message: `Marine loading completed: ${formData.vesselName} loaded with ${formData.volume}L from ${formData.refuellerId}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
         acknowledged: false,
         targetRole: UserRole.DEPOT_MANAGER
       });
@@ -288,11 +315,9 @@ export const MarineLoading: React.FC = () => {
                                     if (val === '' || /^\d*\.?\d*$/.test(val)) {
                                         setFormData(prev => {
                                             const updated = { ...prev, meterOpen: val };
-                                            const open = parseFloat(val);
-                                            const close = parseFloat(prev.meterClose.toString().replace(/,/g, ''));
-                                            if (!isNaN(open) && !isNaN(close)) {
-                                                updated.volume = (close - open).toString();
-                                            }
+                                            const open = parseFloat(val) || 0;
+                                            const vol = parseFloat(prev.volume.toString().replace(/,/g, '')) || 0;
+                                            updated.meterClose = (open + vol).toString();
                                             return updated;
                                         });
                                     }
@@ -303,27 +328,13 @@ export const MarineLoading: React.FC = () => {
                         </div>
 
                         <div className="card-premium p-4 lg:p-6 border-outline/30 bg-surface">
-                            <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Closing Totalizer</label>
+                            <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Calculated Closing Totalizer</label>
                             <input 
                                 type="text" 
                                 name="meterClose"
-                                required
-                                value={formData.meterClose ? parseInt(formData.meterClose.toString().replace(/,/g, '')).toLocaleString() : ''}
-                                onChange={(e) => {
-                                    const val = e.target.value.replace(/,/g, '');
-                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                        setFormData(prev => {
-                                            const updated = { ...prev, meterClose: val };
-                                            const open = parseFloat(prev.meterOpen.toString().replace(/,/g, ''));
-                                            const close = parseFloat(val);
-                                            if (!isNaN(open) && !isNaN(close)) {
-                                                updated.volume = (close - open).toString();
-                                            }
-                                            return updated;
-                                        });
-                                    }
-                                }}
-                                className="w-full text-2xl lg:text-4xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-10"
+                                readOnly
+                                value={formData.meterClose ? parseInt(formData.meterClose.toString().replace(/,/g, '')).toLocaleString() : '0'}
+                                className="w-full text-2xl lg:text-4xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline/30 text-on-surface-dim opacity-70 cursor-not-allowed"
                                 placeholder="000,000"
                             />
                         </div>
@@ -337,9 +348,20 @@ export const MarineLoading: React.FC = () => {
                                 name="volume"
                                 required
                                 placeholder="0"
-                                value={formData.volume ? parseInt(formData.volume.toString().replace(/,/g, '')).toLocaleString() : '0'}
-                                readOnly
-                                className="w-full px-6 lg:px-10 py-4 lg:py-6 bg-surface-lowest border border-outline/50 rounded-[24px] lg:rounded-[32px] text-3xl lg:text-5xl font-[900] text-primary tracking-tighter text-center outline-none transition-all font-mono opacity-80"
+                                value={formData.volume && formData.volume !== '0' ? parseInt(formData.volume.toString().replace(/,/g, '')).toLocaleString() : ''}
+                                onChange={(e) => {
+                                    const val = e.target.value.replace(/,/g, '');
+                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                        setFormData(prev => {
+                                            const updated = { ...prev, volume: val };
+                                            const open = parseFloat(prev.meterOpen.toString().replace(/,/g, '')) || 0;
+                                            const vol = parseFloat(val) || 0;
+                                            updated.meterClose = (open + vol).toString();
+                                            return updated;
+                                        });
+                                    }
+                                }}
+                                className="w-full px-6 lg:px-10 py-4 lg:py-6 bg-surface-lowest border border-outline/50 rounded-[24px] lg:rounded-[32px] text-3xl lg:text-5xl font-[900] text-primary tracking-tighter text-center outline-none transition-all font-mono shadow-inner focus:border-primary"
                             />
                             <span className="absolute right-6 lg:right-10 top-1/2 transform -translate-y-1/2 text-[10px] font-black text-on-surface-dim uppercase opacity-30">LTRS</span>
                         </div>
@@ -449,7 +471,7 @@ export const MarineLoading: React.FC = () => {
                 <button 
                     type="submit" 
                     disabled={loading || !formData.visualCheck || !formData.waterCheck}
-                    className="w-full py-6 bg-primary text-white rounded-[32px] font-[900] text-sm uppercase tracking-[0.4em] hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-20 disabled:scale-100 disabled:grayscale flex items-center justify-center"
+                    className="w-full py-6 kinetic-gradient text-white rounded-[32px] font-[900] text-sm uppercase tracking-[0.4em] hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-20 disabled:scale-100 disabled:grayscale flex items-center justify-center shadow-premium"
                 >
                     {loading ? 'SYNCHRONIZING...' : (
                     <>

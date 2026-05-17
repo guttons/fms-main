@@ -26,6 +26,14 @@ export enum EquipmentStatus {
   REFUELLING = 'Refuelling'
 }
 
+export interface MaintenanceDetails {
+  jobType: 'MAINTENANCE' | 'BREAKDOWN' | 'ROUTINE SERVICE' | 'MAINTENANCE WORK';
+  description: string;
+  actionRequiredBy: 'FUEL' | 'PROCUREMENT' | 'MECHANICAL' | 'FUEL MAINTENANCE';
+  breakdownDate: string; // YYYY-MM-DD
+  expectedReturnDate: string; // YYYY-MM-DD
+}
+
 export interface Equipment {
   id: string;
   name: string;
@@ -34,6 +42,7 @@ export interface Equipment {
   currentVolume: number;
   maxCapacity: number;
   lastUpdated: string;
+  maintenanceDetails?: MaintenanceDetails;
 }
 
 export interface User {

@@ -182,7 +182,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                </div>
                <div className="bg-primary/10 text-primary px-4 py-2 rounded-xl font-black border border-primary/20 flex items-center text-[10px] uppercase tracking-widest">
                    <Clock className="w-4 h-4 mr-2" />
-                   {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                   {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
                </div>
            </div>
         </div>
@@ -558,7 +558,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
   };
 
   const renderItpDashboard = () => (
-      <div className="space-y-10 animate-in fade-in slide-in-from-left-4 duration-500">
+      <div className="space-y-10 animate-in fade-in slide-in-from-left-4 duration-500 ease-out">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
            <div>
               <h2 className="headline-lg text-on-surface">Into-Plane Operations Center</h2>
@@ -571,7 +571,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
         {/* ITP Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          <div className="card-premium p-8 group hover:border-primary/30">
+          <div className="card-premium p-8 group hover:border-primary/30 animate-in fade-in slide-in-from-bottom-2 duration-500 stagger-1">
              <div className="flex justify-between items-start">
                 <div>
                    <p className="label-sm text-on-surface-dim font-bold opacity-60">Scheduled Flights</p>
@@ -593,7 +593,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
             const Icon = current.icon;
 
             return (
-              <div className={`card-premium p-8 group transition-all duration-500 ${current.border} relative overflow-hidden`}>
+              <div className={`card-premium p-8 group transition-all duration-500 ${current.border} relative overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-500 stagger-2`}>
                 <div className="flex justify-between items-start relative z-10 animate-in fade-in slide-in-from-right-4 duration-500">
                   <div>
                     <p className="label-sm text-on-surface-dim font-bold opacity-60 flex items-center">
@@ -620,7 +620,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
               </div>
             );
           })()}
-           <div className="card-premium p-8 group hover:border-primary/30">
+           <div className="card-premium p-8 group hover:border-primary/30 animate-in fade-in slide-in-from-bottom-2 duration-500 stagger-3">
              <div className="flex justify-between items-start">
                 <div>
                    <p className="label-sm text-on-surface-dim font-bold opacity-60">Active Staff</p>
@@ -630,7 +630,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
              </div>
              <div className="mt-4 text-[10px] font-bold opacity-40 uppercase tracking-widest text-success">All operators online</div>
           </div>
-          <div className="card-premium p-8 group hover:border-warning/30">
+          <div className="card-premium p-8 group hover:border-warning/30 animate-in fade-in slide-in-from-bottom-2 duration-500 stagger-4">
              <div className="flex justify-between items-start">
                 <div>
                    <p className="label-sm text-on-surface-dim font-bold opacity-60">Avg. Turnaround</p>
@@ -692,7 +692,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                                         const success = await createAlert({
                                                             severity: 'medium',
                                                             message: `Replenishment requested for unit ${eqAssignment.equipment_id}`,
-                                                            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                                                            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
                                                             acknowledged: false,
                                                             targetRole: UserRole.DEPOT_OPERATOR
                                                         });
@@ -790,7 +790,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                     const success = await createAlert({
                                       severity: 'medium',
                                       message: `Replenishment requested for unit ${eq.id}`,
-                                      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                                      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
                                       acknowledged: false,
                                       targetRole: UserRole.DEPOT_OPERATOR
                                     });
@@ -927,7 +927,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
   // --- Sub-Component: Depot Dashboard (FUEL SERVICES Style) ---
   const renderDepotDashboard = () => (
-    <div className="space-y-10 fade-in">
+    <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500 ease-out">
       {/* Hero Section: Active Units + Metric Summary */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
         
@@ -1280,7 +1280,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
             )}
 
             {/* Conditionally Render View */}
-            {viewMode === 'ITP' ? renderItpDashboard() : renderDepotDashboard()}
+            <div key={viewMode}>
+                {viewMode === 'ITP' ? renderItpDashboard() : renderDepotDashboard()}
+            </div>
         </>
       )}
     </div>

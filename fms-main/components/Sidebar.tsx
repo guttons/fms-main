@@ -97,6 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
           { id: 'admin', label: 'System Admin', icon: Settings },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
+          { id: 'history', label: 'Log History', icon: FileText },
           { id: 'briefing', label: 'Shift Briefing', icon: ClipboardList },
           { id: 'intoplane', label: 'Into-Plane Ops', icon: Plane },
           { id: 'stock', label: 'Stock Management', icon: Database },

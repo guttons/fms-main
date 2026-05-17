@@ -251,11 +251,11 @@ export const Schedule: React.FC = () => {
       </div>
 
       {/* Content */}
-      <div className="bg-surface rounded-3xl border border-outline overflow-hidden shadow-sm">
-        
+      <div className="bg-surface rounded-3xl border border-outline overflow-hidden shadow-sm relative">
+        <div key={activeTab}>
         {/* International Ops */}
         {activeTab === 'international' && (
-          <>
+          <div className="animate-in fade-in slide-in-from-left-4 duration-500">
             {/* Desktop View */}
             <div className="hidden md:block overflow-x-auto">
               <table className="min-w-full divide-y divide-outline">
@@ -271,8 +271,8 @@ export const Schedule: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-surface divide-y divide-outline text-on-surface">
-                  {scheduledFlights.map((item) => (
-                    <tr key={item.id} className="hover:bg-primary/[0.02] transition-colors group">
+                  {scheduledFlights.map((item, idx) => (
+                    <tr key={item.id} className={`hover:bg-primary/[0.02] transition-colors group animate-in fade-in slide-in-from-left-4 duration-300 stagger-${Math.min(idx + 1, 5)}`}>
                       <td className="px-8 py-6 whitespace-nowrap">
                           <div className="flex items-center">
                               <div className="p-3 bg-surface-lowest rounded-2xl border border-outline mr-4 group-hover:border-primary/20 transition-all">
@@ -406,19 +406,19 @@ export const Schedule: React.FC = () => {
                 </div>
               ))}
             </div>
-          </>
+          </div>
         )}
 
         {/* Domestic Ops */}
         {activeTab === 'domestic' && (
-          <div className="p-8 lg:p-10">
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500 p-8 lg:p-10">
             <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] mb-8 flex items-center">
                <span className="w-1.5 h-6 bg-primary rounded-full mr-4"></span>
                Squadron Assignments
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-              {domesticTeams.map(team => (
-                <div key={team.id} className="card-premium p-6 group transition-all hover:scale-[1.02]">
+              {domesticTeams.map((team, idx) => (
+                <div key={team.id} className={`card-premium p-6 group transition-all hover:scale-[1.02] animate-in fade-in slide-in-from-bottom-2 duration-300 stagger-${Math.min(idx + 1, 5)}`}>
                   <div className="flex items-center mb-8">
                     <div className="p-3 bg-surface-dim rounded-2xl border border-outline mr-4 group-hover:border-primary/30 transition-all">
                       <Users className="w-5 h-5 text-on-surface" />
@@ -455,8 +455,8 @@ export const Schedule: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline text-on-surface">
-                    {MOCK_DOMESTIC_FLIGHTS.map((flight) => (
-                      <tr key={flight.id} className="hover:bg-primary/[0.01] transition-colors group">
+                    {MOCK_DOMESTIC_FLIGHTS.map((flight, idx) => (
+                      <tr key={flight.id} className={`hover:bg-primary/[0.01] transition-colors group animate-in fade-in slide-in-from-left-4 duration-300 stagger-${Math.min(idx + 1, 5)}`}>
                         <td className="px-8 py-6 whitespace-nowrap">
                           <div className="flex items-center">
                             <div className="p-3 bg-surface-dim rounded-2xl border border-outline mr-4">
@@ -497,7 +497,7 @@ export const Schedule: React.FC = () => {
 
         {/* Equipment Assignments */}
         {activeTab === 'equipment' && (
-          <div className="p-8 lg:p-10">
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500 p-8 lg:p-10">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
               <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
                  <span className="w-1.5 h-6 bg-primary rounded-full mr-4"></span>
@@ -576,7 +576,7 @@ export const Schedule: React.FC = () => {
 
         {/* Status Board */}
         {activeTab === 'status' && (
-          <div className="p-8 lg:p-10 space-y-10">
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500 p-8 lg:p-10 space-y-10">
             <div className="flex items-center">
               <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
                  <span className="w-1.5 h-6 bg-primary rounded-full mr-4"></span>
@@ -703,7 +703,7 @@ export const Schedule: React.FC = () => {
             </div>
           </div>
         )}
-
+        </div>
       </div>
 
       {/* Add Flight Modal */}

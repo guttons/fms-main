@@ -177,14 +177,14 @@ const ScreenDashboard: React.FC<{
                                    }
                                }}
                                disabled={!isAssignedToMe && job.status !== 'COMPLETED'}
-                               className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm
+                               className={`w-10 h-10 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm
                                    ${job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/20' : 
                                      isAssignedToMe ? 'kinetic-gradient text-white hover:scale-[1.05] active:scale-95 shadow-premium' : 'bg-surface-container-low text-on-surface-dim opacity-40 border-outline'}
                                `}
                                title={job.status === 'COMPLETED' ? 'View Log' : (!isAssignedToMe ? 'Locked' : 'Start Job')}
                            >
-                               {job.status === 'COMPLETED' ? <ChevronRight className="!w-7 !h-7 stroke-[3]" /> : 
-                                (!isAssignedToMe ? <Lock className="!w-6 !h-6 stroke-[2.5]" /> : <Play className="!w-7 !h-7 !fill-white !text-white stroke-[2.5] ml-0.5" />)}
+                               {job.status === 'COMPLETED' ? <ChevronRight className="w-6 h-6 sm:w-7 sm:h-7 stroke-[3]" /> : 
+                                (!isAssignedToMe ? <Lock className="w-5 h-5 sm:w-5 sm:h-5 stroke-[2.5]" /> : <Play className="w-[24px] h-[24px] sm:w-[28px] sm:h-[28px] flex-shrink-0 ml-0.5 sm:ml-1" fill="white" color="white" strokeWidth={2.5} />)}
                            </button>
                       </div>
                   </div>
@@ -269,7 +269,7 @@ const ScreenDashboard: React.FC<{
           </button>
       </div>
 
-      <div className="space-y-4">
+      <div key={viewMode} className={`space-y-4 animate-in fade-in duration-500 ${viewMode === 'INT' ? 'slide-in-from-left-4' : 'slide-in-from-right-4'}`}>
           <div className="flex justify-between items-center px-1">
               <h2 className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">
                   {viewMode === 'INT' ? 'International Operations' : 'Domestic Operations'}
@@ -357,7 +357,7 @@ const ScreenTimestamps: React.FC<{
           )}
           <button 
               onClick={() => onTimestamp('timestampArrived')}
-              disabled={!!activeFlight?.timestampArrived}
+              disabled={false}
               className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                   ${activeFlight?.timestampArrived 
                       ? 'bg-success/5 border-success text-on-surface' 
@@ -372,7 +372,7 @@ const ScreenTimestamps: React.FC<{
                   {activeFlight?.timestampArrived && (
                       <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
                            <Clock className="w-4 h-4 mr-2 opacity-60"/>
-                           {new Date(activeFlight.timestampArrived).toLocaleTimeString()}
+                           {new Date(activeFlight.timestampArrived).toLocaleTimeString([], { hour12: false })}
                       </span>
                   )}
               </div>
@@ -382,7 +382,7 @@ const ScreenTimestamps: React.FC<{
 
           <button 
               onClick={() => onTimestamp('timestampPosition')}
-              disabled={!activeFlight?.timestampArrived || !!activeFlight?.timestampPosition}
+              disabled={!activeFlight?.timestampArrived}
               className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                   ${activeFlight?.timestampPosition 
                       ? 'bg-success/5 border-success text-on-surface' 
@@ -399,7 +399,7 @@ const ScreenTimestamps: React.FC<{
                   {activeFlight?.timestampPosition && (
                       <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
                            <Clock className="w-4 h-4 mr-2 opacity-60"/>
-                           {new Date(activeFlight.timestampPosition).toLocaleTimeString()}
+                           {new Date(activeFlight.timestampPosition).toLocaleTimeString([], { hour12: false })}
                       </span>
                   )}
               </div>
@@ -414,7 +414,7 @@ const ScreenTimestamps: React.FC<{
                   disabled={!activeFlight?.timestampPosition || !!activeFlight?.timestampStart}
                   className="w-full text-4xl sm:text-6xl font-mono font-black py-4 bg-transparent outline-none border-b-4 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-10 disabled:opacity-20"
                   placeholder="000,000"
-                  value={activeFlight?.meterOpen ? activeFlight.meterOpen.toLocaleString() : ''}
+                  value={activeFlight?.meterOpen !== undefined ? activeFlight.meterOpen.toLocaleString() : ''}
                   onChange={(e) => {
                       const val = e.target.value.replace(/,/g, '');
                       if (val === '' || /^\d*\.?\d*$/.test(val)) {
@@ -426,7 +426,7 @@ const ScreenTimestamps: React.FC<{
 
           <button 
               onClick={() => onTimestamp('timestampStart')}
-              disabled={!activeFlight?.timestampPosition || !activeFlight?.meterOpen || !!activeFlight?.timestampStart}
+              disabled={!activeFlight?.timestampPosition || activeFlight?.meterOpen === undefined}
               className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                   ${activeFlight?.timestampStart 
                       ? 'bg-success/5 border-success text-on-surface' 
@@ -443,7 +443,7 @@ const ScreenTimestamps: React.FC<{
                    {activeFlight?.timestampStart && (
                       <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
                            <Clock className="w-4 h-4 mr-2 opacity-60"/>
-                           {new Date(activeFlight.timestampStart).toLocaleTimeString()}
+                           {new Date(activeFlight.timestampStart).toLocaleTimeString([], { hour12: false })}
                       </span>
                   )}
               </div>
@@ -484,7 +484,7 @@ const ScreenMetering: React.FC<{
                   type="text" 
                   className="w-full text-4xl sm:text-6xl font-mono font-black py-4 bg-transparent outline-none border-b-4 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-10"
                   placeholder="000,000"
-                  value={activeFlight?.meterOpen ? activeFlight.meterOpen.toLocaleString() : ''}
+                  value={activeFlight?.meterOpen !== undefined ? activeFlight.meterOpen.toLocaleString() : ''}
                   onChange={(e) => {
                       const val = e.target.value.replace(/,/g, '');
                       if (val === '' || /^\d*\.?\d*$/.test(val)) {
@@ -496,14 +496,14 @@ const ScreenMetering: React.FC<{
 
           <button 
               onClick={() => onTimestamp('timestampInitialEnd')}
-              disabled={!activeFlight?.meterOpen || !!activeFlight?.timestampInitialEnd}
+              disabled={activeFlight?.meterOpen === undefined}
               className={`w-full p-6 rounded-2xl border-2 font-black text-[11px] uppercase tracking-widest flex items-center justify-center transition-all
                   ${activeFlight?.timestampInitialEnd 
                       ? 'bg-success/5 border-success text-success' 
                       : 'bg-surface-container-lowest-container border-outline text-on-surface hover:border-primary active:scale-95'}`}
           >
               <Pause className="w-5 h-5 mr-3" />
-              {activeFlight?.timestampInitialEnd ? `Initial End: ${new Date(activeFlight.timestampInitialEnd).toLocaleTimeString()}` : 'Log Initial End'}
+              {activeFlight?.timestampInitialEnd ? `Initial End: ${new Date(activeFlight.timestampInitialEnd).toLocaleTimeString([], { hour12: false })}` : 'Log Initial End'}
           </button>
 
           <div className="mt-4 p-4 lg:p-8 bg-surface-dim/30 rounded-[32px] lg:rounded-[40px] border border-outline">
@@ -698,10 +698,13 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   };
 
   const handleTimestamp = (field: keyof FlightLog) => {
-    setActiveFlight(prev => ({
-      ...prev,
-      [field]: new Date().toISOString()
-    }));
+    setActiveFlight(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        [field]: prev[field] ? undefined : new Date().toISOString()
+      };
+    });
   };
 
   const handleBackToDashboard = () => {
