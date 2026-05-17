@@ -263,6 +263,8 @@ export const Bridging: React.FC = () => {
                                 name="volume"
                                 required
                                 placeholder="0,000"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 value={formData.volume ? parseInt(formData.volume.toString().replace(/,/g, '')).toLocaleString() : ''}
                                 onChange={(e) => {
                                     const val = e.target.value.replace(/,/g, '');

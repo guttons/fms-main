@@ -208,6 +208,8 @@ export const Stock: React.FC = () => {
                             <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1.5 tracking-widest opacity-40">Physical Dip Reconciliation (L)</label>
                             <input 
                               type="number" 
+                              inputMode="numeric"
+                              pattern="[0-9]*"
                               className="w-full px-3 py-2 bg-surface-dim text-on-surface border border-outline rounded-xl text-[10px] font-black uppercase tracking-widest placeholder:text-on-surface-dim/20 focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all"
                               placeholder={tank.currentLevel.toString()}
                               value={readings[tank.id] ?? ''}
@@ -220,6 +222,7 @@ export const Stock: React.FC = () => {
                               <input 
                                 type="number" 
                                 step="0.1"
+                                inputMode="decimal"
                                 className="w-full px-3 py-2 bg-surface-dim text-on-surface border border-outline rounded-xl text-[10px] font-black uppercase tracking-widest placeholder:text-on-surface-dim/20 focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" 
                                 placeholder="15.0" 
                               />
@@ -229,6 +232,7 @@ export const Stock: React.FC = () => {
                               <input 
                                 type="number" 
                                 step="0.0001"
+                                inputMode="decimal"
                                 className="w-full px-3 py-2 bg-surface-dim text-on-surface border border-outline rounded-xl text-[10px] font-black uppercase tracking-widest placeholder:text-on-surface-dim/20 focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" 
                                 placeholder="0.8000" 
                               />

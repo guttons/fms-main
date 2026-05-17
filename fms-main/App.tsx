@@ -22,7 +22,7 @@ import { NotificationProvider } from './context/NotificationContext';
 import { OperationalDataProvider, useOperationalData } from './context/OperationalDataContext';
 import { MOCK_USERS } from './constants';
 import { User, UserRole, FlightJob } from './types';
-import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, CheckCircle } from 'lucide-react';
+import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, CheckCircle, Download, Share2, Smartphone } from 'lucide-react';
 import { updatePWAManifestAndTheme } from './utils/pwa';
 
 const App: React.FC = () => {
@@ -106,9 +106,142 @@ const AppContextContent: React.FC<any> = ({
   isDarkMode, setIsDarkMode, showHeader, setShowHeader, scrollRef, pendingJob, setPendingJob,
   showAlertsPanel, setShowAlertsPanel, isSettingsOpen, setIsSettingsOpen, handleLogout
 }) => {
-  const { alerts, acknowledgeAlert, acknowledgeAllAlerts, equipment, flightJobs } = useOperationalData();
+  const { alerts, acknowledgeAlert, acknowledgeAllAlerts, equipment, flightJobs, refreshData } = useOperationalData();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  // --- Dynamic PWA Install States & Events ---
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [showIOSGuide, setShowIOSGuide] = useState(false);
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // Detect standalone mode
+    if (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone) {
+      setIsInstalled(true);
+    }
+
+    const handleAppInstalled = () => {
+      setIsInstalled(true);
+      setDeferredPrompt(null);
+      setShowInstallBanner(false);
+    };
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  useEffect(() => {
+    // Show sliding banner after 3 seconds if not installed
+    const timer = setTimeout(() => {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
+      if (!isStandalone) {
+        const dismissed = localStorage.getItem('fms-install-dismissed');
+        if (!dismissed) {
+          if (deferredPrompt || isIOS) {
+            setShowInstallBanner(true);
+          }
+        }
+      }
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [deferredPrompt, isIOS]);
+
+  const handleInstallApp = async () => {
+    if (isIOS) {
+      setShowInstallBanner(false);
+      setShowIOSGuide(true);
+      return;
+    }
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+      setShowInstallBanner(false);
+    }
+  };
+
+  // --- Dynamic Pull to Refresh Hook ---
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const startYRef = React.useRef(0);
+  const pullingRef = React.useRef(false);
+
+  useEffect(() => {
+    const mainEl = scrollRef.current;
+    if (!mainEl) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (mainEl.scrollTop <= 0 && !isRefreshing) {
+        startYRef.current = e.touches[0].pageY;
+        pullingRef.current = true;
+      } else {
+        pullingRef.current = false;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!pullingRef.current || isRefreshing) return;
+      const currentY = e.touches[0].pageY;
+      const diff = currentY - startYRef.current;
+      
+      if (diff > 0) {
+        // Resistance curve
+        const distance = Math.min(80, diff * 0.4);
+        setPullDistance(distance);
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    const handleTouchEnd = async () => {
+      if (!pullingRef.current || isRefreshing) return;
+      pullingRef.current = false;
+
+      if (pullDistance >= 60) {
+        setIsRefreshing(true);
+        setPullDistance(60);
+        try {
+          await refreshData();
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setTimeout(() => {
+            setIsRefreshing(false);
+            setPullDistance(0);
+          }, 800);
+        }
+      } else {
+        setPullDistance(0);
+      }
+    };
+
+    mainEl.addEventListener('touchstart', handleTouchStart, { passive: true });
+    mainEl.addEventListener('touchmove', handleTouchMove, { passive: false });
+    mainEl.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      mainEl.removeEventListener('touchstart', handleTouchStart);
+      mainEl.removeEventListener('touchmove', handleTouchMove);
+      mainEl.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [scrollRef, pullDistance, isRefreshing, refreshData]);
 
   // Header scroll listener
   const lastScrollYRef = React.useRef(0);
@@ -250,6 +383,44 @@ const AppContextContent: React.FC<any> = ({
 
           {/* Main Content Scroll Area */}
           <main ref={scrollRef as any} className="flex-1 overflow-y-auto relative canvas scroll-smooth overscroll-none pb-32 lg:pb-10">
+            
+            {/* Dynamic Pull to Refresh Hex Droplet Spinner */}
+            {(pullDistance > 0 || isRefreshing) && (
+              <div 
+                className="absolute left-0 right-0 z-[100] flex justify-center pointer-events-none transition-all duration-100"
+                style={{ 
+                  top: `${pullDistance - 35}px`, 
+                  opacity: Math.min(1, pullDistance / 40)
+                }}
+              >
+                <div className="bg-surface-lowest border border-outline rounded-full p-2.5 shadow-premium flex items-center justify-center transition-all duration-300">
+                  <div className="relative w-5 h-5 flex items-center justify-center text-primary">
+                    <svg 
+                      className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} 
+                      viewBox="0 0 120 120" 
+                      fill="none" 
+                      style={{ 
+                        transform: isRefreshing ? undefined : `rotate(${pullDistance * 4.5}deg)`,
+                        transition: isRefreshing ? 'none' : 'transform 0.1s linear'
+                      }}
+                    >
+                      <path 
+                        d="M60 15 L100 38 V82 L60 105 L20 82 V38 Z" 
+                        stroke="currentColor" 
+                        strokeWidth="11" 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                      />
+                      <path 
+                        d="M60 35 C60 35 45 55 45 65 C45 73.284 51.716 80 60 80 C68.284 80 75 73.284 75 65 C75 55 60 35 60 35 Z" 
+                        fill="currentColor" 
+                      />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Animated Combined Header Container */}
             <div className={`transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] sticky top-0 z-50 ${showHeader ? 'translate-y-0' : '-translate-y-full'}`}>
             {/* Phase 1: Critical Alert Bar */}
@@ -500,6 +671,39 @@ const AppContextContent: React.FC<any> = ({
                                 </button>
                             </div>
 
+                            {/* Dynamic PWA Installer Trigger */}
+                            {(!isInstalled || deferredPrompt || isIOS) && (
+                              <div className="p-4 bg-surface-dim/40 rounded-[32px] hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between border border-outline/30">
+                                <div className="flex items-center space-x-3">
+                                  <div className="p-2.5 rounded-lg bg-primary/10 text-primary">
+                                    <Download className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight">FMS Native App</h4>
+                                    <p className="text-[9px] font-bold text-on-surface-dim opacity-50">
+                                      {isInstalled ? 'Running Standalone' : 'Install on home screen'}
+                                    </p>
+                                  </div>
+                                </div>
+                                {!isInstalled ? (
+                                  <button 
+                                    onClick={() => {
+                                      setIsSettingsOpen(false);
+                                      handleInstallApp();
+                                    }}
+                                    className="px-4 py-1.5 bg-primary text-white text-[9px] font-black uppercase tracking-[0.1em] rounded-lg kinetic-gradient shadow-md active:scale-95 transition-all whitespace-nowrap"
+                                  >
+                                    Install
+                                  </button>
+                                ) : (
+                                  <span className="flex items-center text-success space-x-1">
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    <span className="text-[9px] font-black uppercase tracking-widest">Active</span>
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
                             {/* User Profile Summary */}
                             <div className="pt-5 border-t border-outline">
                               <div className="flex items-center space-x-3">
@@ -556,6 +760,80 @@ const AppContextContent: React.FC<any> = ({
           isVisible={showHeader}
         />
 
+        {/* Premium Floating Install Banner */}
+        {showInstallBanner && (
+          <div className="fixed bottom-24 lg:bottom-8 left-4 right-4 md:left-auto md:right-8 md:w-96 bg-surface-container-low/95 backdrop-blur-xl border border-outline rounded-[24px] p-5 shadow-premium z-[999] animate-in slide-in-from-bottom-2 duration-500 text-on-surface">
+            <div className="flex items-start space-x-4">
+              <div className="p-2.5 bg-primary/10 rounded-xl text-primary flex-shrink-0">
+                <svg viewBox="0 0 120 120" fill="none" className="w-8 h-8 text-primary">
+                  <path d="M60 15 L100 38 V82 L60 105 L20 82 V38 Z" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M60 35 C60 35 45 55 45 65 C45 73.284 51.716 80 60 80 C68.284 80 75 73.284 75 65 C75 55 60 35 60 35 Z" fill="currentColor" />
+                </svg>
+              </div>
+              
+              <div className="flex-1 min-w-0">
+                <h4 className="text-xs font-black uppercase tracking-widest text-on-surface">Install FMS Web App</h4>
+                <p className="text-[10px] font-bold text-on-surface-dim opacity-60 mt-1 leading-normal">Access Fuel Services directly from your home screen with offline capability and native performance.</p>
+                
+                <div className="mt-4 flex items-center space-x-3">
+                  <button 
+                    onClick={handleInstallApp}
+                    className="px-4 py-2 kinetic-gradient text-white text-[9px] font-black uppercase tracking-[0.1em] rounded-lg shadow-lg active:scale-95 transition-all"
+                  >
+                    {isIOS ? 'Show Guide' : 'Install Now'}
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setShowInstallBanner(false);
+                      localStorage.setItem('fms-install-dismissed', 'true');
+                    }}
+                    className="px-3 py-2 bg-surface-dim hover:bg-surface-container border border-outline text-on-surface-dim text-[9px] font-black uppercase tracking-[0.1em] rounded-lg active:scale-95 transition-all"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* iOS PWA Install Guide Modal */}
+        {showIOSGuide && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="bg-surface border border-outline rounded-[32px] p-6 w-full max-w-sm shadow-premium flex flex-col items-center text-center animate-in slide-in-from-bottom-2 duration-400">
+              <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-4">
+                <Smartphone className="w-6 h-6" />
+              </div>
+              
+              <h3 className="text-xs font-black uppercase tracking-widest text-on-surface">Install on iOS Safari</h3>
+              <p className="text-[10px] font-bold text-on-surface-dim opacity-60 mt-2 leading-relaxed">
+                Follow these simple steps to install the FMS App on your iPhone or iPad:
+              </p>
+              
+              <div className="w-full space-y-4 my-6 text-left border-t border-b border-outline/40 py-5">
+                <div className="flex items-center space-x-3 text-[10px] font-bold text-on-surface-dim">
+                  <div className="w-6 h-6 rounded-full bg-surface-dim flex items-center justify-center text-[9px] font-black text-primary border border-outline">1</div>
+                  <p className="flex-1">Tap the Safari <strong className="text-primary uppercase tracking-wider">Share</strong> button <Share2 className="w-3.5 h-3.5 inline ml-1 text-primary" /> in the toolbar.</p>
+                </div>
+                <div className="flex items-center space-x-3 text-[10px] font-bold text-on-surface-dim">
+                  <div className="w-6 h-6 rounded-full bg-surface-dim flex items-center justify-center text-[9px] font-black text-primary border border-outline">2</div>
+                  <p className="flex-1">Scroll down the share list and tap <strong className="text-primary uppercase tracking-wider">Add to Home Screen</strong>.</p>
+                </div>
+                <div className="flex items-center space-x-3 text-[10px] font-bold text-on-surface-dim">
+                  <div className="w-6 h-6 rounded-full bg-surface-dim flex items-center justify-center text-[9px] font-black text-primary border border-outline">3</div>
+                  <p className="flex-1">Tap <strong className="text-primary uppercase tracking-wider">Add</strong> in the top-right corner.</p>
+                </div>
+              </div>
+              
+              <button 
+                onClick={() => setShowIOSGuide(false)}
+                className="w-full py-3 kinetic-gradient text-white text-[9px] font-black uppercase tracking-[0.2em] rounded-xl shadow-lg active:scale-95 transition-all"
+              >
+                Got It
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
   );

@@ -305,6 +305,8 @@ const ScreenTimestamps: React.FC<{
                   <input 
                       type="text" 
                       maxLength={6}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       className="flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-error placeholder:text-error/20"
                       placeholder="000000"
                       value={activeFlight?.deliveryNumber?.replace('MLE-', '') || ''}
@@ -412,6 +414,8 @@ const ScreenTimestamps: React.FC<{
               <input 
                   type="text" 
                   disabled={!activeFlight?.timestampPosition || !!activeFlight?.timestampStart}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   className="w-full text-4xl sm:text-6xl font-mono font-black py-4 bg-transparent outline-none border-b-4 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-10 disabled:opacity-20"
                   placeholder="000,000"
                   value={activeFlight?.meterOpen !== undefined ? activeFlight.meterOpen.toLocaleString() : ''}
@@ -482,6 +486,8 @@ const ScreenMetering: React.FC<{
               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Opening Totalizer</label>
               <input 
                   type="text" 
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   className="w-full text-4xl sm:text-6xl font-mono font-black py-4 bg-transparent outline-none border-b-4 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-10"
                   placeholder="000,000"
                   value={activeFlight?.meterOpen !== undefined ? activeFlight.meterOpen.toLocaleString() : ''}
@@ -511,6 +517,8 @@ const ScreenMetering: React.FC<{
                <div className="relative w-full max-w-md mx-auto">
                    <input 
                        type="text" 
+                       inputMode="numeric"
+                       pattern="[0-9]*"
                        className="w-full px-6 lg:px-10 py-4 lg:py-6 bg-surface-lowest border border-outline/50 rounded-[24px] lg:rounded-[32px] text-4xl sm:text-6xl font-[900] text-primary tracking-tighter text-center outline-none focus:border-primary transition-all font-mono"
                        placeholder="0,000"
                        value={activeFlight?.volume ? activeFlight.volume.toLocaleString() : ''}

@@ -122,7 +122,7 @@ export const TankerDischarge: React.FC = () => {
                             </div>
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">BoL Quantity (MT)</label>
-                                <input type="number" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none text-right font-mono transition-all" placeholder="0.000" step="0.001" required />
+                                <input type="number" inputMode="decimal" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none text-right font-mono transition-all" placeholder="0.000" step="0.001" required />
                             </div>
                         </div>
                     </div>
@@ -136,19 +136,19 @@ export const TankerDischarge: React.FC = () => {
                         <div className="grid grid-cols-2 gap-5">
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">SG @ 15°C</label>
-                                <input type="number" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="0.8400" step="0.0001" required />
+                                <input type="number" inputMode="decimal" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="0.8400" step="0.0001" required />
                             </div>
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Flash Point (°C)</label>
-                                <input type="number" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="60.0" step="0.1" required />
+                                <input type="number" inputMode="decimal" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="60.0" step="0.1" required />
                             </div>
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Observed Temp (°C)</label>
-                                <input type="number" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="28.5" step="0.1" required />
+                                <input type="number" inputMode="decimal" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="28.5" step="0.1" required />
                             </div>
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">H2O Content (PPM)</label>
-                                <input type="number" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="0" required />
+                                <input type="number" inputMode="numeric" pattern="[0-9]*" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="0" required />
                             </div>
                         </div>
                     </div>
@@ -199,7 +199,7 @@ export const TankerDischarge: React.FC = () => {
                                 
                                 <div>
                                     <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Final Receipt Vol (L)</label>
-                                    <input type="number" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-xl font-[900] text-primary tracking-tighter outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all text-right font-mono" placeholder="0" required />
+                                    <input type="number" inputMode="numeric" pattern="[0-9]*" className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-xl font-[900] text-primary tracking-tighter outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all text-right font-mono" placeholder="0" required />
                                 </div>
 
                                 <div className="pt-6">

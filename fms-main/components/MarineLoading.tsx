@@ -309,6 +309,8 @@ export const MarineLoading: React.FC = () => {
                                 type="text" 
                                 name="meterOpen"
                                 required
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 value={formData.meterOpen ? parseInt(formData.meterOpen.toString().replace(/,/g, '')).toLocaleString() : ''}
                                 onChange={(e) => {
                                     const val = e.target.value.replace(/,/g, '');
@@ -333,6 +335,8 @@ export const MarineLoading: React.FC = () => {
                                 type="text" 
                                 name="meterClose"
                                 readOnly
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 value={formData.meterClose ? parseInt(formData.meterClose.toString().replace(/,/g, '')).toLocaleString() : '0'}
                                 className="w-full text-2xl lg:text-4xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline/30 text-on-surface-dim opacity-70 cursor-not-allowed"
                                 placeholder="000,000"
@@ -347,6 +351,8 @@ export const MarineLoading: React.FC = () => {
                                 type="text" 
                                 name="volume"
                                 required
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 placeholder="0"
                                 value={formData.volume && formData.volume !== '0' ? parseInt(formData.volume.toString().replace(/,/g, '')).toLocaleString() : ''}
                                 onChange={(e) => {
