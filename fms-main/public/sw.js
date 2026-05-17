@@ -1,12 +1,43 @@
-self.addEventListener("install", (event) => {
-  console.log("Service Worker installed");
+const CACHE_NAME = 'fms-v1';
+const ASSETS = [
+  '/',
+  '/index.html',
+  '/index.css',
+  '/manifest.json',
+  '/favicon.svg'
+];
+
+self.addEventListener('install', (e) => {
+  e.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(ASSETS);
+    }).then(() => self.skipWaiting())
+  );
 });
 
-self.addEventListener("activate", (event) => {
-  console.log("Service Worker activated");
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
 });
 
-self.addEventListener("fetch", (event) => {
-  // Standard pass-through fetch handler to guarantee PWA compliance
-  event.respondWith(fetch(event.request));
+self.addEventListener('fetch', (e) => {
+  // Offline-first strategy to guarantee installability
+  e.respondWith(
+    caches.match(e.request).then((cached) => {
+      return cached || fetch(e.request).catch(() => {
+        if (e.request.mode === 'navigate') {
+          return caches.match('/');
+        }
+      });
+    })
+  );
 });
