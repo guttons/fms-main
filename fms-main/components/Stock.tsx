@@ -254,16 +254,14 @@ export const Stock: React.FC = () => {
         })}
       </div>
 
-      <div className="fixed bottom-[90px] right-6 lg:bottom-10 lg:right-10 z-[60] animate-in slide-in-from-bottom-5">
+      <div className="mt-8 pt-8 border-t border-outline flex flex-col items-center">
           <button 
              onClick={handleSave}
-             className="flex items-center justify-center p-4 lg:px-6 lg:py-4 kinetic-gradient text-white rounded-full lg:rounded-2xl shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 hover:-translate-y-1 active:scale-95 active:translate-y-0 transition-all border border-white/10 group"
+             className="w-full lg:w-auto kinetic-gradient text-white p-4 lg:p-6 lg:px-16 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center shadow-premium active:scale-95 transition-all hover:scale-[1.02]"
              title="Finalize Reconciliation"
            >
-              <Save className="w-6 h-6 lg:w-5 lg:h-5 lg:mr-3 group-hover:scale-110 transition-transform" />
-              <span className="hidden lg:inline font-black text-[11px] uppercase tracking-[0.2em]">
-                  FINALIZE RECONCILIATION
-              </span>
+              <Save className="w-5 h-5 mr-3" />
+              <span>FINALIZE RECONCILIATION</span>
           </button>
       </div>
     </div>

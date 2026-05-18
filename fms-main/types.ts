@@ -145,6 +145,7 @@ export interface BridgingLog {
   density?: number;
   temperature?: number;
   operatorId: string;
+  date?: string;
 }
 
 export interface ForecastScenario {

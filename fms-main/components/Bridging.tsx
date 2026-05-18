@@ -37,12 +37,21 @@ export const Bridging: React.FC = () => {
 
 
 
+  const getTodayDateString = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const [formData, setFormData] = useState({
     sourceTankId: '',
     vehicleId: '',
     volume: '',
     startTime: '',
     endTime: '',
+    date: getTodayDateString(),
     visualCheckPassed: false,
     cwdCheckPassed: false,
     density: '',
@@ -64,7 +73,13 @@ export const Bridging: React.FC = () => {
     fetchLogs();
   }, []);
 
-  const jetA1Tanks = (tanks || []).filter(t => t && t.type === FuelType.JET_A1);
+  const allowedTankNames = ['TK-101', 'TK-102', 'TK-103', 'TK-7', 'TK-8', 'TK-9'];
+  const jetA1Tanks = (tanks || [])
+    .filter(t => t && t.type === FuelType.JET_A1)
+    .filter(t => {
+      if (!t || !t.name) return false;
+      return allowedTankNames.some(name => t.name.includes(name));
+    });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -111,6 +126,7 @@ export const Bridging: React.FC = () => {
           operatorId: 'current_user', // In a real app, use the actual user ID
           density: formData.density ? parseFloat(formData.density) : undefined,
           temperature: formData.temperature ? parseFloat(formData.temperature) : undefined,
+          date: formData.date
         };
 
         await supabaseService.createBridgingLog(logToSave);
@@ -143,6 +159,7 @@ export const Bridging: React.FC = () => {
                 volume: '',
                 startTime: '',
                 endTime: '',
+                date: getTodayDateString(),
                 visualCheckPassed: false,
                 cwdCheckPassed: false,
                 density: '',
@@ -288,6 +305,17 @@ export const Bridging: React.FC = () => {
                         </h3>
                         <div className="space-y-6">
                             <div>
+                                <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Date</label>
+                                <input 
+                                    type="date" 
+                                    name="date"
+                                    required
+                                    value={formData.date}
+                                    onChange={handleInputChange}
+                                    className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all"
+                                />
+                            </div>
+                            <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Commencement</label>
                                 <div className="flex gap-2">
                                     <input 
@@ -382,7 +410,7 @@ export const Bridging: React.FC = () => {
                 <button 
                     type="submit" 
                     disabled={loading || !formData.visualCheckPassed || !formData.cwdCheckPassed}
-                    className="w-full py-6 bg-primary text-white rounded-[32px] font-[900] text-sm uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-20 disabled:scale-100 disabled:grayscale flex items-center justify-center"
+                    className="w-full py-6 kinetic-gradient text-white rounded-[32px] font-[900] text-sm uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-20 disabled:scale-100 disabled:grayscale flex items-center justify-center shadow-premium"
                 >
                     {loading ? 'SYNCHRONIZING...' : (
                     <>

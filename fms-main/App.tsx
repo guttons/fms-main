@@ -18,11 +18,11 @@ import { MarineLoading } from './components/MarineLoading';
 import { Login } from './components/Login';
 import { Logo } from './components/Logo';
 import { BottomNav } from './components/BottomNav';
-import { NotificationProvider } from './context/NotificationContext';
+import { NotificationProvider, useNotification } from './context/NotificationContext';
 import { OperationalDataProvider, useOperationalData } from './context/OperationalDataContext';
 import { MOCK_USERS } from './constants';
 import { User, UserRole, FlightJob } from './types';
-import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, CheckCircle, Download, Share2, Smartphone } from 'lucide-react';
+import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, CheckCircle, Download, Share2, Smartphone, Trash2 } from 'lucide-react';
 import { updatePWAManifestAndTheme } from './utils/pwa';
 
 const App: React.FC = () => {
@@ -59,46 +59,72 @@ const App: React.FC = () => {
     };
   }, []);
 
-
-
   const handleLogout = () => {
     setCurrentUser(null);
     setActiveView('dashboard');
   };
 
-  if (!currentUser) {
-    return (
-      <NotificationProvider>
-        <Login onLogin={setCurrentUser} />
-      </NotificationProvider>
-    );
-  }
-
+  // Wrap everything in ONE NotificationProvider so both Login and App can use toasts
   return (
     <NotificationProvider>
-      <OperationalDataProvider user={currentUser}>
-        <AppContextContent 
-          currentUser={currentUser}
-          activeView={activeView}
-          setActiveView={setActiveView}
-          isMobileMenuOpen={isMobileMenuOpen}
-          setIsMobileMenuOpen={setIsMobileMenuOpen}
-          isDarkMode={isDarkMode}
-          setIsDarkMode={setIsDarkMode}
-          showHeader={showHeader}
-          setShowHeader={setShowHeader}
-          scrollRef={scrollRef}
-          pendingJob={pendingJob}
-          setPendingJob={setPendingJob}
-          showAlertsPanel={showAlertsPanel}
-          setShowAlertsPanel={setShowAlertsPanel}
-          isSettingsOpen={isSettingsOpen}
-          setIsSettingsOpen={setIsSettingsOpen}
-          handleLogout={handleLogout}
-        />
-      </OperationalDataProvider>
+      {!currentUser ? (
+        <LoginWrapper onLogin={setCurrentUser} />
+      ) : (
+        <OperationalDataProvider user={currentUser}>
+          <AppContextContent 
+            currentUser={currentUser}
+            activeView={activeView}
+            setActiveView={setActiveView}
+            isMobileMenuOpen={isMobileMenuOpen}
+            setIsMobileMenuOpen={setIsMobileMenuOpen}
+            isDarkMode={isDarkMode}
+            setIsDarkMode={setIsDarkMode}
+            showHeader={showHeader}
+            setShowHeader={setShowHeader}
+            scrollRef={scrollRef}
+            pendingJob={pendingJob}
+            setPendingJob={setPendingJob}
+            showAlertsPanel={showAlertsPanel}
+            setShowAlertsPanel={setShowAlertsPanel}
+            isSettingsOpen={isSettingsOpen}
+            setIsSettingsOpen={setIsSettingsOpen}
+            handleLogout={handleLogout}
+          />
+        </OperationalDataProvider>
+      )}
     </NotificationProvider>
   );
+};
+
+/**
+ * LoginWrapper: renders Login inside the shared NotificationProvider scope,
+ * and fires a welcome + unread-notifications toast right after sign-in.
+ */
+const LoginWrapper: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
+  const { notify } = useNotification();
+
+  const handleLogin = (user: User) => {
+    onLogin(user);
+    // Fire welcome toast
+    notify(`Welcome back, ${user.name.split(' ')[0]}!`, 'success');
+
+    // Check for any persisted unread alerts
+    try {
+      const saved = localStorage.getItem('fms_alerts');
+      const alerts = saved ? JSON.parse(saved) : [];
+      const unread = (alerts as any[]).filter((a: any) => !a.acknowledged).length;
+      if (unread > 0) {
+        setTimeout(() => {
+          notify(
+            `You have ${unread} unread notification${unread === 1 ? '' : 's'}. Open the bell icon to review.`,
+            'warning'
+          );
+        }, 900);
+      }
+    } catch (_) {}
+  };
+
+  return <Login onLogin={handleLogin} />;
 };
 
 const AppContextContent: React.FC<any> = ({ 
@@ -106,7 +132,8 @@ const AppContextContent: React.FC<any> = ({
   isDarkMode, setIsDarkMode, showHeader, setShowHeader, scrollRef, pendingJob, setPendingJob,
   showAlertsPanel, setShowAlertsPanel, isSettingsOpen, setIsSettingsOpen, handleLogout
 }) => {
-  const { alerts, acknowledgeAlert, acknowledgeAllAlerts, equipment, flightJobs, refreshData } = useOperationalData();
+  const { alerts, acknowledgeAlert, acknowledgeAllAlerts, clearAllAlerts, equipment, flightJobs, refreshData } = useOperationalData();
+  const { notify } = useNotification();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
@@ -349,7 +376,7 @@ const AppContextContent: React.FC<any> = ({
       case 'equipment':
         return <EquipmentStatus user={currentUser!} />;
       case 'seaplane':
-        return <Seaplane />;
+        return <Seaplane user={currentUser} />;
       default:
         return (
           <div className="flex items-center justify-center h-full text-slate-400">
@@ -557,20 +584,57 @@ const AppContextContent: React.FC<any> = ({
                       )}
                     </button>
 
-                    {/* Alerts Dropdown Panel */}
+                        {/* Alerts Dropdown Panel */}
                     {showAlertsPanel && (
                       <>
                         <div className="fixed inset-0 z-[90]" onClick={() => setShowAlertsPanel(false)} />
                         <div className="fixed inset-x-4 top-20 sm:absolute sm:inset-auto sm:right-0 sm:top-auto sm:mt-4 w-auto sm:w-96 max-h-[80vh] sm:max-h-[500px] bg-surface border border-outline rounded-xl z-[100] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-4 duration-300">
-                          <div className="px-5 py-4 bg-surface-dim border-b border-outline flex items-center justify-between">
-                          <h3 className="text-[10px] font-black uppercase tracking-widest text-on-surface flex items-center">
-                            <Bell className="w-3.5 h-3.5 mr-2 text-primary" />
-                            Tactical Updates
-                          </h3>
-                          <button onClick={() => setShowAlertsPanel(false)} className="text-on-surface-dim hover:text-primary transition-colors">
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
+                          {/* Panel Header */}
+                          <div className="px-5 py-3 bg-surface-dim border-b border-outline flex items-center justify-between gap-3">
+                            <h3 className="text-[10px] font-black uppercase tracking-widest text-on-surface flex items-center shrink-0">
+                              <Bell className="w-3.5 h-3.5 mr-2 text-primary" />
+                              Tactical Updates
+                              {unacknowledgedCount > 0 && (
+                                <span className="ml-2 px-1.5 py-0.5 bg-error text-white text-[8px] font-black rounded-full">
+                                  {unacknowledgedCount}
+                                </span>
+                              )}
+                            </h3>
+                            <div className="flex items-center gap-1">
+                              {/* Mark All Read */}
+                              {unacknowledgedCount > 0 && (
+                                <button
+                                  onClick={async () => {
+                                    const unreadIds = userAlerts.filter(a => !a.acknowledged).map(a => a.id);
+                                    await acknowledgeAllAlerts(unreadIds);
+                                    notify('All notifications marked as read.', 'success');
+                                  }}
+                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white text-[8px] font-black uppercase tracking-widest transition-all active:scale-95"
+                                  title="Mark all as read"
+                                >
+                                  <CheckCircle className="w-3 h-3" />
+                                  <span className="hidden sm:inline">Mark Read</span>
+                                </button>
+                              )}
+                              {/* Clear All */}
+                              {userAlerts.length > 0 && (
+                                <button
+                                  onClick={async () => {
+                                    await clearAllAlerts();
+                                    notify('All notifications cleared.', 'info');
+                                  }}
+                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-error/10 text-error hover:bg-error hover:text-white text-[8px] font-black uppercase tracking-widest transition-all active:scale-95"
+                                  title="Clear all notifications"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span className="hidden sm:inline">Clear All</span>
+                                </button>
+                              )}
+                              <button onClick={() => setShowAlertsPanel(false)} className="p-1.5 rounded-lg text-on-surface-dim hover:text-primary hover:bg-surface-container transition-colors ml-1">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
                         
                         <div className="flex-1 overflow-y-auto custom-scrollbar">
                           {userAlerts.length === 0 ? (
@@ -612,8 +676,8 @@ const AppContextContent: React.FC<any> = ({
                         </div>
                         
                         {userAlerts.length > 0 && (
-                          <div className="p-4 bg-surface-dim/40 border-t border-outline">
-                             <p className="text-[8px] font-bold text-center text-on-surface-dim uppercase tracking-[0.2em] opacity-40 italic">Tap items to acknowledge protocol</p>
+                          <div className="p-3 bg-surface-dim/40 border-t border-outline">
+                             <p className="text-[8px] font-bold text-center text-on-surface-dim uppercase tracking-[0.2em] opacity-40 italic">Hover items to acknowledge individually</p>
                           </div>
                         )}
                       </div>

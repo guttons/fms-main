@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FlightLog, User, FlightJob, Equipment, EquipmentStatus } from '../types';
 import { MOCK_JOBS, MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, PIT_MAPPING } from '../constants';
-import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Lock } from 'lucide-react';
+import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Lock, Calendar, X, CreditCard, Ban } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { equipmentBadgeClass, equipmentDotClass, getEquipmentHexColor } from '../utils/equipmentColors';
 import { useNotification } from '../context/NotificationContext';
@@ -24,14 +24,16 @@ const MobileHeader: React.FC<{
     activeFlight: Partial<FlightLog> | null,
     selectedVehicleId: string,
     setSelectedVehicleId: (id: string) => void,
-    equipment: Equipment[]
-}> = ({ user, isOnline, activeFlight, selectedVehicleId, setSelectedVehicleId, equipment }) => (
+    equipment: Equipment[],
+    paymentType: string,
+    setPaymentType: (v: string) => void
+}> = ({ user, isOnline, activeFlight, selectedVehicleId, setSelectedVehicleId, equipment, paymentType, setPaymentType }) => (
   <div className="bg-surface text-on-surface p-4 border-b border-outline sticky top-0 z-30 transition-colors shadow-sm flex items-center justify-between gap-3 overflow-hidden">
       <div className="flex items-center flex-1 min-w-0">
           <Truck className="w-5 h-5 mr-3 text-primary animate-pulse flex-shrink-0" />
           
-          <div className="flex items-center flex-shrink-0">
-              <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em] opacity-80 leading-none mr-3 hidden sm:block">Unit</span>
+          <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em] opacity-80 leading-none hidden sm:block">Unit</span>
               
               {activeFlight && (
                   <div className="md:hidden flex items-center h-[30px]">
@@ -44,7 +46,7 @@ const MobileHeader: React.FC<{
                   </div>
               )}
 
-              <div className={`relative w-full ${activeFlight ? 'hidden md:block' : 'block'}`}>
+              <div className={`relative ${activeFlight ? 'hidden md:block' : 'block'}`}>
                   <select 
                       value={activeFlight?.vehicleId || selectedVehicleId}
                       disabled={!!activeFlight}
@@ -67,6 +69,29 @@ const MobileHeader: React.FC<{
                   </select>
                   <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim rotate-90 pointer-events-none" />
               </div>
+
+              {/* Payment Type Dropdown — hidden once job is active */}
+              {!activeFlight && (
+                  <div className="relative">
+                      <select
+                          value={paymentType}
+                          onChange={(e) => setPaymentType(e.target.value)}
+                          className={`rounded-lg py-2 pl-3 pr-7 text-[11px] font-black shadow-sm appearance-none focus:border-primary transition-all cursor-pointer uppercase tracking-widest border
+                              ${ paymentType === 'VOID'
+                                  ? 'bg-error/10 border-error/40 text-error'
+                                  : paymentType === 'CASH'
+                                  ? 'border-[#22c55e]/50 text-[#22c55e]'
+                                  : 'bg-surface-container-highest border-outline text-on-surface-dim'}
+                          `}
+                          style={paymentType === 'CASH' ? { backgroundColor: 'rgba(34,197,94,0.1)' } : undefined}
+                      >
+                          <option value="CREDIT">CREDIT</option>
+                          <option value="CASH">CASH</option>
+                          <option value="VOID">VOID</option>
+                      </select>
+                      <ChevronRight className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-on-surface-dim rotate-90 pointer-events-none" />
+                  </div>
+              )}
           </div>
 
           {activeFlight && (
@@ -83,8 +108,15 @@ const MobileHeader: React.FC<{
           )}
       </div>
 
-      <div className="flex items-center flex-shrink-0 ml-1">
+      <div className="flex flex-col items-center flex-shrink-0 ml-1 gap-1">
           <div className={`w-2.5 h-2.5 rounded-full ${equipmentDotClass(activeFlight?.vehicleId || selectedVehicleId)} shadow-premium`} title={isOnline ? 'Synced' : 'Offline'}></div>
+          {activeFlight && paymentType !== 'VOID' && (
+              <span className={`text-[8px] font-black uppercase tracking-widest leading-none
+                  ${paymentType === 'CASH' ? 'text-success' : 'text-on-surface-dim opacity-50'}
+              `}>
+                  {paymentType}
+              </span>
+          )}
       </div>
   </div>
 );
@@ -232,7 +264,7 @@ const ScreenDashboard: React.FC<{
   return (
     <div className="p-5 flex flex-col space-y-8 pb-24">
       {/* Category Toggle */}
-      <div className="flex justify-center mt-2 mb-4">
+      <div className="flex justify-center items-center mt-2 mb-4">
           <div className="bg-surface-container-low p-1 rounded-[22px] border-transparent flex relative w-full max-w-[320px] h-[38px]">
               <div 
                   className={`absolute top-1 bottom-1 w-[calc(50%-4px)] kinetic-gradient rounded-[18px] transition-all duration-300 ${viewMode === 'DOM' ? 'translate-x-full' : 'translate-x-0'}`}
@@ -298,6 +330,22 @@ const ScreenTimestamps: React.FC<{
       <h2 className="text-on-surface text-xl sm:text-2xl font-black mb-8 tracking-tighter uppercase italic">Ramp Arrival <span className="text-primary">& Setup</span></h2>
       
       <div className="space-y-6 flex-1">
+          {/* Operational Date */}
+          <div className="card-premium p-6 border-outline overflow-hidden">
+              <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Operational Date</label>
+              <div className="relative">
+                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
+                  <input
+                      type="date"
+                      required
+                      value={activeFlight?.operationalDate || new Date().toISOString().split('T')[0]}
+                      onChange={(e) => onInputChange('operationalDate' as any, e.target.value)}
+                      onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                      className="w-full pl-10 pr-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:left-0 [&::-webkit-calendar-picker-indicator]:top-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                  />
+              </div>
+          </div>
+
           <div className="card-premium p-6 border-outline overflow-hidden">
               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Delivery Ticket Number</label>
               <div className="flex items-center gap-2 max-w-full overflow-hidden">
@@ -635,6 +683,55 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(null);
+  const [paymentType, setPaymentType] = useState<'CREDIT' | 'CASH' | 'VOID'>('CREDIT');
+  const [showVoidModal, setShowVoidModal] = useState(false);
+  const [voidForm, setVoidForm] = useState({ date: new Date().toISOString().split('T')[0], deliveryNumber: '' });
+  const [voidSaving, setVoidSaving] = useState(false);
+  const [voidSuccess, setVoidSuccess] = useState(false);
+
+  // Auto-show void modal when VOID selected
+  useEffect(() => {
+    if (paymentType === 'VOID') setShowVoidModal(true);
+    else setShowVoidModal(false);
+  }, [paymentType]);
+
+  const handleSaveVoid = async () => {
+    if (voidForm.deliveryNumber.length !== 6) return;
+    setVoidSaving(true);
+    try {
+      await supabaseService.createFlightLog({
+        flightNumber: 'VOID',
+        aircraftReg: 'N/A',
+        aircraftType: 'N/A',
+        stand: 'N/A',
+        operatorId: user.id,
+        vehicleId: selectedVehicleId,
+        status: 'COMPLETED',
+        deliveryNumber: `MLE-${voidForm.deliveryNumber}`,
+        timestampStart: `${voidForm.date}T00:00:00.000Z`,
+        timestampClearance: new Date().toISOString(),
+        meterOpen: 0,
+        meterClose: 0,
+        volume: 0,
+        panelCheck: false,
+        walkAroundCheck: false,
+        appearanceCheck: false,
+        waterCheck: false,
+        remarks: `VOIDED TICKET - ${voidForm.deliveryNumber}`
+      });
+      setVoidSuccess(true);
+      setTimeout(() => {
+        setVoidSuccess(false);
+        setShowVoidModal(false);
+        setPaymentType('CREDIT');
+        setVoidForm({ date: new Date().toISOString().split('T')[0], deliveryNumber: '' });
+      }, 2000);
+    } catch (e) {
+      console.error('Void save failed:', e);
+    } finally {
+      setVoidSaving(false);
+    }
+  };
   
   // Auto-start if job passed from dashboard
   useEffect(() => {
@@ -812,7 +909,76 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
           selectedVehicleId={selectedVehicleId}
           setSelectedVehicleId={setSelectedVehicleId}
           equipment={equipment}
+          paymentType={paymentType}
+          setPaymentType={(v) => setPaymentType(v as any)}
         />
+
+        {/* Void Ticket Modal */}
+        {showVoidModal && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-surface rounded-3xl border border-error/30 shadow-premium w-full max-w-md p-8 animate-in fade-in zoom-in duration-300">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <span className="block text-[10px] font-black text-error uppercase tracking-[0.3em] mb-1">Void Operation</span>
+                  <h3 className="text-2xl font-[900] tracking-tighter text-on-surface">VOID TICKET</h3>
+                </div>
+                <button onClick={() => { setShowVoidModal(false); setPaymentType('CREDIT'); }} className="p-2 rounded-xl hover:bg-surface-dim transition-colors">
+                  <X className="w-5 h-5 text-on-surface-dim" />
+                </button>
+              </div>
+
+              {voidSuccess ? (
+                <div className="flex flex-col items-center py-8">
+                  <CheckCircle className="w-14 h-14 text-success mb-4" />
+                  <p className="text-success font-black text-lg uppercase tracking-widest">Ticket Voided</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-3 opacity-60">Operational Date</label>
+                    <div className="relative">
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-error opacity-50 pointer-events-none" />
+                      <input
+                        type="date"
+                        value={voidForm.date}
+                        onChange={(e) => setVoidForm(p => ({ ...p, date: e.target.value }))}
+                        onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                        className="w-full pl-10 pr-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black focus:ring-4 focus:ring-error/10 focus:border-error outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:left-0 [&::-webkit-calendar-picker-indicator]:top-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-3 opacity-60">Delivery Ticket Number</label>
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <span className="text-2xl font-mono font-black text-on-surface-dim opacity-30 shrink-0">MLE-</span>
+                      <input
+                        type="text"
+                        maxLength={6}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        placeholder="000000"
+                        value={voidForm.deliveryNumber}
+                        onChange={(e) => setVoidForm(p => ({ ...p, deliveryNumber: e.target.value.replace(/\D/g,'').slice(0,6) }))}
+                        className="flex-1 min-w-0 text-4xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-error transition-all text-error placeholder:text-error/20"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleSaveVoid}
+                    disabled={voidForm.deliveryNumber.length !== 6 || voidSaving}
+                    className="w-full py-4 bg-error text-white rounded-2xl font-[900] text-[12px] uppercase tracking-[0.3em] flex items-center justify-center gap-3 hover:opacity-90 active:scale-95 transition-all disabled:opacity-30"
+                  >
+                    <Ban className="w-4 h-4" />
+                    {voidSaving ? 'SAVING...' : 'CONFIRM VOID'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="flex-1">
             {currentScreen === 'dashboard' && (
               <ScreenDashboard 

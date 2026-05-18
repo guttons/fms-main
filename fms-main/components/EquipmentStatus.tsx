@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Equipment, EquipmentStatus as EqStatus, EquipmentType, Tank, User, UserRole } from '../types';
+import { Equipment, EquipmentStatus as EqStatus, EquipmentType, MaintenanceDetails, Tank, User, UserRole } from '../types';
 import { EQUIPMENT } from '../constants';
 import { 
   Truck, 
@@ -34,7 +34,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
   const [editingMaintEq, setEditingMaintEq] = useState<Equipment | null>(null);
   
   // Form state for maintenance modal
-  const [maintForm, setMaintForm] = useState({
+  const [maintForm, setMaintForm] = useState<MaintenanceDetails>({
     jobType: 'MAINTENANCE',
     description: '',
     actionRequiredBy: 'FUEL',

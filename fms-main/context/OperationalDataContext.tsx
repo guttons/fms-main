@@ -8,7 +8,16 @@ import { auth } from '../firebase';
 interface ShiftBriefingInfo {
   info: { text: string; type: string; isHighAlert?: boolean }[];
   dieselNeeds: string[];
+  staffAssignments?: {
+    activeOperators: string[];
+    activeOfficers: string[];
+    hydrantOpsOfficers: string[];
+    dutySupervisor: string;
+    shiftInCharge: string;
+  };
 }
+
+export type BriefingShift = 'Morning' | 'Evening' | 'Night';
 
 interface OperationalDataContextType {
   equipment: Equipment[];
@@ -16,18 +25,21 @@ interface OperationalDataContextType {
   flightJobs: FlightJob[];
   domesticFlights: any[];
   briefingInfo: ShiftBriefingInfo;
+  selectedBriefingShift: BriefingShift;
+  setSelectedBriefingShift: (shift: BriefingShift) => void;
   alerts: Alert[];
   flightLogs: FlightLog[];
   isAlertsLoading: boolean;
   updateEquipmentStatus: (id: string, status: EqStatus) => void;
   updateEquipment: (id: string, updates: Partial<Equipment>) => Promise<void>;
   updateTankLevel: (id: string, newLevel: number) => Promise<void>;
-  updateBriefingInfo: (info: any[], dieselNeeds: string[]) => Promise<void>;
+  updateBriefingInfo: (info: any[], dieselNeeds: string[], staffAssignments: any) => Promise<void>;
   updateFlightJob: (id: string, updates: Partial<FlightJob>) => void;
   addFlightJob: (job: FlightJob) => void;
   createAlert: (alert: Omit<Alert, 'id'>) => Promise<boolean>;
   acknowledgeAlert: (id: string) => Promise<void>;
   acknowledgeAllAlerts: (ids: string[]) => Promise<void>;
+  clearAllAlerts: () => Promise<void>;
   refreshData: () => Promise<void>;
   isLoading: boolean;
 }
@@ -82,8 +94,27 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
   });
 
+  const [selectedBriefingShift, setSelectedBriefingShift] = useState<BriefingShift>(() => {
+    try {
+      const saved = localStorage.getItem('fms_selected_shift');
+      if (saved) return saved as BriefingShift;
+    } catch(e) {}
+    
+    // Auto-detect current shift based on time
+    const hour = new Date().getHours();
+    const min = new Date().getMinutes();
+    const time = hour + min / 60;
+    
+    // Morning: 07:30 (7.5) to 16:00 (16.0)
+    // Evening: 15:00 (15.0) to 23:30 (23.5)
+    // Night: 22:30 (22.5) to 08:30 (8.5)
+    if (time >= 7.5 && time < 15.0) return 'Morning';
+    if (time >= 15.0 && time < 22.5) return 'Evening';
+    return 'Night';
+  });
+
   const [briefingInfo, setBriefingInfo] = useState<ShiftBriefingInfo>(() => {
-    const saved = localStorage.getItem('fms_briefing_info');
+    const saved = localStorage.getItem(`fms_briefing_info_${selectedBriefingShift}`);
     return saved ? JSON.parse(saved) : {
       info: [
         { text: 'Ready before 15 mins/PPE/360 Walkaround check/Following speed limits/Marshaling when required', type: 'critical', isHighAlert: true },
@@ -92,7 +123,14 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         { text: 'All hose related issues must be reported with specific hose identification number clearly stated', type: 'standard' },
         { text: 'Rf 16 & 17 check if gear changed to NEUTRAL after parking', type: 'standard' },
       ],
-      dieselNeeds: []
+      dieselNeeds: [],
+      staffAssignments: {
+        activeOperators: ['u3', 'u3b'],
+        activeOfficers: ['u1'],
+        hydrantOpsOfficers: ['u7'],
+        dutySupervisor: 'u2',
+        shiftInCharge: 'u2b'
+      }
     };
   });
 
@@ -129,8 +167,12 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   }, [domesticFlights]);
 
   useEffect(() => {
-    localStorage.setItem('fms_briefing_info', JSON.stringify(briefingInfo));
-  }, [briefingInfo]);
+    localStorage.setItem(`fms_briefing_info_${selectedBriefingShift}`, JSON.stringify(briefingInfo));
+  }, [briefingInfo, selectedBriefingShift]);
+  
+  useEffect(() => {
+    localStorage.setItem('fms_selected_shift', selectedBriefingShift);
+  }, [selectedBriefingShift]);
   
   useEffect(() => {
     localStorage.setItem('fms_alerts', JSON.stringify(alerts));
@@ -146,7 +188,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       const [fetchedTanks, fetchedJobs, fetchedBriefing, fetchedAlerts, fetchedEq, fetchedLogs] = await Promise.all([
         supabaseService.getTanks(),
         supabaseService.getFlightJobs(),
-        supabaseService.getShiftBriefingInfo(new Date().toISOString().split('T')[0]),
+        supabaseService.getShiftBriefingInfo(new Date().toISOString().split('T')[0], selectedBriefingShift),
         supabaseService.getAlerts(),
         supabaseService.getEquipment(),
         supabaseService.getFlightLogs()
@@ -154,7 +196,17 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
       if (fetchedTanks && fetchedTanks.length > 0) setTanks(fetchedTanks);
       if (fetchedJobs && fetchedJobs.length > 0) setFlightJobs(fetchedJobs);
-      if (fetchedBriefing && typeof fetchedBriefing === 'object') setBriefingInfo(fetchedBriefing as any);
+      if (fetchedBriefing && typeof fetchedBriefing === 'object') {
+         // Merge with default staff if missing
+         const staff = (fetchedBriefing as any).staffAssignments || {
+            activeOperators: ['u3', 'u3b'],
+            activeOfficers: ['u1'],
+            hydrantOpsOfficers: ['u7'],
+            dutySupervisor: 'u2',
+            shiftInCharge: 'u2b'
+         };
+         setBriefingInfo({ ...(fetchedBriefing as any), staffAssignments: staff });
+      }
       if (fetchedEq && fetchedEq.length > 0) {
         setEquipment(prev => {
           return EQUIPMENT.map(mock => {
@@ -174,12 +226,12 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
   }, []);
 
-  // Sync with Firestore when user logs in
+  // Sync with Firestore when user logs in or shift changes
   useEffect(() => {
     if (appUser) {
       refreshData();
     }
-  }, [appUser, refreshData]);
+  }, [appUser, selectedBriefingShift, refreshData]);
 
   // Dedicated Real-time Listeners Effect
   useEffect(() => {
@@ -260,13 +312,13 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
   };
 
-  const updateBriefingInfo = async (info: any[], dieselNeeds: string[]) => {
-    setBriefingInfo({ info, dieselNeeds });
+  const updateBriefingInfo = async (info: any[], dieselNeeds: string[], staffAssignments: any) => {
+    setBriefingInfo({ info, dieselNeeds, staffAssignments });
 
     if (appUser) {
       const todayDate = new Date().toISOString().split('T')[0];
       try {
-        await supabaseService.upsertShiftBriefingInfo(todayDate, info, dieselNeeds);
+        await supabaseService.upsertShiftBriefingInfo(todayDate, selectedBriefingShift, info, dieselNeeds, staffAssignments);
       } catch (error) {
         console.error('Failed to sync briefing update to Firestore:', error);
       }
@@ -364,13 +416,31 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
   };
 
+  const clearAllAlerts = async () => {
+    try {
+      const allIds = (alerts || []).map(a => a.id);
+      if (allIds.length === 0) return;
+      // Acknowledge all first so they're removed from views, then wipe local state
+      await supabaseService.acknowledgeAllAlerts(allIds);
+      setAlerts([]);
+      localStorage.setItem('fms_alerts', JSON.stringify([]));
+    } catch (error) {
+      console.error('Failed to clear all alerts:', error);
+      // Fallback: clear locally anyway
+      setAlerts([]);
+      localStorage.setItem('fms_alerts', JSON.stringify([]));
+    }
+  };
+
   return (
     <OperationalDataContext.Provider value={{
       equipment: equipment || [],
       tanks: tanks || [],
       flightJobs: flightJobs || [],
       domesticFlights: domesticFlights || [],
-      briefingInfo: briefingInfo || { info: [], dieselNeeds: [] },
+      briefingInfo: briefingInfo || { info: [], dieselNeeds: [], staffAssignments: undefined },
+      selectedBriefingShift,
+      setSelectedBriefingShift,
       updateEquipmentStatus,
       updateEquipment,
       updateTankLevel,
@@ -380,6 +450,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       createAlert,
       acknowledgeAlert,
       acknowledgeAllAlerts,
+      clearAllAlerts,
       refreshData,
       isLoading,
       alerts: alerts || [],

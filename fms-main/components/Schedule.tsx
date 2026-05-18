@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, EQUIPMENT } from '../constants';
 import { UserRole, EquipmentType, FlightJob } from '../types';
-import { Calendar, Plus, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings } from 'lucide-react';
+import { Calendar, Plus, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
 
@@ -158,7 +158,7 @@ export const Schedule: React.FC = () => {
       <select 
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`block w-full text-[11px] font-[900] rounded-xl shadow-inner focus:ring-4 focus:ring-primary/10 focus:border-primary px-4 py-3 border uppercase tracking-widest appearance-none transition-all ${
+        className={`block w-full text-[10px] font-bold rounded-xl focus:border-primary px-3 py-2 border uppercase tracking-wider appearance-none transition-colors ${
           value ? 'bg-surface-dim text-on-surface border-outline' : 'bg-surface-dim text-error border-error/30'
         }`}
       >
@@ -167,7 +167,7 @@ export const Schedule: React.FC = () => {
           <option key={op.id} value={op.id} className="bg-surface-container text-on-surface">{op.name.toUpperCase()}</option>
         ))}
       </select>
-      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-on-surface-dim opacity-30 pointer-events-none group-hover/select:opacity-100 transition-all" />
+      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-on-surface-dim opacity-40 pointer-events-none" />
     </div>
   );
 
@@ -210,41 +210,41 @@ export const Schedule: React.FC = () => {
         />
         <button
           onClick={() => setActiveTab('international')}
-          className={`flex-1 md:w-[140px] flex items-center justify-center px-4 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+          className={`flex-1 md:w-[140px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
             activeTab === 'international' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
-          <Plane className="w-4 h-4 mr-2.5 shrink-0" />
+          <Plane className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
           <span className="hidden sm:block whitespace-nowrap">International</span>
           <span className="block sm:hidden">INT</span>
         </button>
         <button
           onClick={() => setActiveTab('domestic')}
-          className={`flex-1 md:w-[120px] flex items-center justify-center px-4 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+          className={`flex-1 md:w-[120px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
             activeTab === 'domestic' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
-          <Users className="w-4 h-4 mr-2.5 shrink-0" />
+          <Home className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
           <span className="hidden sm:block whitespace-nowrap">Domestic</span>
           <span className="block sm:hidden">DOM</span>
         </button>
         <button
           onClick={() => setActiveTab('equipment')}
-          className={`flex-1 md:w-[120px] flex items-center justify-center px-4 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+          className={`flex-1 md:w-[120px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
             activeTab === 'equipment' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
-          <Truck className="w-4 h-4 mr-2.5 shrink-0" />
+          <Truck className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
           <span className="hidden sm:block whitespace-nowrap">{currentShiftLabel}</span>
           <span className="block sm:hidden">{currentShiftLabel}</span>
         </button>
         <button
           onClick={() => setActiveTab('status')}
-          className={`flex-1 md:w-[160px] flex items-center justify-center px-4 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+          className={`flex-1 md:w-[160px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
             activeTab === 'status' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
-          <Users className="w-4 h-4 mr-2.5 shrink-0" />
+          <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
           <span className="hidden sm:block whitespace-nowrap">Status Board</span>
           <span className="block sm:hidden">STATUS</span>
         </button>
@@ -346,7 +346,7 @@ export const Schedule: React.FC = () => {
             {/* Mobile View */}
             <div className="block md:hidden p-4 space-y-4">
               {scheduledFlights.map((item) => (
-                <div key={item.id} className="card-premium p-6 border-outline group transition-all active:scale-[0.98]">
+                <div key={item.id} className="card-premium p-4 sm:p-6 border-outline group transition-all active:scale-[0.98] max-w-md mx-auto w-full">
                   <div className="flex justify-between items-start mb-6">
                     <div className="flex items-center">
                       <div className="p-3 bg-surface-dim rounded-2xl border border-outline mr-4">
@@ -411,14 +411,14 @@ export const Schedule: React.FC = () => {
 
         {/* Domestic Ops */}
         {activeTab === 'domestic' && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-500 p-8 lg:p-10">
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500 p-4 md:p-8 lg:p-10">
             <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] mb-8 flex items-center">
                <span className="w-1.5 h-6 bg-primary rounded-full mr-4"></span>
                Squadron Assignments
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-12">
               {domesticTeams.map((team, idx) => (
-                <div key={team.id} className={`card-premium p-6 group transition-all hover:scale-[1.02] animate-in fade-in slide-in-from-bottom-2 duration-300 stagger-${Math.min(idx + 1, 5)}`}>
+                <div key={team.id} className="card-premium p-4 sm:p-6 group hover:border-primary/20 transition-colors w-full">
                   <div className="flex items-center mb-8">
                     <div className="p-3 bg-surface-dim rounded-2xl border border-outline mr-4 group-hover:border-primary/30 transition-all">
                       <Users className="w-5 h-5 text-on-surface" />
@@ -497,7 +497,7 @@ export const Schedule: React.FC = () => {
 
         {/* Equipment Assignments */}
         {activeTab === 'equipment' && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-500 p-8 lg:p-10">
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500 p-4 md:p-8 lg:p-10">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
               <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
                  <span className="w-1.5 h-6 bg-primary rounded-full mr-4"></span>
@@ -535,9 +535,9 @@ export const Schedule: React.FC = () => {
                     <h4 className="text-xs font-black text-on-surface-dim uppercase tracking-[0.3em] mb-6 border-b border-outline pb-2">
                         {type === 'Refueller' ? 'Refuellers (RF)' : 'Hydrant Dispensers (HD)'}
                     </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
                       {eqs.map(eq => (
-                        <div key={eq.id} className="card-premium p-6 group transition-all hover:scale-[1.02]">
+                        <div key={eq.id} className="card-premium p-4 sm:p-6 group hover:border-primary/20 transition-colors w-full">
                           <div className="flex items-center justify-between mb-8">
                             <div className="flex items-center">
                               <div className="p-3 bg-surface-dim rounded-2xl border border-outline mr-4 group-hover:border-primary/30 transition-all">
@@ -576,7 +576,7 @@ export const Schedule: React.FC = () => {
 
         {/* Status Board */}
         {activeTab === 'status' && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-500 p-8 lg:p-10 space-y-10">
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500 p-4 md:p-8 lg:p-10 space-y-10">
             <div className="flex items-center">
               <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
                  <span className="w-1.5 h-6 bg-primary rounded-full mr-4"></span>
@@ -586,7 +586,7 @@ export const Schedule: React.FC = () => {
               <span className="ml-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">{operators.length} Personnel Active</span>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 {operators.map((op) => {
                     const opTasks = flightJobs.filter((j: any) => j.assignedTo === op.id || j.assignedOfficer === op.id);
                     const activeTask = opTasks.find((j: any) => j.status === 'IN_PROGRESS');
@@ -597,7 +597,7 @@ export const Schedule: React.FC = () => {
                     const domAssignment = domesticTeams.find(a => a.op1 === op.id || a.op2 === op.id);
 
                     return (
-                        <div key={op.id} className="card-premium p-4 sm:p-6 space-y-4 sm:space-y-6 hover:border-primary/20 transition-all group relative overflow-hidden">
+                        <div key={op.id} className="card-premium p-4 sm:p-6 space-y-4 sm:space-y-6 hover:border-primary/20 transition-colors group relative overflow-hidden w-full">
                             <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                             
                             {/* Operator Header */}
