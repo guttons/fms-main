@@ -14,6 +14,10 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterDate, setFilterDate] = useState('');
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  
   const [editingLog, setEditingLog] = useState<FlightLog | null>(null);
   const [editForm, setEditForm] = useState({ volume: 0, status: 'PENDING' });
   const [saving, setSaving] = useState(false);
@@ -53,10 +57,23 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     }
   };
 
-  const filteredLogs = (logs || []).filter(log => 
-    log && (log.flightNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.aircraftReg.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredLogs = (logs || []).filter(log => {
+    const matchesSearch = log && (
+      log.flightNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.aircraftReg.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    let matchesDate = true;
+    if (filterDate && log.timestampStart) {
+      // Create local date string from timestamp for matching
+      const logDate = new Date(log.timestampStart).toLocaleDateString('en-CA'); // gets YYYY-MM-DD locally
+      matchesDate = logDate === filterDate;
+    }
+
+    return matchesSearch && matchesDate;
+  });
+
+  const totalVolume = filteredLogs.reduce((sum, log) => sum + (log.volume || 0), 0);
 
   return (
     <div className="p-6 lg:p-10 space-y-10">
@@ -82,15 +99,43 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                     className="w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all"
                 />
              </div>
-             <button className="p-4 bg-surface-dim border border-outline rounded-2xl hover:bg-primary/5 transition-all text-on-surface-dim">
+             <button 
+                 onClick={() => setShowFilters(!showFilters)}
+                 className={`p-4 rounded-2xl transition-all border ${showFilters ? 'bg-primary text-white border-primary' : 'bg-surface-dim text-on-surface-dim border-outline hover:bg-primary/5'}`}
+             >
                 <Filter className="w-5 h-5" />
              </button>
-             <button className="flex items-center px-8 py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all">
-                <Download className="w-4 h-4 mr-3" />
-                EXPORT CSV
+             <button className="flex items-center justify-center p-4 sm:px-8 sm:py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all">
+                <Download className="w-5 h-5 sm:w-4 sm:h-4 sm:mr-3" />
+                <span className="hidden sm:inline">EXPORT CSV</span>
              </button>
         </div>
       </div>
+
+      {showFilters && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-surface-dim border border-outline rounded-[24px] animate-in slide-in-from-top-2 duration-300">
+           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex flex-col">
+                 <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2">Filter By Date</label>
+                 <input 
+                    type="date"
+                    value={filterDate}
+                    onChange={(e) => setFilterDate(e.target.value)}
+                    onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                    className="bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-[12px] font-bold text-on-surface focus:border-primary outline-none [&::-webkit-calendar-picker-indicator]:cursor-pointer cursor-pointer"
+                 />
+              </div>
+              {filterDate && (
+                 <button onClick={() => setFilterDate('')} className="mt-6 text-[10px] font-black text-error uppercase tracking-widest hover:underline">Clear Date</button>
+              )}
+           </div>
+           
+           <div className="bg-surface-lowest p-4 rounded-xl border border-outline flex flex-col items-end min-w-[200px]">
+              <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-1">Total Volume (Filtered)</span>
+              <span className="text-2xl font-mono font-black text-primary">{totalVolume.toLocaleString()} <span className="text-sm opacity-50">L</span></span>
+           </div>
+        </div>
+      )}
 
       <div className="card-premium overflow-hidden">
         {loading ? (
@@ -119,8 +164,13 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                 ) : (
                   filteredLogs.map((log) => {
                       const operatorName = MOCK_USERS.find(u => u.id === log.operatorId)?.name || 'Unknown';
+                      const isExpanded = expandedLogId === log.id;
                       return (
-                        <tr key={log.id} className="hover:bg-primary/[0.02] transition-colors group">
+                        <React.Fragment key={log.id}>
+                        <tr 
+                          onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                          className={`hover:bg-primary/[0.02] transition-colors group cursor-pointer ${isExpanded ? 'bg-primary/[0.03]' : ''}`}
+                        >
                           <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
                               {log.timestampStart ? new Date(log.timestampStart).toLocaleString([], { hour12: false }) : 'PENDING SYNC'}
                           </td>
@@ -138,6 +188,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                               <span className={`text-[9px] font-black px-4 py-1.5 rounded-full border uppercase tracking-[0.2em] shadow-sm ${
                                   log.status === 'COMPLETED' 
                                   ? 'bg-success/10 text-success border-success/20' 
+                                  : log.status === 'VOID'
+                                  ? 'bg-error/10 text-error border-error/20'
                                   : 'bg-warning/10 text-warning border-warning/20'
                               }`}>
                                   {log.status}
@@ -146,7 +198,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                           <td className="px-10 py-6 text-right">
                               {canEdit ? (
                                 <button 
-                                  onClick={() => {
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     setEditingLog(log);
                                     setEditForm({ volume: log.volume, status: log.status });
                                   }} 
@@ -155,10 +208,50 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                   EDIT
                                 </button>
                               ) : (
-                                <button className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-[0.3em] transition-all opacity-50 cursor-not-allowed">DETAILS</button>
+                                <button className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-[0.3em] transition-all">
+                                  {isExpanded ? 'HIDE' : 'DETAILS'}
+                                </button>
                               )}
                           </td>
                         </tr>
+                        {isExpanded && (
+                           <tr className="bg-surface-dim/30 border-b border-outline">
+                              <td colSpan={6} className="px-10 py-6">
+                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-in fade-in duration-300">
+                                    <div className="flex flex-col gap-1">
+                                       <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Arrived</span>
+                                       <span className="text-[11px] font-mono text-on-surface">{log.timestampArrived ? new Date(log.timestampArrived).toLocaleTimeString([], {hour12: false}) : '--:--:--'}</span>
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                       <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Positioned</span>
+                                       <span className="text-[11px] font-mono text-on-surface">{log.timestampPosition ? new Date(log.timestampPosition).toLocaleTimeString([], {hour12: false}) : '--:--:--'}</span>
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                       <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Dispense Start</span>
+                                       <span className="text-[11px] font-mono text-success">{log.timestampStart ? new Date(log.timestampStart).toLocaleTimeString([], {hour12: false}) : '--:--:--'}</span>
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                       <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Dispense End</span>
+                                       <span className="text-[11px] font-mono text-error">{log.timestampInitialEnd ? new Date(log.timestampInitialEnd).toLocaleTimeString([], {hour12: false}) : '--:--:--'}</span>
+                                    </div>
+                                    
+                                    <div className="flex flex-col gap-1">
+                                       <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Equipment</span>
+                                       <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.vehicleId || 'N/A'}</span>
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                       <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Ticket Number</span>
+                                       <span className="text-[11px] font-mono text-primary font-black">{log.deliveryNumber || 'N/A'}</span>
+                                    </div>
+                                    <div className="flex flex-col gap-1 col-span-2">
+                                       <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Remarks</span>
+                                       <span className="text-[11px] text-on-surface opacity-80">{log.remarks || 'No operational remarks.'}</span>
+                                    </div>
+                                 </div>
+                              </td>
+                           </tr>
+                        )}
+                        </React.Fragment>
                       );
                   })
                 )}

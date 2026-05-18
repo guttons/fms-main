@@ -8,6 +8,7 @@ export const Stock: React.FC = () => {
   const { notify } = useNotification();
   const { tanks, updateTankLevel } = useOperationalData();
   const [readings, setReadings] = useState<Record<string, number>>({});
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Helper to categorize tanks
   const categorizeTank = (tank: Tank) => {
@@ -102,11 +103,27 @@ export const Stock: React.FC = () => {
              <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Live Tank Reconciliation</span>
           </div>
         </div>
-        <div className="flex items-center space-x-4 bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner">
-             <span className="text-[10px] font-black text-on-surface-dim px-4 uppercase tracking-widest opacity-60">Last Sync: {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false})}</span>
-             <button className="p-3 hover:bg-surface-lowest rounded-xl border border-outline bg-surface-dim transition-all active:scale-95 shadow-sm">
-                <RefreshCw className="w-4 h-4 text-primary" />
-             </button>
+        <div className="flex items-center justify-between w-full md:w-auto md:justify-start gap-2 sm:gap-4 mt-2 md:mt-0">
+             {/* Date Selector */}
+             <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner">
+                 <input
+                     type="date"
+                     value={selectedDate}
+                     onChange={(e) => setSelectedDate(e.target.value)}
+                     onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                     className="bg-transparent text-[11px] font-black uppercase tracking-widest text-on-surface outline-none cursor-pointer px-2 sm:px-3 py-1.5 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                 />
+             </div>
+             
+             {/* Sync Container */}
+             <div className="flex items-center sm:bg-surface-dim sm:p-1.5 sm:rounded-2xl sm:border sm:border-outline sm:shadow-inner">
+                 <span className="hidden sm:block text-[10px] font-black text-on-surface-dim px-4 uppercase tracking-widest opacity-60">
+                     Last Sync: {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false})}
+                 </span>
+                 <button className="p-3 hover:bg-surface-lowest rounded-xl border border-outline bg-surface-dim transition-all active:scale-95 shadow-sm">
+                    <RefreshCw className="w-4 h-4 text-primary" />
+                 </button>
+             </div>
         </div>
       </div>
 

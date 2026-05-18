@@ -85,9 +85,9 @@ const MobileHeader: React.FC<{
                           `}
                           style={paymentType === 'CASH' ? { backgroundColor: 'rgba(34,197,94,0.1)' } : undefined}
                       >
-                          <option value="CREDIT">CREDIT</option>
-                          <option value="CASH">CASH</option>
-                          <option value="VOID">VOID</option>
+                          <option value="CREDIT" className="bg-surface-container-highest text-on-surface">CREDIT</option>
+                          <option value="CASH" className="bg-surface-container-highest text-on-surface">CASH</option>
+                          <option value="VOID" className="bg-surface-container-highest text-on-surface">VOID</option>
                       </select>
                       <ChevronRight className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-on-surface-dim rotate-90 pointer-events-none" />
                   </div>
