@@ -47,6 +47,24 @@ const App: React.FC = () => {
     updatePWAManifestAndTheme(isDarkMode);
   }, [isDarkMode]);
   
+  // Splash screen fadeout
+  useEffect(() => {
+    const splash = document.getElementById('pwa-splash');
+    if (splash) {
+      // Fade out after 1.5 seconds for premium fluid feel
+      const timer = setTimeout(() => {
+        splash.style.opacity = '0';
+        splash.style.visibility = 'hidden';
+        // Remove from DOM after transition completes
+        const removeTimer = setTimeout(() => {
+          splash.remove();
+        }, 500);
+        return () => clearTimeout(removeTimer);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   // Network listener
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -136,6 +154,12 @@ const AppContextContent: React.FC<any> = ({
   const { notify } = useNotification();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [mainElement, setMainElement] = useState<HTMLElement | null>(null);
+
+  const mainRefCallback = React.useCallback((node: HTMLElement | null) => {
+    scrollRef.current = node;
+    setMainElement(node);
+  }, [scrollRef]);
 
   // --- Dynamic PWA Install States & Events ---
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -210,7 +234,7 @@ const AppContextContent: React.FC<any> = ({
   const pullingRef = React.useRef(false);
 
   useEffect(() => {
-    const mainEl = scrollRef.current;
+    const mainEl = mainElement;
     if (!mainEl) return;
 
     const handleTouchStart = (e: TouchEvent) => {
@@ -268,15 +292,14 @@ const AppContextContent: React.FC<any> = ({
       mainEl.removeEventListener('touchmove', handleTouchMove);
       mainEl.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [scrollRef, pullDistance, isRefreshing, refreshData]);
+  }, [mainElement, pullDistance, isRefreshing, refreshData]);
 
   // Header scroll listener
   const lastScrollYRef = React.useRef(0);
   useEffect(() => {
+    if (!mainElement) return;
+
     const handleScroll = () => {
-      if (!scrollRef.current) return;
-      
-      const mainElement = scrollRef.current;
       const currentScrollY = Math.max(0, mainElement.scrollTop);
       // Add a small 50px buffer to maxScroll to be completely safe against rounding errors
       const maxScroll = Math.max(0, mainElement.scrollHeight - mainElement.clientHeight) - 50;
@@ -304,10 +327,9 @@ const AppContextContent: React.FC<any> = ({
       lastScrollYRef.current = currentScrollY;
     };
 
-    const mainElement = scrollRef.current;
-    mainElement?.addEventListener('scroll', handleScroll, { passive: true });
-    return () => mainElement?.removeEventListener('scroll', handleScroll);
-  }, [scrollRef, setShowHeader]);
+    mainElement.addEventListener('scroll', handleScroll, { passive: true });
+    return () => mainElement.removeEventListener('scroll', handleScroll);
+  }, [mainElement, setShowHeader]);
 
   const searchResults = React.useMemo(() => {
     if (!searchQuery.trim()) return { equipment: [], jobs: [], personnel: [] };
@@ -409,7 +431,7 @@ const AppContextContent: React.FC<any> = ({
           )}
 
           {/* Main Content Scroll Area */}
-          <main ref={scrollRef as any} className="flex-1 overflow-y-auto relative canvas scroll-smooth overscroll-none pb-32 lg:pb-10">
+          <main ref={mainRefCallback} className="flex-1 overflow-y-auto relative canvas scroll-smooth overscroll-none pb-32 lg:pb-10">
             
             {/* Dynamic Pull to Refresh Hex Droplet Spinner */}
             {(pullDistance > 0 || isRefreshing) && (
@@ -434,7 +456,7 @@ const AppContextContent: React.FC<any> = ({
                       <path 
                         d="M60 15 L100 38 V82 L60 105 L20 82 V38 Z" 
                         stroke="currentColor" 
-                        strokeWidth="11" 
+                        strokeWidth="8" 
                         strokeLinecap="round" 
                         strokeLinejoin="round" 
                       />
@@ -442,6 +464,12 @@ const AppContextContent: React.FC<any> = ({
                         d="M60 35 C60 35 45 55 45 65 C45 73.284 51.716 80 60 80 C68.284 80 75 73.284 75 65 C75 55 60 35 60 35 Z" 
                         fill="currentColor" 
                       />
+                      <circle cx="60" cy="15" r="6" fill="currentColor" />
+                      <circle cx="100" cy="38" r="6" fill="currentColor" />
+                      <circle cx="100" cy="82" r="6" fill="currentColor" />
+                      <circle cx="60" cy="105" r="6" fill="currentColor" />
+                      <circle cx="20" cy="82" r="6" fill="currentColor" />
+                      <circle cx="20" cy="38" r="6" fill="currentColor" />
                     </svg>
                   </div>
                 </div>
@@ -832,6 +860,12 @@ const AppContextContent: React.FC<any> = ({
                 <svg viewBox="0 0 120 120" fill="none" className="w-8 h-8 text-primary">
                   <path d="M60 15 L100 38 V82 L60 105 L20 82 V38 Z" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
                   <path d="M60 35 C60 35 45 55 45 65 C45 73.284 51.716 80 60 80 C68.284 80 75 73.284 75 65 C75 55 60 35 60 35 Z" fill="currentColor" />
+                  <circle cx="60" cy="15" r="6" fill="currentColor" />
+                  <circle cx="100" cy="38" r="6" fill="currentColor" />
+                  <circle cx="100" cy="82" r="6" fill="currentColor" />
+                  <circle cx="60" cy="105" r="6" fill="currentColor" />
+                  <circle cx="20" cy="82" r="6" fill="currentColor" />
+                  <circle cx="20" cy="38" r="6" fill="currentColor" />
                 </svg>
               </div>
               

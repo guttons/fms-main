@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { FlightLog, User, FlightJob, Equipment, EquipmentStatus } from '../types';
+import { createPortal } from 'react-dom';
+import { FlightLog, User, FlightJob, Equipment, EquipmentStatus, UserRole } from '../types';
 import { MOCK_JOBS, MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, PIT_MAPPING } from '../constants';
 import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Lock, Calendar, X, CreditCard, Ban } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
@@ -680,7 +681,7 @@ const ScreenQC: React.FC<{
 
 export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob }) => {
   const { notify } = useNotification();
-  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment } = useOperationalData();
+  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(null);
   const [paymentType, setPaymentType] = useState<'CREDIT' | 'CASH' | 'VOID'>('CREDIT');
@@ -695,8 +696,27 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     else setShowVoidModal(false);
   }, [paymentType]);
 
+  useEffect(() => {
+    if (showVoidModal) {
+      document.documentElement.classList.add('modal-open');
+    } else {
+      document.documentElement.classList.remove('modal-open');
+    }
+    return () => {
+      document.documentElement.classList.remove('modal-open');
+    };
+  }, [showVoidModal]);
+
   const handleSaveVoid = async () => {
     if (voidForm.deliveryNumber.length !== 6) return;
+    
+    const fullDeliveryNumber = `MLE-${voidForm.deliveryNumber}`;
+    const isDuplicate = (flightLogs || []).some(log => log && log.deliveryNumber === fullDeliveryNumber);
+    if (isDuplicate) {
+      notify(`Delivery ticket number ${fullDeliveryNumber} is already used. Void aborted.`, 'error');
+      return;
+    }
+
     setVoidSaving(true);
     try {
       await supabaseService.createFlightLog({
@@ -803,6 +823,53 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   };
 
   const handleTimestamp = (field: keyof FlightLog) => {
+    if (!activeFlight) return;
+
+    const TIMESTAMP_SEQUENCE: (keyof FlightLog)[] = [
+      'timestampArrived',
+      'timestampPosition',
+      'timestampStart',
+      'timestampInitialEnd',
+      'timestampFinalStart',
+      'timestampFinalEnd'
+    ];
+
+    const FIELD_LABELS: Record<string, string> = {
+      timestampArrived: 'Log Arrived',
+      timestampPosition: 'Log Position',
+      timestampStart: 'Commence Fueling',
+      timestampInitialEnd: 'Initial End',
+      timestampFinalStart: 'Final Start',
+      timestampFinalEnd: 'Final End'
+    };
+
+    const index = TIMESTAMP_SEQUENCE.indexOf(field);
+    if (index !== -1) {
+      const isCurrentlySet = !!activeFlight[field];
+
+      if (isCurrentlySet) {
+        // We want to UNDO (clear) this timestamp.
+        // We must check if any subsequent timestamp in the sequence is currently set.
+        for (let i = index + 1; i < TIMESTAMP_SEQUENCE.length; i++) {
+          const subsequentField = TIMESTAMP_SEQUENCE[i];
+          if (activeFlight[subsequentField]) {
+            notify(`Cannot undo "${FIELD_LABELS[field]}". Please undo "${FIELD_LABELS[subsequentField]}" first.`, 'warning');
+            return;
+          }
+        }
+      } else {
+        // We want to SET this timestamp.
+        // We must check if all previous timestamps in the sequence are currently set.
+        for (let i = 0; i < index; i++) {
+          const previousField = TIMESTAMP_SEQUENCE[i];
+          if (!activeFlight[previousField]) {
+            notify(`Cannot log "${FIELD_LABELS[field]}" before "${FIELD_LABELS[previousField]}".`, 'warning');
+            return;
+          }
+        }
+      }
+    }
+
     setActiveFlight(prev => {
       if (!prev) return prev;
       return {
@@ -840,6 +907,14 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   const handleSubmit = async () => {
     if (!activeFlight) return;
     
+    if (activeFlight.deliveryNumber) {
+      const isDuplicate = (flightLogs || []).some(log => log && log.deliveryNumber === activeFlight.deliveryNumber);
+      if (isDuplicate) {
+        notify(`Delivery ticket number ${activeFlight.deliveryNumber} is already used. Please enter a unique ticket number.`, 'error');
+        return;
+      }
+    }
+    
     setLoading(true);
     try {
       const logToSave: Omit<FlightLog, 'id'> = {
@@ -876,10 +951,29 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         const vehicle = equipment.find(eq => eq.id === selectedVehicleId);
         if (vehicle && vehicle.currentVolume !== undefined) {
           const newVolume = Math.max(0, vehicle.currentVolume - (activeFlight.volume || 0));
+          const capacity = vehicle.maxCapacity || 20000;
+          const isLow = newVolume < 2000 || newVolume < capacity * 0.1;
+          
           await updateEquipment(selectedVehicleId, { 
             currentVolume: newVolume,
-            status: EquipmentStatus.AVAILABLE 
+            status: isLow ? EquipmentStatus.REFUELLING : EquipmentStatus.AVAILABLE 
           });
+
+          if (isLow) {
+            // Trigger automatic replenishment request for Depot Operator
+            try {
+              await createAlert({
+                severity: 'medium',
+                message: `Replenishment requested for unit ${selectedVehicleId} (Low fuel: ${newVolume}L)`,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                acknowledged: false,
+                targetRole: UserRole.DEPOT_OPERATOR
+              });
+              notify(`Refueller ${selectedVehicleId} fuel level is low (${newVolume}L). Replenishment request triggered automatically.`, 'warning');
+            } catch (err) {
+              console.error("Auto alert trigger failed:", err);
+            }
+          }
         } else {
           updateEquipmentStatus(selectedVehicleId, EquipmentStatus.AVAILABLE);
         }
@@ -914,9 +1008,9 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         />
 
         {/* Void Ticket Modal */}
-        {showVoidModal && (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-surface rounded-3xl border border-error/30 shadow-premium w-full max-w-md p-8 animate-in fade-in zoom-in duration-300">
+        {showVoidModal && createPortal(
+          <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-surface rounded-3xl border border-error/30 shadow-premium w-full max-w-md p-8 animate-in fade-in zoom-in duration-300 my-auto">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <span className="block text-[10px] font-black text-error uppercase tracking-[0.3em] mb-1">Void Operation</span>
@@ -976,7 +1070,8 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 </div>
               )}
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         <div className="flex-1">
@@ -1018,6 +1113,19 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
               />
             )}
         </div>
+        <style>{`
+          html.modal-open, html.modal-open body {
+            overflow: hidden !important;
+            height: 100% !important;
+          }
+          @media (max-width: 1023px) {
+            html.modal-open .sticky.top-0,
+            html.modal-open header,
+            html.modal-open .fixed.bottom-6 {
+              display: none !important;
+            }
+          }
+        `}</style>
     </div>
   );
 };

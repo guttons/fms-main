@@ -110,6 +110,7 @@ export interface FlightLog {
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
   deliveryNumber?: string;
   pitNumber?: string;
+  operationalDate?: string;
   
   // Granular Timestamps
   timestampArrived?: string;      // Arrived at Stand

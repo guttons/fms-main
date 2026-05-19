@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Equipment, EquipmentStatus as EqStatus, EquipmentType, MaintenanceDetails, Tank, User, UserRole } from '../types';
 import { EQUIPMENT } from '../constants';
 import { 
@@ -33,6 +34,17 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingMaintEq, setEditingMaintEq] = useState<Equipment | null>(null);
   
+  useEffect(() => {
+    if (editingMaintEq) {
+      document.documentElement.classList.add('modal-open');
+    } else {
+      document.documentElement.classList.remove('modal-open');
+    }
+    return () => {
+      document.documentElement.classList.remove('modal-open');
+    };
+  }, [editingMaintEq]);
+
   // Form state for maintenance modal
   const [maintForm, setMaintForm] = useState<MaintenanceDetails>({
     jobType: 'MAINTENANCE',
@@ -87,6 +99,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
       });
       
       if (success) {
+        await updateEquipmentStatus(eqId, EqStatus.REFUELLING);
         notify(`Refuel request sent to Depot Operators for ${eqId}`, 'success');
       }
     } catch (error) {
@@ -569,9 +582,9 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
         ))}
       </div>
       
-      {editingMaintEq && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-surface/20 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="bg-surface-dim border border-outline rounded-3xl w-full max-w-md shadow-premium overflow-hidden">
+      {editingMaintEq && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-300">
+          <div className="bg-surface-dim border border-outline rounded-3xl w-full max-w-md shadow-premium overflow-hidden my-auto">
             <div className="p-6 border-b border-outline flex justify-between items-center bg-surface-lowest">
               <div>
                 <h3 className="text-xl font-[900] text-on-surface tracking-tighter uppercase italic">{editingMaintEq.name} Maintenance</h3>
@@ -661,8 +674,22 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
+      <style>{`
+        html.modal-open, html.modal-open body {
+          overflow: hidden !important;
+          height: 100% !important;
+        }
+        @media (max-width: 1023px) {
+          html.modal-open .sticky.top-0,
+          html.modal-open header,
+          html.modal-open .fixed.bottom-6 {
+            display: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 };

@@ -39,13 +39,24 @@ export const ShiftBriefing: React.FC = () => {
   const [additionalInfo, setAdditionalInfo] = useState(briefingInfo?.info || []);
   const [dieselNeeds, setDieselNeeds] = useState<string[]>(briefingInfo?.dieselNeeds || []);
 
-  const [staffAssignments, setStaffAssignments] = useState(briefingInfo?.staffAssignments || {
+  interface StaffAssignments {
+    activeOperators: string[];
+    activeOfficers: string[];
+    hydrantOpsOfficers: string[];
+    dutySupervisor: string;
+    shiftInCharge: string;
+    attendees?: string[];
+  }
+
+  const [staffAssignments, setStaffAssignments] = useState<StaffAssignments>(briefingInfo?.staffAssignments || {
     activeOperators: ['u3', 'u3b'],
     activeOfficers: ['u1'],
     hydrantOpsOfficers: ['u7'],
     dutySupervisor: 'u2',
     shiftInCharge: 'u2b'
   });
+
+  const [attendees, setAttendees] = useState<string[]>(briefingInfo?.staffAssignments?.attendees || []);
 
   // Sync local state when context changes (e.g., on load or shift switch)
   useEffect(() => {
@@ -54,6 +65,9 @@ export const ShiftBriefing: React.FC = () => {
       setDieselNeeds(briefingInfo.dieselNeeds || []);
       if (briefingInfo.staffAssignments) {
         setStaffAssignments(briefingInfo.staffAssignments);
+        setAttendees(briefingInfo.staffAssignments.attendees || []);
+      } else {
+        setAttendees([]);
       }
     }
   }, [briefingInfo]);
@@ -70,7 +84,10 @@ export const ShiftBriefing: React.FC = () => {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await updateBriefingInfo(additionalInfo, dieselNeeds, staffAssignments);
+      await updateBriefingInfo(additionalInfo, dieselNeeds, {
+        ...staffAssignments,
+        attendees
+      });
       notify('Shift briefing saved successfully!', 'success');
     } catch (error) {
       console.error("Failed to save shift briefing:", error);
@@ -181,7 +198,14 @@ export const ShiftBriefing: React.FC = () => {
               </div>
               
               {/* Shift Tabs */}
-              <div className="flex bg-surface-dim border border-outline rounded-xl p-1 inline-flex shadow-sm">
+              <div className="bg-surface-dim p-1 rounded-xl border border-outline shadow-inner relative flex w-full sm:w-fit overflow-hidden">
+                <div 
+                  className={`absolute top-1 bottom-1 rounded-lg kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
+                    ${selectedBriefingShift === 'Morning' ? 'left-1 w-[calc(33.33%-2px)] sm:w-[180px] translate-x-0' : ''}
+                    ${selectedBriefingShift === 'Evening' ? 'left-1 w-[calc(33.33%-2px)] sm:w-[180px] translate-x-[100%] sm:translate-x-[180px]' : ''}
+                    ${selectedBriefingShift === 'Night' ? 'left-1 w-[calc(33.33%-2px)] sm:w-[180px] translate-x-[200%] sm:translate-x-[360px]' : ''}
+                  `}
+                />
                 {[
                   { id: 'Morning', label: 'Morning (07:30-16:00)' },
                   { id: 'Evening', label: 'Evening (15:00-23:30)' },
@@ -190,10 +214,8 @@ export const ShiftBriefing: React.FC = () => {
                   <button
                     key={shift.id}
                     onClick={() => setSelectedBriefingShift(shift.id as any)}
-                    className={`px-3 sm:px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                      selectedBriefingShift === shift.id 
-                      ? 'bg-primary text-white shadow-md' 
-                      : 'text-on-surface-dim hover:text-on-surface hover:bg-surface'
+                    className={`flex-1 sm:w-[180px] flex items-center justify-center py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+                      selectedBriefingShift === shift.id ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
                     }`}
                   >
                     <span className="hidden sm:inline">{shift.label}</span>
@@ -204,15 +226,6 @@ export const ShiftBriefing: React.FC = () => {
             </div>
           </div>
         </div>
-        
-        <button 
-          onClick={handleSave}
-          disabled={isSaving}
-          className="btn-command px-10 py-5 rounded-3xl shadow-premium group hover:scale-[1.02] active:scale-95 bg-primary text-white transition-all font-black uppercase tracking-widest text-[11px]"
-        >
-          <Save className="w-4.5 h-4.5 mr-3 group-hover:rotate-12 transition-transform" />
-          {isSaving ? 'ARCHIVING OPS DATA...' : 'AUTHORIZE & COMMIT'}
-        </button>
       </div>
 
       <div className="grid grid-cols-12 gap-8 relative z-10">
@@ -301,9 +314,9 @@ export const ShiftBriefing: React.FC = () => {
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Active Operators</h3>
                 </div>
-                <span className="bg-surface-dim border border-outline px-3 py-1 rounded-full text-[10px] font-black opacity-60 group-hover:opacity-100 transition-opacity">{staffAssignments.activeOperators.length} UNITS</span>
+                <span className="bg-surface-dim border border-outline px-3 py-1 rounded-full text-[10px] font-black opacity-60 group-hover:opacity-100 transition-opacity">{staffAssignments.activeOperators.length} STAFF</span>
               </div>
-              {renderStaffSelectArray(staffAssignments.activeOperators, [UserRole.OPERATOR], "Operators", "bg-success shadow-[0_0_10px_rgba(34,197,94,0.4)]", (newVals) => setStaffAssignments(prev => ({...prev, activeOperators: newVals})))}
+              {renderStaffSelectArray(staffAssignments.activeOperators, [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.DEPOT_OPERATOR], "Operators", "bg-success shadow-[0_0_10px_rgba(34,197,94,0.4)]", (newVals) => setStaffAssignments(prev => ({...prev, activeOperators: newVals})))}
             </div>
 
             {/* Active Officers Card */}
@@ -315,9 +328,9 @@ export const ShiftBriefing: React.FC = () => {
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Active Officers</h3>
                 </div>
-                <span className="bg-surface-dim border border-outline px-3 py-1 rounded-full text-[10px] font-black opacity-60 group-hover:opacity-100 transition-opacity">{staffAssignments.activeOfficers.length} UNITS</span>
+                <span className="bg-surface-dim border border-outline px-3 py-1 rounded-full text-[10px] font-black opacity-60 group-hover:opacity-100 transition-opacity">{staffAssignments.activeOfficers.length} STAFF</span>
               </div>
-              {renderStaffSelectArray(staffAssignments.activeOfficers, [UserRole.OFFICER, UserRole.ADMIN], "Officers", "bg-primary shadow-[0_0_10px_rgba(14,165,233,0.4)]", (newVals) => setStaffAssignments(prev => ({...prev, activeOfficers: newVals})))}
+              {renderStaffSelectArray(staffAssignments.activeOfficers, [UserRole.ITP_OFFICER, UserRole.ADMIN], "Officers", "bg-primary shadow-[0_0_10px_rgba(14,165,233,0.4)]", (newVals) => setStaffAssignments(prev => ({...prev, activeOfficers: newVals})))}
             </div>
 
             {/* Hydrant Ops Officers Card */}
@@ -329,9 +342,9 @@ export const ShiftBriefing: React.FC = () => {
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Hydrant Ops Officers</h3>
                 </div>
-                <span className="bg-surface-dim border border-outline px-3 py-1 rounded-full text-[10px] font-black opacity-60 group-hover:opacity-100 transition-opacity">{staffAssignments.hydrantOpsOfficers.length} UNITS</span>
+                <span className="bg-surface-dim border border-outline px-3 py-1 rounded-full text-[10px] font-black opacity-60 group-hover:opacity-100 transition-opacity">{staffAssignments.hydrantOpsOfficers.length} STAFF</span>
               </div>
-              {renderStaffSelectArray(staffAssignments.hydrantOpsOfficers, [UserRole.OFFICER, UserRole.OPERATOR], "Hydrant Officers", "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]", (newVals) => setStaffAssignments(prev => ({...prev, hydrantOpsOfficers: newVals})))}
+              {renderStaffSelectArray(staffAssignments.hydrantOpsOfficers, [UserRole.ITP_OFFICER, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OPERATOR], "Hydrant Officers", "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]", (newVals) => setStaffAssignments(prev => ({...prev, hydrantOpsOfficers: newVals})))}
             </div>
 
             {/* Supervisors & Managers Card */}
@@ -343,7 +356,7 @@ export const ShiftBriefing: React.FC = () => {
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Staffing Management</h3>
                 </div>
-                <span className="bg-surface-dim border border-outline px-3 py-1 rounded-full text-[10px] font-black opacity-60 group-hover:opacity-100 transition-opacity">2 UNITS</span>
+                <span className="bg-surface-dim border border-outline px-3 py-1 rounded-full text-[10px] font-black opacity-60 group-hover:opacity-100 transition-opacity">2 STAFF</span>
               </div>
               <div className="space-y-6">
                 {renderStaffSelect(staffAssignments.dutySupervisor, [UserRole.ITP_MANAGER], "Duty Supervisor", (id) => setStaffAssignments(prev => ({ ...prev, dutySupervisor: id })))}
@@ -351,6 +364,111 @@ export const ShiftBriefing: React.FC = () => {
                 {renderStaffSelect(staffAssignments.shiftInCharge, [UserRole.ITP_MANAGER, UserRole.DEPOT_MANAGER], "Shift In-Charge", (id) => setStaffAssignments(prev => ({ ...prev, shiftInCharge: id })))}
               </div>
             </div>
+          </div>
+
+          {/* BRIEFING ATTENDANCE CARD */}
+          <div className="card-premium p-5 sm:p-8 space-y-6 group max-w-md mx-auto md:max-w-none w-full">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-primary/5 rounded-xl">
+                  <UserCheck className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Briefing Attendance</h3>
+                  <p className="text-[10px] text-on-surface-dim opacity-50 uppercase tracking-widest mt-1">Mark present briefing attendees</p>
+                </div>
+              </div>
+              
+              {/* Progress indicator */}
+              {(() => {
+                const uniqueStaff = Array.from(new Set([
+                  ...staffAssignments.activeOperators,
+                  ...staffAssignments.activeOfficers,
+                  ...staffAssignments.hydrantOpsOfficers,
+                  staffAssignments.dutySupervisor,
+                  staffAssignments.shiftInCharge
+                ].filter(Boolean)));
+                
+                if (uniqueStaff.length === 0) return null;
+                const presentCount = uniqueStaff.filter(id => attendees.includes(id)).length;
+                
+                return (
+                  <div className="flex items-center space-x-3">
+                    <span className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/10 border border-primary/20 px-3 py-1.5 rounded-full">
+                      {presentCount} / {uniqueStaff.length} PRESENT
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {(() => {
+              const uniqueStaff = Array.from(new Set([
+                ...staffAssignments.activeOperators,
+                ...staffAssignments.activeOfficers,
+                ...staffAssignments.hydrantOpsOfficers,
+                staffAssignments.dutySupervisor,
+                staffAssignments.shiftInCharge
+              ].filter(Boolean)));
+
+              if (uniqueStaff.length === 0) {
+                return (
+                  <div className="text-[10px] font-bold opacity-30 uppercase italic text-center py-8 border border-dashed border-outline rounded-2xl">
+                    Assign staff above to track briefing attendance.
+                  </div>
+                );
+              }
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {uniqueStaff.map((id) => {
+                    const user = MOCK_USERS.find(u => u.id === id);
+                    if (!user) return null;
+                    const isPresent = attendees.includes(id);
+                    
+                    return (
+                      <div 
+                        key={id} 
+                        onClick={() => {
+                          if (isPresent) {
+                            setAttendees(prev => prev.filter(att => att !== id));
+                          } else {
+                            setAttendees(prev => [...prev, id]);
+                          }
+                        }}
+                        className={`flex items-center justify-between p-4 rounded-2xl border cursor-pointer transition-all shadow-sm ${
+                          isPresent 
+                            ? 'bg-success/5 border-success/30 hover:border-success/50' 
+                            : 'bg-surface-dim border-outline hover:border-outline-active hover:bg-surface-container'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3 min-w-0">
+                          {user.avatar ? (
+                            <img src={user.avatar} alt="" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-surface-lowest border border-outline flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                              {user.name.charAt(0)}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-[12px] font-black text-on-surface truncate uppercase tracking-tight">{user.name}</p>
+                            <p className="text-[8px] font-bold text-on-surface-dim opacity-50 uppercase tracking-wider truncate">{user.role.replace('_', ' ')}</p>
+                          </div>
+                        </div>
+
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${
+                          isPresent 
+                            ? 'bg-success border-success text-white' 
+                            : 'border-outline text-transparent'
+                        }`}>
+                          <UserCheck className="w-3.5 h-3.5" />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Tactical Briefing Points */}
@@ -505,6 +623,18 @@ export const ShiftBriefing: React.FC = () => {
           </div>
 
         </div>
+      </div>
+
+      {/* AUTHORIZE & COMMIT BUTTON */}
+      <div className="flex justify-center pt-8 border-t border-outline relative z-10">
+        <button 
+          onClick={handleSave}
+          disabled={isSaving}
+          className="btn-command px-12 py-5 rounded-3xl shadow-premium group hover:scale-[1.02] active:scale-95 bg-primary text-white transition-all font-black uppercase tracking-widest text-[11px] flex items-center justify-center space-x-3 w-full sm:w-auto"
+        >
+          <Save className="w-5 h-5 mr-3 group-hover:rotate-12 transition-transform" />
+          {isSaving ? 'ARCHIVING OPS DATA...' : 'AUTHORIZE & COMMIT'}
+        </button>
       </div>
     </div>
   );

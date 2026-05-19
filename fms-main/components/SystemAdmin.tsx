@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Users, Server, ShieldCheck, Activity, Database,
   Plus, Pencil, Trash2, X, Check, AlertTriangle,
@@ -77,10 +78,21 @@ function fmtVol(n: number) {
 
 // ─── Confirm Dialog ───────────────────────────────────────────────────────────
 const ConfirmDialog: React.FC<{ state: ConfirmState; onClose: () => void }> = ({ state, onClose }) => {
+  useEffect(() => {
+    if (state.open) {
+      document.documentElement.classList.add('modal-open');
+    } else {
+      document.documentElement.classList.remove('modal-open');
+    }
+    return () => {
+      document.documentElement.classList.remove('modal-open');
+    };
+  }, [state.open]);
+
   if (!state.open) return null;
-  return (
-    <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-surface/20 backdrop-blur-xl" onClick={onClose}>
-      <div className="bg-surface rounded-3xl p-8 max-w-sm w-full mx-4 shadow-premium border border-outline" onClick={e => e.stopPropagation()}>
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-surface rounded-3xl p-8 max-w-sm w-full mx-4 shadow-premium border border-outline my-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-4 mb-6">
           <div className="p-3 rounded-2xl bg-error/10 border border-error/20">
             <AlertTriangle className="w-6 h-6 text-error" />
@@ -96,22 +108,55 @@ const ConfirmDialog: React.FC<{ state: ConfirmState; onClose: () => void }> = ({
           <button onClick={() => { state.onConfirm(); onClose(); }} className="flex-1 px-4 py-3 rounded-xl bg-error text-white text-[11px] font-black uppercase tracking-widest hover:bg-error/90 transition-all active:scale-95">Delete</button>
         </div>
       </div>
-    </div>
+      <style>{`
+        .modal-open, .modal-open body {
+          overflow: hidden !important;
+          height: 100% !important;
+        }
+        .modal-open #bottom-nav,
+        .modal-open header,
+        .modal-open #sidebar {
+          display: none !important;
+        }
+      `}</style>
+    </div>,
+    document.body
   );
 };
 
 // ─── Modal Wrapper ─────────────────────────────────────────────────────────────
-const Modal: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => (
-  <div className="fixed inset-0 z-[9997] flex items-center justify-center bg-surface/20 backdrop-blur-xl p-4" onClick={onClose}>
-    <div className="bg-surface border border-outline rounded-3xl w-full max-w-lg shadow-premium max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-      <div className="flex items-center justify-between px-8 py-6">
-        <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.2em]">{title}</h3>
-        <button onClick={onClose} className="p-2 rounded-xl hover:bg-surface-container-low transition-all active:scale-90"><X className="w-5 h-5 text-on-surface-dim" /></button>
+const Modal: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => {
+  useEffect(() => {
+    document.documentElement.classList.add('modal-open');
+    return () => {
+      document.documentElement.classList.remove('modal-open');
+    };
+  }, []);
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-surface border border-outline rounded-3xl w-full max-w-lg shadow-premium max-h-[90vh] overflow-y-auto my-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-8 py-6 border-b border-outline/55">
+          <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.2em]">{title}</h3>
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-surface-container-low transition-all active:scale-90"><X className="w-5 h-5 text-on-surface-dim" /></button>
+        </div>
+        <div className="p-8">{children}</div>
       </div>
-      <div className="p-8">{children}</div>
-    </div>
-  </div>
-);
+      <style>{`
+        .modal-open, .modal-open body {
+          overflow: hidden !important;
+          height: 100% !important;
+        }
+        .modal-open #bottom-nav,
+        .modal-open header,
+        .modal-open #sidebar {
+          display: none !important;
+        }
+      `}</style>
+    </div>,
+    document.body
+  );
+};
 
 // ─── Form Field ────────────────────────────────────────────────────────────────
 const Field: React.FC<{ label: string; children: React.ReactNode; required?: boolean }> = ({ label, children, required }) => (

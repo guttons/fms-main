@@ -6,12 +6,12 @@ import { useNotification } from '../context/NotificationContext';
 import { useOperationalData } from '../context/OperationalDataContext';
 
 export const Bridging: React.FC = () => {
-  const { tanks, updateTankLevel, alerts, acknowledgeAlert, createAlert, equipment } = useOperationalData();
+  const { tanks, updateTankLevel, alerts, acknowledgeAlert, createAlert, equipment, updateEquipment } = useOperationalData();
   const [logs, setLogs] = useState<BridgingLog[]>([]);
   const { notify } = useNotification();
 
   const availableRefuelers = (equipment || [])
-    .filter(eq => eq.type === EquipmentType.REFUELLER && eq.status === EquipmentStatus.AVAILABLE);
+    .filter(eq => eq.type === EquipmentType.REFUELLER && (eq.status === EquipmentStatus.AVAILABLE || eq.status === EquipmentStatus.REFUELLING));
 
   // Filter alerts for replenishment requests to highlight them
   const requestedRFs = Array.from(new Set(
@@ -111,6 +111,21 @@ export const Bridging: React.FC = () => {
             if (!isNaN(transferVol)) {
                 const newLevel = tank.currentLevel - transferVol;
                 await updateTankLevel(tank.id, newLevel < 0 ? 0 : newLevel);
+            }
+        }
+
+        // Update Refueller Volume and Status to AVAILABLE
+        const refueller = (equipment || []).find(eq => eq.id === formData.vehicleId);
+        if (refueller) {
+            const transferVol = parseInt(formData.volume);
+            if (!isNaN(transferVol)) {
+                const current = refueller.currentVolume || 0;
+                const maxCap = refueller.maxCapacity || 0;
+                const newVol = current + transferVol;
+                await updateEquipment(refueller.id, {
+                    currentVolume: newVol > maxCap ? maxCap : newVol,
+                    status: EquipmentStatus.AVAILABLE
+                });
             }
         }
 

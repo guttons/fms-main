@@ -2,14 +2,17 @@
 import React, { useState } from 'react';
 import { Sailboat, MapPin, Droplet, Save, CheckCircle, AlertTriangle, Calendar, FileText } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
+import { useOperationalData } from '../context/OperationalDataContext';
 
 interface SeaplaneProps {
     user?: any;
 }
 
 export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
+    const { flightLogs } = useOperationalData();
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
+    const [duplicateError, setDuplicateError] = useState<string | null>(null);
     const [formData, setFormData] = useState({
         operator: '',
         pumpId: '',
@@ -28,6 +31,20 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setDuplicateError(null);
+
+        // ── Duplicate delivery number check ──
+        const fullDeliveryNumber = `MLE-${formData.deliveryNumber}`;
+        const isDuplicate = flightLogs.some(
+            (log) => log.deliveryNumber === fullDeliveryNumber
+        );
+        if (isDuplicate) {
+            setDuplicateError(
+                `Delivery ticket ${fullDeliveryNumber} already exists in the operations log. Each ticket number must be unique.`
+            );
+            return;
+        }
+
         setLoading(true);
         try {
             const parsedVolume = parseFloat(formData.volume.replace(/,/g, '')) || 0;
@@ -122,15 +139,24 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                             required
                             inputMode="numeric"
                             pattern="[0-9]*"
-                            className="flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-error placeholder:text-error/20"
+                            className={`flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 transition-all text-error placeholder:text-error/20 ${
+                                duplicateError ? 'border-error' : 'border-outline focus:border-primary'
+                            }`}
                             placeholder="000000"
                             value={formData.deliveryNumber}
                             onChange={(e) => {
                                 const val = e.target.value.replace(/\D/g, '').slice(0, 6);
                                 setFormData(prev => ({ ...prev, deliveryNumber: val }));
+                                if (duplicateError) setDuplicateError(null);
                             }}
                         />
                     </div>
+                    {duplicateError && (
+                        <div className="mt-4 flex items-start gap-3 p-3 bg-error/10 border border-error/30 rounded-xl">
+                            <AlertTriangle className="w-4 h-4 text-error mt-0.5 shrink-0" />
+                            <p className="text-[10px] font-black text-error uppercase tracking-widest leading-relaxed">{duplicateError}</p>
+                        </div>
+                    )}
                 </div>
 
                 <div className="card-premium p-6 lg:p-10">

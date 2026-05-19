@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { MOCK_USERS } from '../constants';
 import { FileText, Search, Download, Filter, X } from 'lucide-react';
 import { Logo } from './Logo';
@@ -19,10 +20,80 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   
   const [editingLog, setEditingLog] = useState<FlightLog | null>(null);
-  const [editForm, setEditForm] = useState({ volume: 0, status: 'PENDING' });
+  const [editForm, setEditForm] = useState({
+    flightNumber: '',
+    aircraftReg: '',
+    aircraftType: '',
+    stand: '',
+    deliveryNumber: '',
+    volume: 0,
+    meterOpen: 0,
+    meterClose: 0,
+    remarks: '',
+    date: '',
+    timeArrived: '',
+    timePosition: '',
+    timeStart: '',
+    timeEnd: ''
+  });
   const [saving, setSaving] = useState(false);
 
   const canEdit = user?.role === UserRole.ITP_MANAGER || user?.role === UserRole.ADMIN;
+
+  const getLocalDatePart = (isoString?: string) => {
+    if (!isoString) return '';
+    try {
+      const date = new Date(isoString);
+      if (isNaN(date.getTime())) return '';
+      return date.toLocaleDateString('en-CA'); // YYYY-MM-DD
+    } catch {
+      return '';
+    }
+  };
+
+  const getLocalTimePart = (isoString?: string) => {
+    if (!isoString) return '';
+    try {
+      const date = new Date(isoString);
+      if (isNaN(date.getTime())) {
+        if (isoString.includes(':')) {
+          const parts = isoString.split(':');
+          return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
+        }
+        return '';
+      }
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    } catch {
+      return '';
+    }
+  };
+
+  const combineDateAndTime = (dateStr: string, timeStr: string) => {
+    if (!dateStr || !timeStr) return '';
+    try {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      const date = new Date(year, month - 1, day, hours, minutes);
+      return date.toISOString();
+    } catch {
+      return '';
+    }
+  };
+
+  const formatTime = (isoString?: string) => {
+    if (!isoString) return '--:--:--';
+    try {
+      const date = new Date(isoString);
+      if (isNaN(date.getTime())) {
+        if (isoString.includes(':')) return isoString;
+        return '--:--:--';
+      }
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    } catch {
+      return isoString || '--:--:--';
+    }
+  };
 
   const fetchLogs = async () => {
     try {
@@ -40,18 +111,61 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     fetchLogs();
   }, []);
 
+  useEffect(() => {
+    if (editingLog) {
+      document.documentElement.classList.add('modal-open');
+    } else {
+      document.documentElement.classList.remove('modal-open');
+    }
+    return () => {
+      document.documentElement.classList.remove('modal-open');
+    };
+  }, [editingLog]);
+
   const handleSaveEdit = async () => {
     if (!editingLog) return;
+    
+    // Validate ticket number to exactly 6 digits
+    const cleanTicket = editForm.deliveryNumber.replace(/\D/g, '');
+    if (cleanTicket.length !== 6) return;
+
     setSaving(true);
     try {
       await supabaseService.updateFlightLog(editingLog.id, {
+        flightNumber: editForm.flightNumber,
+        aircraftReg: editForm.aircraftReg,
+        aircraftType: editForm.aircraftType,
+        stand: editForm.stand,
+        deliveryNumber: `MLE-${cleanTicket}`,
         volume: Number(editForm.volume),
-        status: editForm.status as any
+        meterOpen: Number(editForm.meterOpen),
+        meterClose: Number(editForm.meterClose),
+        remarks: editForm.remarks,
+        timestampArrived: combineDateAndTime(editForm.date, editForm.timeArrived),
+        timestampPosition: combineDateAndTime(editForm.date, editForm.timePosition),
+        timestampStart: combineDateAndTime(editForm.date, editForm.timeStart),
+        timestampInitialEnd: combineDateAndTime(editForm.date, editForm.timeEnd)
       });
       setEditingLog(null);
       await fetchLogs();
     } catch (error) {
       console.error('Error updating log:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteLog = async () => {
+    if (!editingLog) return;
+    if (!window.confirm('Are you absolutely sure you want to delete this operational log record? This action is permanent.')) return;
+
+    setSaving(true);
+    try {
+      await supabaseService.deleteFlightLog(editingLog.id);
+      setEditingLog(null);
+      await fetchLogs();
+    } catch (error) {
+      console.error('Error deleting log:', error);
     } finally {
       setSaving(false);
     }
@@ -65,15 +179,25 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
     let matchesDate = true;
     if (filterDate && log.timestampStart) {
-      // Create local date string from timestamp for matching
-      const logDate = new Date(log.timestampStart).toLocaleDateString('en-CA'); // gets YYYY-MM-DD locally
+      const logDate = new Date(log.timestampStart).toLocaleDateString('en-CA');
       matchesDate = logDate === filterDate;
     }
 
     return matchesSearch && matchesDate;
   });
 
-  const totalVolume = filteredLogs.reduce((sum, log) => sum + (log.volume || 0), 0);
+  const sortedLogs = [...filteredLogs].sort((a, b) => {
+    const aVal = a.deliveryNumber || '';
+    const bVal = b.deliveryNumber || '';
+    if (!aVal && !bVal) return 0;
+    if (!aVal) return 1;
+    if (!bVal) return -1;
+    return bVal.localeCompare(aVal, undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  const totalVolume = sortedLogs.reduce((sum, log) => sum + (log.volume || 0), 0);
+
+  const isValidTicket = editForm.deliveryNumber.replace(/\D/g, '').length === 6;
 
   return (
     <div className="p-6 lg:p-10 space-y-10">
@@ -105,7 +229,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
              >
                 <Filter className="w-5 h-5" />
              </button>
-             <button className="flex items-center justify-center p-4 sm:px-8 sm:py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all">
+             <button className="flex items-center justify-center p-4 sm:px-8 sm:py-4 kinetic-gradient text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all">
                 <Download className="w-5 h-5 sm:w-4 sm:h-4 sm:mr-3" />
                 <span className="hidden sm:inline">EXPORT CSV</span>
              </button>
@@ -150,19 +274,19 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                 <tr className="bg-surface-dim/50 border-b border-outline">
                   <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Timestamp</th>
                   <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Flight ID</th>
-                  <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Tactical Operator</th>
+                  <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Equipment Used</th>
                   <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
-                  <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Deployment Status</th>
+                  <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Delivery Ticket</th>
                   <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline">
-                {filteredLogs.length === 0 ? (
+                {sortedLogs.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-10 py-20 text-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 italic">Zero matches in historical database</td>
                   </tr>
                 ) : (
-                  filteredLogs.map((log) => {
+                  sortedLogs.map((log) => {
                       const operatorName = MOCK_USERS.find(u => u.id === log.operatorId)?.name || 'Unknown';
                       const isExpanded = expandedLogId === log.id;
                       return (
@@ -172,28 +296,20 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                           className={`hover:bg-primary/[0.02] transition-colors group cursor-pointer ${isExpanded ? 'bg-primary/[0.03]' : ''}`}
                         >
                           <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
-                              {log.timestampStart ? new Date(log.timestampStart).toLocaleString([], { hour12: false }) : 'PENDING SYNC'}
+                              {log.timestampStart ? new Date(log.timestampStart).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: false }) : 'PENDING'}
                           </td>
                           <td className="px-10 py-6">
                               <div className="text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">{log.flightNumber}</div>
                               <div className="text-[9px] font-black text-on-surface-dim opacity-30 uppercase tracking-widest mt-1">{log.aircraftReg} ({log.aircraftType})</div>
                           </td>
-                          <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest">
-                              {operatorName}
+                          <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest font-mono">
+                              {log.vehicleId || 'N/A'}
                           </td>
                           <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
                               {log.volume.toLocaleString()}
                           </td>
-                          <td className="px-10 py-6">
-                              <span className={`text-[9px] font-black px-4 py-1.5 rounded-full border uppercase tracking-[0.2em] shadow-sm ${
-                                  log.status === 'COMPLETED' 
-                                  ? 'bg-success/10 text-success border-success/20' 
-                                  : log.status === 'VOID'
-                                  ? 'bg-error/10 text-error border-error/20'
-                                  : 'bg-warning/10 text-warning border-warning/20'
-                              }`}>
-                                  {log.status}
-                              </span>
+                          <td className="px-10 py-6 text-left text-[11px] font-black text-error font-mono tracking-widest">
+                              {log.deliveryNumber || 'N/A'}
                           </td>
                           <td className="px-10 py-6 text-right">
                               {canEdit ? (
@@ -201,7 +317,23 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setEditingLog(log);
-                                    setEditForm({ volume: log.volume, status: log.status });
+                                    const primaryDate = getLocalDatePart(log.timestampStart || log.timestampArrived || log.timestampPosition || log.timestampInitialEnd) || new Date().toISOString().split('T')[0];
+                                    setEditForm({
+                                      flightNumber: log.flightNumber || '',
+                                      aircraftReg: log.aircraftReg || '',
+                                      aircraftType: log.aircraftType || '',
+                                      stand: log.stand || '',
+                                      deliveryNumber: log.deliveryNumber ? log.deliveryNumber.replace('MLE-', '') : '',
+                                      volume: log.volume || 0,
+                                      meterOpen: log.meterOpen || 0,
+                                      meterClose: log.meterClose || 0,
+                                      remarks: log.remarks || '',
+                                      date: primaryDate,
+                                      timeArrived: getLocalTimePart(log.timestampArrived),
+                                      timePosition: getLocalTimePart(log.timestampPosition),
+                                      timeStart: getLocalTimePart(log.timestampStart),
+                                      timeEnd: getLocalTimePart(log.timestampInitialEnd)
+                                    });
                                   }} 
                                   className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-[0.3em] transition-all"
                                 >
@@ -220,28 +352,24 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-in fade-in duration-300">
                                     <div className="flex flex-col gap-1">
                                        <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Arrived</span>
-                                       <span className="text-[11px] font-mono text-on-surface">{log.timestampArrived ? new Date(log.timestampArrived).toLocaleTimeString([], {hour12: false}) : '--:--:--'}</span>
+                                       <span className="text-[11px] font-mono text-on-surface">{formatTime(log.timestampArrived)}</span>
                                     </div>
                                     <div className="flex flex-col gap-1">
                                        <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Positioned</span>
-                                       <span className="text-[11px] font-mono text-on-surface">{log.timestampPosition ? new Date(log.timestampPosition).toLocaleTimeString([], {hour12: false}) : '--:--:--'}</span>
+                                       <span className="text-[11px] font-mono text-on-surface">{formatTime(log.timestampPosition)}</span>
                                     </div>
                                     <div className="flex flex-col gap-1">
                                        <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Dispense Start</span>
-                                       <span className="text-[11px] font-mono text-success">{log.timestampStart ? new Date(log.timestampStart).toLocaleTimeString([], {hour12: false}) : '--:--:--'}</span>
+                                       <span className="text-[11px] font-mono text-success">{formatTime(log.timestampStart)}</span>
                                     </div>
                                     <div className="flex flex-col gap-1">
                                        <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Dispense End</span>
-                                       <span className="text-[11px] font-mono text-error">{log.timestampInitialEnd ? new Date(log.timestampInitialEnd).toLocaleTimeString([], {hour12: false}) : '--:--:--'}</span>
+                                       <span className="text-[11px] font-mono text-error">{formatTime(log.timestampInitialEnd)}</span>
                                     </div>
                                     
                                     <div className="flex flex-col gap-1">
-                                       <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Equipment</span>
-                                       <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.vehicleId || 'N/A'}</span>
-                                    </div>
-                                    <div className="flex flex-col gap-1">
-                                       <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Ticket Number</span>
-                                       <span className="text-[11px] font-mono text-primary font-black">{log.deliveryNumber || 'N/A'}</span>
+                                       <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Tactical Operator</span>
+                                       <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{operatorName}</span>
                                     </div>
                                     <div className="flex flex-col gap-1 col-span-2">
                                        <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Remarks</span>
@@ -262,54 +390,217 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
       </div>
 
       {/* Edit Modal */}
-      {editingLog && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-container rounded-[32px] p-8 w-full max-w-lg border border-outline shadow-2xl relative animate-in zoom-in-95 duration-300">
-            <button 
-              onClick={() => setEditingLog(null)}
-              className="absolute top-6 right-6 p-2 rounded-xl bg-surface-dim text-on-surface hover:bg-error/10 hover:text-error transition-all"
-            >
-              <X className="w-5 h-5" />
-            </button>
+      {editingLog && createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-surface-container rounded-[24px] sm:rounded-[32px] border border-outline shadow-2xl relative max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] my-auto flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+            {/* Header: fixed/sticky */}
+            <div className="p-5 sm:p-8 pb-4 border-b border-outline relative shrink-0">
+              <button 
+                onClick={() => setEditingLog(null)}
+                className="absolute top-5 right-5 p-2 rounded-xl bg-surface-dim text-on-surface hover:bg-error/10 hover:text-error transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <h3 className="headline-sm text-on-surface mb-1 tracking-tighter">Edit Operational Log</h3>
+              <p className="text-[11px] font-black text-primary uppercase tracking-[0.2em]">Modify details for Ticket: {editingLog.deliveryNumber || 'MLE-XXXXXX'}</p>
+            </div>
 
-            <h3 className="headline-sm text-on-surface mb-2 tracking-tighter">Edit Flight Log</h3>
-            <p className="text-[11px] font-black text-primary uppercase tracking-[0.2em] mb-8">{editingLog.flightNumber} • {editingLog.aircraftReg}</p>
-
-            <div className="space-y-5">
+            {/* Content: Scrollable */}
+            <div className="p-5 sm:p-8 pt-4 overflow-y-auto space-y-6 flex-1">
+              {/* Flight Info Grid */}
               <div>
-                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-widest mb-2">Volume (Liters)</label>
-                <input 
-                  type="number"
-                  value={editForm.volume}
-                  onChange={e => setEditForm({...editForm, volume: e.target.valueAsNumber || 0})}
-                  className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Flight & Aircraft Details</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Flight Number</label>
+                    <input 
+                      type="text"
+                      value={editForm.flightNumber}
+                      onChange={e => setEditForm({...editForm, flightNumber: e.target.value})}
+                      className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Aircraft Reg</label>
+                    <input 
+                      type="text"
+                      value={editForm.aircraftReg}
+                      onChange={e => setEditForm({...editForm, aircraftReg: e.target.value})}
+                      className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Aircraft Type</label>
+                    <input 
+                      type="text"
+                      value={editForm.aircraftType}
+                      onChange={e => setEditForm({...editForm, aircraftType: e.target.value})}
+                      className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Stand</label>
+                    <input 
+                      type="text"
+                      value={editForm.stand}
+                      onChange={e => setEditForm({...editForm, stand: e.target.value})}
+                      className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Delivery & Volumetrics */}
+              <div>
+                <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Delivery & Meter Readings</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Ticket Number</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[12px] font-black text-on-surface-dim font-mono">MLE-</span>
+                      <input 
+                        type="text"
+                        maxLength={6}
+                        value={editForm.deliveryNumber}
+                        onChange={e => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          setEditForm({...editForm, deliveryNumber: val});
+                        }}
+                        className="w-full bg-surface-lowest border border-outline rounded-xl pl-12 pr-3 py-2 text-error font-mono text-[12px] font-black focus:border-primary outline-none"
+                        placeholder="000000"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Volume (Liters)</label>
+                    <input 
+                      type="number"
+                      value={editForm.volume}
+                      onChange={e => setEditForm({...editForm, volume: e.target.valueAsNumber || 0})}
+                      className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Meter Open</label>
+                    <input 
+                      type="number"
+                      value={editForm.meterOpen}
+                      onChange={e => setEditForm({...editForm, meterOpen: e.target.valueAsNumber || 0})}
+                      className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Meter Close</label>
+                    <input 
+                      type="number"
+                      value={editForm.meterClose}
+                      onChange={e => setEditForm({...editForm, meterClose: e.target.valueAsNumber || 0})}
+                      className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Date & Timings */}
+              <div>
+                <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Operation Timing Specifications</h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Operation Date</label>
+                    <input 
+                      type="date"
+                      value={editForm.date}
+                      onChange={e => setEditForm({...editForm, date: e.target.value})}
+                      className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Arrived</label>
+                      <input 
+                        type="time"
+                        value={editForm.timeArrived}
+                        onChange={e => setEditForm({...editForm, timeArrived: e.target.value})}
+                        className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Positioned</label>
+                      <input 
+                        type="time"
+                        value={editForm.timePosition}
+                        onChange={e => setEditForm({...editForm, timePosition: e.target.value})}
+                        className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Dispense Start</label>
+                      <input 
+                        type="time"
+                        value={editForm.timeStart}
+                        onChange={e => setEditForm({...editForm, timeStart: e.target.value})}
+                        className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Dispense End</label>
+                      <input 
+                        type="time"
+                        value={editForm.timeEnd}
+                        onChange={e => setEditForm({...editForm, timeEnd: e.target.value})}
+                        className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Remarks */}
+              <div>
+                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-widest mb-2">Remarks</label>
+                <textarea 
+                  value={editForm.remarks}
+                  onChange={e => setEditForm({...editForm, remarks: e.target.value})}
+                  rows={2}
+                  className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-on-surface text-[12px] font-bold focus:border-primary outline-none resize-none"
+                  placeholder="Enter any additional details or remarks..."
                 />
               </div>
+            </div>
 
-              <div>
-                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-widest mb-2">Status</label>
-                <select 
-                  value={editForm.status}
-                  onChange={e => setEditForm({...editForm, status: e.target.value})}
-                  className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
-                >
-                  <option value="PENDING">PENDING</option>
-                  <option value="IN_PROGRESS">IN_PROGRESS</option>
-                  <option value="COMPLETED">COMPLETED</option>
-                </select>
-              </div>
-
+            {/* Footer: sticky/fixed */}
+            <div className="p-5 sm:p-8 pt-4 border-t border-outline shrink-0 flex gap-4">
               <button 
-                onClick={handleSaveEdit}
+                type="button"
+                onClick={handleDeleteLog}
                 disabled={saving}
-                className="w-full mt-4 kinetic-gradient text-white font-black uppercase tracking-[0.2em] py-4 rounded-xl shadow-premium hover:shadow-glow transition-all active:scale-95 text-[11px] disabled:opacity-50"
+                className="flex-1 bg-error/10 border border-error/30 text-error hover:bg-error hover:text-white font-black uppercase tracking-[0.2em] py-4 rounded-xl transition-all active:scale-95 text-[11px] disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Processing...' : 'Delete Record'}
+              </button>
+              <button 
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={saving || !isValidTicket}
+                className="flex-[2] kinetic-gradient text-white font-black uppercase tracking-[0.2em] py-4 rounded-xl shadow-premium hover:shadow-glow transition-all active:scale-95 text-[11px] disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {saving ? 'Saving...' : 'Save Log Record'}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
+      <style>{`
+        @media (max-width: 1023px) {
+          html.modal-open .sticky.top-0,
+          html.modal-open header,
+          html.modal-open .fixed.bottom-6 {
+            display: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 };

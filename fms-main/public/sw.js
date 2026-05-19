@@ -1,8 +1,7 @@
-const CACHE_NAME = 'fms-v1';
+const CACHE_NAME = 'fms-v2';
 const ASSETS = [
   '/',
   '/index.html',
-  '/index.css',
   '/manifest.json',
   '/favicon.svg'
 ];

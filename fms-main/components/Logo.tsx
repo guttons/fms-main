@@ -38,12 +38,12 @@ export const Logo: React.FC<LogoProps> = ({ className = "h-12 w-auto" }) => {
       />
       
       {/* Connecting nodes */}
-      <circle cx="60" cy="15" r="4" fill="currentColor" />
-      <circle cx="100" cy="38" r="4" fill="currentColor" />
-      <circle cx="100" cy="82" r="4" fill="currentColor" />
-      <circle cx="60" cy="105" r="4" fill="currentColor" />
-      <circle cx="20" cy="82" r="4" fill="currentColor" />
-      <circle cx="20" cy="38" r="4" fill="currentColor" />
+      <circle cx="60" cy="15" r="6" fill="currentColor" />
+      <circle cx="100" cy="38" r="6" fill="currentColor" />
+      <circle cx="100" cy="82" r="6" fill="currentColor" />
+      <circle cx="60" cy="105" r="6" fill="currentColor" />
+      <circle cx="20" cy="82" r="6" fill="currentColor" />
+      <circle cx="20" cy="38" r="6" fill="currentColor" />
     </svg>
   );
 };

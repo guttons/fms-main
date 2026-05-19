@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, EQUIPMENT } from '../constants';
 import { UserRole, EquipmentType, FlightJob } from '../types';
 import { Calendar, Plus, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home } from 'lucide-react';
@@ -47,6 +48,17 @@ export const Schedule: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const operators = MOCK_USERS.filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(u.role));
   const todayDate = new Date().toISOString().split('T')[0];
+
+  useEffect(() => {
+    if (isModalOpen) {
+      document.documentElement.classList.add('modal-open');
+    } else {
+      document.documentElement.classList.remove('modal-open');
+    }
+    return () => {
+      document.documentElement.classList.remove('modal-open');
+    };
+  }, [isModalOpen]);
 
   useEffect(() => {
     if (briefingInfo?.dieselNeeds) {
@@ -707,9 +719,9 @@ export const Schedule: React.FC = () => {
       </div>
 
       {/* Add Flight Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-surface/20 backdrop-blur-xl p-4" onClick={() => setIsModalOpen(false)}>
-            <div className="bg-surface-lowest rounded-[40px] shadow-2xl w-full max-w-lg p-10 border border-outline relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      {isModalOpen && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" onClick={() => setIsModalOpen(false)}>
+            <div className="bg-surface-lowest rounded-[40px] shadow-2xl w-full max-w-lg p-10 border border-outline relative overflow-hidden my-auto" onClick={(e) => e.stopPropagation()}>
                 <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
                 
                 <h3 className="text-3xl font-[900] text-on-surface mb-8 tracking-tighter uppercase italic relative z-10">INITIATE TASK</h3>
@@ -759,7 +771,22 @@ export const Schedule: React.FC = () => {
                     </div>
                 </form>
             </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {isModalOpen && (
+        <style>{`
+          .modal-open, .modal-open body {
+            overflow: hidden !important;
+            height: 100% !important;
+          }
+          .modal-open #bottom-nav,
+          .modal-open header,
+          .modal-open #sidebar {
+            display: none !important;
+          }
+        `}</style>
       )}
     </div>
   );

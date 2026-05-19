@@ -14,6 +14,7 @@ interface ShiftBriefingInfo {
     hydrantOpsOfficers: string[];
     dutySupervisor: string;
     shiftInCharge: string;
+    attendees?: string[];
   };
 }
 
@@ -33,7 +34,7 @@ interface OperationalDataContextType {
   updateEquipmentStatus: (id: string, status: EqStatus) => void;
   updateEquipment: (id: string, updates: Partial<Equipment>) => Promise<void>;
   updateTankLevel: (id: string, newLevel: number) => Promise<void>;
-  updateBriefingInfo: (info: any[], dieselNeeds: string[], staffAssignments: any) => Promise<void>;
+  updateBriefingInfo: (info: any[], dieselNeeds: string[], staffAssignments?: any) => Promise<void>;
   updateFlightJob: (id: string, updates: Partial<FlightJob>) => void;
   addFlightJob: (job: FlightJob) => void;
   createAlert: (alert: Omit<Alert, 'id'>) => Promise<boolean>;
@@ -312,13 +313,19 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
   };
 
-  const updateBriefingInfo = async (info: any[], dieselNeeds: string[], staffAssignments: any) => {
-    setBriefingInfo({ info, dieselNeeds, staffAssignments });
+  const updateBriefingInfo = async (info: any[], dieselNeeds: string[], staffAssignments?: any) => {
+    let finalStaff = staffAssignments;
+    setBriefingInfo(prev => {
+      if (staffAssignments === undefined) {
+        finalStaff = prev?.staffAssignments;
+      }
+      return { info, dieselNeeds, staffAssignments: finalStaff };
+    });
 
     if (appUser) {
       const todayDate = new Date().toISOString().split('T')[0];
       try {
-        await supabaseService.upsertShiftBriefingInfo(todayDate, selectedBriefingShift, info, dieselNeeds, staffAssignments);
+        await supabaseService.upsertShiftBriefingInfo(todayDate, selectedBriefingShift, info, dieselNeeds, finalStaff !== undefined ? finalStaff : null);
       } catch (error) {
         console.error('Failed to sync briefing update to Firestore:', error);
       }

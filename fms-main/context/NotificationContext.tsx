@@ -28,7 +28,11 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   const notify = useCallback((message: string, type: NotificationType = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
-    setNotifications((prev) => [...prev, { id, message, type }]);
+    setNotifications((prev) => {
+      // Keep only one active instance per notification type to avoid stacking
+      const filtered = prev.filter((n) => n.type !== type);
+      return [...filtered, { id, message, type }];
+    });
     setTimeout(() => {
       setNotifications((prev) => prev.filter((n) => n.id !== id));
     }, 5000);

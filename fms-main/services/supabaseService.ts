@@ -164,108 +164,92 @@ export const supabaseService = {
     }
   },
 
-  // Flight Logs
-  async getFlightLogs(): Promise<FlightLog[]> {
-    if (!auth.currentUser) return [];
+  // ── BigQuery Cloud Run API helpers ──────────────────────────────────────────
+  // VITE_BIGQUERY_API_URL = deployed Cloud Run URL, e.g.
+  //   https://fms-bigquery-api-XXXXXXXX-uc.a.run.app
+  // Fallback: local Cloud Run dev server on port 8080
+  _bqBase(): string {
+    return (
+      import.meta.env.VITE_BIGQUERY_API_URL ||
+      'http://localhost:8080'
+    );
+  },
 
-    const path = 'flight_logs';
+  async _bqAuthHeaders(): Promise<Record<string, string>> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     try {
-      const querySnapshot = await getDocs(collection(db, path));
-      return querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          flightNumber: data.flight_number,
-          aircraftReg: data.aircraft_reg,
-          aircraftType: data.aircraft_type,
-          stand: data.stand,
-          operatorId: data.operator_id,
-          vehicleId: data.vehicle_id,
-          status: data.status,
-          timestampArrived: data.timestamp_arrived,
-          timestampPosition: data.timestamp_position,
-          timestampStart: data.timestamp_start,
-          timestampInitialEnd: data.timestamp_initial_end,
-          timestampFinalStart: data.timestamp_final_start,
-          timestampFinalEnd: data.timestamp_final_end,
-          timestampClearance: data.timestamp_clearance,
-          meterOpen: data.meter_open,
-          meterClose: data.meter_close,
-          volume: data.volume,
-          panelCheck: data.panel_check,
-          walkAroundCheck: data.walk_around_check,
-          appearanceCheck: data.appearance_check,
-          waterCheck: data.water_check
-        } as FlightLog;
-      });
+      if (auth.currentUser) {
+        const token = await auth.currentUser.getIdToken();
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    } catch (e) {
+      console.warn('[BigQuery] Could not get ID token:', e);
+    }
+    return headers;
+  },
+
+  // Flight Logs — backed by native Google BigQuery via Cloud Run API proxy
+  async getFlightLogs(): Promise<FlightLog[]> {
+    console.log('[BigQuery SQL] SELECT * FROM `macl-fms.fms_data.operations_log` WHERE is_deleted IS FALSE ORDER BY delivery_number DESC');
+    if (!auth.currentUser) return [];
+    try {
+      const headers = await this._bqAuthHeaders();
+      const res = await fetch(`${this._bqBase()}/operations-log`, { headers });
+      if (!res.ok) throw new Error(`BigQuery GET failed: ${res.status} ${await res.text()}`);
+      const data = await res.json();
+      return data.logs as FlightLog[];
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, path);
-      throw error;
+      console.error('[BigQuery] getFlightLogs error:', error);
+      return [];
     }
   },
 
   async createFlightLog(log: Omit<FlightLog, 'id'>): Promise<void> {
-    const path = 'flight_logs';
-    
-    // 1. Sync to BigQuery (Primary Record for Into-Plane)
+    console.log('[BigQuery SQL] INSERT INTO `macl-fms.fms_data.operations_log` VALUES (...)');
+    if (!auth.currentUser) return;
     try {
-      await this.syncToBigQuery('into_plane_refuelling', log);
-    } catch (bqError) {
-      console.error('BigQuery Sync Failed:', bqError);
-      // We continue to Firebase as a fallback
-    }
-
-    // 2. Save to Firestore (Real-time cache/fallback)
-    if (!auth.currentUser) return; 
-
-    try {
-      await addDoc(collection(db, path), {
-        flight_number: log.flightNumber || '',
-        aircraft_reg: log.aircraftReg || '',
-        aircraft_type: log.aircraftType || '',
-        stand: log.stand || '',
-        operator_id: log.operatorId || '',
-        vehicle_id: log.vehicleId || '',
-        status: log.status || 'PENDING',
-        delivery_number: log.deliveryNumber || null,
-        pit_number: log.pitNumber || null,
-        timestamp_arrived: log.timestampArrived ?? null,
-        timestamp_position: log.timestampPosition ?? null,
-        timestamp_start: log.timestampStart ?? null,
-        timestamp_initial_end: log.timestampInitialEnd ?? null,
-        timestamp_final_start: log.timestampFinalStart ?? null,
-        timestamp_final_end: log.timestampFinalEnd ?? null,
-        timestamp_clearance: log.timestampClearance ?? null,
-        meter_open: log.meterOpen ?? 0,
-        meter_close: log.meterClose ?? 0,
-        volume: log.volume ?? 0,
-        panel_check: log.panelCheck ?? false,
-        walk_around_check: log.walkAroundCheck ?? false,
-        appearance_check: log.appearanceCheck ?? false,
-        water_check: log.waterCheck ?? false,
-        remarks: log.remarks || '',
-        created_at: new Date().toISOString()
+      const headers = await this._bqAuthHeaders();
+      const res = await fetch(`${this._bqBase()}/operations-log`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(log),
       });
+      if (!res.ok) throw new Error(`BigQuery POST failed: ${res.status} ${await res.text()}`);
     } catch (error) {
-      // If Firestore fails (permissions, etc.), we don't throw if BigQuery succeeded
-      console.warn('Firestore fallback save failed (Permissions or Config):', error instanceof Error ? error.message : error);
+      console.error('[BigQuery] createFlightLog error:', error);
+      throw error;
     }
   },
 
   async updateFlightLog(id: string, updates: Partial<FlightLog>): Promise<void> {
+    console.log(`[BigQuery SQL] UPDATE \`macl-fms.fms_data.operations_log\` SET ... WHERE id = '${id}'`);
     if (!auth.currentUser) return;
-    const path = `flight_logs/${id}`;
     try {
-      const logRef = doc(db, 'flight_logs', id);
-      const dbUpdates: any = {};
-      if (updates.status !== undefined) dbUpdates.status = updates.status;
-      if (updates.volume !== undefined) dbUpdates.volume = updates.volume;
-      if (updates.meterOpen !== undefined) dbUpdates.meter_open = updates.meterOpen;
-      if (updates.meterClose !== undefined) dbUpdates.meter_close = updates.meterClose;
-      
-      await updateDoc(logRef, dbUpdates);
+      const headers = await this._bqAuthHeaders();
+      const res = await fetch(`${this._bqBase()}/operations-log/${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error(`BigQuery PATCH failed: ${res.status} ${await res.text()}`);
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
+      console.error('[BigQuery] updateFlightLog error:', error);
+      throw error;
+    }
+  },
+
+  async deleteFlightLog(id: string): Promise<void> {
+    console.log(`[BigQuery SQL] UPDATE \`macl-fms.fms_data.operations_log\` SET is_deleted=TRUE WHERE id = '${id}'`);
+    if (!auth.currentUser) return;
+    try {
+      const headers = await this._bqAuthHeaders();
+      const res = await fetch(`${this._bqBase()}/operations-log/${id}`, {
+        method: 'DELETE',
+        headers,
+      });
+      if (!res.ok) throw new Error(`BigQuery DELETE failed: ${res.status} ${await res.text()}`);
+    } catch (error) {
+      console.error('[BigQuery] deleteFlightLog error:', error);
       throw error;
     }
   },
@@ -613,21 +597,21 @@ export const supabaseService = {
     }
   },
 
-  // BigQuery Sync (Operational Data Warehouse)
+  // BigQuery Sync — routes through the Cloud Run API proxy
   async syncToBigQuery(table: string, data: any): Promise<void> {
-    // In a real production environment, this would hit a cloud function or an API endpoint 
-    // that proxies the request to BigQuery using the Google Cloud SDK.
-    console.log(`[BigQuery Sync] Syncing to table: ${table}`, data);
-    
+    console.log(`[BigQuery Sync] Routing to Cloud Run API → table: ${table}`, data);
     try {
-      // Simulate API call to BigQuery proxy
-      // await fetch('https://api.your-system.com/v1/bigquery/sync', { ... });
-      
-      // For this demo/development phase, we log the intent.
-      return Promise.resolve();
+      const headers = await this._bqAuthHeaders();
+      const res = await fetch(`${this._bqBase()}/operations-log`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ ...data, _targetTable: table }),
+      });
+      if (!res.ok) {
+        console.error(`[BigQuery Sync] Failed for table ${table}: ${res.status}`);
+      }
     } catch (error) {
-      console.error('BigQuery Sync Failed:', error);
-      throw error;
+      console.error('[BigQuery Sync] Error:', error);
     }
   }
 };
