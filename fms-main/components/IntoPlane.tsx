@@ -964,12 +964,12 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
             try {
               await createAlert({
                 severity: 'medium',
-                message: `Replenishment requested for unit ${selectedVehicleId} (Low fuel: ${newVolume}L)`,
+                message: `Replenishment requested for unit ${selectedVehicleId} (Low fuel: ${newVolume.toLocaleString()}L)`,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
                 acknowledged: false,
                 targetRole: UserRole.DEPOT_OPERATOR
               });
-              notify(`Refueller ${selectedVehicleId} fuel level is low (${newVolume}L). Replenishment request triggered automatically.`, 'warning');
+              notify(`Refueller ${selectedVehicleId} fuel level is low (${newVolume.toLocaleString()}L). Replenishment request triggered automatically.`, 'warning');
             } catch (err) {
               console.error("Auto alert trigger failed:", err);
             }

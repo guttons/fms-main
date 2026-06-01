@@ -41,7 +41,7 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const scrollRef = React.useRef<HTMLElement>(null);
   const [pendingJob, setPendingJob] = useState<FlightJob | null>(null);
-  
+
   // Theme management
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
@@ -157,6 +157,27 @@ const AppContextContent: React.FC<any> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [mainElement, setMainElement] = useState<HTMLElement | null>(null);
+
+  const alertsRef = React.useRef<HTMLDivElement>(null);
+  const settingsRef = React.useRef<HTMLDivElement>(null);
+
+  // Click outside handlers for modals/dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showAlertsPanel && alertsRef.current && !alertsRef.current.contains(target)) {
+        setShowAlertsPanel(false);
+      }
+      if (isSettingsOpen && settingsRef.current && !settingsRef.current.contains(target)) {
+        setIsSettingsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showAlertsPanel, isSettingsOpen]);
 
   const mainRefCallback = React.useCallback((node: HTMLElement | null) => {
     scrollRef.current = node;
@@ -694,7 +715,7 @@ const AppContextContent: React.FC<any> = ({
               <div className="flex items-center space-x-6">
                 <div className="flex items-center space-x-4 border-outline pl-6">
 
-                  <div className="relative">
+                  <div className="relative" ref={alertsRef}>
                     <button 
                       onClick={() => {
                         setShowAlertsPanel(!showAlertsPanel);
@@ -811,7 +832,7 @@ const AppContextContent: React.FC<any> = ({
                     )}
                   </div>
 
-                  <div className="relative">
+                  <div className="relative" ref={settingsRef}>
                     <div 
                       onClick={() => {
                         setIsSettingsOpen(!isSettingsOpen);

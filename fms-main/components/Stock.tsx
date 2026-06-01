@@ -74,7 +74,7 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
     // Keep raw string in local state for fluid typing
     setDipReadings(prev => ({ ...prev, [id]: heightStr }));
 
-    const height = parseFloat(heightStr) || 0;
+    const height = (parseFloat(heightStr) || 0) / 10; // Convert MM input to CM for geometry formulas
     if (height <= 0) {
       setReadings(prev => {
         const next = { ...prev };
@@ -214,7 +214,7 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
       </div>
 
       {/* Global Tank Search & Active Filters Bar */}
-      <div className="card-premium p-6 border border-outline flex items-center bg-surface-dim/40 max-w-xl">
+      <div className="card-premium py-3.5 px-5 border border-outline flex items-center bg-surface-dim/40 max-w-xl">
         <Search className="w-4 h-4 text-on-surface-dim opacity-40 mr-4" />
         <input 
           type="text" 
@@ -257,7 +257,7 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
                           <th className="px-6 py-4 text-right text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Capacity</th>
                           <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Fill Ratio</th>
                           <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Last Record Date</th>
-                          <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60" style={{ width: '130px' }}>Dip Height (cm)</th>
+                          <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60" style={{ width: '130px' }}>Dip Height (mm)</th>
                           <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60" style={{ width: '150px' }}>Calc Volume (L)</th>
                           <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60" style={{ width: '90px' }}>Temp (°C)</th>
                           <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60" style={{ width: '90px' }}>SG 15°C</th>
@@ -309,14 +309,14 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
                               <td className="px-6 py-4 text-center text-[10px] font-bold opacity-60">
                                 {lastRecTime}
                               </td>
-                              {/* DIP cm Input */}
+                              {/* DIP mm Input */}
                               <td className="px-6 py-4 text-center">
                                 <input 
                                   type="number"
-                                  step="0.1"
+                                  step="1"
                                   min="0"
                                   className="w-24 text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-black uppercase focus:ring-2 focus:ring-primary outline-none"
-                                  placeholder="0.0 cm"
+                                  placeholder="0"
                                   value={dipReadings[tank.id] ?? ''}
                                   onChange={(e) => handleDipChange(tank.id, e.target.value, tank.capacity)}
                                 />
@@ -326,30 +326,38 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
                                 <input 
                                   type="text"
                                   readOnly
-                                  className="w-28 text-center px-2 py-1.5 bg-surface-dim/40 border border-outline/40 rounded-lg text-xs font-mono font-bold text-on-surface-dim cursor-not-allowed"
-                                  placeholder="Auto Calc"
+                                  className="w-28 text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-mono font-bold text-on-surface-dim opacity-70 cursor-not-allowed"
+                                  placeholder=""
                                   value={readings[tank.id] ? `${readings[tank.id].toLocaleString()} L` : ''}
                                 />
                               </td>
                               <td className="px-6 py-4 text-center">
-                                <input 
-                                  type="number"
-                                  step="0.1"
-                                  placeholder="15.0"
-                                  className="w-16 text-center px-1.5 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-mono"
-                                  value={tempReadings[tank.id] ?? ''}
-                                  onChange={(e) => setTempReadings(prev => ({ ...prev, [tank.id]: e.target.value }))}
-                                />
+                                {tank.type === FuelType.DIESEL || tank.type === FuelType.PETROL ? (
+                                  <span className="text-on-surface-dim opacity-30">—</span>
+                                ) : (
+                                  <input 
+                                    type="number"
+                                    step="0.1"
+                                    placeholder="15.0"
+                                    className="w-16 text-center px-1.5 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-mono text-on-surface"
+                                    value={tempReadings[tank.id] ?? ''}
+                                    onChange={(e) => setTempReadings(prev => ({ ...prev, [tank.id]: e.target.value }))}
+                                  />
+                                )}
                               </td>
                               <td className="px-6 py-4 text-center">
-                                <input 
-                                  type="number"
-                                  step="0.0001"
-                                  placeholder="0.8000"
-                                  className="w-18 text-center px-1.5 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-mono"
-                                  value={sgReadings[tank.id] ?? ''}
-                                  onChange={(e) => setSgReadings(prev => ({ ...prev, [tank.id]: e.target.value }))}
-                                />
+                                {tank.type === FuelType.DIESEL || tank.type === FuelType.PETROL ? (
+                                  <span className="text-on-surface-dim opacity-30">—</span>
+                                ) : (
+                                  <input 
+                                    type="number"
+                                    step="0.0001"
+                                    placeholder="0.8000"
+                                    className="w-18 text-center px-1.5 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-mono text-on-surface"
+                                    value={sgReadings[tank.id] ?? ''}
+                                    onChange={(e) => setSgReadings(prev => ({ ...prev, [tank.id]: e.target.value }))}
+                                  />
+                                )}
                               </td>
                             </tr>
                           );
@@ -425,12 +433,12 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
                           <div className="space-y-4 pt-4 border-t border-outline/50 mt-4">
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-50">Dip Height (cm)</label>
+                                <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-50">Dip Height (mm)</label>
                                 <input 
                                   type="number" 
-                                  step="0.1"
+                                  step="1"
                                   className="w-full px-2 py-2 bg-surface-dim text-on-surface border border-outline rounded-xl text-[10px] font-black text-center"
-                                  placeholder="0.0"
+                                  placeholder="0"
                                   value={dipReadings[tank.id] ?? ''}
                                   onChange={(e) => handleDipChange(tank.id, e.target.value, tank.capacity)}
                                 />
@@ -440,36 +448,38 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
                                 <input 
                                   type="text" 
                                   readOnly
-                                  className="w-full px-2 py-2 bg-surface-dim/40 text-on-surface-dim border border-outline/30 rounded-xl text-[10px] font-mono font-bold text-center cursor-not-allowed"
-                                  placeholder="---"
+                                  className="w-full px-2 py-2 bg-surface-dim text-on-surface-dim border border-outline/30 rounded-xl text-[10px] font-mono font-bold text-center opacity-70 cursor-not-allowed"
+                                  placeholder=""
                                   value={readings[tank.id] ? readings[tank.id].toLocaleString() : ''}
                                 />
                               </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-50">Temp (°C)</label>
-                                <input 
-                                  type="number" 
-                                  step="0.1"
-                                  className="w-full px-2 py-1.5 bg-surface-dim text-on-surface border border-outline rounded-xl text-[10px] text-center"
-                                  placeholder="15.0"
-                                  value={tempReadings[tank.id] ?? ''}
-                                  onChange={(e) => setTempReadings(prev => ({ ...prev, [tank.id]: e.target.value }))}
-                                />
+                            {tank.type !== FuelType.DIESEL && tank.type !== FuelType.PETROL && (
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-50">Temp (°C)</label>
+                                  <input 
+                                    type="number" 
+                                    step="0.1"
+                                    className="w-full px-2 py-1.5 bg-surface-dim text-on-surface border border-outline rounded-xl text-[10px] text-center"
+                                    placeholder="15.0"
+                                    value={tempReadings[tank.id] ?? ''}
+                                    onChange={(e) => setTempReadings(prev => ({ ...prev, [tank.id]: e.target.value }))}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-50">SG 15°C</label>
+                                  <input 
+                                    type="number" 
+                                    step="0.0001"
+                                    className="w-full px-2 py-1.5 bg-surface-dim text-on-surface border border-outline rounded-xl text-[10px] text-center"
+                                    placeholder="0.8000"
+                                    value={sgReadings[tank.id] ?? ''}
+                                    onChange={(e) => setSgReadings(prev => ({ ...prev, [tank.id]: e.target.value }))}
+                                  />
+                                </div>
                               </div>
-                              <div>
-                                <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-50">SG 15°C</label>
-                                <input 
-                                  type="number" 
-                                  step="0.0001"
-                                  className="w-full px-2 py-1.5 bg-surface-dim text-on-surface border border-outline rounded-xl text-[10px] text-center"
-                                  placeholder="0.8000"
-                                  value={sgReadings[tank.id] ?? ''}
-                                  onChange={(e) => setSgReadings(prev => ({ ...prev, [tank.id]: e.target.value }))}
-                                />
-                              </div>
-                            </div>
+                            )}
                           </div>
                         </div>
                       </div>

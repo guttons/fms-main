@@ -1046,7 +1046,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                         if (vehicleId) localStorage.setItem('fms_initiate_loading_vehicle', vehicleId);
                         setActiveView('bridging');
                       }}
-                      className="px-6 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-[10px] font-black uppercase tracking-[0.15em] transition-all hover:scale-105 active:scale-95 shrink-0 shadow-premium"
+                      className="kinetic-gradient text-white rounded-xl text-[10px] font-black uppercase tracking-[0.15em] transition-all hover:scale-105 active:scale-95 shrink-0 shadow-premium px-6 py-2.5"
                     >
                       Dispatch Loading
                     </button>

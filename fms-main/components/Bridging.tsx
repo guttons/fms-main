@@ -139,6 +139,54 @@ export const Bridging: React.FC<BridgingProps> = ({ user }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // ── Manual validation (form uses noValidate to avoid browser focus hijack) ──
+    const transferVol = parseInt((formData.volume || '').toString().replace(/,/g, ''));
+    if (!formData.sourceTankId) {
+      notify('Please select a Source Tank.', 'warning');
+      return;
+    }
+    if (!formData.vehicleId) {
+      notify('Please select a Target Refueler.', 'warning');
+      return;
+    }
+    if (!formData.volume || isNaN(transferVol) || transferVol <= 0) {
+      notify('Please enter a valid fuel volume greater than 0.', 'warning');
+      return;
+    }
+    // Volume capacity check: cannot exceed remaining space in the refueler
+    const selectedRefueler = (equipment || []).find(eq => eq.id === formData.vehicleId);
+    if (selectedRefueler) {
+      const remainingCapacity = (selectedRefueler.maxCapacity || 0) - (selectedRefueler.currentVolume || 0);
+      if (transferVol > remainingCapacity) {
+        notify(
+          `Volume exceeds refueler capacity. Max fillable: ${remainingCapacity.toLocaleString()}L (current: ${(selectedRefueler.currentVolume || 0).toLocaleString()}L, max: ${selectedRefueler.maxCapacity.toLocaleString()}L).`,
+          'error'
+        );
+        return;
+      }
+    }
+    if (!formData.startTime) {
+      notify('Please enter commencement time.', 'warning');
+      return;
+    }
+    if (!formData.endTime) {
+      notify('Please enter completion time.', 'warning');
+      return;
+    }
+    if (!formData.operatorName) {
+      notify('Please select a Fueling Operator.', 'warning');
+      return;
+    }
+    if (!formData.supervisorName) {
+      notify('Please select a Verifying Officer.', 'warning');
+      return;
+    }
+    if (!formData.visualCheckPassed || !formData.cwdCheckPassed) {
+      notify('Both quality checks must be confirmed before submitting.', 'warning');
+      return;
+    }
+
     setLoading(true);
     
     try {
@@ -189,7 +237,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user }) => {
         // Notify ITP Duty Manager of replenishment completion
         await createAlert({
           severity: 'low',
-          message: `Replenishment Complete: Refueller ${formData.vehicleId} loaded with ${formData.volume}L by ${formData.operatorName || user?.name || 'Operator'}`,
+          message: `Replenishment Complete: Refueller ${formData.vehicleId} loaded with ${Number(formData.volume).toLocaleString()}L by ${formData.operatorName || user?.name || 'Operator'}`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
           acknowledged: false,
           targetRole: UserRole.ITP_MANAGER
@@ -221,8 +269,8 @@ export const Bridging: React.FC<BridgingProps> = ({ user }) => {
             });
         }, 3000);
     } catch (error) {
-        console.error('Error saving bridging log to Firebase:', error);
-        notify('Failed to save log to Firebase.', 'error');
+        console.error('Error saving bridging log:', error);
+        notify('Failed to save log. Please try again.', 'error');
         setLoading(false);
     }
   };
@@ -239,7 +287,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user }) => {
         </p>
         <button 
           onClick={() => setSuccess(false)}
-          className="mt-12 px-10 py-4 bg-primary text-white font-black text-[11px] uppercase rounded-2xl transition-all shadow-premium"
+          className="mt-12 px-10 py-4 kinetic-gradient text-white font-black text-[11px] uppercase rounded-2xl transition-all shadow-premium hover:scale-105 active:scale-95"
         >
           INITIATE NEW LOAD
         </button>
@@ -294,7 +342,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user }) => {
                               notify(`Initiated loading for unit ${vehicleId}`, 'success');
                             }
                           }}
-                          className="px-4 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all"
+                          className="px-4 py-1.5 kinetic-gradient text-white hover:scale-105 active:scale-95 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all shadow-sm"
                         >
                           Initiate
                         </button>
@@ -305,7 +353,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user }) => {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6 lg:space-y-10">
+            <form onSubmit={handleSubmit} noValidate className="space-y-6 lg:space-y-10">
                 {/* Source & Destination */}
                 <div className="card-premium p-6 lg:p-8">
                     <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] mb-8 flex items-center">
