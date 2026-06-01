@@ -7,7 +7,7 @@ import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
 
 export const Schedule: React.FC = () => {
-  const { equipment, flightJobs, briefingInfo, updateFlightJob, addFlightJob } = useOperationalData();
+  const { equipment, flightJobs, briefingInfo, updateFlightJob, addFlightJob, staff } = useOperationalData();
   const [activeTab, setActiveTab] = useState<'international' | 'domestic' | 'equipment' | 'status'>('international');
   const [configuringFlightId, setConfiguringFlightId] = useState<string | null>(null);
 
@@ -46,7 +46,7 @@ export const Schedule: React.FC = () => {
   );
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const operators = MOCK_USERS.filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(u.role));
+  const operators = (staff && staff.length > 0 ? staff : MOCK_USERS).filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(u.role));
   const todayDate = new Date().toISOString().split('T')[0];
 
   useEffect(() => {

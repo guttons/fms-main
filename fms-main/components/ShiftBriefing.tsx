@@ -26,7 +26,8 @@ import { useOperationalData } from '../context/OperationalDataContext';
 
 export const ShiftBriefing: React.FC = () => {
   const { notify } = useNotification();
-  const { equipment, briefingInfo, updateBriefingInfo, selectedBriefingShift, setSelectedBriefingShift } = useOperationalData();
+  const { equipment, briefingInfo, updateBriefingInfo, selectedBriefingShift, setSelectedBriefingShift, staff } = useOperationalData();
+  const activeStaff = staff && staff.length > 0 ? staff : MOCK_USERS;
   const [isSaving, setIsSaving] = useState(false);
   const [briefingDate] = useState(new Date().toLocaleDateString('en-GB', { 
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' 
@@ -103,7 +104,7 @@ export const ShiftBriefing: React.FC = () => {
 
 
   const renderStaffSelect = (value: string, roles: UserRole[], label: string, onSelect: (id: string) => void) => {
-    const roleUsers = MOCK_USERS.filter(u => roles.includes(u.role));
+    const roleUsers = activeStaff.filter(u => roles.includes(u.role));
     return (
       <div className="flex flex-col space-y-2">
         <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">{label}</label>
@@ -122,7 +123,7 @@ export const ShiftBriefing: React.FC = () => {
   };
 
   const renderStaffSelectArray = (values: string[], roles: UserRole[], label: string, dotColor: string, onUpdate: (newValues: string[]) => void) => {
-    const roleUsers = MOCK_USERS.filter(u => roles.includes(u.role));
+    const roleUsers = activeStaff.filter(u => roles.includes(u.role));
     return (
       <div className="flex flex-col space-y-3">
         <div className="flex justify-between items-center mb-1">
@@ -167,7 +168,7 @@ export const ShiftBriefing: React.FC = () => {
     );
   };
 
-  const getUserName = (id: string) => MOCK_USERS.find(u => u.id === id)?.name || 'Unassigned';
+  const getUserName = (id: string) => activeStaff.find(u => u.id === id)?.name || 'Unassigned';
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 space-y-6 sm:space-y-10 animate-in fade-in duration-700 min-h-screen relative overflow-y-auto overflow-x-hidden custom-scrollbar transition-colors">
@@ -422,7 +423,7 @@ export const ShiftBriefing: React.FC = () => {
               return (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {uniqueStaff.map((id) => {
-                    const user = MOCK_USERS.find(u => u.id === id);
+                    const user = activeStaff.find(u => u.id === id);
                     if (!user) return null;
                     const isPresent = attendees.includes(id);
                     

@@ -10,13 +10,9 @@ import { UserRole, EquipmentType, EquipmentStatus, FuelType } from '../types';
 import type { StaffMember, Equipment, Tank } from '../types';
 import { MOCK_USERS } from '../constants';
 import { Logo } from './Logo';
-import {
-  subscribeToStaff, addStaff, updateStaff, deleteStaff,
-  subscribeToEquipment, addEquipment, updateEquipment, deleteEquipment,
-  subscribeToTanks, addTank, updateTank, deleteTank,
-} from '../services/firebaseService';
 import { useNotification, NotificationType } from '../context/NotificationContext';
 import { seedingService } from '../services/seedingService';
+import { useOperationalData } from '../context/OperationalDataContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Tab = 'staff' | 'equipment' | 'tanks';
@@ -177,8 +173,8 @@ const StaffTab: React.FC<{
   confirm: (msg: string, cb: () => void) => void;
   currentUser?: any;
 }> = ({ push, confirm, currentUser }) => {
-  const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { staff, addStaff, updateStaff, deleteStaff, isLoading } = useOperationalData();
+  const loading = isLoading;
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<StaffMember | null>(null);
   const [saving, setSaving] = useState(false);
@@ -197,28 +193,63 @@ const StaffTab: React.FC<{
   };
   const [form, setForm] = useState<Omit<StaffMember, 'id'>>(emptyForm);
 
-  useEffect(() => {
-    const unsub = subscribeToStaff((data) => { setStaff(data); setLoading(false); });
-    return unsub;
-  }, []);
-
   const openAdd = () => { setEditing(null); setForm(emptyForm); setShowModal(true); };
   const openEdit = (s: StaffMember) => { setEditing(s); setForm({ name: s.name, role: s.role, employeeId: s.employeeId, phone: s.phone ?? '', email: s.email ?? '', status: s.status, joinDate: s.joinDate, avatar: s.avatar ?? '' }); setShowModal(true); };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.employeeId.trim()) { push('Name and Employee ID are required', 'error'); return; }
+    const trimmedName = form.name.trim();
+    if (!trimmedName) { push('Full Name is required', 'error'); return; }
+    if (trimmedName.length < 2) { push('Full Name must be at least 2 characters long', 'error'); return; }
+
+    const trimmedEmpId = form.employeeId.trim();
+    if (!trimmedEmpId) { push('Employee ID is required', 'error'); return; }
+    const empIdRegex = /^[a-zA-Z0-9-]+$/;
+    if (!empIdRegex.test(trimmedEmpId)) { push('Employee ID must be alphanumeric and can only contain dashes (-)', 'error'); return; }
+
+    const rawPhone = form.phone ? String(form.phone).trim() : '';
+    if (!rawPhone) { push('Phone number is required', 'error'); return; }
+    const sanitizedPhone = rawPhone.replace(/[\s-()]/g, '');
+    const phoneRegex = /^\+?[0-9]{6,15}$/;
+    if (!phoneRegex.test(sanitizedPhone)) {
+      push('Invalid Phone. Must contain at least 6 digits (e.g. +9607771234 or +960-777-1234).', 'error');
+      return;
+    }
+
+    const trimmedEmail = form.email ? String(form.email).trim() : '';
+    if (!trimmedEmail) { push('Email address is required', 'error'); return; }
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      push('Invalid Email Address. Please enter a valid email address (e.g. employee@macl.aero).', 'error');
+      return;
+    }
+
+    if (!editing) {
+      const exists = staff.some(s => s.employeeId.toUpperCase().trim() === trimmedEmpId.toUpperCase());
+      if (exists) {
+        push(`Employee ID "${trimmedEmpId}" is already registered in the system.`, 'error');
+        return;
+      }
+    }
+
     setSaving(true);
     try {
+      const finalForm = {
+        ...form,
+        name: trimmedName,
+        employeeId: trimmedEmpId,
+        phone: form.phone ? form.phone.trim() : '',
+        email: form.email ? form.email.trim() : ''
+      };
       if (editing) {
-        await updateStaff(editing.id, form);
-        push('Staff member updated', 'success');
+        await updateStaff(editing.id, finalForm);
+        push('Staff member updated successfully', 'success');
       } else {
-        await addStaff(form);
-        push('Staff member added', 'success');
+        await addStaff(finalForm);
+        push('Staff member added successfully', 'success');
       }
       setShowModal(false);
     } catch (e) {
-      push('Failed to save. Check Firestore permissions.', 'error');
+      push('Failed to save. Check Supabase connection and database permissions.', 'error');
     } finally {
       setSaving(false);
     }
@@ -380,10 +411,10 @@ const StaffTab: React.FC<{
               </div>
             </Field>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Phone">
+              <Field label="Phone" required>
                 <input className={inputCls} placeholder="+960 xxx xxxx" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
               </Field>
-              <Field label="Email">
+              <Field label="Email" required>
                 <input className={inputCls} placeholder="name@macl.aero" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
               </Field>
             </div>
@@ -412,8 +443,8 @@ const StaffTab: React.FC<{
 
 // ─── EQUIPMENT TAB ─────────────────────────────────────────────────────────────
 const EquipmentTab: React.FC<{ push: (msg: string, type?: NotificationType) => void; confirm: (msg: string, cb: () => void) => void }> = ({ push, confirm }) => {
-  const [equipment, setEquipment] = useState<Equipment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { equipment, addEquipment, updateEquipment, deleteEquipment, isLoading } = useOperationalData();
+  const loading = isLoading;
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Equipment | null>(null);
   const [saving, setSaving] = useState(false);
@@ -421,11 +452,6 @@ const EquipmentTab: React.FC<{ push: (msg: string, type?: NotificationType) => v
 
   const emptyForm = { name: '', type: EquipmentType.REFUELLER, status: EquipmentStatus.AVAILABLE, currentVolume: 0, maxCapacity: 0 };
   const [form, setForm] = useState(emptyForm);
-
-  useEffect(() => {
-    const unsub = subscribeToEquipment((data) => { setEquipment(data); setLoading(false); });
-    return unsub;
-  }, []);
 
   const openAdd = () => { setEditing(null); setForm(emptyForm); setShowModal(true); };
   const openEdit = (eq: Equipment) => {
@@ -435,19 +461,72 @@ const EquipmentTab: React.FC<{ push: (msg: string, type?: NotificationType) => v
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) { push('Equipment name/ID is required', 'error'); return; }
+    const trimmedName = form.name.toUpperCase().trim();
+    if (!trimmedName) { push('Equipment name/ID is required', 'error'); return; }
+
+    if (form.type === EquipmentType.REFUELLER) {
+      if (!/^RF-\d+$/i.test(trimmedName)) {
+        push('Invalid Refueller ID pattern. Must match RF-xx (e.g., RF-02).', 'error');
+        return;
+      }
+    } else if (form.type === EquipmentType.HYDRANT_DISPENSER) {
+      if (!/^HD-\d+$/i.test(trimmedName)) {
+        push('Invalid Hydrant Dispenser ID pattern. Must match HD-xx (e.g., HD-01).', 'error');
+        return;
+      }
+    } else if (form.type === EquipmentType.DIESEL_TRUCK) {
+      if (!/^DT-\d+$/i.test(trimmedName)) {
+        push('Invalid Diesel Truck ID pattern. Must match DT-xx (e.g., DT-01).', 'error');
+        return;
+      }
+    } else if (form.type === EquipmentType.HYDRANT_SERVICE) {
+      if (!/^HS-\d+$/i.test(trimmedName)) {
+        push('Invalid Hydrant Service ID pattern. Must match HS-xx (e.g., HS-01).', 'error');
+        return;
+      }
+    }
+
+    let finalVolume = form.currentVolume;
+    let finalCapacity = form.maxCapacity;
+
+    if (form.type === EquipmentType.REFUELLER || form.type === EquipmentType.DIESEL_TRUCK) {
+      if (finalCapacity <= 0) { push('Bowsers and Diesel trucks require a Max Capacity greater than 0 L', 'error'); return; }
+      if (finalVolume < 0) { push('Current Volume cannot be negative', 'error'); return; }
+      if (finalVolume > finalCapacity) { push(`Current Volume (${finalVolume} L) cannot exceed Max Capacity (${finalCapacity} L)`, 'error'); return; }
+    } else {
+      finalVolume = 0;
+      finalCapacity = 0;
+    }
+
+    if (!editing) {
+      const exists = equipment.some(eq => eq.id.toUpperCase().trim() === trimmedName);
+      if (exists) {
+        push(`Equipment ID "${trimmedName}" is already registered in the system.`, 'error');
+        return;
+      }
+    }
+
     setSaving(true);
     try {
+      const finalForm = {
+        name: trimmedName,
+        type: form.type,
+        status: form.status,
+        currentVolume: finalVolume,
+        maxCapacity: finalCapacity,
+        maintenanceDetails: editing?.maintenanceDetails || null
+      };
+
       if (editing) {
-        await updateEquipment(editing.id, form);
-        push('Equipment updated', 'success');
+        await updateEquipment(editing.id, finalForm);
+        push('Equipment updated successfully', 'success');
       } else {
-        await addEquipment(form);
-        push('Equipment added', 'success');
+        await addEquipment(finalForm);
+        push('Equipment added successfully', 'success');
       }
       setShowModal(false);
     } catch (e: any) {
-      const msg = e?.message?.includes('permission') ? 'Permission Denied: Unauthorized to modify equipment.' : 'Failed to save. Check Firestore permissions.';
+      const msg = e?.message?.includes('permission') ? 'Permission Denied: Unauthorized to modify equipment.' : 'Failed to save. Check Supabase connection and database permissions.';
       push(msg, 'error');
     }
     finally { setSaving(false); }
@@ -506,7 +585,9 @@ const EquipmentTab: React.FC<{ push: (msg: string, type?: NotificationType) => v
                     <div className="flex items-start justify-between mb-4">
                       <div>
                         <p className="text-sm font-black text-on-surface uppercase tracking-tight">{eq.name}</p>
-                        <p className="text-[10px] text-on-surface-dim opacity-40 uppercase tracking-widest mt-0.5">{eq.id}</p>
+                        {eq.id !== eq.name && !eq.id.startsWith('eq-') && (
+                          <p className="text-[10px] text-on-surface-dim opacity-40 uppercase tracking-widest mt-0.5">{eq.id}</p>
+                        )}
                       </div>
                       <span className={`px-2.5 py-1 text-[8px] font-black rounded-lg border uppercase tracking-widest ${STATUS_COLORS[eq.status]}`}>
                         {eq.status}
@@ -563,14 +644,16 @@ const EquipmentTab: React.FC<{ push: (msg: string, type?: NotificationType) => v
                 <ChevronDown className="w-4 h-4 text-on-surface-dim absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             </Field>
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Current Volume (L)">
-                <input type="number" className={inputCls} placeholder="0" min={0} value={form.currentVolume} onChange={e => setForm(p => ({ ...p, currentVolume: Number(e.target.value) }))} />
-              </Field>
-              <Field label="Max Capacity (L)">
-                <input type="number" className={inputCls} placeholder="0" min={0} value={form.maxCapacity} onChange={e => setForm(p => ({ ...p, maxCapacity: Number(e.target.value) }))} />
-              </Field>
-            </div>
+            {(form.type === EquipmentType.REFUELLER || form.type === EquipmentType.DIESEL_TRUCK) && (
+              <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-300">
+                <Field label="Current Volume (L)">
+                  <input type="number" className={inputCls} placeholder="0" min={0} value={form.currentVolume} onChange={e => setForm(p => ({ ...p, currentVolume: Number(e.target.value) }))} />
+                </Field>
+                <Field label="Max Capacity (L)">
+                  <input type="number" className={inputCls} placeholder="0" min={0} value={form.maxCapacity} onChange={e => setForm(p => ({ ...p, maxCapacity: Number(e.target.value) }))} />
+                </Field>
+              </div>
+            )}
             <div className="flex gap-3 pt-2">
               <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 rounded-xl border-transparent text-[11px] font-black uppercase tracking-widest text-on-surface-dim hover:bg-surface-container-low transition-all">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 px-4 py-3 rounded-xl kinetic-gradient text-[11px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
@@ -587,8 +670,8 @@ const EquipmentTab: React.FC<{ push: (msg: string, type?: NotificationType) => v
 
 // ─── TANKS TAB ─────────────────────────────────────────────────────────────────
 const TanksTab: React.FC<{ push: (msg: string, type?: NotificationType) => void; confirm: (msg: string, cb: () => void) => void }> = ({ push, confirm }) => {
-  const [tanks, setTanks] = useState<Tank[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { tanks, addTank, updateTank, deleteTank, isLoading } = useOperationalData();
+  const loading = isLoading;
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Tank | null>(null);
   const [saving, setSaving] = useState(false);
@@ -596,11 +679,6 @@ const TanksTab: React.FC<{ push: (msg: string, type?: NotificationType) => void;
 
   const emptyForm = { name: '', type: FuelType.JET_A1, capacity: 0, currentLevel: 0, safeMinLevel: 0 };
   const [form, setForm] = useState(emptyForm);
-
-  useEffect(() => {
-    const unsub = subscribeToTanks((data) => { setTanks(data); setLoading(false); });
-    return unsub;
-  }, []);
 
   const openAdd = () => { setEditing(null); setForm(emptyForm); setShowModal(true); };
   const openEdit = (t: Tank) => {
@@ -610,20 +688,41 @@ const TanksTab: React.FC<{ push: (msg: string, type?: NotificationType) => void;
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) { push('Tank name is required', 'error'); return; }
-    if (form.capacity <= 0) { push('Capacity must be greater than 0', 'error'); return; }
+    const trimmedName = form.name.trim();
+    if (!trimmedName) { push('Tank name is required', 'error'); return; }
+    if (form.capacity <= 0) { push('Capacity must be greater than 0 L', 'error'); return; }
+    if (form.currentLevel < 0) { push('Current Level cannot be negative', 'error'); return; }
+    if (form.currentLevel > form.capacity) { push('Current Level cannot exceed Max Capacity', 'error'); return; }
+    if (form.safeMinLevel < 0) { push('Safe Minimum Level cannot be negative', 'error'); return; }
+    if (form.safeMinLevel > form.capacity) { push('Safe Minimum Level cannot exceed Max Capacity', 'error'); return; }
+
+    if (!editing) {
+      const exists = tanks.some(t => t.id.toUpperCase().trim() === trimmedName);
+      if (exists) {
+        push(`Tank ID/Name "${trimmedName}" is already registered in the system.`, 'error');
+        return;
+      }
+    }
+
     setSaving(true);
     try {
+      const finalForm = {
+        name: trimmedName,
+        type: form.type,
+        capacity: form.capacity,
+        currentLevel: form.currentLevel,
+        safeMinLevel: form.safeMinLevel
+      };
       if (editing) {
-        await updateTank(editing.id, form);
-        push('Tank updated', 'success');
+        await updateTank(editing.id, finalForm);
+        push('Tank updated successfully', 'success');
       } else {
-        await addTank(form);
-        push('Tank added', 'success');
+        await addTank(finalForm);
+        push('Tank added successfully', 'success');
       }
       setShowModal(false);
     } catch (e: any) {
-      const msg = e?.message?.includes('permission') ? 'Permission Denied: Unauthorized to modify tanks.' : 'Failed to save. Check Firestore permissions.';
+      const msg = e?.message?.includes('permission') ? 'Permission Denied: Unauthorized to modify tanks.' : 'Failed to save. Check Supabase connection and database permissions.';
       push(msg, 'error');
     }
     finally { setSaving(false); }
@@ -783,7 +882,7 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
     setConfirm({ open: true, message, onConfirm });
   }, []);
 
-  // Heartbeat to show Firebase is connected
+  // Heartbeat to show Supabase is connected
   useEffect(() => {
     const interval = setInterval(() => setIsLive(v => !v), 2000);
     return () => clearInterval(interval);
@@ -824,7 +923,7 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
             <div className="h-1 w-1 rounded-full bg-on-surface-dim opacity-20" />
             <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em] flex items-center gap-1.5">
               <span className={`w-1.5 h-1.5 rounded-full bg-primary transition-opacity duration-500 ${isLive ? 'opacity-100' : 'opacity-20'}`} />
-              Firebase Live
+              Supabase Live
             </span>
           </div>
         </div>

@@ -1,9 +1,9 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightLog } from '../types';
+import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightLog, StaffMember, UserRole } from '../types';
 import { EQUIPMENT, TANKS, MOCK_JOBS, MOCK_DOMESTIC_FLIGHTS, MOCK_ALERTS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
-import { auth } from '../firebase';
+import { supabase } from '../supabase';
 
 interface ShiftBriefingInfo {
   info: { text: string; type: string; isHighAlert?: boolean }[];
@@ -33,7 +33,12 @@ interface OperationalDataContextType {
   isAlertsLoading: boolean;
   updateEquipmentStatus: (id: string, status: EqStatus) => void;
   updateEquipment: (id: string, updates: Partial<Equipment>) => Promise<void>;
+  addEquipment: (eq: Omit<Equipment, 'id' | 'lastUpdated'>) => Promise<void>;
+  deleteEquipment: (id: string) => Promise<void>;
   updateTankLevel: (id: string, newLevel: number) => Promise<void>;
+  addTank: (tank: Omit<Tank, 'id' | 'lastUpdated'>) => Promise<void>;
+  updateTank: (id: string, updates: Partial<Omit<Tank, 'id'>>) => Promise<void>;
+  deleteTank: (id: string) => Promise<void>;
   updateBriefingInfo: (info: any[], dieselNeeds: string[], staffAssignments?: any) => Promise<void>;
   updateFlightJob: (id: string, updates: Partial<FlightJob>) => void;
   addFlightJob: (job: FlightJob) => void;
@@ -43,6 +48,10 @@ interface OperationalDataContextType {
   clearAllAlerts: () => Promise<void>;
   refreshData: () => Promise<void>;
   isLoading: boolean;
+  staff: StaffMember[];
+  addStaff: (member: Omit<StaffMember, 'id'>) => Promise<void>;
+  updateStaff: (id: string, updates: Partial<Omit<StaffMember, 'id'>>) => Promise<void>;
+  deleteStaff: (id: string) => Promise<void>;
 }
 
 const OperationalDataContext = createContext<OperationalDataContextType | undefined>(undefined);
@@ -144,6 +153,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
   });
   const [flightLogs, setFlightLogs] = useState<FlightLog[]>([]);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
   const [isAlertsLoading, setIsAlertsLoading] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -186,16 +196,27 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     try {
       setIsLoading(true);
       setIsAlertsLoading(true);
-      const [fetchedTanks, fetchedJobs, fetchedBriefing, fetchedAlerts, fetchedEq, fetchedLogs] = await Promise.all([
+      const [fetchedTanks, fetchedJobs, fetchedBriefing, fetchedAlerts, fetchedEq, fetchedLogs, fetchedStaff] = await Promise.all([
         supabaseService.getTanks(),
         supabaseService.getFlightJobs(),
         supabaseService.getShiftBriefingInfo(new Date().toISOString().split('T')[0], selectedBriefingShift),
         supabaseService.getAlerts(),
         supabaseService.getEquipment(),
-        supabaseService.getFlightLogs()
+        supabaseService.getFlightLogs(),
+        supabaseService.getStaff()
       ]);
 
-      if (fetchedTanks && fetchedTanks.length > 0) setTanks(fetchedTanks);
+      if (fetchedTanks && fetchedTanks.length > 0) {
+        setTanks(prev => {
+          const liveIds = new Set(fetchedTanks.map(t => t.id));
+          const mappedLive = fetchedTanks.map(live => {
+            const mock = TANKS.find(t => t.id === live.id);
+            return mock ? { ...mock, ...live } : live;
+          });
+          const fallbackMocks = TANKS.filter(mock => !liveIds.has(mock.id));
+          return [...mappedLive, ...fallbackMocks];
+        });
+      }
       if (fetchedJobs && fetchedJobs.length > 0) setFlightJobs(fetchedJobs);
       if (fetchedBriefing && typeof fetchedBriefing === 'object') {
          // Merge with default staff if missing
@@ -210,14 +231,18 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       }
       if (fetchedEq && fetchedEq.length > 0) {
         setEquipment(prev => {
-          return EQUIPMENT.map(mock => {
-            const live = fetchedEq.find(f => f.id === mock.id);
-            return live ? { ...mock, ...live } : mock;
+          const liveIds = new Set(fetchedEq.map(e => e.id));
+          const mappedLive = fetchedEq.map(live => {
+            const mock = EQUIPMENT.find(m => m.id === live.id);
+            return mock ? { ...mock, ...live } : live;
           });
+          const fallbackMocks = EQUIPMENT.filter(mock => !liveIds.has(mock.id));
+          return [...mappedLive, ...fallbackMocks];
         });
       }
       if (fetchedAlerts && Array.isArray(fetchedAlerts)) setAlerts(fetchedAlerts);
       if (fetchedLogs && Array.isArray(fetchedLogs)) setFlightLogs(fetchedLogs);
+      if (fetchedStaff && fetchedStaff.length > 0) setStaff(fetchedStaff);
       
     } catch (error) {
       console.error('Error refreshing operational data:', error);
@@ -227,7 +252,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
   }, []);
 
-  // Sync with Firestore when user logs in or shift changes
+  // Sync with Supabase when user logs in or shift changes
   useEffect(() => {
     if (appUser) {
       refreshData();
@@ -247,20 +272,45 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     setIsAlertsLoading(true);
 
     const unsubscribeAlerts = supabaseService.subscribeToAlerts((updatedAlerts) => {
-      console.log("SYNC: Alerts received from Firestore. Count:", updatedAlerts.length);
+      console.log("SYNC: Alerts received from Supabase. Count:", updatedAlerts.length);
       setAlerts(updatedAlerts);
       setIsAlertsLoading(false);
     });
 
     const unsubscribeEquipment = supabaseService.subscribeToEquipment((updatedEq) => {
-      console.log("SYNC: Equipment received from Firestore. Count:", updatedEq.length);
+      console.log("SYNC: Equipment received from Supabase. Count:", updatedEq.length);
       if (updatedEq && updatedEq.length > 0) {
         setEquipment(prev => {
-          return EQUIPMENT.map(mock => {
-            const live = updatedEq.find(f => f.id === mock.id);
-            return live ? { ...mock, ...live } : mock;
+          const liveIds = new Set(updatedEq.map(e => e.id));
+          const mappedLive = updatedEq.map(live => {
+            const mock = EQUIPMENT.find(m => m.id === live.id);
+            return mock ? { ...mock, ...live } : live;
           });
+          const fallbackMocks = EQUIPMENT.filter(mock => !liveIds.has(mock.id));
+          return [...mappedLive, ...fallbackMocks];
         });
+      }
+    });
+
+    const unsubscribeTanks = supabaseService.subscribeToTanks((updatedTanks) => {
+      console.log("SYNC: Tanks received from Supabase. Count:", updatedTanks.length);
+      if (updatedTanks && updatedTanks.length > 0) {
+        setTanks(prev => {
+          const liveIds = new Set(updatedTanks.map(t => t.id));
+          const mappedLive = updatedTanks.map(live => {
+            const mock = TANKS.find(t => t.id === live.id);
+            return mock ? { ...mock, ...live } : live;
+          });
+          const fallbackMocks = TANKS.filter(mock => !liveIds.has(mock.id));
+          return [...mappedLive, ...fallbackMocks];
+        });
+      }
+    });
+
+    const unsubscribeStaff = supabaseService.subscribeToStaff((updatedStaff) => {
+      console.log("SYNC: Staff received from Supabase. Count:", updatedStaff.length);
+      if (updatedStaff && updatedStaff.length > 0) {
+        setStaff(updatedStaff);
       }
     });
 
@@ -268,6 +318,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       console.log("PROVIDER: Tearing down listeners for user:", appUser.id);
       if (unsubscribeAlerts) unsubscribeAlerts();
       if (unsubscribeEquipment) unsubscribeEquipment();
+      if (unsubscribeTanks) unsubscribeTanks();
+      if (unsubscribeStaff) unsubscribeStaff();
     };
   }, [appUser]);
 
@@ -276,11 +328,11 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       eq.id === id ? { ...eq, status, lastUpdated: new Date().toISOString() } : eq
     ));
 
-    if (auth.currentUser) {
+    if (appUser) {
       try {
         await supabaseService.updateEquipmentStatus(id, status);
       } catch (error) {
-        console.error('Failed to sync equipment status to Firestore:', error);
+        console.error('Failed to sync equipment status to Supabase:', error);
       }
     }
   };
@@ -290,11 +342,11 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       eq.id === id ? { ...eq, ...updates, lastUpdated: new Date().toISOString() } : eq
     ));
 
-    if (auth.currentUser) {
+    if (appUser) {
       try {
         await supabaseService.updateEquipment(id, updates);
       } catch (error) {
-        console.error('Failed to sync equipment update to Firestore:', error);
+        console.error('Failed to sync equipment update to Supabase:', error);
       }
     }
   };
@@ -304,11 +356,11 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       t.id === id ? { ...t, currentLevel: newLevel, lastUpdated: new Date().toISOString() } : t
     ));
 
-    if (auth.currentUser) {
+    if (appUser) {
       try {
         await supabaseService.updateTankLevel(id, newLevel);
       } catch (error) {
-        console.error('Failed to sync tank update to Firestore:', error);
+        console.error('Failed to sync tank update to Supabase:', error);
       }
     }
   };
@@ -351,27 +403,34 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     const vehicleId = replenishmentMatch ? replenishmentMatch[1] : null;
 
     if (vehicleId) {
-      const now = Date.now();
-      const lastRequest = replenishmentLocks.current[vehicleId] || 0;
-      const COOLDOWN = 5000; // 5 seconds
-
-      // Block if requested in the last 5 seconds (frontend cooldown)
-      if (now - lastRequest < COOLDOWN) {
-        console.warn(`Replenishment lock active for ${vehicleId}. Blocking duplicate.`);
-        return false;
-      }
+      // Only apply the request lock for REQUEST-type alerts (not completion alerts)
+      const isRequestAlert = alertData.message.toLowerCase().includes('requested');
       
-      // Also check existing alerts
-      const alreadyRequested = (alerts || []).some(a => 
-        !a.acknowledged && a.message.includes(`unit ${vehicleId}`)
-      );
-      
-      if (alreadyRequested) {
-        console.warn(`Alert already exists for ${vehicleId}. Blocking.`);
-        return false;
-      }
+      if (isRequestAlert) {
+        const now = Date.now();
+        const lastRequest = replenishmentLocks.current[vehicleId] || 0;
+        const COOLDOWN = 5000; // 5 seconds
 
-      replenishmentLocks.current[vehicleId] = now;
+        // Block if requested in the last 5 seconds (frontend cooldown)
+        if (now - lastRequest < COOLDOWN) {
+          console.warn(`Replenishment lock active for ${vehicleId}. Blocking duplicate.`);
+          return false;
+        }
+        
+        // Also check existing unacknowledged REQUEST alerts (not completion alerts)
+        const alreadyRequested = (alerts || []).some(a => 
+          !a.acknowledged && 
+          a.message.toLowerCase().includes('requested') &&
+          a.message.includes(`unit ${vehicleId}`)
+        );
+        
+        if (alreadyRequested) {
+          console.warn(`Alert already exists for ${vehicleId}. Blocking.`);
+          return false;
+        }
+
+        replenishmentLocks.current[vehicleId] = now;
+      }
     }
 
     // GENERAL DUPLICATE GUARD: Check current state + pending Ref
@@ -439,6 +498,38 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
   };
 
+  const addStaff = async (member: Omit<StaffMember, 'id'>) => {
+    await supabaseService.addStaff(member);
+  };
+
+  const updateStaff = async (id: string, updates: Partial<Omit<StaffMember, 'id'>>) => {
+    await supabaseService.updateStaff(id, updates);
+  };
+
+  const deleteStaff = async (id: string) => {
+    await supabaseService.deleteStaff(id);
+  };
+
+  const addEquipment = async (eq: Omit<Equipment, 'id' | 'lastUpdated'>) => {
+    await supabaseService.addEquipment(eq);
+  };
+
+  const deleteEquipment = async (id: string) => {
+    await supabaseService.deleteEquipment(id);
+  };
+
+  const addTank = async (tank: Omit<Tank, 'id' | 'lastUpdated'>) => {
+    await supabaseService.addTank(tank);
+  };
+
+  const updateTank = async (id: string, updates: Partial<Omit<Tank, 'id'>>) => {
+    await supabaseService.updateTank(id, updates);
+  };
+
+  const deleteTank = async (id: string) => {
+    await supabaseService.deleteTank(id);
+  };
+
   return (
     <OperationalDataContext.Provider value={{
       equipment: equipment || [],
@@ -462,7 +553,16 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       isLoading,
       alerts: alerts || [],
       flightLogs: flightLogs || [],
-      isAlertsLoading
+      isAlertsLoading,
+      staff: staff || [],
+      addStaff,
+      updateStaff,
+      deleteStaff,
+      addEquipment,
+      deleteEquipment,
+      addTank,
+      updateTank,
+      deleteTank
     }}>
       {children}
     </OperationalDataContext.Provider>

@@ -1,25 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { FuelType, BridgingLog, UserRole, EquipmentType, EquipmentStatus } from '../types';
-import { Droplet, Truck, CheckCircle, AlertTriangle, Save, Clock, ArrowRight, History, FileText } from 'lucide-react';
+import { FuelType, BridgingLog, UserRole, EquipmentType, EquipmentStatus, User } from '../types';
+import { Droplet, Truck, CheckCircle, AlertTriangle, Save, Clock, ArrowRight, History, FileText, Users } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useNotification } from '../context/NotificationContext';
 import { useOperationalData } from '../context/OperationalDataContext';
 
-export const Bridging: React.FC = () => {
-  const { tanks, updateTankLevel, alerts, acknowledgeAlert, createAlert, equipment, updateEquipment } = useOperationalData();
+interface BridgingProps {
+  user?: User | null;
+}
+
+export const Bridging: React.FC<BridgingProps> = ({ user }) => {
+  const { tanks, updateTankLevel, alerts, acknowledgeAlert, createAlert, equipment, updateEquipment, staff } = useOperationalData();
   const [logs, setLogs] = useState<BridgingLog[]>([]);
   const { notify } = useNotification();
 
-  const availableRefuelers = (equipment || [])
-    .filter(eq => eq.type === EquipmentType.REFUELLER && (eq.status === EquipmentStatus.AVAILABLE || eq.status === EquipmentStatus.REFUELLING));
+  const isOperator = user?.role === UserRole.DEPOT_OPERATOR;
 
-  // Filter alerts for replenishment requests to highlight them
+  // ── IMPORTANT: compute replenishment data BEFORE using it in availableRefuelers ──
+
+  // Filter alerts for replenishment requests (unacknowledged) to highlight them
+  const replenishmentRequests = (alerts || []).filter(a => 
+    a && !a.acknowledged && (
+      a.message.toLowerCase().includes('request') && (
+        a.message.toLowerCase().includes('replenish') || 
+        a.message.toLowerCase().includes('refuel')
+      )
+    )
+  );
+
+  // Extract vehicle IDs from replenishment request alerts
   const requestedRFs = Array.from(new Set(
-    (alerts || [])
-      .filter(a => a && !a.acknowledged && (
-        a.message.toLowerCase().includes('replenishment requested') || 
-        a.message.toLowerCase().includes('refuel requested')
-      ))
+    replenishmentRequests
       .map(a => {
         const match = a.message.match(/unit\s+(RF-\d+)/i);
         return match ? match[1].toUpperCase() : null;
@@ -27,15 +38,30 @@ export const Bridging: React.FC = () => {
       .filter(Boolean) as string[]
   ));
 
+  // Now it's safe to use requestedRFs here
+  const availableRefuelers = (equipment || [])
+    .filter(eq => eq.type === EquipmentType.REFUELLER && (
+      eq.status === EquipmentStatus.AVAILABLE || 
+      eq.status === EquipmentStatus.REFUELLING || 
+      requestedRFs.includes(eq.id)    // Always include RF units with a pending replenish request
+    ));
+
+  // Extract staff roles for personnel dropdowns
+  const activeOperators = (staff || []).filter(s => [UserRole.DEPOT_OPERATOR, UserRole.ITP_OPERATOR].includes(s.role));
+  const activeOfficers = (staff || []).filter(s => [UserRole.DEPOT_MANAGER, UserRole.ITP_MANAGER, UserRole.ADMIN].includes(s.role));
+
   const handleBridgingComplete = async (vehicleId: string) => {
     // Acknowledge the corresponding alert
-    const relevantAlert = (alerts || []).find(a => a && !a.acknowledged && a.message.includes(`unit ${vehicleId}`));
+    // Only acknowledge the replenishment REQUEST alert (not any completion alert)
+    const relevantAlert = (alerts || []).find(a => 
+      a && !a.acknowledged && 
+      a.message.toLowerCase().includes('requested') &&
+      a.message.includes(`unit ${vehicleId}`)
+    );
     if (relevantAlert) {
       await acknowledgeAlert(relevantAlert.id);
     }
   };
-
-
 
   const getTodayDateString = () => {
     const today = new Date();
@@ -56,12 +82,24 @@ export const Bridging: React.FC = () => {
     cwdCheckPassed: false,
     density: '',
     temperature: '',
+    operatorName: '',
+    supervisorName: '',
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
+  // Prefill vehicle from dashboard "Dispatch" action
+  useEffect(() => {
+    const prefilled = localStorage.getItem('fms_initiate_loading_vehicle');
+    if (prefilled) {
+      setFormData(prev => ({ ...prev, vehicleId: prefilled }));
+      localStorage.removeItem('fms_initiate_loading_vehicle');
+      notify(`Initiated loading for unit ${prefilled} based on ITP request.`, 'info');
+    }
+  }, [notify]);
+
   // Fetch logs from Firebase on mount
-  React.useEffect(() => {
+  useEffect(() => {
     const fetchLogs = async () => {
       try {
         const fetchedLogs = await supabaseService.getBridgingLogs();
@@ -129,7 +167,6 @@ export const Bridging: React.FC = () => {
             }
         }
 
-        
         const logToSave: Omit<BridgingLog, 'id'> = {
           sourceTankId: formData.sourceTankId,
           vehicleId: formData.vehicleId,
@@ -138,7 +175,7 @@ export const Bridging: React.FC = () => {
           endTime: formData.endTime,
           visualCheckPassed: formData.visualCheckPassed,
           cwdCheckPassed: formData.cwdCheckPassed,
-          operatorId: 'current_user', // In a real app, use the actual user ID
+          operatorId: formData.operatorName || user?.name || 'System Admin',
           density: formData.density ? parseFloat(formData.density) : undefined,
           temperature: formData.temperature ? parseFloat(formData.temperature) : undefined,
           date: formData.date
@@ -152,7 +189,7 @@ export const Bridging: React.FC = () => {
         // Notify ITP Duty Manager of replenishment completion
         await createAlert({
           severity: 'low',
-          message: `Refueller ${formData.vehicleId} replenished with ${formData.volume}L`,
+          message: `Replenishment Complete: Refueller ${formData.vehicleId} loaded with ${formData.volume}L by ${formData.operatorName || user?.name || 'Operator'}`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
           acknowledged: false,
           targetRole: UserRole.ITP_MANAGER
@@ -179,6 +216,8 @@ export const Bridging: React.FC = () => {
                 cwdCheckPassed: false,
                 density: '',
                 temperature: '',
+                operatorName: '',
+                supervisorName: '',
             });
         }, 3000);
     } catch (error) {
@@ -200,7 +239,7 @@ export const Bridging: React.FC = () => {
         </p>
         <button 
           onClick={() => setSuccess(false)}
-          className="mt-12 px-10 py-4 bg-primary text-white font-black text-[11px] uppercase rounded-2xl transition-all"
+          className="mt-12 px-10 py-4 bg-primary text-white font-black text-[11px] uppercase rounded-2xl transition-all shadow-premium"
         >
           INITIATE NEW LOAD
         </button>
@@ -229,7 +268,43 @@ export const Bridging: React.FC = () => {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-10">
         {/* Input Form */}
-        <div className="xl:col-span-2">
+        <div className="xl:col-span-2 space-y-6">
+            {/* Active Replenishment Requests Feed */}
+            {replenishmentRequests.length > 0 && (
+              <div className="card-premium p-6 border-l-4 border-l-primary bg-primary/[0.02]">
+                <h3 className="text-xs font-black text-primary uppercase tracking-[0.2em] mb-4 flex items-center">
+                  <Droplet className="w-3.5 h-3.5 mr-2 animate-bounce" />
+                  Active ITP Replenishment Requests
+                </h3>
+                <div className="space-y-2">
+                  {replenishmentRequests.map(req => {
+                    const match = req.message.match(/unit\s+(RF-\d+)/i);
+                    const vehicleId = match ? match[1].toUpperCase() : '';
+                    return (
+                      <div key={req.id} className="flex justify-between items-center bg-surface p-3.5 rounded-xl border border-outline/50 shadow-sm">
+                        <div className="flex items-center space-x-3">
+                          <Truck className="w-4 h-4 text-primary opacity-60" />
+                          <span className="text-[11px] font-bold text-on-surface">{req.message}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (vehicleId) {
+                              setFormData(prev => ({ ...prev, vehicleId }));
+                              notify(`Initiated loading for unit ${vehicleId}`, 'success');
+                            }
+                          }}
+                          className="px-4 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all"
+                        >
+                          Initiate
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-6 lg:space-y-10">
                 {/* Source & Destination */}
                 <div className="card-premium p-6 lg:p-8">
@@ -271,7 +346,7 @@ export const Bridging: React.FC = () => {
                                 <option value="">SELECT RF UNIT...</option>
                                 {availableRefuelers.length === 0 ? (
                                     <option disabled>NO AVAILABLE REFUELERS</option>
-                                ) : (
+                               ) : (
                                     availableRefuelers.map(rf => (
                                         <option key={rf.id} value={rf.id}>
                                             {rf.id} ({rf.currentVolume.toLocaleString()} / {rf.maxCapacity.toLocaleString()}L) {requestedRFs.includes(rf.id) ? '⚠ REPLENISH' : ''}
@@ -311,6 +386,46 @@ export const Bridging: React.FC = () => {
                     </div>
                 </div>
 
+                {/* Personnel Selector Grid (New Feature!) */}
+                <div className="card-premium p-6 lg:p-8">
+                    <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] mb-6 flex items-center">
+                        <Users className="w-4 h-4 mr-3 text-primary opacity-60" />
+                        Personnel Involved
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Fueling Operator Name</label>
+                            <select
+                                name="operatorName"
+                                required
+                                value={formData.operatorName}
+                                onChange={handleInputChange}
+                                className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all appearance-none"
+                            >
+                                <option value="">SELECT OPERATOR...</option>
+                                {(activeOperators.length > 0 ? activeOperators : staff).map(op => (
+                                    <option key={op.id} value={op.name}>{op.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Verifying Officer Name</label>
+                            <select
+                                name="supervisorName"
+                                required
+                                value={formData.supervisorName}
+                                onChange={handleInputChange}
+                                className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all appearance-none"
+                            >
+                                <option value="">SELECT OFFICER...</option>
+                                {(activeOfficers.length > 0 ? activeOfficers : staff).map(off => (
+                                    <option key={off.id} value={off.name}>{off.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Operations Timing & QC in a grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-10">
                     <div className="card-premium p-6 lg:p-8">
@@ -320,14 +435,17 @@ export const Bridging: React.FC = () => {
                         </h3>
                         <div className="space-y-6">
                             <div>
-                                <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Date</label>
+                                <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Operational Date</label>
                                 <input 
                                     type="date" 
                                     name="date"
                                     required
+                                    disabled={isOperator}
                                     value={formData.date}
                                     onChange={handleInputChange}
-                                    className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all"
+                                    className={`w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all ${
+                                      isOperator ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                                    }`}
                                 />
                             </div>
                             <div>

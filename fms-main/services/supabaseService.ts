@@ -1,16 +1,6 @@
-import { db, auth } from '../firebase';
-import { collection, getDocs, doc, updateDoc, addDoc, query, where, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
-import { User, Tank, FlightLog, BridgingLog, Alert, FlightJob, Equipment } from '../types';
-import { TANKS, MOCK_USERS, MOCK_JOBS, RECENT_LOGS, MOCK_ALERTS, MOCK_DOMESTIC_FLIGHTS, EQUIPMENT } from '../constants';
-
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
+import { supabase } from '../supabase';
+import { User, Tank, FlightLog, BridgingLog, Alert, FlightJob, Equipment, StaffMember, UserRole, EquipmentStatus } from '../types';
+import { TANKS, MOCK_USERS, MOCK_JOBS, EQUIPMENT } from '../constants';
 
 const localBridgingLogs: BridgingLog[] = [
   {
@@ -43,131 +33,227 @@ const localBridgingLogs: BridgingLog[] = [
   }
 ];
 
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
-}
+let localStaff: StaffMember[] = [];
+let localEquipment: Equipment[] = [];
+let localTanks: Tank[] = [];
 
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
+const staffCallbacks = new Set<(staff: StaffMember[]) => void>();
+const equipmentCallbacks = new Set<(eq: Equipment[]) => void>();
+const tanksCallbacks = new Set<(tanks: Tank[]) => void>();
+
+const triggerStaffCallbacks = () => {
+  const list = [...localStaff];
+  staffCallbacks.forEach(cb => {
+    try { cb(list); } catch (e) { console.error('Error in staff callback:', e); }
+  });
+};
+
+const triggerEquipmentCallbacks = () => {
+  const list = [...localEquipment];
+  equipmentCallbacks.forEach(cb => {
+    try { cb(list); } catch (e) { console.error('Error in equipment callback:', e); }
+  });
+};
+
+const triggerTanksCallbacks = () => {
+  const list = [...localTanks];
+  tanksCallbacks.forEach(cb => {
+    try { cb(list); } catch (e) { console.error('Error in tank callback:', e); }
+  });
+};
 
 export const supabaseService = {
-  // Users
+  // ── Auth & Users ────────────────────────────────────────────────────────────
   async getUsers(): Promise<User[]> {
-    if (!auth.currentUser) return [];
-
-    const path = 'users';
-    try {
-      const querySnapshot = await getDocs(collection(db, path));
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, path);
-      throw error;
+    const { data, error } = await supabase.from('profiles').select('*');
+    if (error) {
+      console.warn('[Supabase] getUsers failed, falling back to mocks:', error);
+      return MOCK_USERS;
     }
+    if (!data || data.length === 0) return MOCK_USERS;
+    return data.map(row => ({
+      id: row.id,
+      name: row.name,
+      role: row.role as UserRole,
+      avatar: row.avatar
+    }));
   },
 
-  // Tanks
+  // ── Tanks ───────────────────────────────────────────────────────────────────
   async getTanks(): Promise<Tank[]> {
-    if (!auth.currentUser) return [];
-
-    const path = 'tanks';
-    try {
-      const querySnapshot = await getDocs(collection(db, path));
-      return querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          name: data.name,
-          type: data.type,
-          capacity: data.capacity,
-          currentLevel: data.current_level,
-          safeMinLevel: data.safe_min_level,
-          lastUpdated: data.last_updated
-        } as Tank;
-      });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, path);
-      throw error;
+    const { data, error } = await supabase.from('tanks').select('*').order('name');
+    if (error) {
+      console.warn('[Supabase] getTanks failed, falling back to static constants:', error);
+      if (localTanks.length === 0) localTanks = TANKS;
+      return localTanks;
     }
+    if (!data || data.length === 0) {
+      if (localTanks.length === 0) localTanks = TANKS;
+      return localTanks;
+    }
+    localTanks = data.map(row => ({
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      capacity: Number(row.capacity),
+      currentLevel: Number(row.current_level),
+      safeMinLevel: Number(row.safe_min_level),
+      lastUpdated: row.last_updated
+    } as Tank));
+    return localTanks;
   },
 
   async updateTankLevel(id: string, newLevel: number): Promise<void> {
-    if (!auth.currentUser) return; // Mock success
-    const path = `tanks/${id}`;
-    try {
-      const tankRef = doc(db, 'tanks', id);
-      await updateDoc(tankRef, {
-        current_level: newLevel,
-        last_updated: new Date().toISOString()
-      });
-    } catch (error) {
-      console.warn('Firestore updateTankLevel failed, continuing with local state update:', error);
+    const index = localTanks.findIndex(t => t.id === id);
+    let original: Tank | null = null;
+    if (index !== -1) {
+      original = { ...localTanks[index] };
+      localTanks[index] = { ...localTanks[index], currentLevel: newLevel, lastUpdated: new Date().toISOString() };
+      triggerTanksCallbacks();
+    }
+
+    const { error } = await supabase.from('tanks').update({
+      current_level: newLevel,
+      last_updated: new Date().toISOString()
+    }).eq('id', id);
+
+    if (error) {
+      if (index !== -1 && original) {
+        localTanks[index] = original;
+        triggerTanksCallbacks();
+      }
+      console.error('[Supabase] updateTankLevel failed:', error);
     }
   },
 
-  // Flight Jobs
-  async getFlightJobs(): Promise<FlightJob[]> {
-    if (!auth.currentUser) return [];
+  subscribeToTanks(callback: (tanks: Tank[]) => void) {
+    const channel = supabase
+      .channel('tanks-changes-' + Date.now() + '-' + Math.floor(Math.random() * 1000))
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tanks' },
+        async () => {
+          const tanks = await supabaseService.getTanks();
+          callback(tanks);
+        }
+      )
+      .subscribe();
 
-    const path = 'flight_jobs';
-    try {
-      const querySnapshot = await getDocs(collection(db, path));
-      return querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          flightNumber: data.flight_number,
-          aircraftReg: data.aircraft_reg,
-          aircraftType: data.aircraft_type,
-          stand: data.stand,
-          assignedTo: data.assigned_to,
-          status: data.status
-        } as FlightJob;
-      });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, path);
+    supabaseService.getTanks().then(callback);
+    tanksCallbacks.add(callback);
+
+    return () => {
+      supabase.removeChannel(channel);
+      tanksCallbacks.delete(callback);
+    };
+  },
+
+  async addTank(tank: Omit<Tank, 'id' | 'lastUpdated'>): Promise<void> {
+    const cleanId = tank.name.toUpperCase().trim();
+    const newTank: Tank = {
+      id: cleanId,
+      ...tank,
+      name: cleanId,
+      lastUpdated: new Date().toISOString()
+    };
+    localTanks.push(newTank);
+    triggerTanksCallbacks();
+
+    const row = {
+      id: cleanId,
+      name: cleanId,
+      type: tank.type,
+      capacity: tank.capacity,
+      current_level: tank.currentLevel,
+      safe_min_level: tank.safeMinLevel,
+    };
+    const { error } = await supabase.from('tanks').insert([row]);
+    if (error) {
+      localTanks = localTanks.filter(t => t.id !== cleanId);
+      triggerTanksCallbacks();
+      console.error('[Supabase] addTank failed:', error);
       throw error;
     }
   },
 
-  // ── BigQuery Cloud Run API helpers ──────────────────────────────────────────
-  // VITE_BIGQUERY_API_URL = deployed Cloud Run URL, e.g.
-  //   https://fms-bigquery-api-XXXXXXXX-uc.a.run.app
-  // Fallback: local Cloud Run dev server on port 8080
+  async updateTank(id: string, updates: Partial<Omit<Tank, 'id'>>): Promise<void> {
+    const index = localTanks.findIndex(t => t.id === id);
+    let original: Tank | null = null;
+    if (index !== -1) {
+      original = { ...localTanks[index] };
+      localTanks[index] = { ...localTanks[index], ...updates, lastUpdated: new Date().toISOString() };
+      triggerTanksCallbacks();
+    }
+
+    const row: Record<string, any> = {
+      last_updated: new Date().toISOString()
+    };
+    if ('name' in updates) row.name = updates.name;
+    if ('type' in updates) row.type = updates.type;
+    if ('capacity' in updates) row.capacity = updates.capacity;
+    if ('currentLevel' in updates) row.current_level = updates.currentLevel;
+    if ('safeMinLevel' in updates) row.safe_min_level = updates.safeMinLevel;
+
+    const { error } = await supabase.from('tanks').update(row).eq('id', id);
+    if (error) {
+      if (index !== -1 && original) {
+        localTanks[index] = original;
+        triggerTanksCallbacks();
+      }
+      console.error('[Supabase] updateTank failed:', error);
+      throw error;
+    }
+  },
+
+  async deleteTank(id: string): Promise<void> {
+    const index = localTanks.findIndex(t => t.id === id);
+    let original: Tank | null = null;
+    if (index !== -1) {
+      original = { ...localTanks[index] };
+      localTanks.splice(index, 1);
+      triggerTanksCallbacks();
+    }
+
+    const { error } = await supabase.from('tanks').delete().eq('id', id);
+    if (error) {
+      if (index !== -1 && original) {
+        localTanks.splice(index, 0, original);
+        triggerTanksCallbacks();
+      }
+      console.error('[Supabase] deleteTank failed:', error);
+      throw error;
+    }
+  },
+
+  // ── Flight Jobs ─────────────────────────────────────────────────────────────
+  async getFlightJobs(): Promise<FlightJob[]> {
+    const { data, error } = await supabase.from('flight_jobs').select('*');
+    if (error) {
+      console.warn('[Supabase] getFlightJobs failed, falling back to mocks:', error);
+      return MOCK_JOBS;
+    }
+    if (!data || data.length === 0) return MOCK_JOBS;
+    return data.map(row => ({
+      id: row.id,
+      flightNumber: row.flight_number,
+      aircraftReg: row.aircraft_reg,
+      aircraftType: row.aircraft_type,
+      stand: row.stand,
+      sta: row.sta,
+      eta: row.eta,
+      std: row.std,
+      assignedTo: row.assigned_to,
+      assignedOfficer: row.assigned_officer,
+      equipmentUsage: row.equipment_usage,
+      status: row.status,
+      vehicleId: row.vehicle_id,
+      remarks: row.remarks,
+      deliveryNumber: row.delivery_number,
+      pitNumber: row.pit_number
+    } as FlightJob));
+  },
+
+  // ── BigQuery Cloud Run API Helper & Operations Logs ────────────────────────
   _bqBase(): string {
     return (
       import.meta.env.VITE_BIGQUERY_API_URL ||
@@ -178,20 +264,23 @@ export const supabaseService = {
   async _bqAuthHeaders(): Promise<Record<string, string>> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     try {
-      if (auth.currentUser) {
-        const token = await auth.currentUser.getIdToken();
-        headers['Authorization'] = `Bearer ${token}`;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      } else {
+        console.warn(
+          '[BigQuery] No active Supabase session found. The Authorization header is empty. ' +
+          'Please ensure that "Anonymous Sign-ins" are enabled in your Supabase Dashboard (Authentication > Providers > Anonymous).'
+        );
       }
     } catch (e) {
-      console.warn('[BigQuery] Could not get ID token:', e);
+      console.warn('[BigQuery] Could not get Supabase access token:', e);
     }
     return headers;
   },
 
-  // Flight Logs — backed by native Google BigQuery via Cloud Run API proxy
   async getFlightLogs(): Promise<FlightLog[]> {
-    console.log('[BigQuery SQL] SELECT * FROM `macl-fms.fms_data.operations_log` WHERE is_deleted IS FALSE ORDER BY delivery_number DESC');
-    if (!auth.currentUser) return [];
+    console.log('[BigQuery API] GET /operations-log');
     try {
       const headers = await this._bqAuthHeaders();
       const res = await fetch(`${this._bqBase()}/operations-log`, { headers });
@@ -205,8 +294,7 @@ export const supabaseService = {
   },
 
   async createFlightLog(log: Omit<FlightLog, 'id'>): Promise<void> {
-    console.log('[BigQuery SQL] INSERT INTO `macl-fms.fms_data.operations_log` VALUES (...)');
-    if (!auth.currentUser) return;
+    console.log('[BigQuery API] POST /operations-log');
     try {
       const headers = await this._bqAuthHeaders();
       const res = await fetch(`${this._bqBase()}/operations-log`, {
@@ -222,8 +310,7 @@ export const supabaseService = {
   },
 
   async updateFlightLog(id: string, updates: Partial<FlightLog>): Promise<void> {
-    console.log(`[BigQuery SQL] UPDATE \`macl-fms.fms_data.operations_log\` SET ... WHERE id = '${id}'`);
-    if (!auth.currentUser) return;
+    console.log(`[BigQuery API] PATCH /operations-log/${id}`);
     try {
       const headers = await this._bqAuthHeaders();
       const res = await fetch(`${this._bqBase()}/operations-log/${id}`, {
@@ -239,8 +326,7 @@ export const supabaseService = {
   },
 
   async deleteFlightLog(id: string): Promise<void> {
-    console.log(`[BigQuery SQL] UPDATE \`macl-fms.fms_data.operations_log\` SET is_deleted=TRUE WHERE id = '${id}'`);
-    if (!auth.currentUser) return;
+    console.log(`[BigQuery API] DELETE /operations-log/${id}`);
     try {
       const headers = await this._bqAuthHeaders();
       const res = await fetch(`${this._bqBase()}/operations-log/${id}`, {
@@ -254,352 +340,534 @@ export const supabaseService = {
     }
   },
 
-  // Bridging Logs
+  // ── Bridging Logs ──────────────────────────────────────────────────────────
   async getBridgingLogs(): Promise<BridgingLog[]> {
-    if (!auth.currentUser) return localBridgingLogs;
+    const { data, error } = await supabase
+      .from('bridging_logs')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    const path = 'bridging_logs';
-    try {
-      const querySnapshot = await getDocs(collection(db, path));
-      if (querySnapshot.empty) return localBridgingLogs;
-      return querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          sourceTankId: data.source_tank_id,
-          vehicleId: data.vehicle_id,
-          volume: data.volume,
-          startTime: data.start_time,
-          endTime: data.end_time,
-          visualCheckPassed: data.visual_check_passed,
-          cwdCheckPassed: data.cwd_check_passed,
-          density: data.density,
-          temperature: data.temperature,
-          operatorId: data.operator_id,
-          date: data.date
-        } as BridgingLog;
-      });
-    } catch (error) {
-      console.warn('Firestore getBridgingLogs failed, falling back to localBridgingLogs:', error);
+    if (error) {
+      console.warn('[Supabase] getBridgingLogs failed, falling back to localBridgingLogs:', error);
       return localBridgingLogs;
     }
+    if (!data || data.length === 0) return localBridgingLogs;
+    return data.map(row => ({
+      id: row.id,
+      sourceTankId: row.source_tank_id,
+      vehicleId: row.vehicle_id,
+      volume: Number(row.volume),
+      startTime: row.start_time,
+      endTime: row.end_time,
+      visualCheckPassed: row.visual_check_passed,
+      cwdCheckPassed: row.cwd_check_passed,
+      density: row.density ? Number(row.density) : undefined,
+      temperature: row.temperature ? Number(row.temperature) : undefined,
+      operatorId: row.operator_id,
+      date: row.date
+    } as BridgingLog));
   },
 
   async createBridgingLog(log: Omit<BridgingLog, 'id'>): Promise<void> {
-    const id = `bl-${Date.now()}`;
-    const newLog: BridgingLog = { id, ...log };
-    localBridgingLogs.unshift(newLog); // Prepend to the local memory array!
+    const row = {
+      source_tank_id: log.sourceTankId,
+      vehicle_id: log.vehicleId,
+      volume: log.volume,
+      start_time: log.startTime,
+      end_time: log.endTime,
+      visual_check_passed: log.visualCheckPassed,
+      cwd_check_passed: log.cwdCheckPassed,
+      density: log.density ?? null,
+      temperature: log.temperature ?? null,
+      operator_id: log.operatorId,
+      date: log.date || new Date().toISOString().split('T')[0]
+    };
 
-    if (!auth.currentUser) return; // Mock success
-    const path = 'bridging_logs';
-    try {
-      await addDoc(collection(db, path), {
-        source_tank_id: log.sourceTankId,
-        vehicle_id: log.vehicleId,
-        volume: log.volume,
-        start_time: log.startTime,
-        end_time: log.endTime,
-        visual_check_passed: log.visualCheckPassed,
-        cwd_check_passed: log.cwdCheckPassed,
-        density: log.density ?? null,
-        temperature: log.temperature ?? null,
-        operator_id: log.operatorId,
-        date: log.date || new Date().toISOString().split('T')[0],
-        created_at: new Date().toISOString()
-      });
-    } catch (error) {
-      console.warn('Firestore fallback save failed (Permissions or Config) for bridging log:', error);
+    const id = `bl-${Date.now()}`;
+    localBridgingLogs.unshift({ id, ...log });
+
+    const { error } = await supabase.from('bridging_logs').insert([row]);
+    if (error) {
+      console.error('[Supabase] createBridgingLog failed:', error);
     }
   },
 
-  // Alerts
+  // ── Alerts ──────────────────────────────────────────────────────────────────
   async getAlerts(): Promise<Alert[]> {
-    if (!auth.currentUser) return [];
-
-    const path = 'alerts';
-    try {
-      const querySnapshot = await getDocs(collection(db, path));
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Alert));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, path);
-      throw error;
+    const { data, error } = await supabase.from('alerts').select('*').order('timestamp', { ascending: false });
+    if (error) {
+      console.error('[Supabase] getAlerts failed:', error);
+      return [];
     }
+    if (!data || data.length === 0) return [];
+    return data.map(row => ({
+      id: row.id,
+      severity: row.severity,
+      message: row.message,
+      // Convert stored ISO timestamp to a human-readable HH:MM string for the UI
+      timestamp: row.timestamp
+        ? new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+        : row.timestamp,
+      acknowledged: row.acknowledged,
+      targetRole: row.target_role
+    } as Alert));
   },
 
   subscribeToAlerts(callback: (alerts: Alert[]) => void) {
-    if (!auth.currentUser) return () => {};
-    const path = 'alerts';
+    const channel = supabase
+      .channel('alerts-changes-' + Date.now() + '-' + Math.floor(Math.random() * 1000))
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'alerts' },
+        async () => {
+          const alerts = await supabaseService.getAlerts();
+          callback(alerts);
+        }
+      )
+      .subscribe();
 
-    const q = query(collection(db, path));
-    return onSnapshot(q, (snapshot) => {
-      const alerts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Alert));
-      callback(alerts);
-    }, (error) => {
-      console.error('Alerts Subscription Error:', error);
-    });
+    supabaseService.getAlerts().then(callback);
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   },
 
   async acknowledgeAlert(id: string): Promise<void> {
-    if (!auth.currentUser) return; // Mock success
-    const path = `alerts/${id}`;
-    try {
-      const alertRef = doc(db, 'alerts', id);
-      await updateDoc(alertRef, { acknowledged: true });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
-      throw error;
+    const { error } = await supabase.from('alerts').update({ acknowledged: true }).eq('id', id);
+    if (error) {
+      console.error('[Supabase] acknowledgeAlert failed:', error);
     }
   },
 
   async acknowledgeAllAlerts(ids: string[]): Promise<void> {
-    if (!auth.currentUser) return; // Mock success
-    const path = 'alerts/bulk';
-    try {
-      await Promise.all(ids.map(id => {
-        const alertRef = doc(db, 'alerts', id);
-        return updateDoc(alertRef, { acknowledged: true });
-      }));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
-      throw error;
+    const { error } = await supabase.from('alerts').update({ acknowledged: true }).in('id', ids);
+    if (error) {
+      console.error('[Supabase] acknowledgeAllAlerts failed:', error);
     }
   },
 
   async createAlert(alert: Omit<Alert, 'id'>): Promise<void> {
-    if (!auth.currentUser) {
-      console.warn("User not authenticated. Simulating successful alert creation locally.");
-      return;
-    }
-    const path = 'alerts';
-    try {
-      await addDoc(collection(db, path), {
-        severity: alert.severity,
-        message: alert.message,
-        timestamp: alert.timestamp,
-        acknowledged: alert.acknowledged,
-        targetRole: alert.targetRole || null,
-      });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, path);
-      throw error;
+    const row = {
+      severity: alert.severity,
+      message: alert.message,
+      // Always use a full ISO 8601 timestamp for the DB column (timestamptz).
+      // The caller may pass a display-only HH:MM string which is invalid for Postgres.
+      timestamp: new Date().toISOString(),
+      acknowledged: alert.acknowledged,
+      target_role: alert.targetRole || null
+    };
+    const { error } = await supabase.from('alerts').insert([row]);
+    if (error) {
+      console.error('[Supabase] createAlert failed:', error);
     }
   },
 
   async checkActiveReplenishRequest(eqId: string): Promise<boolean> {
-    if (!auth.currentUser) return false;
-    const path = 'alerts';
-    try {
-      const q = query(
-        collection(db, path), 
-        where('acknowledged', '==', false),
-        where('message', '==', `Replenishment requested for unit ${eqId}`)
-      );
-      const querySnapshot = await getDocs(q);
-      return !querySnapshot.empty;
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, path);
+    const { data, error } = await supabase
+      .from('alerts')
+      .select('id')
+      .eq('acknowledged', false)
+      .eq('message', `Replenishment requested for unit ${eqId}`);
+
+    if (error) {
+      console.error('[Supabase] checkActiveReplenishRequest failed:', error);
       return false;
     }
+    return (data || []).length > 0;
   },
 
-  // Equipment
+  // ── Equipment ───────────────────────────────────────────────────────────────
   async getEquipment(): Promise<Equipment[]> {
-    if (!auth.currentUser) return [];
-
-    const path = 'equipment';
-    try {
-      const querySnapshot = await getDocs(collection(db, path));
-      if (querySnapshot.empty) return EQUIPMENT;
-      return querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data
-        } as Equipment;
-      });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, path);
-      throw error;
+    const { data, error } = await supabase.from('equipment').select('*').order('name');
+    if (error) {
+      console.warn('[Supabase] getEquipment failed, falling back to static constants:', error);
+      if (localEquipment.length === 0) localEquipment = EQUIPMENT;
+      return localEquipment;
     }
+    if (!data || data.length === 0) {
+      if (localEquipment.length === 0) localEquipment = EQUIPMENT;
+      return localEquipment;
+    }
+    localEquipment = data.map(row => ({
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      status: row.status,
+      currentVolume: Number(row.current_volume),
+      maxCapacity: Number(row.max_capacity),
+      lastUpdated: row.last_updated,
+      maintenanceDetails: row.maintenance_details
+    } as Equipment));
+    return localEquipment;
   },
 
-  async updateEquipmentStatus(id: string, status: string): Promise<void> {
-    if (!auth.currentUser) return; // Mock success
-    const path = `equipment/${id}`;
-    try {
-      const eqRef = doc(db, 'equipment', id);
-      await setDoc(eqRef, {
-        status: status,
-        lastUpdated: new Date().toISOString()
-      }, { merge: true });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
-      throw error;
+  async updateEquipmentStatus(id: string, status: EquipmentStatus): Promise<void> {
+    const index = localEquipment.findIndex(e => e.id === id);
+    let original: Equipment | null = null;
+    if (index !== -1) {
+      original = { ...localEquipment[index] };
+      localEquipment[index] = { ...localEquipment[index], status, lastUpdated: new Date().toISOString() };
+      triggerEquipmentCallbacks();
+    }
+
+    const { error } = await supabase.from('equipment').update({
+      status: status,
+      last_updated: new Date().toISOString()
+    }).eq('id', id);
+
+    if (error) {
+      if (index !== -1 && original) {
+        localEquipment[index] = original;
+        triggerEquipmentCallbacks();
+      }
+      console.error('[Supabase] updateEquipmentStatus failed:', error);
     }
   },
 
   async updateEquipment(id: string, updates: Partial<Equipment>): Promise<void> {
-    if (!auth.currentUser) return; // Mock success
-    const path = `equipment/${id}`;
-    try {
-      const eqRef = doc(db, 'equipment', id);
-      await setDoc(eqRef, {
-        ...updates,
-        lastUpdated: new Date().toISOString()
-      }, { merge: true });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
-      throw error;
+    const index = localEquipment.findIndex(e => e.id === id);
+    let original: Equipment | null = null;
+    if (index !== -1) {
+      original = { ...localEquipment[index] };
+      localEquipment[index] = { ...localEquipment[index], ...updates, lastUpdated: new Date().toISOString() };
+      triggerEquipmentCallbacks();
+    }
+
+    const row: Record<string, any> = {
+      last_updated: new Date().toISOString()
+    };
+    if ('name' in updates) row.name = updates.name;
+    if ('type' in updates) row.type = updates.type;
+    if ('status' in updates) row.status = updates.status;
+    if ('currentVolume' in updates) row.current_volume = updates.currentVolume;
+    if ('maxCapacity' in updates) row.max_capacity = updates.maxCapacity;
+    if ('maintenanceDetails' in updates) row.maintenance_details = updates.maintenanceDetails;
+
+    const { error } = await supabase.from('equipment').update(row).eq('id', id);
+    if (error) {
+      if (index !== -1 && original) {
+        localEquipment[index] = original;
+        triggerEquipmentCallbacks();
+      }
+      console.error('[Supabase] updateEquipment failed:', error);
     }
   },
 
   subscribeToEquipment(callback: (equipment: Equipment[]) => void) {
-    if (!auth.currentUser) return () => {};
-    const path = 'equipment';
+    const channel = supabase
+      .channel('equipment-changes-' + Date.now() + '-' + Math.floor(Math.random() * 1000))
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'equipment' },
+        async () => {
+          const equipment = await supabaseService.getEquipment();
+          callback(equipment);
+        }
+      )
+      .subscribe();
 
-    const q = query(collection(db, path));
-    return onSnapshot(q, (snapshot) => {
-      if (snapshot.empty) {
-        callback(EQUIPMENT);
-        return;
-      }
-      const equipment = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Equipment));
-      callback(equipment);
-    }, (error) => {
-      console.error('Equipment Subscription Error:', error);
-    });
+    supabaseService.getEquipment().then(callback);
+    equipmentCallbacks.add(callback);
+
+    return () => {
+      supabase.removeChannel(channel);
+      equipmentCallbacks.delete(callback);
+    };
   },
 
-  // Domestic Assignments
-  async getDomesticAssignments(date: string) {
-    if (!auth.currentUser) return null;
+  async addEquipment(eq: Omit<Equipment, 'id' | 'lastUpdated'>): Promise<void> {
+    const cleanId = eq.name.toUpperCase().trim();
+    const newEq: Equipment = {
+      id: cleanId,
+      ...eq,
+      name: cleanId,
+      lastUpdated: new Date().toISOString()
+    };
+    localEquipment.push(newEq);
+    triggerEquipmentCallbacks();
 
-    const path = 'domestic_assignments';
-    try {
-      const q = query(collection(db, path), where('assignment_date', '==', date));
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => doc.data());
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, path);
+    const row = {
+      id: cleanId,
+      name: cleanId,
+      type: eq.type,
+      status: eq.status,
+      current_volume: eq.currentVolume,
+      max_capacity: eq.maxCapacity,
+      maintenance_details: eq.maintenanceDetails || null
+    };
+    const { error } = await supabase.from('equipment').insert([row]);
+    if (error) {
+      localEquipment = localEquipment.filter(e => e.id !== cleanId);
+      triggerEquipmentCallbacks();
+      console.error('[Supabase] addEquipment failed:', error);
       throw error;
     }
+  },
+
+  async deleteEquipment(id: string): Promise<void> {
+    const index = localEquipment.findIndex(e => e.id === id);
+    let original: Equipment | null = null;
+    if (index !== -1) {
+      original = { ...localEquipment[index] };
+      localEquipment.splice(index, 1);
+      triggerEquipmentCallbacks();
+    }
+
+    const { error } = await supabase.from('equipment').delete().eq('id', id);
+    if (error) {
+      if (index !== -1 && original) {
+        localEquipment.splice(index, 0, original);
+        triggerEquipmentCallbacks();
+      }
+      console.error('[Supabase] deleteEquipment failed:', error);
+      throw error;
+    }
+  },
+
+  // ── Domestic & Equipment Assignments ────────────────────────────────────────
+  async getDomesticAssignments(date: string) {
+    const { data, error } = await supabase
+      .from('domestic_assignments')
+      .select('*')
+      .eq('assignment_date', date);
+
+    if (error) {
+      console.error('[Supabase] getDomesticAssignments failed:', error);
+      return null;
+    }
+    return data;
   },
 
   async upsertDomesticAssignment(date: string, teamName: string, op1: string, op2: string) {
-    if (!auth.currentUser) return; 
     const docId = `${date}_${teamName}`;
-    const path = `domestic_assignments/${docId}`;
-    try {
-      const assignmentRef = doc(db, 'domestic_assignments', docId);
-      await setDoc(assignmentRef, {
-        assignment_date: date,
-        team_name: teamName,
-        operator1_id: op1,
-        operator2_id: op2
-      }, { merge: true });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, path);
-      throw error;
+    const { error } = await supabase.from('domestic_assignments').upsert({
+      id: docId,
+      assignment_date: date,
+      team_name: teamName,
+      operator1_id: op1,
+      operator2_id: op2
+    });
+    if (error) {
+      console.error('[Supabase] upsertDomesticAssignment failed:', error);
     }
   },
 
-  // Equipment Assignments
   async getEquipmentAssignments(date: string, shiftType: string) {
-    if (!auth.currentUser) return null;
+    const { data, error } = await supabase
+      .from('equipment_assignments')
+      .select('*')
+      .eq('assignment_date', date)
+      .eq('shift_type', shiftType);
 
-    const path = 'equipment_assignments';
-    try {
-      const q = query(collection(db, path), 
-        where('assignment_date', '==', date),
-        where('shift_type', '==', shiftType)
-      );
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => doc.data());
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, path);
-      throw error;
+    if (error) {
+      console.error('[Supabase] getEquipmentAssignments failed:', error);
+      return null;
     }
+    return data;
   },
 
   async upsertEquipmentAssignment(date: string, eqId: string, shiftType: string, op1: string, op2: string) {
-    if (!auth.currentUser) return; // Mock success
     const docId = `${date}_${eqId}_${shiftType}`;
-    const path = `equipment_assignments/${docId}`;
-    try {
-      const assignmentRef = doc(db, 'equipment_assignments', docId);
-      await setDoc(assignmentRef, {
-        assignment_date: date,
-        equipment_id: eqId,
-        shift_type: shiftType,
-        operator1_id: op1,
-        operator2_id: op2
-      }, { merge: true });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, path);
-      throw error;
+    const { error } = await supabase.from('equipment_assignments').upsert({
+      id: docId,
+      assignment_date: date,
+      equipment_id: eqId,
+      shift_type: shiftType,
+      operator1_id: op1,
+      operator2_id: op2
+    });
+    if (error) {
+      console.error('[Supabase] upsertEquipmentAssignment failed:', error);
     }
   },
 
-  // Shift Briefing
+  // ── Shift Briefings ─────────────────────────────────────────────────────────
   async getShiftBriefingInfo(date: string, shift: string) {
-    if (!auth.currentUser) return null;
+    const docId = `${date}_${shift}`;
+    const { data, error } = await supabase
+      .from('shift_briefing_info')
+      .select('*')
+      .eq('id', docId)
+      .maybeSingle();
 
-    const path = 'shift_briefing_info';
-    try {
-      const docId = `${date}_${shift}`;
-      const q = query(collection(db, path), where('date', '==', date), where('shift', '==', shift));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        const data = querySnapshot.docs[0].data();
-        return {
-          info: data.info || [],
-          dieselNeeds: data.diesel_needs || [],
-          staffAssignments: data.staff_assignments || null
-        };
-      }
-      // Fallback: try getting by the old date-only ID for backwards compatibility
-      const oldQ = query(collection(db, path), where('date', '==', date));
-      const oldQuerySnapshot = await getDocs(oldQ);
-      if (!oldQuerySnapshot.empty) {
-        const data = oldQuerySnapshot.docs[0].data();
-        // Only return old data if it doesn't have a specific shift assigned yet
-        if (!data.shift) {
-           return {
-             info: data.info || [],
-             dieselNeeds: data.diesel_needs || [],
-             staffAssignments: data.staff_assignments || null
-           };
-        }
-      }
+    if (error) {
+      console.error('[Supabase] getShiftBriefingInfo failed:', error);
       return { info: [], dieselNeeds: [], staffAssignments: null };
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, path);
-      throw error;
     }
+    if (data) {
+      return {
+        info: data.info || [],
+        dieselNeeds: data.diesel_needs || [],
+        staffAssignments: data.staff_assignments || null
+      };
+    }
+    return { info: [], dieselNeeds: [], staffAssignments: null };
   },
 
   async upsertShiftBriefingInfo(date: string, shift: string, info: any[], dieselNeeds: string[], staffAssignments: any) {
-    if (!auth.currentUser) return;
     const docId = `${date}_${shift}`;
-    const path = `shift_briefing_info/${docId}`;
-    try {
-      const briefingRef = doc(db, 'shift_briefing_info', docId);
-      await setDoc(briefingRef, {
-        date: date,
-        shift: shift,
-        info: info,
-        diesel_needs: dieselNeeds,
-        staff_assignments: staffAssignments
-      }, { merge: true });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, path);
+    const { error } = await supabase.from('shift_briefing_info').upsert({
+      id: docId,
+      date: date,
+      shift: shift,
+      info: info,
+      diesel_needs: dieselNeeds,
+      staff_assignments: staffAssignments
+    });
+    if (error) {
+      console.error('[Supabase] upsertShiftBriefingInfo failed:', error);
+    }
+  },
+
+  // ── Staff (CRUD, Admin Panel) ───────────────────────────────────────────────
+  subscribeToStaff(callback: (staff: StaffMember[]) => void) {
+    const channel = supabase
+      .channel('staff-changes-' + Date.now() + '-' + Math.floor(Math.random() * 1000))
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'staff' },
+        async () => {
+          const staff = await supabaseService.getStaff();
+          callback(staff);
+        }
+      )
+      .subscribe();
+
+    supabaseService.getStaff().then(callback);
+    staffCallbacks.add(callback);
+
+    return () => {
+      supabase.removeChannel(channel);
+      staffCallbacks.delete(callback);
+    };
+  },
+
+  async getStaff(): Promise<StaffMember[]> {
+    const { data, error } = await supabase.from('staff').select('*').order('name');
+    if (error) {
+      console.warn('[Supabase] getStaff failed, falling back to mocks:', error);
+      if (localStaff.length === 0) {
+        localStaff = MOCK_USERS.map(u => ({
+          id: u.id,
+          name: u.name,
+          role: u.role,
+          employeeId: `EMP-${u.id.toUpperCase()}`,
+          status: 'active',
+          joinDate: new Date().toISOString(),
+          avatar: u.avatar
+        }));
+      }
+      return localStaff;
+    }
+    if (!data || data.length === 0) {
+      if (localStaff.length === 0) {
+        localStaff = MOCK_USERS.map(u => ({
+          id: u.id,
+          name: u.name,
+          role: u.role,
+          employeeId: `EMP-${u.id.toUpperCase()}`,
+          status: 'active',
+          joinDate: new Date().toISOString(),
+          avatar: u.avatar
+        }));
+      }
+      return localStaff;
+    }
+    localStaff = data.map(row => ({
+      id: row.id,
+      name: row.name,
+      role: row.role as UserRole,
+      employeeId: row.employee_id,
+      phone: row.phone,
+      email: row.email,
+      status: row.status as 'active' | 'inactive',
+      joinDate: row.join_date || new Date().toISOString(),
+      avatar: row.avatar
+    } as StaffMember));
+    return localStaff;
+  },
+
+  async addStaff(member: Omit<StaffMember, 'id'>): Promise<void> {
+    const newId = `st-${Date.now()}`;
+    const newMember: StaffMember = {
+      id: newId,
+      ...member,
+      avatar: member.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}`
+    };
+    localStaff.push(newMember);
+    triggerStaffCallbacks();
+
+    const row = {
+      name: member.name,
+      role: member.role,
+      employee_id: member.employeeId,
+      phone: member.phone || null,
+      email: member.email || null,
+      status: member.status,
+      avatar: newMember.avatar
+    };
+    const { error } = await supabase.from('staff').insert([row]);
+    if (error) {
+      localStaff = localStaff.filter(s => s.id !== newId);
+      triggerStaffCallbacks();
+      console.error('[Supabase] addStaff failed:', error);
       throw error;
     }
   },
 
-  // BigQuery Sync — routes through the Cloud Run API proxy
+  async updateStaff(id: string, updates: Partial<Omit<StaffMember, 'id'>>): Promise<void> {
+    const index = localStaff.findIndex(s => s.id === id);
+    let original: StaffMember | null = null;
+    if (index !== -1) {
+      original = { ...localStaff[index] };
+      localStaff[index] = { ...localStaff[index], ...updates };
+      triggerStaffCallbacks();
+    }
+
+    const row: Record<string, any> = {};
+    if ('name' in updates) row.name = updates.name;
+    if ('role' in updates) row.role = updates.role;
+    if ('employeeId' in updates) row.employee_id = updates.employeeId;
+    if ('phone' in updates) row.phone = updates.phone;
+    if ('email' in updates) row.email = updates.email;
+    if ('status' in updates) row.status = updates.status;
+    if ('avatar' in updates) row.avatar = updates.avatar;
+
+    const { error } = await supabase.from('staff').update(row).eq('id', id);
+    if (error) {
+      if (index !== -1 && original) {
+        localStaff[index] = original;
+        triggerStaffCallbacks();
+      }
+      console.error('[Supabase] updateStaff failed:', error);
+      throw error;
+    }
+  },
+
+  async deleteStaff(id: string): Promise<void> {
+    const index = localStaff.findIndex(s => s.id === id);
+    let original: StaffMember | null = null;
+    if (index !== -1) {
+      original = { ...localStaff[index] };
+      localStaff.splice(index, 1);
+      triggerStaffCallbacks();
+    }
+
+    const { error } = await supabase.from('staff').delete().eq('id', id);
+    if (error) {
+      if (index !== -1 && original) {
+        localStaff.splice(index, 0, original);
+        triggerStaffCallbacks();
+      }
+      console.error('[Supabase] deleteStaff failed:', error);
+      throw error;
+    }
+  },
+
+  // ── BigQuery Sync ──────────────────────────────────────────────────────────
   async syncToBigQuery(table: string, data: any): Promise<void> {
-    console.log(`[BigQuery Sync] Routing to Cloud Run API → table: ${table}`, data);
+    console.log(`[BigQuery Sync] Syncing ${table} to BigQuery proxy...`);
     try {
       const headers = await this._bqAuthHeaders();
       const res = await fetch(`${this._bqBase()}/operations-log`, {
@@ -608,7 +876,7 @@ export const supabaseService = {
         body: JSON.stringify({ ...data, _targetTable: table }),
       });
       if (!res.ok) {
-        console.error(`[BigQuery Sync] Failed for table ${table}: ${res.status}`);
+        console.error(`[BigQuery Sync] Sync failed for table ${table}: ${res.status}`);
       }
     } catch (error) {
       console.error('[BigQuery Sync] Error:', error);

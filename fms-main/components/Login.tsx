@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Hexagon, Lock, User as UserIcon, ShieldCheck, AlertCircle } from 'lucide-react';
-import { auth } from '../firebase';
-import { signInWithPopup, OAuthProvider, signInAnonymously } from 'firebase/auth';
+import { supabase } from '../supabase';
 import { User, UserRole } from '../types';
 import { MOCK_USERS } from '../constants';
 import { Logo } from './Logo';
@@ -19,16 +18,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setIsLoggingIn(true);
     setError(null);
     try {
-      const provider = new OAuthProvider('microsoft.com');
-      const result = await signInWithPopup(auth, provider);
-      const firebaseUser = result.user;
-      const matchedMockUser = MOCK_USERS.find(u => u.id === firebaseUser.uid) || {
-        id: firebaseUser.uid,
-        name: firebaseUser.displayName || firebaseUser.email || 'Microsoft User',
-        role: UserRole.ITP_OPERATOR,
-        avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${firebaseUser.displayName || 'MU'}`
-      };
-      onLogin(matchedMockUser);
+      const { error: authErr } = await supabase.auth.signInWithOAuth({
+        provider: 'azure',
+        options: {
+          scopes: 'openid email profile',
+        }
+      });
+      if (authErr) throw authErr;
     } catch (err: any) {
       console.error("Microsoft Login failed:", err);
       setError(err.message || "Failed to sign in with Microsoft.");
@@ -39,12 +35,11 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const handleMockLogin = async (user: User) => {
     setIsLoggingIn(true);
     try {
-      // Attempt to sign in anonymously for Firestore context
       try {
-        await signInAnonymously(auth);
+        const { error: authErr } = await supabase.auth.signInAnonymously();
+        if (authErr) console.warn("Supabase anonymous auth warning:", authErr.message);
       } catch (authErr: any) {
-        console.warn("Simulator: Anonymous login restricted/failed. Proceeding with mock session.", authErr);
-        // We continue anyway so the user can enter the dashboard
+        console.warn("Simulator: Anonymous login restricted. Proceeding with mock session.", authErr);
       }
       onLogin(user);
     } catch (err: any) {

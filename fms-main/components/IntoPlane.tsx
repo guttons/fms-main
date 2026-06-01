@@ -129,7 +129,7 @@ const ScreenDashboard: React.FC<{
     setSelectedVehicleId: (id: string) => void
 }> = ({ user, onStartJob }) => {
   const { notify } = useNotification();
-  const { flightJobs, domesticFlights } = useOperationalData();
+  const { flightJobs, domesticFlights, staff } = useOperationalData();
   const [viewMode, setViewMode] = useState<'INT' | 'DOM'>('INT');
   const [filterMyTasks, setFilterMyTasks] = useState(false);
   
@@ -162,7 +162,7 @@ const ScreenDashboard: React.FC<{
 
   const renderJobCard = (job: FlightJob) => {
       const isAssignedToMe = job.assignedTo === user.id;
-      const assignee = MOCK_USERS.find(u => u.id === job.assignedTo);
+      const assignee = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => u.id === job.assignedTo);
       const assigneeName = assignee?.name || 'Unassigned';
       const delayed = isDelayed(job.sta, job.eta);
       

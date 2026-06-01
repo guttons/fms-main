@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Ship, Truck, CheckCircle, AlertTriangle, Save, Clock, ArrowRight, History, FileText, Anchor, Droplet } from 'lucide-react';
+import { Ship, Truck, CheckCircle, AlertTriangle, Save, Clock, ArrowRight, History, FileText, Anchor, Droplet, Users, Calendar } from 'lucide-react';
 import { useOperationalData } from '../context/OperationalDataContext';
-import { EquipmentType, UserRole, FuelType, EquipmentStatus } from '../types';
+import { EquipmentType, UserRole, FuelType, EquipmentStatus, User } from '../types';
 import { useNotification } from '../context/NotificationContext';
 import { supabaseService } from '../services/supabaseService';
 
@@ -19,6 +19,7 @@ interface MarineLoadingLog {
     waterCheck: boolean;
     operatorId: string;
     timestamp: string;
+    deliveryNumber?: string;
 }
 
 const MOCK_MARINE_LOGS: MarineLoadingLog[] = [
@@ -35,7 +36,8 @@ const MOCK_MARINE_LOGS: MarineLoadingLog[] = [
         visualCheck: true,
         waterCheck: true,
         operatorId: 'u4',
-        timestamp: '2023-10-27'
+        timestamp: new Date().toISOString().split('T')[0],
+        deliveryNumber: 'MLE-881202'
     },
     {
         id: 'ml2',
@@ -50,16 +52,28 @@ const MOCK_MARINE_LOGS: MarineLoadingLog[] = [
         visualCheck: true,
         waterCheck: true,
         operatorId: 'u4',
-        timestamp: '2023-10-27'
+        timestamp: new Date().toISOString().split('T')[0],
+        deliveryNumber: 'MLE-881203'
     }
 ];
 
-export const MarineLoading: React.FC = () => {
-  const { equipment, createAlert, alerts, flightLogs } = useOperationalData();
+interface MarineLoadingProps {
+  user?: User | null;
+}
+
+export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
+  const { equipment, createAlert, alerts, flightLogs, staff } = useOperationalData();
   const { notify } = useNotification();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [logs, setLogs] = useState<MarineLoadingLog[]>(MOCK_MARINE_LOGS);
+
+  const isOperator = user?.role === UserRole.DEPOT_OPERATOR;
+
+  // Extract staff roles for personnel dropdowns
+  const activeOperators = (staff || []).filter(s => [UserRole.DEPOT_OPERATOR, UserRole.ITP_OPERATOR].includes(s.role));
+  const activeOfficers = (staff || []).filter(s => [UserRole.DEPOT_MANAGER, UserRole.ITP_MANAGER, UserRole.ADMIN].includes(s.role));
 
   const [formData, setFormData] = useState({
     refuellerId: '',
@@ -72,6 +86,10 @@ export const MarineLoading: React.FC = () => {
     endTime: '',
     visualCheck: false,
     waterCheck: false,
+    deliveryNumber: '',
+    date: new Date().toISOString().split('T')[0],
+    operatorName: '',
+    supervisorName: ''
   });
 
   // Pre-enter opening totalizer based on Refueller's last completed log close reading
@@ -111,8 +129,10 @@ export const MarineLoading: React.FC = () => {
   const requestedRFs = Array.from(new Set(
     (alerts || [])
       .filter(a => a && !a.acknowledged && (
-        a.message.toLowerCase().includes('replenishment requested') || 
-        a.message.toLowerCase().includes('refuel requested')
+        a.message.toLowerCase().includes('request') && (
+          a.message.toLowerCase().includes('replenish') || 
+          a.message.toLowerCase().includes('refuel')
+        )
       ))
       .map(a => {
         const match = a.message.match(/unit\s+(RF-\d+)/i);
@@ -152,32 +172,85 @@ export const MarineLoading: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setDuplicateError(null);
+
+    // ── Duplicate delivery number check ──
+    const fullDeliveryNumber = `MLE-${formData.deliveryNumber}`;
+    const isDuplicateGlobal = (flightLogs || []).some(
+        (log) => log && log.deliveryNumber === fullDeliveryNumber
+    );
+    const isDuplicateLocal = (logs || []).some(
+        (log) => log && log.deliveryNumber === fullDeliveryNumber
+    );
+
+    if (isDuplicateGlobal || isDuplicateLocal) {
+        setDuplicateError(
+            `Delivery ticket ${fullDeliveryNumber} already exists in the operations log. Each ticket number must be unique.`
+        );
+        notify(`Delivery ticket number ${fullDeliveryNumber} is already used. Please enter a unique ticket number.`, 'error');
+        return;
+    }
+
     setLoading(true);
     
-    // Simulate API call
+    // Simulate API call and save to database
     setTimeout(async () => {
+      const parsedVolume = parseInt(formData.volume.toString().replace(/,/g, '')) || 0;
+      const parsedMeterOpen = parseFloat(formData.meterOpen.toString().replace(/,/g, '')) || 0;
+      const parsedMeterClose = parseFloat(formData.meterClose.toString().replace(/,/g, '')) || 0;
+
       const newLog: MarineLoadingLog = {
         id: `ml-${Date.now()}`,
         refuellerId: formData.refuellerId,
         vesselName: formData.vesselName,
-        volume: parseInt(formData.volume),
-        meterOpen: parseFloat(formData.meterOpen),
-        meterClose: parseFloat(formData.meterClose),
+        volume: parsedVolume,
+        meterOpen: parsedMeterOpen,
+        meterClose: parsedMeterClose,
         product: formData.product,
         startTime: formData.startTime,
         endTime: formData.endTime,
         visualCheck: formData.visualCheck,
         waterCheck: formData.waterCheck,
-        operatorId: 'current_user',
-        timestamp: new Date().toISOString().split('T')[0]
+        operatorId: formData.operatorName || user?.name || 'System Admin',
+        timestamp: formData.date,
+        deliveryNumber: formData.deliveryNumber ? `MLE-${formData.deliveryNumber}` : undefined,
       };
+
+      try {
+        // Save to global flight/operations log
+        const logToSave = {
+          flightNumber: `VESSEL-${formData.vesselName.toUpperCase()}`,
+          aircraftReg: `VESSEL-${formData.vesselName.toUpperCase()}`,
+          aircraftType: 'MARINE VESSEL',
+          stand: 'MARINE JETTY',
+          operatorId: formData.operatorName || 'System Admin',
+          vehicleId: formData.refuellerId.toUpperCase(),
+          status: 'COMPLETED' as const,
+          deliveryNumber: formData.deliveryNumber ? `MLE-${formData.deliveryNumber}` : undefined,
+          timestampStart: `${formData.date}T${formData.startTime}:00.000Z`,
+          timestampFinalEnd: `${formData.date}T${formData.endTime}:00.000Z`,
+          timestampClearance: new Date().toISOString(),
+          meterOpen: parsedMeterOpen,
+          meterClose: parsedMeterClose,
+          volume: parsedVolume,
+          panelCheck: true,
+          walkAroundCheck: true,
+          appearanceCheck: formData.visualCheck,
+          waterCheck: formData.waterCheck,
+          remarks: `Marine Loading for ${formData.vesselName} (Supervised by ${formData.supervisorName})`
+        };
+
+        await supabaseService.createFlightLog(logToSave);
+      } catch (dbError) {
+        console.error('Error saving marine log to database:', dbError);
+      }
 
       setLogs(prev => [newLog, ...prev]);
       
       // Create alert for record
       await createAlert({
         severity: 'low',
-        message: `Marine loading completed: ${formData.vesselName} loaded with ${formData.volume}L from ${formData.refuellerId}`,
+        message: `Marine loading completed: ${formData.vesselName} loaded with ${parsedVolume.toLocaleString()}L from ${formData.refuellerId}${formData.deliveryNumber ? ` (Ticket: MLE-${formData.deliveryNumber})` : ''}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
         acknowledged: false,
         targetRole: UserRole.DEPOT_MANAGER
@@ -200,6 +273,10 @@ export const MarineLoading: React.FC = () => {
           endTime: '',
           visualCheck: false,
           waterCheck: false,
+          deliveryNumber: '',
+          date: new Date().toISOString().split('T')[0],
+          operatorName: '',
+          supervisorName: ''
         });
       }, 3000);
     }, 1500);
@@ -216,8 +293,8 @@ export const MarineLoading: React.FC = () => {
           Marine vessel {formData.vesselName} successfully loaded from unit {formData.refuellerId}. Logistics registry updated.
         </p>
         <button 
-          onClick={() => setSuccess(false)}
-          className="mt-12 px-10 py-4 bg-primary text-white font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-premium hover:scale-105 active:scale-95 transition-all"
+          onClick={() => { setSuccess(false); setDuplicateError(null); }}
+          className="mt-12 px-10 py-4 bg-primary text-white font-black text-[11px] uppercase rounded-2xl shadow-premium hover:scale-105 active:scale-95 transition-all"
         >
           INITIATE NEW LOAD
         </button>
@@ -248,6 +325,37 @@ export const MarineLoading: React.FC = () => {
         {/* Input Form */}
         <div className="xl:col-span-2">
             <form onSubmit={handleSubmit} className="space-y-6 lg:space-y-10">
+                {/* Delivery Ticket Entry Field */}
+                <div className="card-premium p-6 lg:p-8 border-outline overflow-hidden">
+                    <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Delivery Ticket Number</label>
+                    <div className="flex items-center gap-2 max-w-full overflow-hidden">
+                        <span className="text-2xl sm:text-3xl font-mono font-black text-on-surface-dim opacity-30 shrink-0">MLE-</span>
+                        <input 
+                            type="text" 
+                            maxLength={6}
+                            required
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            className={`flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 transition-all text-error placeholder:text-error/20 ${
+                                duplicateError ? 'border-error' : 'border-outline focus:border-primary'
+                            }`}
+                            placeholder="000000"
+                            value={formData.deliveryNumber}
+                            onChange={(e) => {
+                                const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                                  setFormData(prev => ({ ...prev, deliveryNumber: val }));
+                                if (duplicateError) setDuplicateError(null);
+                            }}
+                        />
+                    </div>
+                    {duplicateError && (
+                        <div className="mt-4 flex items-start gap-3 p-3 bg-error/10 border border-error/30 rounded-xl">
+                            <AlertTriangle className="w-4 h-4 text-error mt-0.5 shrink-0" />
+                            <p className="text-[10px] font-black text-error uppercase tracking-widest leading-relaxed">{duplicateError}</p>
+                        </div>
+                    )}
+                </div>
+
                 {/* Source & Destination */}
                 <div className="card-premium p-6 lg:p-8">
                     <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] mb-8 flex items-center">
@@ -374,6 +482,46 @@ export const MarineLoading: React.FC = () => {
                     </div>
                 </div>
 
+                {/* Personnel Selectors */}
+                <div className="card-premium p-6 lg:p-8">
+                    <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] mb-6 flex items-center">
+                        <Users className="w-4 h-4 mr-3 text-primary opacity-60" />
+                        Personnel Involved
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Transfer Operator Name</label>
+                            <select
+                                name="operatorName"
+                                required
+                                value={formData.operatorName}
+                                onChange={handleInputChange}
+                                className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all appearance-none"
+                            >
+                                <option value="">SELECT OPERATOR...</option>
+                                {(activeOperators.length > 0 ? activeOperators : staff).map(op => (
+                                    <option key={op.id} value={op.name}>{op.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Verifying Officer Name</label>
+                            <select
+                                name="supervisorName"
+                                required
+                                value={formData.supervisorName}
+                                onChange={handleInputChange}
+                                className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all appearance-none"
+                            >
+                                <option value="">SELECT OFFICER...</option>
+                                {(activeOfficers.length > 0 ? activeOfficers : staff).map(off => (
+                                    <option key={off.id} value={off.name}>{off.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Operations Timing & QC */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-10">
                     <div className="card-premium p-6 lg:p-8 border border-outline rounded-3xl border-l-4 border-l-primary">
@@ -382,6 +530,23 @@ export const MarineLoading: React.FC = () => {
                             Chronology
                         </h3>
                         <div className="space-y-6">
+                            <div>
+                                <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Operational Date</label>
+                                <div className="relative">
+                                    <Calendar className="absolute left-6 top-1/2 transform -translate-y-1/2 w-4 h-4 text-primary opacity-40 pointer-events-none" />
+                                    <input 
+                                        required 
+                                        type="date" 
+                                        name="date"
+                                        disabled={isOperator}
+                                        value={formData.date}
+                                        onChange={handleInputChange}
+                                        className={`w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all ${
+                                          isOperator ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                                        }`}
+                                    />
+                                </div>
+                            </div>
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Load Commencement</label>
                                 <div className="flex gap-2">
@@ -476,7 +641,7 @@ export const MarineLoading: React.FC = () => {
 
                 <button 
                     type="submit" 
-                    disabled={loading || !formData.visualCheck || !formData.waterCheck}
+                    disabled={loading || !formData.visualCheck || !formData.waterCheck || formData.deliveryNumber.length !== 6}
                     className="w-full py-6 kinetic-gradient text-white rounded-[32px] font-[900] text-sm uppercase tracking-[0.4em] hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-20 disabled:scale-100 disabled:grayscale flex items-center justify-center shadow-premium"
                 >
                     {loading ? 'SYNCHRONIZING...' : (
@@ -519,10 +684,16 @@ export const MarineLoading: React.FC = () => {
                                             </span>
                                         </div>
                                         <div className="mt-4 flex justify-between items-center text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">
-                                            <span className="flex items-center">
+                                            <span className="flex items-center font-mono">
                                                 <Droplet className="w-3 h-3 mr-2" />
                                                 {log.product}
                                             </span>
+                                            {log.deliveryNumber && (
+                                                <span className="flex items-center text-primary tracking-widest font-mono">
+                                                    <FileText className="w-3.5 h-3.5 mr-1" />
+                                                    {log.deliveryNumber}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 );

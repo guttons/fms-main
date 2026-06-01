@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { MOCK_USERS } from '../constants';
 import { FileText, Search, Download, Filter, X } from 'lucide-react';
 import { Logo } from './Logo';
+import { useOperationalData } from '../context/OperationalDataContext';
 import { supabaseService } from '../services/supabaseService';
 import { FlightLog, User, UserRole } from '../types';
 
@@ -11,6 +12,7 @@ interface LogHistoryProps {
 }
 
 export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
+  const { staff } = useOperationalData();
   const [logs, setLogs] = useState<FlightLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -287,7 +289,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                   </tr>
                 ) : (
                   sortedLogs.map((log) => {
-                      const operatorName = MOCK_USERS.find(u => u.id === log.operatorId)?.name || 'Unknown';
+                      const operatorName = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => u.id === log.operatorId)?.name || 'Unknown';
                       const isExpanded = expandedLogId === log.id;
                       return (
                         <React.Fragment key={log.id}>

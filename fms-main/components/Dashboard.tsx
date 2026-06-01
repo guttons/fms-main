@@ -57,7 +57,7 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onStartJob }) => {
-  const { tanks = [], equipment = [], briefingInfo, flightJobs = [], domesticFlights = [], alerts = [], createAlert, acknowledgeAlert } = useOperationalData();
+  const { tanks = [], equipment = [], briefingInfo, flightJobs = [], domesticFlights = [], alerts = [], createAlert, acknowledgeAlert, staff = [] } = useOperationalData();
   const { notify } = useNotification();
   // Logic to determine initial view and if switching is allowed
 
@@ -152,7 +152,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
     { name: 'Ullage (Empty)', value: maxJetA1 - totalJetA1 },
   ];
 
-  const operators = MOCK_USERS.filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(u.role));
+  const operators = (staff && staff.length > 0 ? staff : MOCK_USERS).filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(u.role));
 
   // --- Sub-Component: Operator Dashboard (My Tasks) ---
   const renderOperatorDashboard = () => {
@@ -464,7 +464,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                 {myTasks.map((job) => {
                     const delayed = isDelayed(job.sta, job.eta);
                     const displayStatus = (delayed && job.status === 'PENDING') ? 'DELAYED' : job.status;
-                    const assigneeName = MOCK_USERS.find(u => u.id === job.assignedTo)?.name || 'Unknown';
+                    const assigneeName = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => u.id === job.assignedTo)?.name || 'Unknown';
                     
                     return (
                         <div key={job.id} className="card-premium border-l-4 border-l-primary overflow-hidden active:scale-[0.99] transition-transform">
@@ -694,7 +694,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                                             message: `Replenishment requested for unit ${eqAssignment.equipment_id}`,
                                                             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
                                                             acknowledged: false,
-                                                            targetRole: UserRole.DEPOT_OPERATOR
+                                                            targetRole: UserRole.DEPOT_MANAGER
                                                         });
                                                         
                                                         if (success) {
@@ -716,7 +716,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                                 className={`absolute -top-1 -right-1 p-1.5 rounded-lg border transition-all ${
                                                     isRequested || pendingRequests.has(eqAssignment.equipment_id)
                                                     ? 'bg-surface-lowest text-on-surface-dim opacity-30 cursor-not-allowed border-outline' 
-                                                    : 'bg-primary text-white border-primary shadow-lg hover:scale-110 active:scale-95'
+                                                    : 'kinetic-gradient text-white border-none shadow-lg hover:scale-110 active:scale-95'
                                                 }`}
                                             >
                                                 {isRequested || pendingRequests.has(eqAssignment.equipment_id) ? <RefreshCw className="w-2.5 h-2.5 animate-spin" /> : 
@@ -792,7 +792,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                       message: `Replenishment requested for unit ${eq.id}`,
                                       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
                                       acknowledged: false,
-                                      targetRole: UserRole.DEPOT_OPERATOR
+                                      targetRole: UserRole.DEPOT_MANAGER
                                     });
                                     if (success) {
                                       notify(`Refuel request sent for ${eq.id}`, 'success');
@@ -809,10 +809,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                   }
                                 }}
                                 disabled={isRequested || pendingRequests.has(eq.id)}
-                                className={`px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all shadow-sm ${
+                                className={`px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all shadow-premium ${
                                   isRequested || pendingRequests.has(eq.id)
                                   ? 'bg-surface-lowest text-on-surface-dim opacity-30 cursor-not-allowed border border-outline' 
-                                  : 'bg-primary text-white border border-primary hover:scale-105 active:scale-95'
+                                  : 'kinetic-gradient text-white border-none hover:scale-105 active:scale-95'
                                 }`}
                               >
                                 {isRequested ? 'REQUESTED' : pendingRequests.has(eq.id) ? 'SENDING...' : 'REPLENISH'}
@@ -926,326 +926,155 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
   );
 
   // --- Sub-Component: Depot Dashboard (FUEL SERVICES Style) ---
-  const renderDepotDashboard = () => (
-    <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500 ease-out">
-      {/* Hero Section: Active Units + Metric Summary */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
-        
-        {/* Hero Card: Live Operations Breakdown */}
-        <div className="xl:col-span-2 card-premium p-10 relative overflow-hidden flex flex-col justify-between min-h-[400px]">
-          <div className="relative z-10">
-            <p className="label-sm text-on-surface-dim opacity-40 mb-3 tracking-[0.4em]">Live Operations Breakdown</p>
-            <h3 className="headline-lg text-on-surface pl-0 font-black tracking-tighter uppercase relative">
-                Active Refueling Units
-                <div className="absolute -left-12 top-1 w-1.5 h-6 bg-primary rounded-full"></div>
-            </h3>
-            <div className="flex items-center space-x-2 mt-4">
-              <div className="dot-live"></div>
-              <span className="text-[10px] font-black text-success uppercase tracking-widest ml-3">Live Telemetry Synchronized</span>
+  const renderDepotDashboard = () => {
+    const totalJetA1 = (tanks || []).filter(t => t.type === FuelType.JET_A1).reduce((acc, t) => acc + t.currentLevel, 0);
+    const totalDiesel = (tanks || []).filter(t => t.type === FuelType.DIESEL).reduce((acc, t) => acc + t.currentLevel, 0);
+    const totalPetrol = (tanks || []).filter(t => t.type === FuelType.PETROL).reduce((acc, t) => acc + t.currentLevel, 0);
+
+    const maxJetA1 = (tanks || []).filter(t => t.type === FuelType.JET_A1).reduce((acc, t) => acc + t.capacity, 0);
+    const maxDiesel = (tanks || []).filter(t => t.type === FuelType.DIESEL).reduce((acc, t) => acc + t.capacity, 0);
+    const maxPetrol = (tanks || []).filter(t => t.type === FuelType.PETROL).reduce((acc, t) => acc + t.capacity, 0);
+
+    const jetA1Pct = maxJetA1 > 0 ? (totalJetA1 / maxJetA1) * 100 : 0;
+    const dieselPct = maxDiesel > 0 ? (totalDiesel / maxDiesel) * 100 : 0;
+    const petrolPct = maxPetrol > 0 ? (totalPetrol / maxPetrol) * 100 : 0;
+
+    // Filter unacknowledged refueling/replenishment alerts
+    const refuelingRequests = (alerts || []).filter(a => 
+      a && !a.acknowledged && (
+        a.message.toLowerCase().includes('request') && (
+          a.message.toLowerCase().includes('replenish') ||
+          a.message.toLowerCase().includes('refuel')
+        )
+      )
+    );
+
+    return (
+      <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500 ease-out">
+        {/* Metric Row: Jet A-1, Diesel, Petrol Stocks */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Jet A-1 Stock */}
+          <div className="card-premium p-8 group hover:border-primary/30 transition-all relative overflow-hidden">
+            <p className="label-sm text-on-surface-dim opacity-40 mb-6 font-bold tracking-[0.2em]">Total Jet A-1 Stock</p>
+            <div className="flex items-baseline space-x-3 mb-4">
+              <h3 className="text-4xl font-[900] text-on-surface tracking-tighter">{(totalJetA1 / 1000000).toFixed(2)}M <span className="text-lg font-bold opacity-30">L</span></h3>
+              <span className="text-[10px] font-black text-primary bg-primary/10 px-3 py-1 rounded-full border border-primary/10">
+                {jetA1Pct.toFixed(1)}% Fill
+              </span>
             </div>
+            {/* Custom progress bar */}
+            <div className="h-1.5 w-full bg-surface-dim rounded-full overflow-hidden border border-outline/30 mt-2">
+              <div className="bg-primary h-full rounded-full transition-all duration-[1000ms]" style={{ width: `${jetA1Pct}%` }}></div>
+            </div>
+            <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.3em] opacity-30 mt-4">Capacity: {(maxJetA1 / 1000000).toFixed(1)}M L</p>
           </div>
 
-          <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
-            {/* HD Dispensers */}
-            <div className="bg-surface-dim/60 rounded-2xl border border-outline p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-primary/10 rounded-xl border border-primary/20">
-                    <Droplet className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-on-surface-dim opacity-60">HD Dispensers</p>
-                    <p className="text-[9px] font-bold text-primary opacity-70 tracking-widest uppercase">Hydrant Units</p>
-                  </div>
-                </div>
-                <span className="text-3xl font-[900] text-primary leading-none">3</span>
-              </div>
-              <div className="space-y-2">
-                {[{id: 'HD-01', flight: 'EK659', stand: 'D14'}, {id: 'HD-02', flight: 'SQ432', stand: 'F55'}, {id: 'HD-03', flight: 'UL102', stand: 'C12'}].map(hd => (
-                  <div key={hd.id} className="flex items-center justify-between px-3 py-2 bg-red-500/5 rounded-xl border border-red-500/10">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-2 h-2 rounded-full animate-pulse ${equipmentDotClass(hd.id)}`}></div>
-                      <span className={`text-[11px] font-black uppercase px-2 py-0.5 rounded-md border ${equipmentBadgeClass(hd.id)}`}>{hd.id}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[10px] font-bold text-on-surface-dim">{hd.flight}</span>
-                      <span className="text-[9px] text-on-surface-dim opacity-50 ml-2">Std {hd.stand}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+          {/* Diesel Stock */}
+          <div className="card-premium p-8 group hover:border-amber-500/30 transition-all relative overflow-hidden">
+            <p className="label-sm text-on-surface-dim opacity-40 mb-6 font-bold tracking-[0.2em]">Total Diesel Stock</p>
+            <div className="flex items-baseline space-x-3 mb-4">
+              <h3 className="text-4xl font-[900] text-amber-600 tracking-tighter">{(totalDiesel / 1000).toFixed(1)}K <span className="text-lg font-bold opacity-30">L</span></h3>
+              <span className="text-[10px] font-black text-amber-600 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/10">
+                {dieselPct.toFixed(1)}% Fill
+              </span>
             </div>
-
-            {/* RF Refuellers */}
-            <div className="bg-surface-dim/60 rounded-2xl border border-outline p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-warning/10 rounded-xl border border-warning/20">
-                    <Truck className="w-5 h-5 text-warning" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-on-surface-dim opacity-60">RF Refuellers</p>
-                    <p className="text-[9px] font-bold text-warning opacity-70 tracking-widest uppercase">Mobile Units</p>
-                  </div>
-                </div>
-                <span className="text-3xl font-[900] text-warning leading-none">
-                  {equipment.filter(e => e.type === EquipmentType.REFUELLER).length}
-                </span>
-              </div>
-              <div className="space-y-4">
-                {(() => {
-                  const allRFs = equipment.filter(e => e.type === EquipmentType.REFUELLER);
-                  const activeOrRequested = allRFs.filter(rf => {
-                    const activeTask = flightJobs.find((j: FlightJob) => j.vehicleId === rf.id && j.status === 'IN_PROGRESS');
-                              const isRequested = alerts.some(a => 
-                                !a.acknowledged && 
-                                (a.message.toLowerCase().includes('replenishment requested') || a.message.toLowerCase().includes('refuel requested')) &&
-                                a.message.includes(rf.id)
-                              );
-                    const isReplenishing = rf.status === EqStatus.REFUELLING;
-                    return activeTask || isRequested || isReplenishing;
-                  });
-                  const standbyRFs = allRFs.filter(rf => !activeOrRequested.find(a => a.id === rf.id));
-
-                  return (
-                    <>
-                      {/* Active/Requested Section */}
-                      {activeOrRequested.length > 0 && (
-                        <div className="space-y-2">
-                          <p className="text-[9px] font-black text-primary uppercase tracking-widest mb-3 flex items-center">
-                            <span className="w-2.5 h-2.5 bg-primary rounded-full mr-3 animate-pulse shadow-[0_0_10px_rgba(var(--color-primary-rgb),0.5)]"></span>
-                            MISSION CRITICAL: Active / Requested
-                          </p>
-                          {activeOrRequested
-                            .sort((a, b) => {
-                              const aReq = alerts.some(al => 
-                                !al.acknowledged && 
-                                (al.message.toLowerCase().includes('replenishment requested') || al.message.toLowerCase().includes('refuel requested')) &&
-                                al.message.includes(a.id)
-                              );
-                              const bReq = alerts.some(al => 
-                                !al.acknowledged && 
-                                (al.message.toLowerCase().includes('replenishment requested') || al.message.toLowerCase().includes('refuel requested')) &&
-                                al.message.includes(b.id)
-                              );
-                              return (aReq === bReq) ? 0 : aReq ? -1 : 1;
-                            })
-                            .map(rf => {
-                              const activeTask = flightJobs.find((j: FlightJob) => j.vehicleId === rf.id && j.status === 'IN_PROGRESS');
-                                        const isRequested = alerts.some(a => 
-                                !a.acknowledged && 
-                                (a.message.toLowerCase().includes('replenishment requested') || a.message.toLowerCase().includes('refuel requested')) &&
-                                a.message.includes(rf.id)
-                              );
-                              const isReplenishing = rf.status === EqStatus.REFUELLING;
-
-                              return (
-                                <div key={rf.id} className="flex items-center justify-between px-3 py-2 rounded-xl border bg-amber-500/5 border-amber-500/10 shadow-sm">
-                                  <div className="flex items-center space-x-3">
-                                    <div className={`w-2 h-2 rounded-full animate-pulse ${equipmentDotClass(rf.id)}`}></div>
-                                    <span className={`text-[11px] font-black uppercase px-2 py-0.5 rounded-md border ${equipmentBadgeClass(rf.id)}`}>{rf.id}</span>
-                                  </div>
-                                  
-                                  <div className="flex items-center space-x-3">
-                                    {isReplenishing ? (
-                                      <span className="text-[9px] font-black text-amber-600 uppercase tracking-widest bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20">Replenishing</span>
-                                    ) : isRequested ? (
-                                      <span className="text-[9px] font-black text-primary uppercase tracking-widest bg-primary/10 px-2 py-0.5 rounded-lg border border-primary/20">Requested</span>
-                                    ) : (
-                                      <div className="text-right">
-                                        <span className="text-[10px] font-bold text-on-surface-dim">{activeTask?.flightNumber}</span>
-                                        <span className="text-[9px] text-on-surface-dim opacity-50 ml-2">Std {activeTask?.stand}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                        </div>
-                      )}
-
-                      {/* Standby Section - Compact Grid */}
-                      {standbyRFs.length > 0 && (
-                        <div className="mt-6 pt-4 border-t border-outline/50">
-                          <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 mb-3">Standby Units</p>
-                          <div className="grid grid-cols-2 gap-2">
-                            {standbyRFs.map(rf => (
-                              <div key={rf.id} className="flex items-center justify-between px-2 py-1.5 rounded-lg border bg-surface-dim border-outline opacity-40 grayscale hover:opacity-100 hover:grayscale-0 transition-all group">
-                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${equipmentBadgeClass(rf.id)}`}>{rf.id}</span>
-                                <span className="text-[8px] font-bold text-on-surface-dim opacity-30 uppercase group-hover:opacity-100">Ready</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
+            {/* Custom progress bar */}
+            <div className="h-1.5 w-full bg-surface-dim rounded-full overflow-hidden border border-outline/30 mt-2">
+              <div className="bg-amber-500 h-full rounded-full transition-all duration-[1000ms]" style={{ width: `${dieselPct}%` }}></div>
             </div>
+            <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.3em] opacity-30 mt-4">Capacity: {(maxDiesel / 1000).toFixed(0)}K L</p>
           </div>
 
-          {/* Abstract Background Element */}
-          <div className="absolute -right-20 -bottom-20 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[100px] pointer-events-none"></div>
+          {/* Petrol Stock */}
+          <div className="card-premium p-8 group hover:border-emerald-500/30 transition-all relative overflow-hidden">
+            <p className="label-sm text-on-surface-dim opacity-40 mb-6 font-bold tracking-[0.2em]">Total Petrol Stock</p>
+            <div className="flex items-baseline space-x-3 mb-4">
+              <h3 className="text-4xl font-[900] text-emerald-600 tracking-tighter">{(totalPetrol / 1000).toFixed(1)}K <span className="text-lg font-bold opacity-30">L</span></h3>
+              <span className="text-[10px] font-black text-emerald-600 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/10">
+                {petrolPct.toFixed(1)}% Fill
+              </span>
+            </div>
+            {/* Custom progress bar */}
+            <div className="h-1.5 w-full bg-surface-dim rounded-full overflow-hidden border border-outline/30 mt-2">
+              <div className="bg-emerald-500 h-full rounded-full transition-all duration-[1000ms]" style={{ width: `${petrolPct}%` }}></div>
+            </div>
+            <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.3em] opacity-30 mt-4">Capacity: {(maxPetrol / 1000).toFixed(0)}K L</p>
+          </div>
         </div>
 
-        {/* Critical Alerts Panel */}
-        <div className="card-premium bg-error/5 border-error/10 p-10 flex flex-col group relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-error/5 rounded-full blur-[100px] -mr-32 -mt-32"></div>
-          
-          <div className="flex items-center justify-between mb-10 relative z-10">
-             <h3 className="label-sm text-error font-black tracking-[0.2em]">Tactical Alerts ({userAlerts.filter(a => !a.acknowledged).length})</h3>
-             <AlertTriangle className="w-6 h-6 text-error opacity-40" />
-          </div>
-          
-          <div className="space-y-6 flex-1 relative z-10 overflow-y-auto max-h-[350px] custom-scrollbar pr-2">
-             {userAlerts.length === 0 ? (
-                <div className="text-center py-10 opacity-30">
-                   <p className="text-[10px] font-black uppercase tracking-widest">No Active Alerts</p>
-                </div>
-             ) : (
-               userAlerts
-                .sort((a, b) => (a.acknowledged === b.acknowledged ? 0 : a.acknowledged ? 1 : -1))
-                .map(alert => (
-                  <div 
-                    key={alert.id}
-                    onClick={() => !alert.acknowledged && handleAcknowledgeAlert(alert.id)}
-                    className={`card-premium p-6 border-error/20 bg-surface-container/50 hover:bg-surface-container hover:scale-[1.02] transition-all cursor-pointer group/item relative overflow-hidden shadow-premium ${alert.acknowledged ? 'opacity-40 grayscale pointer-events-none' : ''}`}
-                  >
-                    <div className={`absolute top-0 left-0 w-1.5 h-full ${alert.severity === 'critical' ? 'bg-error' : 'bg-warning'}`}></div>
-                    <div className="flex justify-between items-start">
-                       <div>
-                          <p className={`text-[11px] font-black uppercase mb-1 tracking-widest ${alert.severity === 'critical' ? 'text-error' : 'text-warning'}`}>{alert.severity} • {alert.timestamp}</p>
-                          <p className="text-sm font-bold text-on-surface opacity-70">{alert.message}</p>
-                       </div>
-                       {alert.severity === 'critical' ? <AlertTriangle className="w-5 h-5 text-on-surface-dim opacity-20 group-hover/item:text-error transition-colors" /> : <Activity className="w-5 h-5 text-on-surface-dim opacity-20 group-hover/item:text-warning transition-colors" />}
-                    </div>
-                  </div>
-                ))
-             )}
-          </div>
-          
-          <button className="w-full mt-10 py-5 text-[10px] font-black uppercase text-error hover:bg-error/10 border border-error/20 rounded-2xl transition-all tracking-[0.4em] relative z-10">
-             System Mitigation Overview
-          </button>
-        </div>
-      </div>
-
-      {/* Metric Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-        <div className="card-premium p-10 group hover:border-primary/30">
-          <p className="label-sm text-on-surface-dim opacity-40 mb-10 font-bold tracking-[0.2em]">Total Jet A-1 Stock</p>
-          <div className="flex items-baseline space-x-4 mb-4">
-            <h3 className="text-5xl font-[900] text-on-surface tracking-tighter">13.03M</h3>
-            <span className="text-[11px] font-black text-success flex items-center bg-success/10 px-4 py-1.5 rounded-full border border-success/10">
-              <TrendingUp className="w-4 h-4 mr-2" /> +0.2%
+        {/* Refueling Requests Widget */}
+        <div className="card-premium p-8 border border-outline relative overflow-hidden flex flex-col group">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
+                <Droplet className="w-4 h-4 mr-3 text-primary animate-pulse" />
+                Active ITP Refueling Requests
+              </h3>
+              <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest mt-1 opacity-50">Pending vehicle replenishments from Into-Plane duty managers</p>
+            </div>
+            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+              refuelingRequests.length > 0 ? 'bg-primary/10 text-primary border border-primary/20 animate-pulse' : 'bg-success/10 text-success border border-success/20'
+            }`}>
+              {refuelingRequests.length} Pending
             </span>
           </div>
-          <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.3em] opacity-30 mt-4">System Standard vs 24H</p>
+
+          <div className="space-y-4 max-h-[280px] overflow-y-auto custom-scrollbar pr-2">
+            {refuelingRequests.length === 0 ? (
+              <div className="text-center py-10 opacity-30 flex flex-col items-center justify-center">
+                <CheckCircle className="w-10 h-10 text-success mb-3 opacity-60" />
+                <p className="text-[10px] font-black uppercase tracking-widest">All Vehicles Adequately Replenished</p>
+              </div>
+            ) : (
+              refuelingRequests.map(request => {
+                const match = request.message.match(/unit\s+(RF-\d+)/i);
+                const vehicleId = match ? match[1].toUpperCase() : '';
+                return (
+                  <div key={request.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-surface-dim/60 border border-outline rounded-2xl gap-4 hover:bg-surface-container transition-all">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-10 h-10 bg-primary/10 text-primary border border-primary/20 rounded-xl flex items-center justify-center shrink-0">
+                        <Truck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-on-surface">{request.message}</p>
+                        <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-50 mt-0.5">Requested {request.timestamp}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        // Store the target vehicle in localStorage so Bridging can auto-fill it
+                        if (vehicleId) localStorage.setItem('fms_initiate_loading_vehicle', vehicleId);
+                        setActiveView('bridging');
+                      }}
+                      className="px-6 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-[10px] font-black uppercase tracking-[0.15em] transition-all hover:scale-105 active:scale-95 shrink-0 shadow-premium"
+                    >
+                      Dispatch Loading
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
 
-        <div className="card-premium p-10 group hover:border-primary/30">
-          <p className="label-sm text-on-surface-dim opacity-40 mb-10 font-bold tracking-[0.2em]">Operational Buffer</p>
-          <div className="flex items-baseline space-x-4 mb-4">
-            <h3 className="text-5xl font-[900] text-on-surface tracking-tighter">12.5 <span className="text-2xl font-bold opacity-20">DAYS</span></h3>
-            <span className="bg-success/10 text-success border border-success/20 text-[10px] font-black px-5 py-2 rounded-full uppercase tracking-[0.2em] ml-6 shadow-sm">
-              Optimal
-            </span>
+        {/* Centerpiece: Infrastructure Asset Grid */}
+        <div className="card-premium p-10">
+          <div className="flex items-center justify-between mb-10">
+            <div>
+              <h3 className="headline-lg text-on-surface tracking-tighter uppercase italic">Infrastructure Asset Grid</h3>
+              <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.4em] mt-2 opacity-40">Live Tank Farm Telemetry</p>
+            </div>
+            <div className="px-4 py-2 bg-surface-dim border border-outline rounded-xl flex items-center space-x-3">
+              <Database className="w-4 h-4 text-primary" />
+              <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest">{(tanks || []).length} Units Online</span>
+            </div>
           </div>
-          <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.3em] opacity-30 mt-4">Dynamic Forecast Projection</p>
-        </div>
-
-        <div className="card-premium p-10 overflow-hidden relative group hover:border-primary/30">
-          <p className="label-sm text-on-surface-dim opacity-40 mb-10 font-bold tracking-[0.2em]">Service Reliability</p>
-          <div className="flex items-baseline space-x-4 mb-8">
-            <h3 className="text-5xl font-[900] text-on-surface tracking-tighter">94.2%</h3>
-            <span className="text-[10px] font-black text-on-surface-dim ml-6 opacity-40 uppercase tracking-widest whitespace-nowrap">KPI: 96%</span>
-          </div>
-          <div className="w-full bg-surface-dim border border-outline h-3.5 rounded-full overflow-hidden shadow-inner">
-            <div className="bg-primary h-full rounded-full shadow-premium transition-all duration-[1500ms] cubic-bezier(0.16, 1, 0.3, 1)" style={{width: '94.2%'}}></div>
-          </div>
+          
+          <TankStatusGrid tanks={tanks || []} />
         </div>
       </div>
-
-      {/* Chart Section */}
-      <div className="card-premium p-12">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-10 mb-16">
-          <div>
-            <h3 className="headline-lg text-on-surface tracking-tighter font-black">Tactical Uplift Performance</h3>
-            <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.4em] mt-3 opacity-40">Planned Target vs Live Operational Stream</p>
-          </div>
-          <div className="flex items-center space-x-12 bg-surface-dim p-5 rounded-[22px] border border-outline">
-             <div className="flex items-center space-x-4">
-                <div className="w-8 h-0.5 border-t-2 border-dashed border-on-surface-dim opacity-30"></div>
-                <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest">Base Target</span>
-             </div>
-             <div className="flex items-center space-x-4">
-                <div className="w-8 h-1.5 bg-primary rounded-full shadow-premium"></div>
-                <span className="text-[10px] font-black text-primary uppercase tracking-widest">Live Flow</span>
-             </div>
-          </div>
-        </div>
-        <div className="h-[450px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={HOURLY_DATA}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-variant)" />
-              <XAxis 
-                dataKey="hour" 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{fontSize: 10, fontWeight: 800, fill: 'var(--color-on-surface-dim)'}} 
-                dy={20}
-              />
-              <YAxis 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{fontSize: 10, fontWeight: 800, fill: 'var(--color-on-surface-dim)'}} 
-                hide 
-              />
-              <Tooltip 
-                contentStyle={{ backgroundColor: 'var(--color-surface-container)', borderRadius: '20px', border: '1px solid var(--color-outline)', boxShadow: 'var(--shadow-lg)', padding: '20px' }}
-                itemStyle={{ fontSize: '13px', fontWeight: '900', textTransform: 'uppercase' }}
-                cursor={{ stroke: 'var(--color-primary)', strokeWidth: 1 }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="jetA1" 
-                stroke="var(--color-primary)" 
-                strokeWidth={5} 
-                dot={{r: 0}} 
-                activeDot={{r: 10, stroke: 'var(--color-surface-container)', strokeWidth: 4, fill: 'var(--color-primary)'}} 
-              />
-              <Line 
-                type="monotone" 
-                dataKey="diesel" 
-                stroke="var(--color-on-surface-dim)" 
-                strokeWidth={2} 
-                strokeDasharray="10 10" 
-                opacity={0.3}
-                dot={{r: 0}} 
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Tank Farm Section - Secondary */}
-      <div className="card-premium p-10">
-        <div className="flex items-center justify-between mb-10">
-          <div>
-            <h3 className="headline-lg text-on-surface tracking-tighter uppercase italic">Infrastructure Asset Grid</h3>
-            <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.4em] mt-2 opacity-40">Live Tank Farm Telemetry</p>
-          </div>
-          <div className="px-4 py-2 bg-surface-dim border border-outline rounded-xl flex items-center space-x-3">
-             <Database className="w-4 h-4 text-primary" />
-             <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest">{tanks.length} Units Online</span>
-          </div>
-        </div>
-        
-        <TankStatusGrid tanks={tanks || []} />
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="p-6 lg:p-12 max-w-[1600px] mx-auto pb-24">

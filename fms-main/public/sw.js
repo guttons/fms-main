@@ -29,13 +29,37 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // Offline-first strategy to guarantee installability
+  // 1. Only intercept GET requests
+  if (e.request.method !== 'GET') return;
+
+  // 2. Only intercept http/https requests (bypasses chrome-extension:// etc.)
+  const url = new URL(e.request.url);
+  if (!url.protocol.startsWith('http')) return;
+
+  // 3. Bypass Service Worker caching for Vite local development endpoints/HMR
+  if (
+    url.hostname === 'localhost' || 
+    url.hostname === '127.0.0.1' ||
+    url.pathname.includes('/@vite/') || 
+    url.pathname.includes('/@react-refresh') ||
+    url.search.includes('t=')
+  ) {
+    return; // Let browser handle it directly without SW interception
+  }
+
+  // 4. For standard assets/requests, use cache-first / network-fallback
   e.respondWith(
     caches.match(e.request).then((cached) => {
-      return cached || fetch(e.request).catch(() => {
+      if (cached) {
+        return cached;
+      }
+      return fetch(e.request).catch((err) => {
+        // Fallback for page navigation when offline
         if (e.request.mode === 'navigate') {
           return caches.match('/');
         }
+        // Throw error so it doesn't resolve to undefined and trigger 'Failed to convert value to Response'
+        throw err;
       });
     })
   );

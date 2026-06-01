@@ -69,6 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
           { id: 'marine', label: 'Tanker Discharge', icon: Anchor },
           { id: 'seaplane', label: 'Seaplane Ops', icon: Sailboat },
+          { id: 'lfs-afs', label: 'LFS / AFS Invoices', icon: FileText },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
         ];
 
@@ -80,6 +81,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'marine-loading', label: 'Marine Provisioning', icon: Ship },
           { id: 'marine', label: 'Marine Oversight', icon: Anchor },
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
+          { id: 'lfs-afs', label: 'LFS / AFS Invoices', icon: FileText },
+          { id: 'forecasting', label: 'Stock Forecasting', icon: TrendingUp },
+          { id: 'reports', label: 'Fuel Reports', icon: ClipboardList },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
         ];
 
@@ -95,7 +99,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
-          { id: 'admin', label: 'System Admin', icon: Settings },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'history', label: 'Log History', icon: FileText },
           { id: 'briefing', label: 'Shift Briefing', icon: ClipboardList },
@@ -170,9 +173,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
             <button 
               onClick={onSettingsClick}
-              className="flex items-center text-on-surface-dim hover:text-primary transition-colors text-[13px] font-bold px-2 group"
+              className={`w-full flex items-center px-2 py-2 text-[13px] font-bold rounded-xl transition-all group
+                ${activeView === 'admin' 
+                  ? 'bg-primary/10 text-primary font-black' 
+                  : 'text-on-surface-dim hover:bg-surface-dim hover:text-on-surface'
+                }`}
             >
-              <Settings className="w-4 h-4 mr-3 opacity-40 group-hover:opacity-100" />
+              <Settings className={`w-4 h-4 mr-3 transition-colors ${activeView === 'admin' ? 'text-primary' : 'opacity-40 group-hover:opacity-100'}`} />
               System Settings
             </button>
             <button 

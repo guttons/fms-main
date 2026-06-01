@@ -33,6 +33,8 @@
     "node_modules",
     "dist",
     "api",
-    "functions"
+    "functions",
+    "test-unzip-clean",
+    "test-zip"
   ]
 }

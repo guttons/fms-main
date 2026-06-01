@@ -15,13 +15,15 @@ import { CommercialReports } from './components/CommercialReports';
 import { Seaplane } from './components/Seaplane';
 import { EquipmentStatus } from './components/EquipmentStatus';
 import { MarineLoading } from './components/MarineLoading';
+import { LfsAfs } from './components/LfsAfs';
+import { FuelReports } from './components/FuelReports';
 import { Login } from './components/Login';
 import { Logo } from './components/Logo';
 import { BottomNav } from './components/BottomNav';
 import { NotificationProvider, useNotification } from './context/NotificationContext';
 import { OperationalDataProvider, useOperationalData } from './context/OperationalDataContext';
 import { MOCK_USERS } from './constants';
-import { User, UserRole, FlightJob } from './types';
+import { User, UserRole, FlightJob, Alert } from './types';
 import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, CheckCircle, Download, Share2, Smartphone, Trash2 } from 'lucide-react';
 import { updatePWAManifestAndTheme } from './utils/pwa';
 
@@ -160,6 +162,61 @@ const AppContextContent: React.FC<any> = ({
     scrollRef.current = node;
     setMainElement(node);
   }, [scrollRef]);
+
+  // --- Real-time Notification Toast System ---
+  const isFirstLoadRef = React.useRef(true);
+  const prevAlertsRef = React.useRef<Alert[]>([]);
+
+  useEffect(() => {
+    if (!currentUser || !alerts) return;
+
+    // Filter unacknowledged alerts matching this user's role
+    const activeAlerts = alerts.filter(a => {
+      if (!a || a.acknowledged) return false;
+      if ([UserRole.ADMIN, UserRole.EXECUTIVE].includes(currentUser.role)) return true;
+      if (a.targetRole === currentUser.role) return true;
+      if ([UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(currentUser.role) && 
+          a.targetRole && [UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(a.targetRole as UserRole)) return true;
+      if ([UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(currentUser.role) && 
+          a.targetRole && [UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(a.targetRole as UserRole)) return true;
+      return !a.targetRole;
+    });
+
+    if (isFirstLoadRef.current) {
+      isFirstLoadRef.current = false;
+      prevAlertsRef.current = alerts;
+      
+      // On login/first load, fire individual toasts for active unread alerts
+      if (activeAlerts.length > 0) {
+        setTimeout(() => {
+          activeAlerts.forEach(alert => {
+            let type: 'info' | 'success' | 'warning' | 'error' = 'info';
+            if (alert.severity === 'critical') type = 'error';
+            else if (alert.severity === 'medium') type = 'warning';
+            
+            notify(alert.message, type);
+          });
+        }, 1500);
+      }
+      return;
+    }
+
+    // Find newly added alerts
+    const prevIds = new Set(prevAlertsRef.current.map(a => a.id));
+    const newlyAdded = activeAlerts.filter(a => !prevIds.has(a.id));
+
+    if (newlyAdded.length > 0) {
+      newlyAdded.forEach(alert => {
+        let type: 'info' | 'success' | 'warning' | 'error' = 'info';
+        if (alert.severity === 'critical') type = 'error';
+        else if (alert.severity === 'medium') type = 'warning';
+        
+        notify(alert.message, type);
+      });
+    }
+
+    prevAlertsRef.current = alerts;
+  }, [alerts, currentUser, notify]);
 
   // --- Dynamic PWA Install States & Events ---
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -341,13 +398,17 @@ const AppContextContent: React.FC<any> = ({
     };
   }, [searchQuery, equipment, flightJobs]);
 
-  // Filter alerts by role
+  // Filter alerts by role — must match the same logic as the toast notification system
   const userAlerts = (alerts || []).filter(a => {
     if (!a || !currentUser || !currentUser.role) return false;
     if ([UserRole.ADMIN, UserRole.EXECUTIVE].includes(currentUser.role)) return true;
     if (a.targetRole === currentUser.role) return true;
+    // Depot role group: both DEPOT_MANAGER and DEPOT_OPERATOR see depot-targeted alerts
     if ([UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(currentUser.role) && 
         a.targetRole && [UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(a.targetRole as UserRole)) return true;
+    // ITP role group: ITP_MANAGER, ITP_OPERATOR, and ITP_HD_OPERATOR see each other's alerts
+    if ([UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(currentUser.role) && 
+        a.targetRole && [UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(a.targetRole as UserRole)) return true;
     return !a.targetRole;
   });
 
@@ -376,15 +437,30 @@ const AppContextContent: React.FC<any> = ({
           />
         );
       case 'forecasting':
+        if (currentUser?.role === UserRole.DEPOT_OPERATOR) {
+          return (
+            <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-300">
+              <div className="w-24 h-24 bg-error/10 rounded-[32px] flex items-center justify-center mb-6 border border-error/20 shadow-premium">
+                <AlertCircle className="w-10 h-10 text-error shadow-glow" />
+              </div>
+              <h2 className="text-xl sm:text-2xl font-[900] text-on-surface mb-2 tracking-tighter uppercase italic">ACCESS DENIED</h2>
+              <p className="text-on-surface-dim max-w-sm uppercase tracking-widest text-[9px] font-black opacity-60">
+                You do not have administrative authorization to view stock forecasting. Security log updated.
+              </p>
+            </div>
+          );
+        }
         return <Forecasting />;
       case 'bridging':
-        return <Bridging />;
+        return <Bridging user={currentUser} />;
       case 'marine-loading':
-        return <MarineLoading />;
+        return <MarineLoading user={currentUser} />;
       case 'marine':
         return <TankerDischarge />;
       case 'stock':
-        return <Stock />;
+        return <Stock user={currentUser} />;
+      case 'lfs-afs':
+        return <LfsAfs user={currentUser} />;
       case 'history':
         return <LogHistory user={currentUser} />;
       case 'schedule':
@@ -394,6 +470,22 @@ const AppContextContent: React.FC<any> = ({
       case 'admin':
         return currentUser.role === UserRole.ADMIN ? <SystemAdmin currentUser={currentUser} /> : <Dashboard user={currentUser} setActiveView={setActiveView} onStartJob={() => {}} />;
       case 'reports':
+        if (currentUser?.role === UserRole.DEPOT_OPERATOR) {
+          return (
+            <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-300">
+              <div className="w-24 h-24 bg-error/10 rounded-[32px] flex items-center justify-center mb-6 border border-error/20 shadow-premium">
+                <AlertCircle className="w-10 h-10 text-error shadow-glow" />
+              </div>
+              <h2 className="text-xl sm:text-2xl font-[900] text-on-surface mb-2 tracking-tighter uppercase italic">ACCESS DENIED</h2>
+              <p className="text-on-surface-dim max-w-sm uppercase tracking-widest text-[9px] font-black opacity-60">
+                You do not have administrative authorization to view fuel and transaction summaries. Security log updated.
+              </p>
+            </div>
+          );
+        }
+        if ([UserRole.DEPOT_MANAGER, UserRole.ADMIN].includes(currentUser?.role as UserRole)) {
+          return <FuelReports user={currentUser} />;
+        }
         return <CommercialReports />;
       case 'equipment':
         return <EquipmentStatus user={currentUser!} />;
@@ -420,7 +512,13 @@ const AppContextContent: React.FC<any> = ({
           }}
           onLogout={handleLogout}
           isMobileMenuOpen={isMobileMenuOpen}
-          onSettingsClick={() => setIsSettingsOpen(true)}
+          onSettingsClick={() => {
+            if (currentUser?.role === UserRole.ADMIN) {
+              setActiveView('admin');
+            } else {
+              setIsSettingsOpen(true);
+            }
+          }}
         />
 
         {/* Content Area */}
