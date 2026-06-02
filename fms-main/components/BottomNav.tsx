@@ -60,6 +60,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         ];
 
       case UserRole.EXECUTIVE:
+        return [
+          { id: 'executive', label: 'Overview', icon: LayoutDashboard },
+          { id: 'forecasting', label: 'Forecast', icon: TrendingUp },
+          { id: 'reports', label: 'Reports', icon: FileText },
+        ];
+
       case UserRole.COMMERCIAL:
         return [
           { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },

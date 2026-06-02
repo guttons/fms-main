@@ -1,66 +1,94 @@
-const CACHE_NAME = 'fms-v2';
-const ASSETS = [
+const CACHE_NAME = 'fms-v3';
+const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/favicon.svg'
+  '/favicon.svg',
+  '/icon-light.svg',
+  '/icon-dark.svg',
 ];
 
+// ─── Install ────────────────────────────────────────────────────────────────
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS);
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(STATIC_ASSETS))
+      .then(() => self.skipWaiting())
   );
 });
 
+// ─── Activate ────────────────────────────────────────────────────────────────
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys
+          .filter((key) => key !== CACHE_NAME)
+          .map((key) => caches.delete(key))
+      )
+    ).then(() => self.clients.claim())
   );
 });
 
+// ─── Fetch ───────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', (e) => {
-  // 1. Only intercept GET requests
+  // Only GET requests
   if (e.request.method !== 'GET') return;
 
-  // 2. Only intercept http/https requests (bypasses chrome-extension:// etc.)
   const url = new URL(e.request.url);
+
+  // Only http/https
   if (!url.protocol.startsWith('http')) return;
 
-  // 3. Bypass Service Worker caching for Vite local development endpoints/HMR
+  // Bypass SW for local dev (Vite HMR / dev server)
   if (
-    url.hostname === 'localhost' || 
+    url.hostname === 'localhost' ||
     url.hostname === '127.0.0.1' ||
-    url.pathname.includes('/@vite/') || 
+    url.pathname.includes('/@vite/') ||
     url.pathname.includes('/@react-refresh') ||
     url.search.includes('t=')
   ) {
-    return; // Let browser handle it directly without SW interception
+    return;
   }
 
-  // 4. For standard assets/requests, use cache-first / network-fallback
+  // Bypass Supabase API — always go to network
+  if (url.hostname.includes('supabase.co')) return;
+
+  // Bypass external CDN modules (esm.sh, tailwindcss, etc.)
+  if (
+    url.hostname.includes('esm.sh') ||
+    url.hostname.includes('cdn.tailwindcss.com')
+  ) return;
+
+  // Navigation (page requests): network-first, fallback to cached /
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request)
+        .catch(() => caches.match('/').then((r) => r || new Response('Offline', { status: 503 })))
+    );
+    return;
+  }
+
+  // Static assets: cache-first, update cache in background
   e.respondWith(
     caches.match(e.request).then((cached) => {
-      if (cached) {
-        return cached;
-      }
-      return fetch(e.request).catch((err) => {
-        // Fallback for page navigation when offline
-        if (e.request.mode === 'navigate') {
-          return caches.match('/');
+      const fetchAndCache = fetch(e.request).then((response) => {
+        if (response && response.ok && response.type !== 'opaque') {
+          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, response.clone()));
         }
-        // Throw error so it doesn't resolve to undefined and trigger 'Failed to convert value to Response'
-        throw err;
+        return response;
       });
+      return cached || fetchAndCache;
+    }).catch(() => {
+      // For image/icon requests, return a cached fallback if possible
+      return caches.match('/favicon.svg');
     })
   );
+});
+
+// ─── Message: skip waiting ────────────────────────────────────────────────────
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

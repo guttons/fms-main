@@ -161,7 +161,7 @@ export const Schedule: React.FC = () => {
         status: 'PENDING',
         assignedTo: ''
     };
-    setScheduledFlights(prev => [...prev, newFlight]);
+    addFlightJob(newFlight);
     setIsModalOpen(false);
   };
 

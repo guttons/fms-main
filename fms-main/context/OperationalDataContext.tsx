@@ -40,8 +40,8 @@ interface OperationalDataContextType {
   updateTank: (id: string, updates: Partial<Omit<Tank, 'id'>>) => Promise<void>;
   deleteTank: (id: string) => Promise<void>;
   updateBriefingInfo: (info: any[], dieselNeeds: string[], staffAssignments?: any) => Promise<void>;
-  updateFlightJob: (id: string, updates: Partial<FlightJob>) => void;
-  addFlightJob: (job: FlightJob) => void;
+  updateFlightJob: (id: string, updates: Partial<FlightJob>) => Promise<void>;
+  addFlightJob: (job: FlightJob) => Promise<void>;
   createAlert: (alert: Omit<Alert, 'id'>) => Promise<boolean>;
   acknowledgeAlert: (id: string) => Promise<void>;
   acknowledgeAllAlerts: (ids: string[]) => Promise<void>;
@@ -314,12 +314,20 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       }
     });
 
+    const unsubscribeFlightJobs = supabaseService.subscribeToFlightJobs((updatedJobs) => {
+      console.log("SYNC: Flight jobs received from Supabase. Count:", updatedJobs.length);
+      if (updatedJobs && updatedJobs.length > 0) {
+        setFlightJobs(updatedJobs);
+      }
+    });
+
     return () => {
       console.log("PROVIDER: Tearing down listeners for user:", appUser.id);
       if (unsubscribeAlerts) unsubscribeAlerts();
       if (unsubscribeEquipment) unsubscribeEquipment();
       if (unsubscribeTanks) unsubscribeTanks();
       if (unsubscribeStaff) unsubscribeStaff();
+      if (unsubscribeFlightJobs) unsubscribeFlightJobs();
     };
   }, [appUser]);
 
@@ -384,14 +392,33 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
   };
 
-  const updateFlightJob = (id: string, updates: Partial<FlightJob>) => {
+  const updateFlightJob = async (id: string, updates: Partial<FlightJob>) => {
     setFlightJobs(prev => prev.map(job => 
       job.id === id ? { ...job, ...updates } : job
     ));
+
+    if (appUser) {
+      try {
+        await supabaseService.updateFlightJob(id, updates);
+      } catch (error) {
+        console.error('Failed to sync flight job update to Supabase:', error);
+      }
+    }
   };
 
-  const addFlightJob = (job: FlightJob) => {
-    setFlightJobs(prev => [...prev, job]);
+  const addFlightJob = async (job: FlightJob) => {
+    setFlightJobs(prev => {
+      if (prev.some(j => j.id === job.id)) return prev;
+      return [...prev, job];
+    });
+
+    if (appUser) {
+      try {
+        await supabaseService.addFlightJob(job);
+      } catch (error) {
+        console.error('Failed to add flight job to Supabase:', error);
+      }
+    }
   };
 
   const createAlert = async (alertData: Omit<Alert, 'id'>): Promise<boolean> => {

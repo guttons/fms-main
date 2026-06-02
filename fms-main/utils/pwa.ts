@@ -1,12 +1,15 @@
 /**
- * Helper to dynamically update the PWA manifest and mobile theme colors.
+ * Dynamically updates the PWA manifest and browser meta-theme to match
+ * the current app theme (light/dark). Also switches the home-screen icon
+ * between icon-light.svg and icon-dark.svg.
  */
 export const updatePWAManifestAndTheme = async (isDark: boolean) => {
-  const themeColor = isDark ? '#0f1623' : '#f7f9fb';
-  const backgroundColor = isDark ? '#0b121f' : '#ffffff';
+  const themeColor      = isDark ? '#0b121f' : '#f7f9fb';
+  const backgroundColor = isDark ? '#0b121f' : '#f7f9fb';
+  const iconSrc         = isDark ? '/icon-dark.svg' : '/icon-light.svg';
 
-  // 1. Update the meta theme-color tag for the mobile status bar
-  let metaThemeColor = document.querySelector('meta[name="theme-color"]');
+  // ── 1. meta[name="theme-color"] ─────────────────────────────────────────
+  let metaThemeColor = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
   if (!metaThemeColor) {
     metaThemeColor = document.createElement('meta');
     metaThemeColor.setAttribute('name', 'theme-color');
@@ -14,109 +17,89 @@ export const updatePWAManifestAndTheme = async (isDark: boolean) => {
   }
   metaThemeColor.setAttribute('content', themeColor);
 
-  // iOS-specific status bar style
-  let metaAppleStatus = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+  // ── 2. iOS status bar style ─────────────────────────────────────────────
+  let metaAppleStatus = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]') as HTMLMetaElement | null;
   if (!metaAppleStatus) {
     metaAppleStatus = document.createElement('meta');
     metaAppleStatus.setAttribute('name', 'apple-mobile-web-app-status-bar-style');
     document.head.appendChild(metaAppleStatus);
   }
-  // Use black-translucent for full screen theme blend, or just default
-  metaAppleStatus.setAttribute('content', 'default');
+  metaAppleStatus.setAttribute('content', isDark ? 'black-translucent' : 'default');
 
-  // iOS web app title
-  let metaAppleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
-  if (!metaAppleTitle) {
-    metaAppleTitle = document.createElement('meta');
-    metaAppleTitle.setAttribute('name', 'apple-mobile-web-app-title');
-    document.head.appendChild(metaAppleTitle);
+  // ── 3. apple-touch-icon (for iOS home screen) ───────────────────────────
+  let appleTouchIcon = document.querySelector('link[rel="apple-touch-icon"]') as HTMLLinkElement | null;
+  if (!appleTouchIcon) {
+    appleTouchIcon = document.createElement('link');
+    appleTouchIcon.setAttribute('rel', 'apple-touch-icon');
+    document.head.appendChild(appleTouchIcon);
   }
-  metaAppleTitle.setAttribute('content', 'Fuel Services');
+  // Point directly at the SVG — iOS 14.5+ supports SVG apple-touch-icons
+  appleTouchIcon.setAttribute('href', iconSrc);
 
-  // Enable web app standalone mode for iOS
-  let metaAppleCapable = document.querySelector('meta[name="apple-mobile-web-app-capable"]');
-  if (!metaAppleCapable) {
-    metaAppleCapable = document.createElement('meta');
-    metaAppleCapable.setAttribute('name', 'apple-mobile-web-app-capable');
-    document.head.appendChild(metaAppleCapable);
-  }
-  metaAppleCapable.setAttribute('content', 'yes');
-
-  // Helper to generate PNG data URLs from the same-origin SVG icon
-  const svgToPng = (svgUrl: string, size: number): Promise<string> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, size, size);
-          resolve(canvas.toDataURL('image/png'));
-        } else {
-          resolve('');
-        }
-      };
-      img.onerror = () => resolve('');
-      // Force same-origin to prevent canvas tainting
-      img.crossOrigin = 'anonymous';
-      img.src = svgUrl;
-    });
-  };
-
+  // ── 4. Dynamic manifest blob ─────────────────────────────────────────────
   try {
-    const icon192 = await svgToPng('/favicon.svg', 192);
-    const icon512 = await svgToPng('/favicon.svg', 512);
-
     const manifestData = {
       name: 'Fuel Management System',
       short_name: 'FMS',
-      description: 'Aviation Fuel Management System',
+      description: 'MACL Aviation Fuel Management System — real-time operations, fueling logs, and fleet tracking.',
       start_url: '/',
+      scope: '/',
       display: 'standalone',
+      orientation: 'any',
       background_color: backgroundColor,
       theme_color: themeColor,
+      categories: ['business', 'productivity', 'utilities'],
+      prefer_related_applications: false,
       icons: [
         {
-          src: icon192 || '/favicon.svg',
-          sizes: '192x192',
-          type: icon192 ? 'image/png' : 'image/svg+xml',
-          purpose: 'any maskable'
+          src: iconSrc,
+          sizes: 'any',
+          type: 'image/svg+xml',
+          purpose: 'any'
         },
         {
-          src: icon512 || '/favicon.svg',
-          sizes: '512x512',
-          type: icon512 ? 'image/png' : 'image/svg+xml',
-          purpose: 'any maskable'
+          src: iconSrc,
+          sizes: 'any',
+          type: 'image/svg+xml',
+          purpose: 'maskable'
+        }
+      ],
+      shortcuts: [
+        {
+          name: 'Dashboard',
+          short_name: 'Dashboard',
+          description: 'Open the operations dashboard',
+          url: '/?view=dashboard',
+          icons: [{ src: iconSrc, sizes: 'any' }]
+        },
+        {
+          name: 'Into-Plane Fueling',
+          short_name: 'Into-Plane',
+          description: 'Log a fueling operation',
+          url: '/?view=intoplane',
+          icons: [{ src: iconSrc, sizes: 'any' }]
         }
       ]
     };
 
-    // 2. Generate a Blob URL and set the manifest link to it
-    const stringManifest = JSON.stringify(manifestData);
-    const blob = new Blob([stringManifest], { type: 'application/manifest+json' });
+    // Revoke previous blob URL to avoid memory leaks
+    const existingLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement | null;
+    if (existingLink?.href?.startsWith('blob:')) {
+      URL.revokeObjectURL(existingLink.href);
+    }
+
+    const blob = new Blob([JSON.stringify(manifestData)], { type: 'application/manifest+json' });
     const manifestURL = URL.createObjectURL(blob);
 
-    let manifestLink = document.querySelector('link[rel="manifest"]');
+    let manifestLink = existingLink;
     if (!manifestLink) {
-      manifestLink = document.createElement('link');
+      manifestLink = document.createElement('link') as HTMLLinkElement;
       manifestLink.setAttribute('rel', 'manifest');
       document.head.appendChild(manifestLink);
     }
     manifestLink.setAttribute('href', manifestURL);
 
-    // Also update apple-touch-icon dynamically to the generated high-quality PNG
-    if (icon192) {
-      let appleTouchIcon = document.querySelector('link[rel="apple-touch-icon"]');
-      if (!appleTouchIcon) {
-        appleTouchIcon = document.createElement('link');
-        appleTouchIcon.setAttribute('rel', 'apple-touch-icon');
-        document.head.appendChild(appleTouchIcon);
-      }
-      appleTouchIcon.setAttribute('href', icon192);
-    }
   } catch (error) {
-    console.error('Failed to dynamically update PWA manifest:', error);
+    console.warn('[PWA] Failed to update dynamic manifest:', error);
   }
 };

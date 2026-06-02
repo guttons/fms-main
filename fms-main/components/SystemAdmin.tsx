@@ -30,6 +30,8 @@ const ROLE_LABELS: Record<UserRole, string> = {
   [UserRole.DEPOT_OPERATOR]: 'Depot Operator',
   [UserRole.EXECUTIVE]: 'Executive',
   [UserRole.COMMERCIAL]: 'Commercial',
+  [UserRole.FINANCE]: 'Finance Manager',
+  [UserRole.CUSTOMER]: 'Aviation Customer',
 };
 
 const ROLE_COLORS: Record<UserRole, string> = {
@@ -42,6 +44,8 @@ const ROLE_COLORS: Record<UserRole, string> = {
   [UserRole.DEPOT_OPERATOR]: 'bg-success/10 text-success border-success/20',
   [UserRole.EXECUTIVE]: 'bg-surface-container-low text-on-surface-dim border-outline',
   [UserRole.COMMERCIAL]: 'bg-surface-container-low text-on-surface-dim border-outline',
+  [UserRole.FINANCE]: 'bg-primary/10 text-primary border-primary/20',
+  [UserRole.CUSTOMER]: 'bg-success/10 text-success border-success/20',
 };
 
 const EQ_TYPE_COLORS: Record<EquipmentType, string> = {

@@ -22,9 +22,13 @@ import { Logo } from './components/Logo';
 import { BottomNav } from './components/BottomNav';
 import { NotificationProvider, useNotification } from './context/NotificationContext';
 import { OperationalDataProvider, useOperationalData } from './context/OperationalDataContext';
+import { FinanceDataProvider } from './context/FinanceDataContext';
+import { FinanceModule } from './components/FinanceModule';
+import { CustomerPortal } from './components/CustomerPortal';
+import { ExecutiveModule } from './components/ExecutiveModule';
 import { MOCK_USERS } from './constants';
 import { User, UserRole, FlightJob, Alert } from './types';
-import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, CheckCircle, Download, Share2, Smartphone, Trash2 } from 'lucide-react';
+import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, CheckCircle, Share2, Smartphone, Trash2 } from 'lucide-react';
 import { updatePWAManifestAndTheme } from './utils/pwa';
 
 const App: React.FC = () => {
@@ -84,34 +88,47 @@ const App: React.FC = () => {
     setActiveView('dashboard');
   };
 
+  const handleLoginSuccess = (user: User) => {
+    setCurrentUser(user);
+    if (user.role === UserRole.CUSTOMER) {
+      setActiveView('customer-portal');
+    } else if (user.role === UserRole.FINANCE) {
+      setActiveView('finance');
+    } else {
+      setActiveView('dashboard');
+    }
+  };
+
   // Wrap everything in ONE NotificationProvider so both Login and App can use toasts
   return (
     <NotificationProvider>
-      {!currentUser ? (
-        <LoginWrapper onLogin={setCurrentUser} />
-      ) : (
-        <OperationalDataProvider user={currentUser}>
-          <AppContextContent 
-            currentUser={currentUser}
-            activeView={activeView}
-            setActiveView={setActiveView}
-            isMobileMenuOpen={isMobileMenuOpen}
-            setIsMobileMenuOpen={setIsMobileMenuOpen}
-            isDarkMode={isDarkMode}
-            setIsDarkMode={setIsDarkMode}
-            showHeader={showHeader}
-            setShowHeader={setShowHeader}
-            scrollRef={scrollRef}
-            pendingJob={pendingJob}
-            setPendingJob={setPendingJob}
-            showAlertsPanel={showAlertsPanel}
-            setShowAlertsPanel={setShowAlertsPanel}
-            isSettingsOpen={isSettingsOpen}
-            setIsSettingsOpen={setIsSettingsOpen}
-            handleLogout={handleLogout}
-          />
-        </OperationalDataProvider>
-      )}
+      <FinanceDataProvider>
+        {!currentUser ? (
+          <LoginWrapper onLogin={handleLoginSuccess} />
+        ) : (
+          <OperationalDataProvider user={currentUser}>
+            <AppContextContent 
+              currentUser={currentUser}
+              activeView={activeView}
+              setActiveView={setActiveView}
+              isMobileMenuOpen={isMobileMenuOpen}
+              setIsMobileMenuOpen={setIsMobileMenuOpen}
+              isDarkMode={isDarkMode}
+              setIsDarkMode={setIsDarkMode}
+              showHeader={showHeader}
+              setShowHeader={setShowHeader}
+              scrollRef={scrollRef}
+              pendingJob={pendingJob}
+              setPendingJob={setPendingJob}
+              showAlertsPanel={showAlertsPanel}
+              setShowAlertsPanel={setShowAlertsPanel}
+              isSettingsOpen={isSettingsOpen}
+              setIsSettingsOpen={setIsSettingsOpen}
+              handleLogout={handleLogout}
+            />
+          </OperationalDataProvider>
+        )}
+      </FinanceDataProvider>
     </NotificationProvider>
   );
 };
@@ -153,7 +170,7 @@ const AppContextContent: React.FC<any> = ({
   showAlertsPanel, setShowAlertsPanel, isSettingsOpen, setIsSettingsOpen, handleLogout
 }) => {
   const { alerts, acknowledgeAlert, acknowledgeAllAlerts, clearAllAlerts, equipment, flightJobs, refreshData } = useOperationalData();
-  const { notify } = useNotification();
+  const { notify, notifyWithAction, dismiss } = useNotification();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [mainElement, setMainElement] = useState<HTMLElement | null>(null);
@@ -242,8 +259,8 @@ const AppContextContent: React.FC<any> = ({
   // --- Dynamic PWA Install States & Events ---
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
-  const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
+  const installToastIdRef = React.useRef<string | null>(null);
 
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
 
@@ -263,7 +280,11 @@ const AppContextContent: React.FC<any> = ({
     const handleAppInstalled = () => {
       setIsInstalled(true);
       setDeferredPrompt(null);
-      setShowInstallBanner(false);
+      // Dismiss install toast if still showing
+      if (installToastIdRef.current) {
+        dismiss(installToastIdRef.current);
+        installToastIdRef.current = null;
+      }
     };
     window.addEventListener('appinstalled', handleAppInstalled);
 
@@ -271,29 +292,41 @@ const AppContextContent: React.FC<any> = ({
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
-  }, []);
+  }, [dismiss]);
 
+  // Show install toast after 4 seconds if not installed and not dismissed
   useEffect(() => {
-    // Show sliding banner after 3 seconds if not installed
     const timer = setTimeout(() => {
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
-      if (!isStandalone) {
-        const dismissed = localStorage.getItem('fms-install-dismissed');
-        if (!dismissed) {
-          if (deferredPrompt || isIOS) {
-            setShowInstallBanner(true);
-          }
-        }
-      }
-    }, 3000);
+      if (isStandalone) return;
+      const dismissed = localStorage.getItem('fms-install-dismissed');
+      if (dismissed) return;
+      if (!deferredPrompt && !isIOS) return;
+
+      const toastId = notifyWithAction(
+        'Install FMS on your home screen for offline access and native performance.',
+        'info',
+        {
+          label: isIOS ? 'Show Guide' : 'Install Now',
+          onClick: () => handleInstallApp()
+        },
+        0 // persist until user dismisses
+      );
+      installToastIdRef.current = toastId;
+    }, 4000);
 
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deferredPrompt, isIOS]);
 
   const handleInstallApp = async () => {
     if (isIOS) {
-      setShowInstallBanner(false);
       setShowIOSGuide(true);
+      // Dismiss install toast
+      if (installToastIdRef.current) {
+        dismiss(installToastIdRef.current);
+        installToastIdRef.current = null;
+      }
       return;
     }
     if (!deferredPrompt) return;
@@ -301,7 +334,11 @@ const AppContextContent: React.FC<any> = ({
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === 'accepted') {
       setDeferredPrompt(null);
-      setShowInstallBanner(false);
+      localStorage.setItem('fms-install-dismissed', 'true');
+      if (installToastIdRef.current) {
+        dismiss(installToastIdRef.current);
+        installToastIdRef.current = null;
+      }
     }
   };
 
@@ -490,6 +527,7 @@ const AppContextContent: React.FC<any> = ({
         return <ShiftBriefing />;
       case 'admin':
         return currentUser.role === UserRole.ADMIN ? <SystemAdmin currentUser={currentUser} /> : <Dashboard user={currentUser} setActiveView={setActiveView} onStartJob={() => {}} />;
+      case 'depot-reports':
       case 'reports':
         if (currentUser?.role === UserRole.DEPOT_OPERATOR) {
           return (
@@ -504,14 +542,48 @@ const AppContextContent: React.FC<any> = ({
             </div>
           );
         }
-        if ([UserRole.DEPOT_MANAGER, UserRole.ADMIN].includes(currentUser?.role as UserRole)) {
-          return <FuelReports user={currentUser} />;
+        if (activeView === 'reports' && ![UserRole.DEPOT_MANAGER, UserRole.ADMIN].includes(currentUser?.role as UserRole)) {
+          return <CommercialReports />;
+        }
+        return <FuelReports user={currentUser} />;
+      case 'commercial-reports':
+        if (currentUser?.role && [UserRole.DEPOT_OPERATOR, UserRole.DEPOT_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_MANAGER].includes(currentUser?.role)) {
+          return (
+            <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-300">
+              <div className="w-24 h-24 bg-error/10 rounded-[32px] flex items-center justify-center mb-6 border border-error/20 shadow-premium">
+                <AlertCircle className="w-10 h-10 text-error shadow-glow" />
+              </div>
+              <h2 className="text-xl sm:text-2xl font-[900] text-on-surface mb-2 tracking-tighter uppercase italic">ACCESS DENIED</h2>
+              <p className="text-on-surface-dim max-w-sm uppercase tracking-widest text-[9px] font-black opacity-60">
+                You do not have administrative authorization to view commercial contracts and route statistics. Security log updated.
+              </p>
+            </div>
+          );
         }
         return <CommercialReports />;
+      case 'executive':
+        if (currentUser?.role && ![UserRole.ADMIN, UserRole.EXECUTIVE].includes(currentUser.role)) {
+          return (
+            <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-300">
+              <div className="w-24 h-24 bg-error/10 rounded-[32px] flex items-center justify-center mb-6 border border-error/20 shadow-premium">
+                <AlertCircle className="w-10 h-10 text-error shadow-glow" />
+              </div>
+              <h2 className="text-xl sm:text-2xl font-[900] text-on-surface mb-2 tracking-tighter uppercase italic">ACCESS DENIED</h2>
+              <p className="text-on-surface-dim max-w-sm uppercase tracking-widest text-[9px] font-black opacity-60">
+                You do not have administrative authorization to view executive daily summaries. Security log updated.
+              </p>
+            </div>
+          );
+        }
+        return <ExecutiveModule user={currentUser} />;
       case 'equipment':
         return <EquipmentStatus user={currentUser!} />;
       case 'seaplane':
         return <Seaplane user={currentUser} />;
+      case 'finance':
+        return <FinanceModule />;
+      case 'customer-portal':
+        return <CustomerPortal user={currentUser} />;
       default:
         return (
           <div className="flex items-center justify-center h-full text-slate-400">
@@ -536,6 +608,7 @@ const AppContextContent: React.FC<any> = ({
           onSettingsClick={() => {
             if (currentUser?.role === UserRole.ADMIN) {
               setActiveView('admin');
+              setIsMobileMenuOpen(false);
             } else {
               setIsSettingsOpen(true);
             }
@@ -882,36 +955,16 @@ const AppContextContent: React.FC<any> = ({
                                 </button>
                             </div>
 
-                            {/* Dynamic PWA Installer Trigger */}
-                            {(!isInstalled || deferredPrompt || isIOS) && (
-                              <div className="p-4 bg-surface-dim/40 rounded-[32px] hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between border border-outline/30">
-                                <div className="flex items-center space-x-3">
-                                  <div className="p-2.5 rounded-lg bg-primary/10 text-primary">
-                                    <Download className="w-4 h-4" />
-                                  </div>
-                                  <div>
-                                    <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight">FMS Native App</h4>
-                                    <p className="text-[9px] font-bold text-on-surface-dim opacity-50">
-                                      {isInstalled ? 'Running Standalone' : 'Install on home screen'}
-                                    </p>
-                                  </div>
+                            {/* Install status indicator (read-only, no install button) */}
+                            {isInstalled && (
+                              <div className="p-3 bg-success/5 rounded-2xl flex items-center space-x-3 border border-success/20">
+                                <div className="p-2 rounded-lg bg-success/10 text-success">
+                                  <CheckCircle className="w-4 h-4" />
                                 </div>
-                                {!isInstalled ? (
-                                  <button 
-                                    onClick={() => {
-                                      setIsSettingsOpen(false);
-                                      handleInstallApp();
-                                    }}
-                                    className="px-4 py-1.5 bg-primary text-white text-[9px] font-black uppercase tracking-[0.1em] rounded-lg kinetic-gradient shadow-md active:scale-95 transition-all whitespace-nowrap"
-                                  >
-                                    Install
-                                  </button>
-                                ) : (
-                                  <span className="flex items-center text-success space-x-1">
-                                    <CheckCircle className="w-3.5 h-3.5" />
-                                    <span className="text-[9px] font-black uppercase tracking-widest">Active</span>
-                                  </span>
-                                )}
+                                <div>
+                                  <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight">Installed</h4>
+                                  <p className="text-[9px] font-bold text-success opacity-70">Running as native app</p>
+                                </div>
                               </div>
                             )}
 
@@ -971,48 +1024,7 @@ const AppContextContent: React.FC<any> = ({
           isVisible={showHeader}
         />
 
-        {/* Premium Floating Install Banner */}
-        {showInstallBanner && (
-          <div className="fixed bottom-24 lg:bottom-8 left-4 right-4 md:left-auto md:right-8 md:w-96 bg-surface-container-low/95 backdrop-blur-xl border border-outline rounded-[24px] p-5 shadow-premium z-[999] animate-in slide-in-from-bottom-2 duration-500 text-on-surface">
-            <div className="flex items-start space-x-4">
-              <div className="p-2.5 bg-primary/10 rounded-xl text-primary flex-shrink-0">
-                <svg viewBox="0 0 120 120" fill="none" className="w-8 h-8 text-primary">
-                  <path d="M60 15 L100 38 V82 L60 105 L20 82 V38 Z" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M60 35 C60 35 45 55 45 65 C45 73.284 51.716 80 60 80 C68.284 80 75 73.284 75 65 C75 55 60 35 60 35 Z" fill="currentColor" />
-                  <circle cx="60" cy="15" r="6" fill="currentColor" />
-                  <circle cx="100" cy="38" r="6" fill="currentColor" />
-                  <circle cx="100" cy="82" r="6" fill="currentColor" />
-                  <circle cx="60" cy="105" r="6" fill="currentColor" />
-                  <circle cx="20" cy="82" r="6" fill="currentColor" />
-                  <circle cx="20" cy="38" r="6" fill="currentColor" />
-                </svg>
-              </div>
-              
-              <div className="flex-1 min-w-0">
-                <h4 className="text-xs font-black uppercase tracking-widest text-on-surface">Install FMS Web App</h4>
-                <p className="text-[10px] font-bold text-on-surface-dim opacity-60 mt-1 leading-normal">Access Fuel Services directly from your home screen with offline capability and native performance.</p>
-                
-                <div className="mt-4 flex items-center space-x-3">
-                  <button 
-                    onClick={handleInstallApp}
-                    className="px-4 py-2 kinetic-gradient text-white text-[9px] font-black uppercase tracking-[0.1em] rounded-lg shadow-lg active:scale-95 transition-all"
-                  >
-                    {isIOS ? 'Show Guide' : 'Install Now'}
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setShowInstallBanner(false);
-                      localStorage.setItem('fms-install-dismissed', 'true');
-                    }}
-                    className="px-3 py-2 bg-surface-dim hover:bg-surface-container border border-outline text-on-surface-dim text-[9px] font-black uppercase tracking-[0.1em] rounded-lg active:scale-95 transition-all"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Install toast is now handled by NotificationContext.notifyWithAction() */}
 
         {/* iOS PWA Install Guide Modal */}
         {showIOSGuide && (

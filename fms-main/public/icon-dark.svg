@@ -1,0 +1,31 @@
+<svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background rectangle for home screen visibility -->
+  <rect width="512" height="512" rx="112" fill="#0b121f"/>
+  
+  <!-- Subtle glow ring -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="#019BC9" stroke-width="2" opacity="0.15"/>
+  
+  <!-- Hexagon frame -->
+  <path 
+    d="M256 72 L416 163 V345 L256 436 L96 345 V163 Z" 
+    stroke="#019BC9" 
+    stroke-width="28" 
+    stroke-linecap="round" 
+    stroke-linejoin="round"
+    fill="none"
+  />
+  
+  <!-- Fuel droplet -->
+  <path 
+    d="M256 148 C256 148 196 228 196 276 C196 309.137 223.863 336 256 336 C288.137 336 316 309.137 316 276 C316 228 256 148 256 148 Z" 
+    fill="#019BC9"
+  />
+  
+  <!-- Hexagon nodes -->
+  <circle cx="256" cy="72"  r="20" fill="#019BC9"/>
+  <circle cx="416" cy="163" r="20" fill="#019BC9"/>
+  <circle cx="416" cy="345" r="20" fill="#019BC9"/>
+  <circle cx="256" cy="436" r="20" fill="#019BC9"/>
+  <circle cx="96"  cy="345" r="20" fill="#019BC9"/>
+  <circle cx="96"  cy="163" r="20" fill="#019BC9"/>
+</svg>

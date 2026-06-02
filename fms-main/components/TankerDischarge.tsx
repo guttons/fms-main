@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Anchor, Droplet, FileText, CheckCircle, Scale, Thermometer, AlertOctagon, History, ShieldAlert } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Anchor, Droplet, FileText, CheckCircle, Scale, Thermometer, AlertOctagon, History, ShieldAlert, Printer, X, Download, ClipboardCheck } from 'lucide-react';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { useNotification } from '../context/NotificationContext';
 import { FuelType, UserRole } from '../types';
@@ -14,6 +14,212 @@ interface DischargeLog {
     status: 'COMPLETED' | 'PENDING';
     tankName: string;
 }
+
+interface ReceiptData {
+  vessel: string;
+  bol: string;
+  product: FuelType | string;
+  quantity: number;
+  date: string;
+  tankName: string;
+  sg?: string;
+  flashPoint?: string;
+  temp?: string;
+  h2o?: string;
+  finalVolume?: string;
+}
+
+const ReceiptModal: React.FC<{ data: ReceiptData; onClose: () => void }> = ({ data, onClose }) => {
+  const receiptRef = useRef<HTMLDivElement>(null);
+  const receiptNo = `FMS-REC-${data.bol.replace(/[^A-Z0-9]/g, '')}-${new Date().getFullYear()}`;
+  const isJetA1 = data.product === FuelType.JET_A1 || data.product === 'JET A-1';
+  const volumeLiters = data.finalVolume ? parseInt(data.finalVolume).toLocaleString() : (data.quantity * 1274).toLocaleString();
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <>
+      {/* Print styles injected globally for this modal */}
+      <style>{`
+        @media print {
+          body > * { display: none !important; }
+          #fms-receipt-print-root { display: block !important; position: fixed; inset: 0; z-index: 99999; background: white; }
+          .no-print { display: none !important; }
+          .print-only { display: block !important; }
+        }
+        @media screen {
+          .print-only { display: none; }
+        }
+      `}</style>
+
+      {/* Overlay */}
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 no-print" onClick={onClose} />
+
+      {/* Modal Container */}
+      <div id="fms-receipt-print-root" className="fixed inset-0 z-[201] flex items-center justify-center p-4 pointer-events-none">
+        <div className="w-full max-w-2xl max-h-[95vh] overflow-y-auto rounded-2xl shadow-2xl pointer-events-auto animate-in fade-in zoom-in-95 duration-300" style={{ background: 'var(--color-surface)' }}>
+          
+          {/* Modal action bar */}
+          <div className="no-print flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--color-outline)' }}>
+            <div className="flex items-center gap-3">
+              <ClipboardCheck className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
+              <span className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--color-on-surface)' }}>Fuel Receipt Certificate</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handlePrint}
+                className="flex items-center gap-2 px-5 py-2.5 kinetic-gradient text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:opacity-90 active:scale-95 transition-all shadow-lg"
+              >
+                <Printer className="w-3.5 h-3.5" /> Print / PDF
+              </button>
+              <button
+                onClick={onClose}
+                className="p-2.5 rounded-xl hover:bg-red-500/10 transition-colors"
+                style={{ color: 'var(--color-on-surface-dim)' }}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* ── RECEIPT DOCUMENT ── */}
+          <div ref={receiptRef} className="p-8" style={{ background: 'white', color: '#111', fontFamily: 'monospace' }}>
+            {/* Header */}
+            <div style={{ borderBottom: '3px solid #0369a1', paddingBottom: '16px', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontSize: '18px', fontWeight: 900, letterSpacing: '-0.5px', color: '#0369a1' }}>MALDIVES AIRPORTS CO. LTD.</div>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#374151', marginTop: '2px' }}>VELANA INTERNATIONAL AIRPORT — MLE / VRMM</div>
+                  <div style={{ fontSize: '10px', color: '#6B7280', marginTop: '2px' }}>Fuel Depot Operations · Hulhulé Island, Republic of Maldives</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '10px', fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Receipt No.</div>
+                  <div style={{ fontSize: '13px', fontWeight: 900, color: '#0369a1', fontFamily: 'monospace' }}>{receiptNo}</div>
+                  <div style={{ fontSize: '10px', color: '#6B7280', marginTop: '4px' }}>Date: {data.date}</div>
+                </div>
+              </div>
+              <div style={{ marginTop: '12px', padding: '8px 16px', background: isJetA1 ? '#eff6ff' : '#fefce8', border: `1px solid ${isJetA1 ? '#bfdbfe' : '#fde68a'}`, borderRadius: '8px', display: 'inline-block' }}>
+                <span style={{ fontSize: '11px', fontWeight: 900, color: isJetA1 ? '#1d4ed8' : '#92400e', textTransform: 'uppercase', letterSpacing: '0.15em' }}>
+                  {data.product} — BULK RECEIPT CERTIFICATE
+                </span>
+              </div>
+            </div>
+
+            {/* Vessel & BoL Details */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+              <div>
+                <div style={{ fontSize: '9px', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '4px' }}>Vessel / Tanker Identity</div>
+                <div style={{ fontSize: '16px', fontWeight: 900, color: '#111827', textTransform: 'uppercase' }}>{data.vessel}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '9px', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '4px' }}>Bill of Lading (BoL) No.</div>
+                <div style={{ fontSize: '16px', fontWeight: 900, color: '#0369a1', fontFamily: 'monospace' }}>{data.bol}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '9px', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '4px' }}>Receiving Storage Tank</div>
+                <div style={{ fontSize: '13px', fontWeight: 900, color: '#111827', textTransform: 'uppercase' }}>{data.tankName}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '9px', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '4px' }}>Receipt Date &amp; Time</div>
+                <div style={{ fontSize: '13px', fontWeight: 900, color: '#111827' }}>{data.date} — {new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} LT</div>
+              </div>
+            </div>
+
+            {/* Volume Table */}
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px', fontSize: '11px' }}>
+              <thead>
+                <tr style={{ background: '#0369a1', color: 'white' }}>
+                  <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 900, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Description</th>
+                  <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 900, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Value</th>
+                  <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 900, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Unit</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderBottom: '1px solid #E5E7EB' }}>
+                  <td style={{ padding: '8px 12px', color: '#374151' }}>BoL Quantity (Gross)</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace' }}>{data.quantity.toLocaleString()}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', color: '#6B7280' }}>MT</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid #E5E7EB', background: '#F9FAFB' }}>
+                  <td style={{ padding: '8px 12px', color: '#374151' }}>Specific Gravity (SG @ 15°C)</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace' }}>{data.sg || '0.8000'}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', color: '#6B7280' }}>kg/L</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid #E5E7EB' }}>
+                  <td style={{ padding: '8px 12px', color: '#374151' }}>Observed Temperature</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace' }}>{data.temp || '28.5'}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', color: '#6B7280' }}>°C</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid #E5E7EB', background: '#F9FAFB' }}>
+                  <td style={{ padding: '8px 12px', color: '#374151' }}>Flash Point</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace' }}>{data.flashPoint || '60.0'}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', color: '#6B7280' }}>°C</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid #E5E7EB' }}>
+                  <td style={{ padding: '8px 12px', color: '#374151' }}>Water Content (H₂O)</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace' }}>{data.h2o || '0'}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', color: '#6B7280' }}>PPM</td>
+                </tr>
+                <tr style={{ background: '#eff6ff', borderBottom: '2px solid #0369a1' }}>
+                  <td style={{ padding: '10px 12px', color: '#1d4ed8', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Net Receipt Volume</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 900, fontSize: '15px', color: '#1d4ed8', fontFamily: 'monospace' }}>{volumeLiters}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', color: '#1d4ed8', fontWeight: 900 }}>LITERS</td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* QC Status */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+              <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '16px', height: '16px', background: '#16a34a', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <span style={{ color: 'white', fontSize: '10px', fontWeight: 900 }}>✓</span>
+                </div>
+                <div>
+                  <div style={{ fontSize: '9px', fontWeight: 900, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Visual Appearance</div>
+                  <div style={{ fontSize: '9px', color: '#6B7280', marginTop: '1px' }}>Clear &amp; Bright — No Particulates</div>
+                </div>
+              </div>
+              <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '16px', height: '16px', background: '#16a34a', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <span style={{ color: 'white', fontSize: '10px', fontWeight: 900 }}>✓</span>
+                </div>
+                <div>
+                  <div style={{ fontSize: '9px', fontWeight: 900, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Water Detection Test</div>
+                  <div style={{ fontSize: '9px', color: '#6B7280', marginTop: '1px' }}>Chemical Detector — Negative</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Signature Block */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '20px', paddingTop: '16px', borderTop: '1px solid #E5E7EB' }}>
+              {['Receiving Officer', 'Depot Manager / Supervisor', 'Vessel Representative'].map((role) => (
+                <div key={role}>
+                  <div style={{ height: '40px', borderBottom: '1px solid #374151', marginBottom: '6px' }} />
+                  <div style={{ fontSize: '9px', fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{role}</div>
+                  <div style={{ fontSize: '9px', color: '#9CA3AF', marginTop: '2px' }}>Date: ___________</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div style={{ paddingTop: '12px', borderTop: '2px solid #E5E7EB' }}>
+              <div style={{ fontSize: '8px', color: '#9CA3AF', lineHeight: '1.6', textAlign: 'center' }}>
+                This receipt is issued in accordance with IATA AHM 955 and local fuel quality management procedures.
+                All measurements are subject to calibration chart corrections per ASTM D1250. This document constitutes
+                an official record of bulk petroleum product receipt at Velana International Airport Fuel Depot.
+              </div>
+              <div style={{ marginTop: '8px', fontSize: '8px', color: '#0369a1', textAlign: 'center', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                MACL FMS · Fuel Management System · {receiptNo}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
 
 export const TankerDischarge: React.FC = () => {
   const { notify } = useNotification();
@@ -35,6 +241,7 @@ export const TankerDischarge: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [validated, setValidated] = useState(false);
   const [logs, setLogs] = useState<DischargeLog[]>([]);
+  const [receiptLog, setReceiptLog] = useState<ReceiptData | null>(null);
 
   // Seed default logs on mount
   useEffect(() => {
@@ -417,26 +624,40 @@ export const TankerDischarge: React.FC = () => {
                     ) : (
                         <div className="divide-y divide-outline">
                             {logs.map(log => (
-                                <div key={log.id} className="p-8 hover:bg-primary/[0.02] transition-colors group">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <span className="text-lg font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">{log.vessel}</span>
-                                        <span className="text-[9px] font-black text-on-surface-dim opacity-30 uppercase tracking-widest">{log.date}</span>
+                                <div key={log.id} className="p-6 hover:bg-primary/[0.02] transition-colors group">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className="text-base font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors leading-tight">{log.vessel}</span>
+                                        <span className="text-[9px] font-black text-on-surface-dim opacity-30 uppercase tracking-widest shrink-0 ml-2">{log.date}</span>
                                     </div>
-                                    <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-2">BoL: {log.bol}</div>
-                                    <div className="text-[9px] font-black text-primary uppercase tracking-widest mb-4">TANK: {log.tankName}</div>
+                                    <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-1">BoL: {log.bol}</div>
+                                    <div className="text-[9px] font-black text-primary uppercase tracking-widest mb-3">TANK: {log.tankName}</div>
                                     <div className="flex justify-between items-center">
-                                        <span className={`flex items-center text-[10px] font-black uppercase tracking-widest ${log.product === FuelType.DIESEL ? 'text-amber-600' : 'text-primary'}`}>
-                                            <Droplet className="w-3 h-3 mr-2" />
+                                        <span className={`flex items-center text-[10px] font-black uppercase tracking-widest ${log.product === FuelType.DIESEL ? 'text-amber-500' : 'text-primary'}`}>
+                                            <Droplet className="w-3 h-3 mr-1.5" />
                                             {log.product}
                                         </span>
-                                        <span className="text-xl font-[900] text-on-surface tracking-tighter italic">
+                                        <span className="text-lg font-[900] text-on-surface tracking-tighter italic">
                                             {log.quantity.toLocaleString()} <span className="text-[10px] opacity-20">MT</span>
                                         </span>
                                     </div>
-                                    <div className="mt-4 flex justify-end">
-                                         <span className="text-[9px] font-black px-4 py-1 rounded-full bg-success/10 text-success border border-success/20 uppercase tracking-[0.2em] shadow-sm">
-                                                {log.status}
-                                         </span>
+                                    <div className="mt-3 flex items-center justify-between">
+                                        <button
+                                            onClick={() => setReceiptLog({
+                                              vessel: log.vessel,
+                                              bol: log.bol,
+                                              product: log.product,
+                                              quantity: log.quantity,
+                                              date: log.date,
+                                              tankName: log.tankName
+                                            })}
+                                            className="flex items-center gap-1.5 text-[9px] font-black text-primary hover:text-on-surface uppercase tracking-widest transition-colors px-3 py-1.5 rounded-lg border border-primary/20 hover:border-primary/50 hover:bg-primary/5 active:scale-95"
+                                        >
+                                            <FileText className="w-3 h-3" />
+                                            Receipt
+                                        </button>
+                                        <span className="text-[9px] font-black px-3 py-1 rounded-full bg-success/10 text-success border border-success/20 uppercase tracking-[0.2em]">
+                                            {log.status}
+                                        </span>
                                     </div>
                                 </div>
                             ))}
@@ -450,8 +671,17 @@ export const TankerDischarge: React.FC = () => {
                     </button>
                 </div>
              </div>
-        </div>
-      </div>
-    </div>
+         </div>
+       </div>
+
+       {/* ── JET A-1 RECEIPT MODAL ── */}
+       {receiptLog && (
+         <ReceiptModal
+           data={receiptLog}
+           onClose={() => setReceiptLog(null)}
+         />
+       )}
+     </div>
   );
 };
+

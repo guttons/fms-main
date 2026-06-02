@@ -57,7 +57,7 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onStartJob }) => {
-  const { tanks = [], equipment = [], briefingInfo, flightJobs = [], domesticFlights = [], alerts = [], createAlert, acknowledgeAlert, staff = [] } = useOperationalData();
+  const { tanks = [], equipment = [], briefingInfo, flightJobs = [], domesticFlights = [], alerts = [], createAlert, acknowledgeAlert, staff = [], updateEquipmentStatus } = useOperationalData();
   const { notify } = useNotification();
   // Logic to determine initial view and if switching is allowed
 
@@ -698,6 +698,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                                         });
                                                         
                                                         if (success) {
+                                                            await updateEquipmentStatus(eqAssignment.equipment_id, EqStatus.REFUELLING);
                                                             notify(`Refuel request sent to Depot Operators for ${eqAssignment.equipment_id}`, 'success');
                                                         }
                                                     } catch (error) {
@@ -795,6 +796,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                       targetRole: UserRole.DEPOT_MANAGER
                                     });
                                     if (success) {
+                                      await updateEquipmentStatus(eq.id, EqStatus.REFUELLING);
                                       notify(`Refuel request sent for ${eq.id}`, 'success');
                                     }
                                   } catch (error) {

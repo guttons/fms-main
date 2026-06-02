@@ -681,7 +681,7 @@ const ScreenQC: React.FC<{
 
 export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob }) => {
   const { notify } = useNotification();
-  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert } = useOperationalData();
+  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(null);
   const [paymentType, setPaymentType] = useState<'CREDIT' | 'CASH' | 'VOID'>('CREDIT');
@@ -980,6 +980,12 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       } else {
         // Just release hydrant/service equipment
         updateEquipmentStatus(selectedVehicleId, EquipmentStatus.AVAILABLE);
+      }
+
+      // Find matching flight job and mark it as COMPLETED in the database
+      const matchingJob = (flightJobs || []).find(job => job.flightNumber === activeFlight.flightNumber && job.status !== 'COMPLETED');
+      if (matchingJob) {
+        await updateFlightJob(matchingJob.id, { status: 'COMPLETED' });
       }
 
       notify("Job Completed & Synced to Database!", "success");

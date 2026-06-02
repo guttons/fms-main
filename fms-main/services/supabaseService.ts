@@ -253,6 +253,79 @@ export const supabaseService = {
     } as FlightJob));
   },
 
+  async addFlightJob(job: FlightJob): Promise<void> {
+    const row = {
+      id: job.id,
+      flight_number: job.flightNumber,
+      aircraft_reg: job.aircraftReg,
+      aircraft_type: job.aircraftType,
+      stand: job.stand,
+      sta: job.sta || null,
+      eta: job.eta || null,
+      std: job.std || null,
+      assigned_to: job.assignedTo || null,
+      assigned_officer: job.assignedOfficer || null,
+      equipment_usage: job.equipmentUsage || null,
+      status: job.status,
+      vehicle_id: job.vehicleId || null,
+      remarks: job.remarks || null,
+      delivery_number: job.deliveryNumber || null,
+      pit_number: job.pitNumber || null
+    };
+
+    const { error } = await supabase.from('flight_jobs').insert([row]);
+    if (error) {
+      console.error('[Supabase] addFlightJob failed:', error);
+      throw error;
+    }
+  },
+
+  async updateFlightJob(id: string, updates: Partial<FlightJob>): Promise<void> {
+    const row: Record<string, any> = {};
+    if ('flightNumber' in updates) row.flight_number = updates.flightNumber;
+    if ('aircraftReg' in updates) row.aircraft_reg = updates.aircraftReg;
+    if ('aircraftType' in updates) row.aircraft_type = updates.aircraftType;
+    if ('stand' in updates) row.stand = updates.stand;
+    if ('sta' in updates) row.sta = updates.sta;
+    if ('eta' in updates) row.eta = updates.eta;
+    if ('std' in updates) row.std = updates.std;
+    if ('assignedTo' in updates) row.assigned_to = updates.assignedTo;
+    if ('assignedOfficer' in updates) row.assigned_officer = updates.assignedOfficer;
+    if ('equipmentUsage' in updates) row.equipment_usage = updates.equipmentUsage;
+    if ('status' in updates) row.status = updates.status;
+    if ('vehicleId' in updates) row.vehicle_id = updates.vehicleId;
+    if ('remarks' in updates) row.remarks = updates.remarks;
+    if ('deliveryNumber' in updates) row.delivery_number = updates.deliveryNumber;
+    if ('pitNumber' in updates) row.pit_number = updates.pitNumber;
+
+    const { error } = await supabase.from('flight_jobs').update(row).eq('id', id);
+    if (error) {
+      console.error('[Supabase] updateFlightJob failed:', error);
+      throw error;
+    }
+  },
+
+  subscribeToFlightJobs(callback: (jobs: FlightJob[]) => void) {
+    const channel = supabase
+      .channel('flight_jobs-changes-' + Date.now() + '-' + Math.floor(Math.random() * 1000))
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'flight_jobs' },
+        async () => {
+          const jobs = await supabaseService.getFlightJobs();
+          callback(jobs);
+        }
+      )
+      .subscribe();
+
+    supabaseService.getFlightJobs().then(callback);
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  },
+
+
   // ── BigQuery Cloud Run API Helper & Operations Logs ────────────────────────
   _bqBase(): string {
     return (

@@ -18,7 +18,8 @@ import {
   Sun,
   Moon,
   ToggleRight,
-  ToggleLeft
+  ToggleLeft,
+  Fuel
 } from 'lucide-react';
 import { Logo } from './Logo';
 
@@ -59,6 +60,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'briefing', label: 'Shift Briefing', icon: ClipboardList },
           { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
           { id: 'history', label: 'Log History', icon: FileText },
+          { id: 'depot-reports', label: 'Fuel Reports', icon: ClipboardList },
         ];
 
       case UserRole.DEPOT_OPERATOR:
@@ -69,7 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
           { id: 'marine', label: 'Tanker Discharge', icon: Anchor },
           { id: 'seaplane', label: 'Seaplane Ops', icon: Sailboat },
-          { id: 'lfs-afs', label: 'LFS / AFS Invoices', icon: FileText },
+          { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
         ];
 
@@ -81,23 +83,50 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'marine-loading', label: 'Marine Provisioning', icon: Ship },
           { id: 'marine', label: 'Marine Oversight', icon: Anchor },
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
-          { id: 'lfs-afs', label: 'LFS / AFS Invoices', icon: FileText },
+          { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
           { id: 'forecasting', label: 'Stock Forecasting', icon: TrendingUp },
-          { id: 'reports', label: 'Fuel Reports', icon: ClipboardList },
+          { id: 'depot-reports', label: 'Fuel Reports', icon: ClipboardList },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
         ];
 
       case UserRole.EXECUTIVE:
+        return [
+          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'executive', label: 'Executive Module', icon: ClipboardList },
+          { id: 'forecasting', label: 'Forecasting & Trends', icon: TrendingUp },
+          { id: 'depot-reports', label: 'Fuel Reports', icon: ClipboardList },
+          { id: 'commercial-reports', label: 'Commercial Reports', icon: FileText },
+          { id: 'finance', label: 'Finance & Billing', icon: FileText },
+        ];
+
       case UserRole.COMMERCIAL:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'forecasting', label: 'Forecasting & Trends', icon: TrendingUp },
-          { id: 'reports', label: 'Commercial Reports', icon: FileText },
+          { id: 'depot-reports', label: 'Fuel Reports', icon: ClipboardList },
+          { id: 'commercial-reports', label: 'Commercial Reports', icon: FileText },
+          { id: 'finance', label: 'Finance & Billing', icon: FileText },
+        ];
+
+      case UserRole.FINANCE:
+        return [
+          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'finance', label: 'Finance & Billing', icon: FileText },
+          { id: 'depot-reports', label: 'Fuel Reports', icon: ClipboardList },
+          { id: 'reports', label: 'Financial Reports', icon: ClipboardList },
+        ];
+
+      case UserRole.CUSTOMER:
+        return [
+          { id: 'customer-portal', label: 'Customer Portal', icon: Plane },
         ];
 
       case UserRole.ADMIN:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'executive', label: 'Executive Module', icon: ClipboardList },
+          { id: 'finance', label: 'Finance & Billing', icon: FileText },
+          { id: 'customer-portal', label: 'Customer Portal', icon: Plane },
           { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'history', label: 'Log History', icon: FileText },
@@ -108,8 +137,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
           { id: 'marine', label: 'Marine Oversight', icon: Anchor },
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
+          { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
           { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
-          { id: 'reports', label: 'Commercial Reports', icon: FileText },
+          { id: 'depot-reports', label: 'Fuel Reports', icon: ClipboardList },
+          { id: 'commercial-reports', label: 'Commercial Reports', icon: FileText },
         ];
       
       default:
