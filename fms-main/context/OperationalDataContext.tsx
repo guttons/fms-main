@@ -15,6 +15,7 @@ interface ShiftBriefingInfo {
     dutySupervisor: string;
     shiftInCharge: string;
     attendees?: string[];
+    dailyCompleted?: string[];
   };
 }
 
@@ -28,6 +29,8 @@ interface OperationalDataContextType {
   briefingInfo: ShiftBriefingInfo;
   selectedBriefingShift: BriefingShift;
   setSelectedBriefingShift: (shift: BriefingShift) => void;
+  selectedBriefingDate: string;
+  setSelectedBriefingDate: (date: string) => void;
   alerts: Alert[];
   flightLogs: FlightLog[];
   isAlertsLoading: boolean;
@@ -123,8 +126,16 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     return 'Night';
   });
 
+  const [selectedBriefingDate, setSelectedBriefingDate] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('fms_selected_briefing_date');
+      if (saved) return saved;
+    } catch(e) {}
+    return new Date().toISOString().split('T')[0];
+  });
+
   const [briefingInfo, setBriefingInfo] = useState<ShiftBriefingInfo>(() => {
-    const saved = localStorage.getItem(`fms_briefing_info_${selectedBriefingShift}`);
+    const saved = localStorage.getItem(`fms_briefing_info_${selectedBriefingDate}_${selectedBriefingShift}`);
     return saved ? JSON.parse(saved) : {
       info: [
         { text: 'Ready before 15 mins/PPE/360 Walkaround check/Following speed limits/Marshaling when required', type: 'critical', isHighAlert: true },
@@ -178,16 +189,41 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   }, [domesticFlights]);
 
   useEffect(() => {
-    localStorage.setItem(`fms_briefing_info_${selectedBriefingShift}`, JSON.stringify(briefingInfo));
-  }, [briefingInfo, selectedBriefingShift]);
+    localStorage.setItem(`fms_briefing_info_${selectedBriefingDate}_${selectedBriefingShift}`, JSON.stringify(briefingInfo));
+  }, [briefingInfo, selectedBriefingDate, selectedBriefingShift]);
   
   useEffect(() => {
     localStorage.setItem('fms_selected_shift', selectedBriefingShift);
   }, [selectedBriefingShift]);
-  
+
   useEffect(() => {
-    localStorage.setItem('fms_alerts', JSON.stringify(alerts));
-  }, [alerts]);
+    localStorage.setItem('fms_selected_briefing_date', selectedBriefingDate);
+  }, [selectedBriefingDate]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(`fms_briefing_info_${selectedBriefingDate}_${selectedBriefingShift}`);
+    if (saved) {
+      setBriefingInfo(JSON.parse(saved));
+    } else {
+      setBriefingInfo({
+        info: [
+          { text: 'Ready before 15 mins/PPE/360 Walkaround check/Following speed limits/Marshaling when required', type: 'critical', isHighAlert: true },
+          { text: 'Officers should NOT stay inside the Bowser while refuelling is in progress', type: 'standard' },
+          { text: 'The officer and operator have the responsibility to check and complete the daily refueller check', type: 'standard' },
+          { text: 'All hose related issues must be reported with specific hose identification number clearly stated', type: 'standard' },
+          { text: 'Rf 16 & 17 check if gear changed to NEUTRAL after parking', type: 'standard' },
+        ],
+        dieselNeeds: [],
+        staffAssignments: {
+          activeOperators: ['u3', 'u3b'],
+          activeOfficers: ['u1'],
+          hydrantOpsOfficers: ['u7'],
+          dutySupervisor: 'u2',
+          shiftInCharge: 'u2b'
+        }
+      });
+    }
+  }, [selectedBriefingDate, selectedBriefingShift]);
 
 
   const refreshData = useCallback(async () => {
@@ -199,7 +235,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       const [fetchedTanks, fetchedJobs, fetchedBriefing, fetchedAlerts, fetchedEq, fetchedLogs, fetchedStaff] = await Promise.all([
         supabaseService.getTanks(),
         supabaseService.getFlightJobs(),
-        supabaseService.getShiftBriefingInfo(new Date().toISOString().split('T')[0], selectedBriefingShift),
+        supabaseService.getShiftBriefingInfo(selectedBriefingDate, selectedBriefingShift),
         supabaseService.getAlerts(),
         supabaseService.getEquipment(),
         supabaseService.getFlightLogs(),
@@ -250,14 +286,14 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       setIsLoading(false);
       setIsAlertsLoading(false);
     }
-  }, []);
+  }, [selectedBriefingDate, selectedBriefingShift]);
 
-  // Sync with Supabase when user logs in or shift changes
+  // Sync with Supabase when user logs in, selected shift or date changes
   useEffect(() => {
     if (appUser) {
       refreshData();
     }
-  }, [appUser, selectedBriefingShift, refreshData]);
+  }, [appUser, selectedBriefingShift, selectedBriefingDate, refreshData]);
 
   // Dedicated Real-time Listeners Effect
   useEffect(() => {
@@ -383,11 +419,10 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     });
 
     if (appUser) {
-      const todayDate = new Date().toISOString().split('T')[0];
       try {
-        await supabaseService.upsertShiftBriefingInfo(todayDate, selectedBriefingShift, info, dieselNeeds, finalStaff !== undefined ? finalStaff : null);
+        await supabaseService.upsertShiftBriefingInfo(selectedBriefingDate, selectedBriefingShift, info, dieselNeeds, finalStaff !== undefined ? finalStaff : null);
       } catch (error) {
-        console.error('Failed to sync briefing update to Firestore:', error);
+        console.error('Failed to sync briefing update to Supabase:', error);
       }
     }
   };
@@ -513,8 +548,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     try {
       const allIds = (alerts || []).map(a => a.id);
       if (allIds.length === 0) return;
-      // Acknowledge all first so they're removed from views, then wipe local state
-      await supabaseService.acknowledgeAllAlerts(allIds);
+      // Delete all alerts from Supabase, then wipe local state
+      await supabaseService.deleteAlerts(allIds);
       setAlerts([]);
       localStorage.setItem('fms_alerts', JSON.stringify([]));
     } catch (error) {
@@ -566,6 +601,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       briefingInfo: briefingInfo || { info: [], dieselNeeds: [], staffAssignments: undefined },
       selectedBriefingShift,
       setSelectedBriefingShift,
+      selectedBriefingDate,
+      setSelectedBriefingDate,
       updateEquipmentStatus,
       updateEquipment,
       updateTankLevel,

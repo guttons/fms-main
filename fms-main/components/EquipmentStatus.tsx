@@ -339,14 +339,16 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
               />
             </div>
             
-            <button
-              onClick={exportToPDF}
-              className="flex items-center justify-center p-2 lg:px-4 lg:py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl hover:bg-primary hover:text-white transition-all shadow-sm active:scale-95 flex-shrink-0"
-              title="Export Status (PDF)"
-            >
-              <FileText className="w-5 h-5 lg:w-4 lg:h-4 lg:mr-2" />
-              <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">Export Status (PDF)</span>
-            </button>
+            {user && ![UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(user.role) && (
+              <button
+                onClick={exportToPDF}
+                className="flex items-center justify-center p-2 lg:px-4 lg:py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl hover:bg-primary hover:text-white transition-all shadow-sm active:scale-95 flex-shrink-0"
+                title="Export Status (PDF)"
+              >
+                <FileText className="w-5 h-5 lg:w-4 lg:h-4 lg:mr-2" />
+                <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">Export Status (PDF)</span>
+              </button>
+            )}
           </div>
           
           <div className="bg-surface-dim p-1 rounded-2xl border border-outline relative flex w-full sm:w-auto overflow-x-auto no-scrollbar shadow-inner">
@@ -490,7 +492,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                                 className={`flex items-center text-[9px] font-black px-2 py-1.5 lg:px-3 lg:py-2 rounded-xl border border-outline shadow-sm transition-all active:scale-95 uppercase tracking-widest ${
                                   pendingRequests.has(eq.id) || alerts.some(a => !a.acknowledged && a.message.includes(`Replenishment requested for unit ${eq.id}`))
                                   ? 'bg-surface-lowest text-on-surface-dim opacity-30 cursor-not-allowed'
-                                  : 'text-primary hover:kinetic-gradient hover:text-white hover:border-transparent bg-surface-lowest'
+                                  : 'text-primary bg-surface-lowest btn-replenish-hover'
                                 }`}
                               >
                                 <Send className={`w-3 h-3 mr-1.5 ${pendingRequests.has(eq.id) ? 'animate-pulse' : ''}`} />

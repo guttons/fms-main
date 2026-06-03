@@ -117,42 +117,40 @@ export const CustomerPortal: React.FC<{ user: any }> = ({ user }) => {
         {/* LEFT COLUMN: Actions & Tab Forms */}
         <div className="lg:col-span-2 space-y-8">
           
-          {/* Navigation Tabs with sliding backdrop */}
-          <div className="relative flex bg-surface-dim border border-outline p-1.5 rounded-[22px] overflow-hidden">
-            <div 
-              className={`absolute top-1.5 bottom-1.5 w-[calc(33.333%-4px)] bg-surface-lowest border border-outline rounded-xl transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
-                ${activeTab === 'request' ? 'translate-x-0' : 
-                  activeTab === 'statements' ? 'translate-x-[100%]' : 
-                  'translate-x-[200%]'}`}
+          {/* Navigation Tabs — EquipmentStatus-style pill bar */}
+          <div className="bg-surface-dim p-1 rounded-2xl border border-outline relative flex w-full overflow-x-auto no-scrollbar shadow-inner">
+            {/* Mobile/tablet: fixed-width pixel indicator */}
+            <div
+              className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium lg:hidden
+                ${activeTab === 'request'    ? 'left-1 w-[130px] translate-x-0'      : ''}
+                ${activeTab === 'statements' ? 'left-1 w-[155px] translate-x-[130px]' : ''}
+                ${activeTab === 'payments'   ? 'left-1 w-[145px] translate-x-[285px]' : ''}
+              `}
             />
-            <button
-              onClick={() => setActiveTab('request')}
-              className={`relative z-10 flex-1 py-3.5 text-center rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors duration-300
-                ${activeTab === 'request' 
-                  ? 'text-primary font-black' 
-                  : 'text-on-surface-dim hover:text-on-surface'}`}
-            >
-              Request Fuel
-            </button>
-            <button
-              onClick={() => setActiveTab('statements')}
-              className={`relative z-10 flex-1 py-3.5 text-center rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors duration-300
-                ${activeTab === 'statements' 
-                  ? 'text-primary font-black' 
-                  : 'text-on-surface-dim hover:text-on-surface'}`}
-            >
-              Uplift Statements
-            </button>
-            <button
-              onClick={() => setActiveTab('payments')}
-              className={`relative z-10 flex-1 py-3.5 text-center rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors duration-300
-                ${activeTab === 'payments' 
-                  ? 'text-primary font-black' 
-                  : 'text-on-surface-dim hover:text-on-surface'}`}
-            >
-              Ledger Payments
-            </button>
+            {/* Desktop: percentage-based indicator (flex-1 equal thirds) */}
+            <div
+              className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium hidden lg:block w-[calc(33.333%-1.33px)]
+                ${activeTab === 'request'    ? 'translate-x-0'    : ''}
+                ${activeTab === 'statements' ? 'translate-x-[100%]' : ''}
+                ${activeTab === 'payments'   ? 'translate-x-[200%]' : ''}
+              `}
+            />
+            {[
+              { id: 'request',    label: 'Request Fuel',      w: 'w-[130px] lg:w-auto' },
+              { id: 'statements', label: 'Uplift Statements', w: 'w-[155px] lg:w-auto' },
+              { id: 'payments',   label: 'Ledger Payments',   w: 'w-[145px] lg:w-auto' },
+            ].map(t => (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id as any)}
+                className={`${t.w} flex-shrink-0 lg:flex-1 flex items-center justify-center py-3 text-[10px] font-black uppercase tracking-widest transition-all relative z-10
+                  ${activeTab === t.id ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'}`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
+
 
           {/* TAB 1: Fuel request form with live validation */}
           {activeTab === 'request' && (

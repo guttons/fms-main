@@ -45,6 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     switch (user.role) {
       case UserRole.ITP_OPERATOR:
       case UserRole.ITP_HD_OPERATOR:
+      case UserRole.ITP_OFFICER:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
@@ -124,9 +125,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       case UserRole.ADMIN:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'executive', label: 'Executive Module', icon: ClipboardList },
-          { id: 'finance', label: 'Finance & Billing', icon: FileText },
-          { id: 'customer-portal', label: 'Customer Portal', icon: Plane },
           { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'history', label: 'Log History', icon: FileText },
@@ -141,6 +139,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
           { id: 'depot-reports', label: 'Fuel Reports', icon: ClipboardList },
           { id: 'commercial-reports', label: 'Commercial Reports', icon: FileText },
+          { id: 'executive', label: 'Executive Module', icon: ClipboardList },
+          { id: 'finance', label: 'Finance & Billing', icon: FileText },
+          { id: 'customer-portal', label: 'Customer Portal', icon: Plane },
         ];
       
       default:

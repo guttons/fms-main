@@ -332,7 +332,13 @@ export const Bridging: React.FC<BridgingProps> = ({ user }) => {
                       <div key={req.id} className="flex justify-between items-center bg-surface p-3.5 rounded-xl border border-outline/50 shadow-sm">
                         <div className="flex items-center space-x-3">
                           <Truck className="w-4 h-4 text-primary opacity-60" />
-                          <span className="text-[11px] font-bold text-on-surface">{req.message}</span>
+                          <div className="flex flex-col">
+                            <span className="text-[11px] font-bold text-on-surface">{req.message}</span>
+                            <span className="text-[9px] font-black text-on-surface-dim opacity-50 uppercase tracking-widest mt-1 flex items-center">
+                              <Clock className="w-3 h-3 mr-1" />
+                              Requested: {req.timestamp}
+                            </span>
+                          </div>
                         </div>
                         <button
                           type="button"
@@ -403,6 +409,22 @@ export const Bridging: React.FC<BridgingProps> = ({ user }) => {
                                 )}
                             </select>
                         </div>
+                        {(() => {
+                          const req = (alerts || []).find(a => 
+                            a && !a.acknowledged && 
+                            (a.message.toLowerCase().includes('replenish') || a.message.toLowerCase().includes('refuel')) &&
+                            a.message.includes(`unit ${formData.vehicleId}`)
+                          );
+                          if (req) {
+                            return (
+                              <div className="mt-2 text-[9px] font-black text-primary uppercase tracking-widest flex items-center bg-primary/5 px-3 py-1.5 rounded-lg border border-primary/10 animate-pulse">
+                                <Clock className="w-3.5 h-3.5 mr-1.5" />
+                                ITP Replenishment Request Sent At: {req.timestamp}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                     </div>
                     </div>
                     
@@ -635,6 +657,14 @@ export const Bridging: React.FC<BridgingProps> = ({ user }) => {
                                         </div>
                                         <div className="mt-4 flex justify-between items-center text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">
                                             <span>SRC: {tank?.name || '---'}</span>
+                                            {(() => {
+                                              const req = (alerts || []).find(a => 
+                                                a && 
+                                                (a.message.toLowerCase().includes('replenish') || a.message.toLowerCase().includes('refuel')) &&
+                                                a.message.includes(`unit ${log.vehicleId}`)
+                                              );
+                                              return req ? <span className="text-primary flex items-center"><Clock className="w-2.5 h-2.5 mr-1" />REQ: {req.timestamp}</span> : null;
+                                            })()}
                                             <span>OP: {log.operatorId}</span>
                                         </div>
                                     </div>

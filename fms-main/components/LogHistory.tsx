@@ -231,10 +231,12 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
              >
                 <Filter className="w-5 h-5" />
              </button>
-             <button className="flex items-center justify-center p-4 sm:px-8 sm:py-4 kinetic-gradient text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all">
-                <Download className="w-5 h-5 sm:w-4 sm:h-4 sm:mr-3" />
-                <span className="hidden sm:inline">EXPORT CSV</span>
-             </button>
+             {user && ![UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(user.role) && (
+               <button className="flex items-center justify-center p-4 sm:px-8 sm:py-4 kinetic-gradient text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all">
+                  <Download className="w-5 h-5 sm:w-4 sm:h-4 sm:mr-3" />
+                  <span className="hidden sm:inline">EXPORT CSV</span>
+               </button>
+             )}
         </div>
       </div>
 

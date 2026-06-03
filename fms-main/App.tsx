@@ -28,7 +28,7 @@ import { CustomerPortal } from './components/CustomerPortal';
 import { ExecutiveModule } from './components/ExecutiveModule';
 import { MOCK_USERS } from './constants';
 import { User, UserRole, FlightJob, Alert } from './types';
-import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, CheckCircle, Share2, Smartphone, Trash2 } from 'lucide-react';
+import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, CheckCircle, Share2, Smartphone, Trash2, Download } from 'lucide-react';
 import { updatePWAManifestAndTheme } from './utils/pwa';
 
 const App: React.FC = () => {
@@ -45,6 +45,7 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const scrollRef = React.useRef<HTMLElement>(null);
   const [pendingJob, setPendingJob] = useState<FlightJob | null>(null);
+  const [pendingVehicleId, setPendingVehicleId] = useState<string | null>(null);
 
   // Theme management
   useEffect(() => {
@@ -120,6 +121,8 @@ const App: React.FC = () => {
               scrollRef={scrollRef}
               pendingJob={pendingJob}
               setPendingJob={setPendingJob}
+              pendingVehicleId={pendingVehicleId}
+              setPendingVehicleId={setPendingVehicleId}
               showAlertsPanel={showAlertsPanel}
               setShowAlertsPanel={setShowAlertsPanel}
               isSettingsOpen={isSettingsOpen}
@@ -167,6 +170,7 @@ const LoginWrapper: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) 
 const AppContextContent: React.FC<any> = ({ 
   currentUser, activeView, setActiveView, isMobileMenuOpen, setIsMobileMenuOpen,
   isDarkMode, setIsDarkMode, showHeader, setShowHeader, scrollRef, pendingJob, setPendingJob,
+  pendingVehicleId, setPendingVehicleId,
   showAlertsPanel, setShowAlertsPanel, isSettingsOpen, setIsSettingsOpen, handleLogout
 }) => {
   const { alerts, acknowledgeAlert, acknowledgeAllAlerts, clearAllAlerts, equipment, flightJobs, refreshData } = useOperationalData();
@@ -215,8 +219,8 @@ const AppContextContent: React.FC<any> = ({
       if (a.targetRole === currentUser.role) return true;
       if ([UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(currentUser.role) && 
           a.targetRole && [UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(a.targetRole as UserRole)) return true;
-      if ([UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(currentUser.role) && 
-          a.targetRole && [UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(a.targetRole as UserRole)) return true;
+      if ([UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(currentUser.role) && 
+          a.targetRole && [UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(a.targetRole as UserRole)) return true;
       return !a.targetRole;
     });
 
@@ -348,12 +352,18 @@ const AppContextContent: React.FC<any> = ({
   const startYRef = React.useRef(0);
   const pullingRef = React.useRef(false);
 
+  // Stable state ref to avoid re-binding touch listeners on every touchmove step
+  const pullStateRef = React.useRef({ pullDistance, isRefreshing, refreshData });
+  useEffect(() => {
+    pullStateRef.current = { pullDistance, isRefreshing, refreshData };
+  }, [pullDistance, isRefreshing, refreshData]);
+
   useEffect(() => {
     const mainEl = mainElement;
     if (!mainEl) return;
 
     const handleTouchStart = (e: TouchEvent) => {
-      if (mainEl.scrollTop <= 0 && !isRefreshing) {
+      if (mainEl.scrollTop <= 5 && !pullStateRef.current.isRefreshing) {
         startYRef.current = e.touches[0].pageY;
         pullingRef.current = true;
       } else {
@@ -362,7 +372,7 @@ const AppContextContent: React.FC<any> = ({
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (!pullingRef.current || isRefreshing) return;
+      if (!pullingRef.current || pullStateRef.current.isRefreshing) return;
       const currentY = e.touches[0].pageY;
       const diff = currentY - startYRef.current;
       
@@ -377,14 +387,16 @@ const AppContextContent: React.FC<any> = ({
     };
 
     const handleTouchEnd = async () => {
-      if (!pullingRef.current || isRefreshing) return;
+      if (!pullingRef.current || pullStateRef.current.isRefreshing) return;
       pullingRef.current = false;
 
-      if (pullDistance >= 60) {
+      const currentPull = pullStateRef.current.pullDistance;
+
+      if (currentPull >= 60) {
         setIsRefreshing(true);
         setPullDistance(60);
         try {
-          await refreshData();
+          await pullStateRef.current.refreshData();
         } catch (err) {
           console.error(err);
         } finally {
@@ -407,7 +419,37 @@ const AppContextContent: React.FC<any> = ({
       mainEl.removeEventListener('touchmove', handleTouchMove);
       mainEl.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [mainElement, pullDistance, isRefreshing, refreshData]);
+  }, [mainElement]);
+
+  // --- Mobile Back Button Gesture Navigation Support ---
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (!e.state?.fmsActive) {
+        setIsMobileMenuOpen(false);
+        setShowAlertsPanel(false);
+        setIsSettingsOpen(false);
+        setShowIOSGuide(false);
+        setActiveView('dashboard');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [setIsMobileMenuOpen, setShowAlertsPanel, setIsSettingsOpen, setShowIOSGuide, setActiveView]);
+
+  useEffect(() => {
+    const hasOverlay = isMobileMenuOpen || showAlertsPanel || isSettingsOpen || showIOSGuide || activeView !== 'dashboard';
+    
+    if (hasOverlay) {
+      if (!window.history.state?.fmsActive) {
+        window.history.pushState({ fmsActive: true }, '');
+      }
+    } else {
+      if (window.history.state?.fmsActive) {
+        window.history.back();
+      }
+    }
+  }, [isMobileMenuOpen, showAlertsPanel, isSettingsOpen, showIOSGuide, activeView]);
 
   // Header scroll listener
   const lastScrollYRef = React.useRef(0);
@@ -464,9 +506,9 @@ const AppContextContent: React.FC<any> = ({
     // Depot role group: both DEPOT_MANAGER and DEPOT_OPERATOR see depot-targeted alerts
     if ([UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(currentUser.role) && 
         a.targetRole && [UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(a.targetRole as UserRole)) return true;
-    // ITP role group: ITP_MANAGER, ITP_OPERATOR, and ITP_HD_OPERATOR see each other's alerts
-    if ([UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(currentUser.role) && 
-        a.targetRole && [UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(a.targetRole as UserRole)) return true;
+    // ITP role group: ITP_MANAGER, ITP_OPERATOR, ITP_HD_OPERATOR, and ITP_OFFICER see each other's alerts
+    if ([UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(currentUser.role) && 
+        a.targetRole && [UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(a.targetRole as UserRole)) return true;
     return !a.targetRole;
   });
 
@@ -484,6 +526,10 @@ const AppContextContent: React.FC<any> = ({
               setPendingJob(job);
               setActiveView('intoplane');
             }}
+            onSelectEquipment={(eqId: string) => {
+              setPendingVehicleId(eqId);
+              setActiveView('intoplane');
+            }}
           />
         );
       case 'intoplane':
@@ -491,7 +537,9 @@ const AppContextContent: React.FC<any> = ({
           <IntoPlane 
             user={currentUser} 
             initialJob={pendingJob}
+            initialVehicleId={pendingVehicleId}
             onClearInitialJob={() => setPendingJob(null)}
+            onClearInitialVehicleId={() => setPendingVehicleId(null)}
           />
         );
       case 'forecasting':
@@ -526,7 +574,7 @@ const AppContextContent: React.FC<any> = ({
       case 'briefing':
         return <ShiftBriefing />;
       case 'admin':
-        return currentUser.role === UserRole.ADMIN ? <SystemAdmin currentUser={currentUser} /> : <Dashboard user={currentUser} setActiveView={setActiveView} onStartJob={() => {}} />;
+        return currentUser.role === UserRole.ADMIN ? <SystemAdmin currentUser={currentUser} /> : <Dashboard user={currentUser} setActiveView={setActiveView} onStartJob={() => {}} onSelectEquipment={(eqId: string) => { setPendingVehicleId(eqId); setActiveView('intoplane'); }} />;
       case 'depot-reports':
       case 'reports':
         if (currentUser?.role === UserRole.DEPOT_OPERATOR) {
@@ -547,7 +595,7 @@ const AppContextContent: React.FC<any> = ({
         }
         return <FuelReports user={currentUser} />;
       case 'commercial-reports':
-        if (currentUser?.role && [UserRole.DEPOT_OPERATOR, UserRole.DEPOT_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_MANAGER].includes(currentUser?.role)) {
+        if (currentUser?.role && [UserRole.DEPOT_OPERATOR, UserRole.DEPOT_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_MANAGER, UserRole.ITP_OFFICER].includes(currentUser?.role)) {
           return (
             <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-300">
               <div className="w-24 h-24 bg-error/10 rounded-[32px] flex items-center justify-center mb-6 border border-error/20 shadow-premium">
@@ -955,17 +1003,39 @@ const AppContextContent: React.FC<any> = ({
                                 </button>
                             </div>
 
-                            {/* Install status indicator (read-only, no install button) */}
-                            {isInstalled && (
-                              <div className="p-3 bg-success/5 rounded-2xl flex items-center space-x-3 border border-success/20">
-                                <div className="p-2 rounded-lg bg-success/10 text-success">
-                                  <CheckCircle className="w-4 h-4" />
+                            {/* Install FMS button if not installed */}
+                            {!isInstalled && (
+                              <button
+                                onClick={() => {
+                                  if (deferredPrompt) {
+                                    handleInstallApp();
+                                  } else {
+                                    notify(
+                                      isIOS
+                                        ? 'Tap the Share button in Safari and select "Add to Home Screen" to install.'
+                                        : 'To install FMS, click the Install icon in your browser address bar or menu.',
+                                      'info'
+                                    );
+                                    if (isIOS) {
+                                      setShowIOSGuide(true);
+                                    }
+                                  }
+                                }}
+                                className="w-full p-4 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 hover:border-primary/30 rounded-[32px] flex items-center justify-between transition-all active:scale-[0.98] group"
+                              >
+                                <div className="flex items-center space-x-3 text-left">
+                                  <div className="p-2.5 rounded-lg bg-primary/20 text-primary">
+                                    <Download className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <h4 className="text-[11px] font-black uppercase tracking-tight">Install FMS App</h4>
+                                    <p className="text-[9px] font-bold text-on-surface-dim opacity-60">Add to your home screen or desktop</p>
+                                  </div>
                                 </div>
-                                <div>
-                                  <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight">Installed</h4>
-                                  <p className="text-[9px] font-bold text-success opacity-70">Running as native app</p>
+                                <div className="text-[10px] font-black uppercase tracking-widest text-primary opacity-80 group-hover:translate-x-0.5 transition-transform">
+                                  Install &rarr;
                                 </div>
-                              </div>
+                              </button>
                             )}
 
                             {/* User Profile Summary */}

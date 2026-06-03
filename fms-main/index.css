@@ -153,6 +153,13 @@ html, body {
   transform: translateY(-1px);
 }
 
+.btn-replenish-hover:hover {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%) !important;
+  color: white !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 12px rgba(3, 105, 161, 0.25);
+}
+
 .pulse-critical {
   position: relative;
 }
@@ -243,9 +250,25 @@ html, body {
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-on-surface-dim); }
 
-/* Hide datalist arrows */
-input::-webkit-calendar-picker-indicator {
+/* Hide scrollbar but keep scrolling */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+
+/* Hide datalist arrows on non-date inputs only */
+input:not([type="date"]):not([type="datetime-local"]):not([type="month"]):not([type="time"]):not([type="week"])::-webkit-calendar-picker-indicator {
     display: none !important;
+}
+
+/* Ensure date picker calendar icon is always visible and clickable */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    display: block !important;
+    opacity: 0.6;
+    cursor: pointer;
+    filter: invert(0.5);
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
 }
 
 /* Animation Utils */

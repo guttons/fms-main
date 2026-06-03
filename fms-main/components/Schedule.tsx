@@ -569,7 +569,7 @@ export const Schedule: React.FC = () => {
                               <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Operator</label>
                               {renderOperatorSelect(eq.op1, (val) => handleAssignEquipment(eq.id, 1, val))}
                             </div>
-                            {type === 'Refueller' && (
+                            {type === 'Refueller' && equipmentShift !== 'DIESEL' && (
                               <div>
                                 <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Officer</label>
                                 {renderOperatorSelect(eq.op2, (val) => handleAssignEquipment(eq.id, 2, val))}

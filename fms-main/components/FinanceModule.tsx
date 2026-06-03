@@ -166,22 +166,36 @@ export const FinanceModule: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs Row */}
-      <div className="relative flex overflow-x-auto bg-surface-dim border border-outline p-1.5 rounded-[22px] scrollbar-hide">
-        <div 
-          className={`absolute top-1.5 bottom-1.5 w-[calc(20%-2.4px)] bg-surface-lowest border border-outline rounded-xl transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
-            ${activeTab === 'balances' ? 'translate-x-0' : 
-              activeTab === 'billing' ? 'translate-x-[100%]' : 
-              activeTab === 'variance' ? 'translate-x-[200%]' : 
-              activeTab === 'procurement' ? 'translate-x-[300%]' : 
-              'translate-x-[400%]'}`}
+      {/* Tabs Row — scrollable on mobile/tablet, evenly spread on desktop */}
+      <div className="bg-surface-dim p-1 rounded-2xl border border-outline relative flex w-full overflow-x-auto no-scrollbar shadow-inner">
+        {/* Sliding kinetic-gradient indicator — fixed widths for mobile, flex-1 tracking on lg */}
+        <div
+          className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
+            lg:hidden
+            ${activeTab === 'balances'    ? 'left-1 w-[140px] translate-x-0'       : ''}
+            ${activeTab === 'billing'     ? 'left-1 w-[140px] translate-x-[140px]'  : ''}
+            ${activeTab === 'variance'    ? 'left-1 w-[148px] translate-x-[280px]'  : ''}
+            ${activeTab === 'procurement' ? 'left-1 w-[168px] translate-x-[428px]'  : ''}
+            ${activeTab === 'reports'     ? 'left-1 w-[155px] translate-x-[596px]'  : ''}
+          `}
+        />
+        {/* Desktop indicator uses percentage-based 20% width since buttons are flex-1 equal */}
+        <div
+          className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
+            hidden lg:block w-[calc(20%-1.6px)]
+            ${activeTab === 'balances'    ? 'translate-x-0'    : ''}
+            ${activeTab === 'billing'     ? 'translate-x-[100%]' : ''}
+            ${activeTab === 'variance'    ? 'translate-x-[200%]' : ''}
+            ${activeTab === 'procurement' ? 'translate-x-[300%]' : ''}
+            ${activeTab === 'reports'     ? 'translate-x-[400%]' : ''}
+          `}
         />
         {[
-          { id: 'balances', label: 'Balances & SWIFTs', icon: DollarSign },
-          { id: 'billing', label: 'Invoicing & FIFO', icon: FileText },
-          { id: 'variance', label: 'Variance & COGS', icon: Scale },
-          { id: 'procurement', label: 'Duty & Procurement', icon: Layers },
-          { id: 'reports', label: 'Financial Reports', icon: FileSpreadsheet }
+          { id: 'balances',    label: 'Balances & SWIFTs',  icon: DollarSign,      w: 'w-[140px] lg:w-auto' },
+          { id: 'billing',     label: 'Invoicing & FIFO',    icon: FileText,        w: 'w-[140px] lg:w-auto' },
+          { id: 'variance',    label: 'Variance & COGS',     icon: Scale,           w: 'w-[148px] lg:w-auto' },
+          { id: 'procurement', label: 'Duty & Procurement',  icon: Layers,          w: 'w-[168px] lg:w-auto' },
+          { id: 'reports',     label: 'Financial Reports',   icon: FileSpreadsheet, w: 'w-[155px] lg:w-auto' },
         ].map(t => {
           const Icon = t.icon;
           const isActive = activeTab === t.id;
@@ -189,17 +203,17 @@ export const FinanceModule: React.FC = () => {
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id as any)}
-              className={`relative z-10 flex-1 flex items-center justify-center whitespace-nowrap gap-2.5 px-6 py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors duration-300
-                ${isActive 
-                  ? 'text-primary font-black' 
-                  : 'text-on-surface-dim hover:text-on-surface'}`}
+              className={`${t.w} flex-shrink-0 lg:flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[9px] font-black uppercase tracking-wider transition-all relative z-10 ${
+                isActive ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+              }`}
             >
-              <Icon className="w-4 h-4" />
-              {t.label}
+              <Icon className="w-3.5 h-3.5 shrink-0" />
+              <span className="leading-tight">{t.label}</span>
             </button>
           );
         })}
       </div>
+
 
       {/* Content Container */}
       <div className="grid grid-cols-1 gap-8">

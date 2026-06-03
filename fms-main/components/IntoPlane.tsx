@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FlightLog, User, FlightJob, Equipment, EquipmentStatus, UserRole } from '../types';
 import { MOCK_JOBS, MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, PIT_MAPPING } from '../constants';
-import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Lock, Calendar, X, CreditCard, Ban } from 'lucide-react';
+import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Lock, Calendar, X, CreditCard, Ban, Eye } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { equipmentBadgeClass, equipmentDotClass, getEquipmentHexColor } from '../utils/equipmentColors';
 import { useNotification } from '../context/NotificationContext';
@@ -13,6 +13,8 @@ interface IntoPlaneProps {
     user: User;
     initialJob?: FlightJob | null;
     onClearInitialJob?: () => void;
+    initialVehicleId?: string | null;
+    onClearInitialVehicleId?: () => void;
 }
 
 
@@ -144,14 +146,15 @@ const ScreenDashboard: React.FC<{
       eta: df.eta,
       std: df.std,
       assignedTo: df.assignedTeam === 'Team 1' ? user.id : 'u1',
+      assignedOfficer: undefined,
       status: df.status as any,
   }));
 
 
 
 
-  const filteredIntlJobs = filterMyTasks ? intlJobs.filter(j => j.assignedTo === user.id) : intlJobs;
-  const filteredDomesticJobs = filterMyTasks ? domesticJobs.filter(j => j.assignedTo === user.id) : domesticJobs;
+  const filteredIntlJobs = filterMyTasks ? intlJobs.filter(j => j.assignedTo === user.id || j.assignedOfficer === user.id) : intlJobs;
+  const filteredDomesticJobs = filterMyTasks ? domesticJobs.filter(j => j.assignedTo === user.id || j.assignedOfficer === user.id) : domesticJobs;
 
   const activeJobs = viewMode === 'INT' ? filteredIntlJobs : filteredDomesticJobs;
 
@@ -161,9 +164,12 @@ const ScreenDashboard: React.FC<{
   };
 
   const renderJobCard = (job: FlightJob) => {
-      const isAssignedToMe = job.assignedTo === user.id;
-      const assignee = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => u.id === job.assignedTo);
+      const isAssignedToMe = job.assignedTo === user.id || job.assignedOfficer === user.id;
+      const usersList = staff && staff.length > 0 ? staff : MOCK_USERS;
+      const assignee = usersList.find(u => u.id === job.assignedTo);
       const assigneeName = assignee?.name || 'Unassigned';
+      const officer = job.assignedOfficer ? usersList.find(u => u.id === job.assignedOfficer) : null;
+      const officerName = officer?.name || null;
       const delayed = isDelayed(job.sta, job.eta);
       
       const displayStatus = (delayed && job.status === 'PENDING') ? 'DELAYED' : job.status;
@@ -191,34 +197,35 @@ const ScreenDashboard: React.FC<{
                                <span className="opacity-60 whitespace-nowrap">{job.aircraftType}</span>
                                <span className="opacity-20 shrink-0">|</span>
                                <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black text-on-surface-dim border-transparent uppercase tracking-wider whitespace-nowrap">{job.aircraftReg}</span>
-                          </div>
-                      </div>
-                                         <div className="flex items-center gap-3 shrink-0">
+                           </div>
+                       </div>
+                       <div className="flex items-center gap-3 shrink-0">
                            {/* Indicators & Actions */}
                             {isAssignedToMe && (
                                <div className="flex items-center justify-center text-primary bg-primary/10 w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl border border-primary/20" title="My Task">
                                    <UserIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                                </div>
                            )}
-
-                           <button 
-                               onClick={() => {
-                                   if (job.status === 'COMPLETED') {
-                                       notify(`Log for ${job.flightNumber} is already finalized.`, "info");
-                                   } else if (isAssignedToMe) {
-                                       onStartJob(job);
-                                   }
-                               }}
-                               disabled={!isAssignedToMe && job.status !== 'COMPLETED'}
-                               className={`w-10 h-10 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm
-                                   ${job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/20' : 
-                                     isAssignedToMe ? 'kinetic-gradient text-white hover:scale-[1.05] active:scale-95 shadow-premium' : 'bg-surface-container-low text-on-surface-dim opacity-40 border-outline'}
-                               `}
-                               title={job.status === 'COMPLETED' ? 'View Log' : (!isAssignedToMe ? 'Locked' : 'Start Job')}
-                           >
-                               {job.status === 'COMPLETED' ? <ChevronRight className="w-6 h-6 sm:w-7 sm:h-7 stroke-[3]" /> : 
-                                (!isAssignedToMe ? <Lock className="w-5 h-5 sm:w-5 sm:h-5 stroke-[2.5]" /> : <Play className="w-[24px] h-[24px] sm:w-[28px] sm:h-[28px] flex-shrink-0 ml-0.5 sm:ml-1" fill="white" color="white" strokeWidth={2.5} />)}
-                           </button>
+                           {user.role === UserRole.ITP_OPERATOR ? null : (
+                               <button 
+                                   onClick={() => {
+                                       if (job.status === 'COMPLETED') {
+                                           notify(`Log for ${job.flightNumber} is already finalized.`, "info");
+                                       } else if (isAssignedToMe) {
+                                           onStartJob(job);
+                                       }
+                                   }}
+                                   disabled={!isAssignedToMe && job.status !== 'COMPLETED'}
+                                   className={`w-10 h-10 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm
+                                        ${job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/20' : 
+                                          isAssignedToMe ? 'kinetic-gradient text-white hover:scale-[1.05] active:scale-95 shadow-premium' : 'bg-surface-container-low text-on-surface-dim opacity-40 border-outline'}
+                                    `}
+                                   title={job.status === 'COMPLETED' ? 'View Log' : (!isAssignedToMe ? 'Locked' : 'Start Job')}
+                               >
+                                   {job.status === 'COMPLETED' ? <ChevronRight className="w-6 h-6 sm:w-7 sm:h-7 stroke-[3]" /> : 
+                                    (!isAssignedToMe ? <Lock className="w-5 h-5 sm:w-5 sm:h-5 stroke-[2.5]" /> : <Play className="w-[24px] h-[24px] sm:w-[28px] sm:h-[28px] flex-shrink-0 ml-0.5 sm:ml-1" fill="white" color="white" strokeWidth={2.5} />)}
+                               </button>
+                           )}
                       </div>
                   </div>
 
@@ -241,11 +248,21 @@ const ScreenDashboard: React.FC<{
 
                       {/* Row 2: Operator (Left) & Status (Right) */}
                       <div className="flex items-center justify-between gap-4">
-                          <div className="flex items-center text-on-surface-dim font-bold">
-                               <div className="w-5 h-5 rounded-md bg-surface-container-low border-transparent flex items-center justify-center mr-2 text-[10px] font-black">
-                                   {assigneeName.charAt(0)}
+                          <div className="flex items-center text-on-surface-dim font-bold gap-3 flex-wrap">
+                               <div className="flex items-center">
+                                   <div className="w-5 h-5 rounded-md bg-surface-container-low border-transparent flex items-center justify-center mr-2 text-[10px] font-black">
+                                       {assigneeName.charAt(0)}
+                                   </div>
+                                   <span className="text-[10px] uppercase tracking-tight">{assigneeName} <span className="opacity-40 italic font-black text-[8px] ml-0.5">(OP)</span></span>
                                </div>
-                               <span className="text-[10px] uppercase tracking-tight">{assigneeName}</span>
+                               {officerName && (
+                                   <div className="flex items-center">
+                                       <div className="w-5 h-5 rounded-md bg-surface-container-low border-transparent flex items-center justify-center mr-2 text-[10px] font-black text-primary bg-primary/5">
+                                           {officerName.charAt(0)}
+                                       </div>
+                                       <span className="text-[10px] uppercase tracking-tight text-on-surface-dim">{officerName} <span className="opacity-40 italic font-black text-[8px] ml-0.5">(OFFICER)</span></span>
+                                   </div>
+                               )}
                           </div>
                           
                           <span className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border shrink-0 ${
@@ -322,8 +339,9 @@ const ScreenTimestamps: React.FC<{
   onTimestamp: (field: keyof FlightLog) => void, 
   onInputChange: (field: keyof FlightLog, value: any) => void,
   onNext: () => void, 
-  onBack: () => void 
-}> = ({ activeFlight, onTimestamp, onInputChange, onNext, onBack }) => (
+  onBack: () => void,
+  user: User
+}> = ({ activeFlight, onTimestamp, onInputChange, onNext, onBack, user }) => (
   <div className="p-5 flex flex-col h-full min-h-[calc(100vh-140px)] pb-32">
       <button onClick={onBack} className="flex items-center text-on-surface-dim hover:text-primary mb-6 font-black text-[11px] uppercase tracking-widest transition-colors">
           <ChevronLeft className="w-4 h-4 mr-2" /> Back to Schedule
@@ -339,6 +357,7 @@ const ScreenTimestamps: React.FC<{
                   <input
                       type="date"
                       required
+                      disabled={user.role === UserRole.ITP_OPERATOR}
                       value={activeFlight?.operationalDate || new Date().toISOString().split('T')[0]}
                       onChange={(e) => onInputChange('operationalDate' as any, e.target.value)}
                       onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
@@ -354,6 +373,7 @@ const ScreenTimestamps: React.FC<{
                   <input 
                       type="text" 
                       maxLength={6}
+                      disabled={user.role === UserRole.ITP_OPERATOR}
                       inputMode="numeric"
                       pattern="[0-9]*"
                       className="flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-error placeholder:text-error/20"
@@ -375,6 +395,7 @@ const ScreenTimestamps: React.FC<{
                         <span className="text-2xl sm:text-3xl font-mono font-black text-primary opacity-30 shrink-0">J</span>
                         <input 
                             type="text" 
+                            disabled={user.role === UserRole.ITP_OPERATOR}
                             className="flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-primary placeholder:text-primary/10 uppercase"
                             placeholder="000-0"
                             value={activeFlight?.pitNumber?.startsWith('J') ? activeFlight.pitNumber.substring(1) : (activeFlight?.pitNumber || '')}
@@ -390,7 +411,7 @@ const ScreenTimestamps: React.FC<{
                             ))}
                         </datalist>
                     </div>
-                    {activeFlight.stand && (
+                    {activeFlight.stand && user.role !== UserRole.ITP_OPERATOR && (
                         <div className="flex flex-wrap gap-2 pt-2">
                             {PIT_MAPPING.filter(m => m.stand === activeFlight.stand).map((m, idx) => (
                                 <button 
@@ -408,11 +429,13 @@ const ScreenTimestamps: React.FC<{
           )}
           <button 
               onClick={() => onTimestamp('timestampArrived')}
-              disabled={false}
+              disabled={user.role === UserRole.ITP_OPERATOR}
               className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                   ${activeFlight?.timestampArrived 
                       ? 'bg-success/5 border-success text-on-surface' 
-                      : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
+                      : user.role === UserRole.ITP_OPERATOR
+                          ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
+                          : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
               `}
           >
               <div className="relative z-10">
@@ -433,11 +456,11 @@ const ScreenTimestamps: React.FC<{
 
           <button 
               onClick={() => onTimestamp('timestampPosition')}
-              disabled={!activeFlight?.timestampArrived}
+              disabled={!activeFlight?.timestampArrived || user.role === UserRole.ITP_OPERATOR}
               className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                   ${activeFlight?.timestampPosition 
                       ? 'bg-success/5 border-success text-on-surface' 
-                      : !activeFlight?.timestampArrived
+                      : (!activeFlight?.timestampArrived || user.role === UserRole.ITP_OPERATOR)
                           ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
                           : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
               `}
@@ -462,7 +485,7 @@ const ScreenTimestamps: React.FC<{
               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Operation Gamma: Opening Totalizer</label>
               <input 
                   type="text" 
-                  disabled={!activeFlight?.timestampPosition || !!activeFlight?.timestampStart}
+                  disabled={!activeFlight?.timestampPosition || !!activeFlight?.timestampStart || user.role === UserRole.ITP_OPERATOR}
                   inputMode="numeric"
                   pattern="[0-9]*"
                   className="w-full text-4xl sm:text-6xl font-mono font-black py-4 bg-transparent outline-none border-b-4 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-10 disabled:opacity-20"
@@ -479,11 +502,11 @@ const ScreenTimestamps: React.FC<{
 
           <button 
               onClick={() => onTimestamp('timestampStart')}
-              disabled={!activeFlight?.timestampPosition || activeFlight?.meterOpen === undefined}
+              disabled={!activeFlight?.timestampPosition || activeFlight?.meterOpen === undefined || user.role === UserRole.ITP_OPERATOR}
               className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                   ${activeFlight?.timestampStart 
                       ? 'bg-success/5 border-success text-on-surface' 
-                      : (!activeFlight?.timestampPosition || !activeFlight?.meterOpen)
+                      : (!activeFlight?.timestampPosition || !activeFlight?.meterOpen || user.role === UserRole.ITP_OPERATOR)
                           ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
                           : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
               `}
@@ -507,7 +530,7 @@ const ScreenTimestamps: React.FC<{
 
       <button 
           onClick={onNext}
-          disabled={!activeFlight?.timestampStart || activeFlight?.deliveryNumber?.replace('MLE-', '').length !== 6}
+          disabled={user.role !== UserRole.ITP_OPERATOR && (!activeFlight?.timestampStart || activeFlight?.deliveryNumber?.replace('MLE-', '').length !== 6)}
           className="mt-8 w-full kinetic-gradient text-white p-4 lg:p-6 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-40 disabled:grayscale active:scale-95 transition-all shadow-premium"
       >
           Proceed to Metering <ChevronRight className="ml-3 w-5 h-5" />
@@ -522,8 +545,9 @@ const ScreenMetering: React.FC<{
   onNext: () => void, 
   onBack: () => void,
   showTopUp: boolean,
-  setShowTopUp: (val: boolean) => void
-}> = ({ activeFlight, onTimestamp, onInputChange, onNext, onBack, showTopUp, setShowTopUp }) => (
+  setShowTopUp: (val: boolean) => void,
+  user: User
+}> = ({ activeFlight, onTimestamp, onInputChange, onNext, onBack, showTopUp, setShowTopUp, user }) => (
   <div className="p-5 flex flex-col h-full min-h-[calc(100vh-140px)] pb-32">
        <button onClick={onBack} className="flex items-center text-on-surface-dim hover:text-primary mb-6 font-black text-[11px] uppercase tracking-widest transition-colors">
           <ChevronLeft className="w-4 h-4 mr-2" /> Back to Timestamps
@@ -537,7 +561,8 @@ const ScreenMetering: React.FC<{
                   type="text" 
                   inputMode="numeric"
                   pattern="[0-9]*"
-                  className="w-full text-4xl sm:text-6xl font-mono font-black py-4 bg-transparent outline-none border-b-4 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-10"
+                  disabled={user.role === UserRole.ITP_OPERATOR}
+                  className="w-full text-4xl sm:text-6xl font-mono font-black py-4 bg-transparent outline-none border-b-4 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-10 disabled:opacity-50"
                   placeholder="000,000"
                   value={activeFlight?.meterOpen !== undefined ? activeFlight.meterOpen.toLocaleString() : ''}
                   onChange={(e) => {
@@ -551,11 +576,13 @@ const ScreenMetering: React.FC<{
 
           <button 
               onClick={() => onTimestamp('timestampInitialEnd')}
-              disabled={activeFlight?.meterOpen === undefined}
+              disabled={activeFlight?.meterOpen === undefined || user.role === UserRole.ITP_OPERATOR}
               className={`w-full p-6 rounded-2xl border-2 font-black text-[11px] uppercase tracking-widest flex items-center justify-center transition-all
                   ${activeFlight?.timestampInitialEnd 
                       ? 'bg-success/5 border-success text-success' 
-                      : 'bg-surface-container-lowest-container border-outline text-on-surface hover:border-primary active:scale-95'}`}
+                      : (activeFlight?.meterOpen === undefined || user.role === UserRole.ITP_OPERATOR)
+                          ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed text-on-surface-dim'
+                          : 'bg-surface-container-lowest-container border-outline text-on-surface hover:border-primary active:scale-95'}`}
           >
               <Pause className="w-5 h-5 mr-3" />
               {activeFlight?.timestampInitialEnd ? `Initial End: ${new Date(activeFlight.timestampInitialEnd).toLocaleTimeString([], { hour12: false })}` : 'Log Initial End'}
@@ -568,7 +595,8 @@ const ScreenMetering: React.FC<{
                        type="text" 
                        inputMode="numeric"
                        pattern="[0-9]*"
-                       className="w-full px-6 lg:px-10 py-4 lg:py-6 bg-surface-lowest border border-outline/50 rounded-[24px] lg:rounded-[32px] text-4xl sm:text-6xl font-[900] text-primary tracking-tighter text-center outline-none focus:border-primary transition-all font-mono"
+                       disabled={user.role === UserRole.ITP_OPERATOR}
+                       className="w-full px-6 lg:px-10 py-4 lg:py-6 bg-surface-lowest border border-outline/50 rounded-[24px] lg:rounded-[32px] text-4xl sm:text-6xl font-[900] text-primary tracking-tighter text-center outline-none focus:border-primary transition-all font-mono disabled:opacity-50"
                        placeholder="0,000"
                        value={activeFlight?.volume ? activeFlight.volume.toLocaleString() : ''}
                        onChange={(e) => {
@@ -591,15 +619,27 @@ const ScreenMetering: React.FC<{
        </div>
 
           <div className="border-t border-outline pt-6">
-               <button onClick={() => setShowTopUp(!showTopUp)} className="text-primary font-black text-[11px] uppercase tracking-widest flex items-center hover:scale-105 transition-transform">
+               <button 
+                   onClick={() => { if (user.role !== UserRole.ITP_OPERATOR) setShowTopUp(!showTopUp); }} 
+                   disabled={user.role === UserRole.ITP_OPERATOR}
+                   className="text-primary font-black text-[11px] uppercase tracking-widest flex items-center hover:scale-105 transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
+               >
                    {showTopUp ? '- Strike Top-Up Data' : '+ Register Top-Up Event'}
                </button>
                {showTopUp && (
                    <div className="grid grid-cols-2 gap-4 mt-6 animate-in fade-in slide-in-from-top-4 duration-400">
-                       <button onClick={() => onTimestamp('timestampFinalStart')} className={`p-4 rounded-xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${activeFlight?.timestampFinalStart ? 'bg-success/5 border-success text-success' : 'bg-surface-container-low border-outline text-on-surface-dim hover:text-on-surface'}`}>
+                       <button 
+                           onClick={() => { if (user.role !== UserRole.ITP_OPERATOR) onTimestamp('timestampFinalStart'); }} 
+                           disabled={user.role === UserRole.ITP_OPERATOR}
+                           className={`p-4 rounded-xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${activeFlight?.timestampFinalStart ? 'bg-success/5 border-success text-success' : 'bg-surface-container-low border-outline text-on-surface-dim hover:text-on-surface disabled:opacity-40 disabled:cursor-not-allowed'}`}
+                       >
                            {activeFlight?.timestampFinalStart ? 'Started' : 'Final Start'}
                        </button>
-                       <button onClick={() => onTimestamp('timestampFinalEnd')} className={`p-4 rounded-xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${activeFlight?.timestampFinalEnd ? 'bg-success/5 border-success text-success' : 'bg-surface-container-low border-outline text-on-surface-dim hover:text-on-surface'}`}>
+                       <button 
+                           onClick={() => { if (user.role !== UserRole.ITP_OPERATOR) onTimestamp('timestampFinalEnd'); }} 
+                           disabled={user.role === UserRole.ITP_OPERATOR}
+                           className={`p-4 rounded-xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${activeFlight?.timestampFinalEnd ? 'bg-success/5 border-success text-success' : 'bg-surface-container-low border-outline text-on-surface-dim hover:text-on-surface disabled:opacity-40 disabled:cursor-not-allowed'}`}
+                       >
                            {activeFlight?.timestampFinalEnd ? 'Ended' : 'Final End'}
                        </button>
                    </div>
@@ -609,9 +649,9 @@ const ScreenMetering: React.FC<{
        <div className="mt-auto pt-10">
            <button 
               onClick={onNext}
-              disabled={!activeFlight?.volume || activeFlight.volume <= 0}
+              disabled={user.role !== UserRole.ITP_OPERATOR && (!activeFlight?.volume || activeFlight.volume <= 0)}
               className="w-full kinetic-gradient p-4 lg:p-6 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-40 disabled:grayscale shadow-premium active:scale-95 transition-all"
-          >
+           >
               Final Compliance <ChevronRight className="ml-3 w-5 h-5" />
           </button>
        </div>
@@ -623,8 +663,10 @@ const ScreenQC: React.FC<{
   onInputChange: (field: keyof FlightLog, value: any) => void, 
   onSubmit: () => void, 
   onBack: () => void,
-  loading: boolean
-}> = ({ activeFlight, onInputChange, onSubmit, onBack, loading }) => (
+  onClose: () => void,
+  loading: boolean,
+  user: User
+}> = ({ activeFlight, onInputChange, onSubmit, onBack, onClose, loading, user }) => (
   <div className="p-5 flex flex-col h-full min-h-[calc(100vh-140px)] pb-32">
        <button onClick={onBack} className="flex items-center text-on-surface-dim hover:text-primary mb-6 font-black text-[11px] uppercase tracking-widest transition-colors">
           <ChevronLeft className="w-4 h-4 mr-2" /> Back to Metering
@@ -641,7 +683,8 @@ const ScreenQC: React.FC<{
                       type="checkbox" 
                       checked={!!activeFlight?.[check as keyof FlightLog]} 
                       onChange={(e) => onInputChange(check as keyof FlightLog, e.target.checked)}
-                      className="!w-5 !h-5 text-primary rounded-lg focus:ring-0 border-outline bg-surface-container-lowest transition-all"
+                      disabled={user.role === UserRole.ITP_OPERATOR}
+                      className="!w-5 !h-5 text-primary rounded-lg focus:ring-0 border-outline bg-surface-container-lowest transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   />
               </label>
           ))}
@@ -649,10 +692,11 @@ const ScreenQC: React.FC<{
           <div className="pt-6">
               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Task Remarks & Feedback</label>
               <textarea 
-                  className="w-full bg-surface-container-low border-2 border-outline rounded-2xl p-5 text-sm font-bold text-on-surface outline-none focus:border-primary transition-all min-h-[120px] placeholder:opacity-20"
-                  placeholder="Enter any operational remarks, delays, or equipment issues..."
+                  className="w-full bg-surface-container-low border-2 border-outline rounded-2xl p-5 text-sm font-bold text-on-surface outline-none focus:border-primary transition-all min-h-[120px] placeholder:opacity-20 disabled:opacity-50"
+                  placeholder={user.role === UserRole.ITP_OPERATOR ? 'No remarks' : 'Enter any operational remarks, delays, or equipment issues...'}
                   value={activeFlight?.remarks || ''}
                   onChange={(e) => onInputChange('remarks', e.target.value)}
+                  disabled={user.role === UserRole.ITP_OPERATOR}
               />
           </div>
        </div>
@@ -663,23 +707,32 @@ const ScreenQC: React.FC<{
                <p className="text-[11px] font-bold text-on-surface opacity-60 leading-relaxed uppercase tracking-widest">Digital certification required. By committing, you verify JIG compliance and manual safety checks are complete.</p>
            </div>
            
-           <button 
-              onClick={onSubmit}
-              disabled={loading || !activeFlight?.panelCheck || !activeFlight?.walkAroundCheck || !activeFlight?.appearanceCheck || !activeFlight?.waterCheck}
-              className="w-full kinetic-gradient p-5 lg:p-7 rounded-3xl font-[900] text-[14px] lg:text-[15px] uppercase tracking-[0.3em] flex items-center justify-center shadow-premium hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 disabled:grayscale"
-           >
-              {loading ? 'ENCRYPTING & SYNCING...' : (
-                  <>
-                      <Save className="w-5 h-5 lg:w-6 lg:h-6 mr-4" />
-                      AUTHORIZE TASK COMPLETE
-                  </>
-              )}
-           </button>
+           {user.role === UserRole.ITP_OPERATOR ? (
+              <button 
+                 onClick={onClose}
+                 className="w-full bg-surface-lowest text-on-surface-dim border border-outline font-[900] text-[14px] lg:text-[15px] uppercase tracking-[0.3em] flex items-center justify-center p-5 lg:p-7 rounded-3xl shadow-premium hover:bg-surface-container hover:text-primary transition-all active:scale-95"
+              >
+                 CLOSE VIEW
+              </button>
+            ) : (
+              <button 
+                 onClick={onSubmit}
+                 disabled={loading || !activeFlight?.panelCheck || !activeFlight?.walkAroundCheck || !activeFlight?.appearanceCheck || !activeFlight?.waterCheck}
+                 className="w-full kinetic-gradient p-5 lg:p-7 rounded-3xl font-[900] text-[14px] lg:text-[15px] uppercase tracking-[0.3em] flex items-center justify-center shadow-premium hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 disabled:grayscale"
+              >
+                 {loading ? 'ENCRYPTING & SYNCING...' : (
+                     <>
+                         <Save className="w-5 h-5 lg:w-6 lg:h-6 mr-4" />
+                         AUTHORIZE TASK COMPLETE
+                     </>
+                 )}
+              </button>
+            )}
        </div>
   </div>
 );
 
-export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob }) => {
+export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob, initialVehicleId, onClearInitialVehicleId }) => {
   const { notify } = useNotification();
   const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
@@ -763,6 +816,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>(() => {
     if (initialJob?.vehicleId) return initialJob.vehicleId;
+    if (initialVehicleId) return initialVehicleId;
     const available = equipment.find(eq => eq.status === EquipmentStatus.AVAILABLE);
     return available ? available.id : 'RF-04';
   });
@@ -775,6 +829,13 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       setSelectedVehicleId(initialJob.vehicleId);
     }
   }, [initialJob]);
+
+  useEffect(() => {
+    if (initialVehicleId) {
+      setSelectedVehicleId(initialVehicleId);
+      if (onClearInitialVehicleId) onClearInitialVehicleId();
+    }
+  }, [initialVehicleId]);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -791,7 +852,9 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
   const startJob = (job: FlightJob) => {
     // Auto-update Equipment Status to IN_PROGRESS/IN_USE
-    updateEquipmentStatus(selectedVehicleId, EquipmentStatus.IN_USE);
+    if (user.role !== UserRole.ITP_OPERATOR) {
+      updateEquipmentStatus(selectedVehicleId, EquipmentStatus.IN_USE);
+    }
 
     // Fetch last meterClose for this vehicle
     const vehicleLogs = (flightLogs || []).filter(log => log.vehicleId === selectedVehicleId && log.status === 'COMPLETED');
@@ -881,7 +944,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
   const handleBackToDashboard = () => {
     // If a job was started, release the equipment
-    if (activeFlight && selectedVehicleId) {
+    if (activeFlight && selectedVehicleId && user.role !== UserRole.ITP_OPERATOR) {
       updateEquipmentStatus(selectedVehicleId, EquipmentStatus.AVAILABLE);
     }
     setActiveFlight(null);
@@ -1096,6 +1159,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 onInputChange={handleInputChange}
                 onNext={() => setCurrentScreen('metering')}
                 onBack={handleBackToDashboard}
+                user={user}
               />
             )}
             {currentScreen === 'metering' && (
@@ -1107,6 +1171,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 onBack={() => setCurrentScreen('timestamps')}
                 showTopUp={showTopUp}
                 setShowTopUp={setShowTopUp}
+                user={user}
               />
             )}
             {currentScreen === 'qc' && (
@@ -1115,7 +1180,9 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 onInputChange={handleInputChange}
                 onSubmit={handleSubmit}
                 onBack={() => setCurrentScreen('metering')}
+                onClose={handleBackToDashboard}
                 loading={loading}
+                user={user}
               />
             )}
         </div>

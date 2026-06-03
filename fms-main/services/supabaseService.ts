@@ -520,6 +520,14 @@ export const supabaseService = {
     }
   },
 
+  async deleteAlerts(ids: string[]): Promise<void> {
+    const { error } = await supabase.from('alerts').delete().in('id', ids);
+    if (error) {
+      console.error('[Supabase] deleteAlerts failed:', error);
+      throw error;
+    }
+  },
+
   async createAlert(alert: Omit<Alert, 'id'>): Promise<void> {
     const row = {
       severity: alert.severity,

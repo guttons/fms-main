@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import { MOCK_ALERTS, MOCK_USERS, MOCK_JOBS, MOCK_DOMESTIC_FLIGHTS } from '../constants';
 import { FuelType, Tank, User, UserRole, FlightJob, Equipment, EquipmentStatus as EqStatus, EquipmentType } from '../types';
-import { AlertTriangle, TrendingDown, TrendingUp, Activity, Droplet, Users, Clock, Plane, LayoutDashboard, MapPin, CheckCircle, Truck, Play, Thermometer, CloudSun, Wind, RefreshCw, Send, Globe, Anchor, ShoppingBag, Database } from 'lucide-react';
+import { AlertTriangle, AlertOctagon, TrendingDown, TrendingUp, Activity, Droplet, Users, Clock, Plane, LayoutDashboard, MapPin, CheckCircle, Truck, Play, Thermometer, CloudSun, Wind, RefreshCw, Send, Globe, Anchor, ShoppingBag, Database, Eye, ChevronRight, ChevronDown } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { useNotification } from '../context/NotificationContext';
@@ -54,21 +54,23 @@ interface DashboardProps {
   user: User;
   setActiveView: (view: string) => void;
   onStartJob?: (job: FlightJob) => void;
+  onSelectEquipment?: (eqId: string) => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onStartJob }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onStartJob, onSelectEquipment }) => {
   const { tanks = [], equipment = [], briefingInfo, flightJobs = [], domesticFlights = [], alerts = [], createAlert, acknowledgeAlert, staff = [], updateEquipmentStatus } = useOperationalData();
   const { notify } = useNotification();
   // Logic to determine initial view and if switching is allowed
 
   // Logic to determine initial view and if switching is allowed
   const isItpManager = user?.role === UserRole.ITP_MANAGER;
-  const isItpOperator = user ? [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(user.role) : false;
+  const isItpOperator = user ? [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(user.role) : false;
   const isDualRole = user ? [UserRole.ADMIN, UserRole.EXECUTIVE].includes(user.role) : false;
   const isDepotRole = user ? [UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(user.role) : false;
   
   const [viewMode, setViewMode] = useState<'ITP' | 'DEPOT'>(isDepotRole ? 'DEPOT' : 'ITP');
   const [pendingRequests, setPendingRequests] = useState<Set<string>>(new Set());
+  const [isAssetsCollapsed, setIsAssetsCollapsed] = useState(false);
 
   const userAlerts = (alerts || []).filter(a => {
     if (!user) return false;
@@ -85,6 +87,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
   const [allEquipmentAssignments, setAllEquipmentAssignments] = useState<any[]>([]);
   const [allDomesticAssignments, setAllDomesticAssignments] = useState<any[]>([]);
   const [rotationIndex, setRotationIndex] = useState(0);
+
+  const [completedAllocationIds, setCompletedAllocationIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(`fms_completed_allocations_${user?.id || ''}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch (_) {
+      return [];
+    }
+  });
+
+  const handleCompleteAllocation = (id: string) => {
+    const updated = [...completedAllocationIds, id];
+    setCompletedAllocationIds(updated);
+    try {
+      localStorage.setItem(`fms_completed_allocations_${user?.id || ''}`, JSON.stringify(updated));
+    } catch (e) {
+      console.error("Failed to save completed allocation", e);
+    }
+    notify("Shift allocation marked as completed.", "success");
+  };
 
   // Rotation timer for dashboard cards (5 categories for Uplift)
   useEffect(() => {
@@ -152,13 +174,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
     { name: 'Ullage (Empty)', value: maxJetA1 - totalJetA1 },
   ];
 
-  const operators = (staff && staff.length > 0 ? staff : MOCK_USERS).filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(u.role));
+  const operators = (staff && staff.length > 0 ? staff : MOCK_USERS).filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(u.role));
 
   // --- Sub-Component: Operator Dashboard (My Tasks) ---
   const renderOperatorDashboard = () => {
-    // STRICT filtering for RBAC: Only show jobs assigned to current user
+    // STRICT filtering for RBAC: Only show jobs assigned to current user (operator or officer)
     const myTasks = flightJobs
-      .filter((job: FlightJob) => job.assignedTo === user.id)
+      .filter((job: FlightJob) => job.assignedTo === user.id || job.assignedOfficer === user.id)
       .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
 
 
@@ -168,8 +190,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
           .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''))
       : [];
 
+    const visibleEquipment = myEquipment 
+      ? myEquipment.filter((eq: any) => !completedAllocationIds.includes(eq.id)) 
+      : [];
     
-    const hasAnyTasks = myTasks.length > 0 || myDomesticTeam || myEquipment;
+    const hasAnyTasks = myTasks.length > 0 || myDomesticTeam || visibleEquipment.length > 0;
 
     return (
       <div className="space-y-4 lg:space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-4xl mx-auto p-4 lg:p-0">
@@ -189,14 +214,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
         {/* Modern Stats Panel */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4">
-            <div className="card-premium p-4 lg:p-6 border-outline flex flex-col justify-center items-center text-center group hover:bg-primary/5 transition-colors">
+            <div className="hidden sm:flex card-premium p-4 lg:p-6 border-outline flex-col justify-center items-center text-center group hover:bg-primary/5 transition-colors">
                 <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">Avg Refuel Time</span>
                 <div className="flex items-baseline space-x-1">
                     <span className="text-2xl font-black text-on-surface">18</span>
                     <span className="text-xs font-bold text-primary italic">MIN</span>
                 </div>
             </div>
-            <div className="card-premium p-6 border-outline flex flex-col justify-center items-center text-center group hover:bg-success/5 transition-colors">
+            <div className="hidden sm:flex card-premium p-6 border-outline flex-col justify-center items-center text-center group hover:bg-success/5 transition-colors">
                 <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">Shift Progress</span>
                 <div className="w-full h-1.5 bg-outline rounded-full mt-2 overflow-hidden">
                     <div className="bg-success h-full w-[65%]" />
@@ -206,14 +231,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
             
             {/* Rotating Weather/Wind Card */}
             <div className="card-premium p-6 border-outline flex flex-col justify-center items-center text-center group hover:bg-warning/5 transition-all duration-500 overflow-hidden relative">
-                <div className={`transition-all duration-500 transform ${rotationIndex === 0 ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 absolute'}`}>
+                <div className={`transition-all duration-500 transform ${rotationIndex % 2 === 0 ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 absolute'}`}>
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">Wind Velocity</span>
                   <div className="flex items-baseline space-x-1">
                       <span className="text-2xl font-black text-on-surface">08</span>
                       <span className="text-xs font-bold text-warning italic">KTS</span>
                   </div>
                 </div>
-                <div className={`transition-all duration-500 transform ${rotationIndex === 1 ? 'translate-y-0 opacity-100' : '-translate-y-12 opacity-0 absolute'}`}>
+                <div className={`transition-all duration-500 transform ${rotationIndex % 2 === 1 ? 'translate-y-0 opacity-100' : '-translate-y-12 opacity-0 absolute'}`}>
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">Weather</span>
                   <div className="flex items-center space-x-2">
                       <CloudSun className="w-5 h-5 text-warning" />
@@ -224,14 +249,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
             {/* Rotating Tank/Density Card */}
             <div className="card-premium p-6 border-outline flex flex-col justify-center items-center text-center group hover:bg-primary/5 transition-all duration-500 overflow-hidden relative">
-                <div className={`transition-all duration-500 transform ${rotationIndex === 0 ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 absolute'}`}>
+                <div className={`transition-all duration-500 transform ${rotationIndex % 2 === 0 ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 absolute'}`}>
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">Service Tank</span>
                   <div className="flex items-center space-x-2">
                       <Droplet className="w-4 h-4 text-primary" />
                       <span className="text-sm font-black text-on-surface uppercase tracking-tight">TK-101 (NFF)</span>
                   </div>
                 </div>
-                <div className={`transition-all duration-500 transform ${rotationIndex === 1 ? 'translate-y-0 opacity-100' : '-translate-y-12 opacity-0 absolute'}`}>
+                <div className={`transition-all duration-500 transform ${rotationIndex % 2 === 1 ? 'translate-y-0 opacity-100' : '-translate-y-12 opacity-0 absolute'}`}>
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">Density</span>
                   <div className="flex items-center space-x-2">
                       <Activity className="w-4 h-4 text-success" />
@@ -243,21 +268,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
         {/* Available Equipment Section - categorized RF / HD */}
         {equipment && equipment.length > 0 && (() => {
-          const available = equipment.filter(eq => eq.status === EqStatus.AVAILABLE);
+          const available = equipment.filter(eq => eq.status === EqStatus.AVAILABLE && (eq.id.startsWith('RF') || eq.id.startsWith('HD')));
           const rfUnits = available.filter(eq => eq.id.startsWith('RF'));
           const hdUnits = available.filter(eq => eq.id.startsWith('HD'));
 
           return (
             <div className="space-y-5">
               {/* Header */}
-              <div className="flex items-center px-1">
-                <h3 className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.3em]">Available Assets</h3>
+              <div 
+                className="flex items-center px-1 cursor-pointer select-none group/assets-header"
+                onClick={() => setIsAssetsCollapsed(!isAssetsCollapsed)}
+              >
+                <h3 className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.3em] flex items-center group-hover/assets-header:text-primary transition-colors">
+                  Available Assets
+                  <span className="ml-2 opacity-60">
+                    {isAssetsCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </span>
+                </h3>
                 <span className="w-8 h-[1px] bg-outline flex-1 mx-4"></span>
                 <span className="text-[10px] font-black text-success uppercase tracking-widest">{available.length} Standby</span>
               </div>
 
               {/* Refuellers */}
-              {rfUnits.length > 0 && (
+              {!isAssetsCollapsed && rfUnits.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.25em] opacity-50 px-1 flex items-center">
                     <span className="w-4 h-[1px] bg-primary/40 mr-2"></span>
@@ -265,13 +298,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {rfUnits.map((eq) => (
-                      <div key={eq.id} className="bg-surface-dim border border-white/10 p-4 lg:p-5 rounded-2xl flex items-center space-x-3 group hover:border-primary/50 transition-all cursor-pointer shadow-premium hover:shadow-glow">
-                        <div className="p-2 bg-primary/10 rounded-lg group-hover:scale-110 transition-transform">
-                          <Truck className="w-4 h-4 text-primary" />
+                      <div key={eq.id} onClick={() => onSelectEquipment?.(eq.id)} className="bg-surface-dim border border-white/10 p-4 lg:p-5 rounded-2xl flex items-center justify-between group hover:border-primary/50 transition-all cursor-pointer shadow-premium hover:shadow-glow">
+                        <div className="flex items-center space-x-3 min-w-0 flex-1">
+                          <div className="p-2 bg-primary/10 rounded-lg group-hover:scale-110 transition-transform flex-shrink-0">
+                            <Truck className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-[900] text-on-surface tracking-tighter truncate">{eq.name}</p>
+                            <p className="text-[8px] font-black text-success opacity-60 uppercase tracking-widest">Available</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-[11px] font-[900] text-on-surface tracking-tighter">{eq.name}</p>
-                          <p className="text-[8px] font-black text-success opacity-60 uppercase tracking-widest">Available</p>
+                        <div className="text-right flex-shrink-0 ml-3">
+                          <span className="text-[11px] font-black text-primary font-mono">{eq.currentVolume?.toLocaleString() || '0'} L</span>
+                          <p className="text-[7px] font-black text-on-surface-dim uppercase tracking-wider opacity-40">Fuel Level</p>
                         </div>
                       </div>
                     ))}
@@ -280,7 +319,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
               )}
 
               {/* Hydrant Dispensers */}
-              {hdUnits.length > 0 && (
+              {!isAssetsCollapsed && hdUnits.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.25em] opacity-50 px-1 flex items-center">
                     <span className="w-4 h-[1px] bg-warning/40 mr-2"></span>
@@ -288,7 +327,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {hdUnits.map((eq) => (
-                      <div key={eq.id} className="bg-surface-dim border border-white/10 p-4 lg:p-5 rounded-2xl flex items-center space-x-3 group hover:border-warning/50 transition-all cursor-pointer shadow-premium hover:shadow-glow-warning">
+                      <div key={eq.id} onClick={() => onSelectEquipment?.(eq.id)} className="bg-surface-dim border border-white/10 p-4 lg:p-5 rounded-2xl flex items-center space-x-3 group hover:border-warning/50 transition-all cursor-pointer shadow-premium hover:shadow-glow-warning">
                         <div className="p-2 bg-warning/10 rounded-lg group-hover:scale-110 transition-transform">
                           <Droplet className="w-4 h-4 text-warning" />
                         </div>
@@ -308,15 +347,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
 
         {/* Tactical Quick Actions */}
-        <div className="flex items-center space-x-4 mb-2 overflow-x-auto pb-2 custom-scrollbar">
-            <button className="flex-shrink-0 bg-error/10 text-error border border-error/20 px-3 py-2 lg:px-4 lg:py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all">
-                Emergency Stop
+        <div className="flex items-center justify-center space-x-4 mb-2 overflow-x-auto pb-2 custom-scrollbar">
+            <button 
+                title="Emergency Stop"
+                className="flex-shrink-0 bg-error/10 text-error border border-error/20 p-3 sm:px-4 sm:py-2.5 rounded-full sm:rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center space-x-2"
+            >
+                <AlertOctagon className="w-5 h-5 sm:w-4 sm:h-4 shrink-0 text-error" />
+                <span className="hidden sm:inline">Emergency Stop</span>
             </button>
-            <button className="flex-shrink-0 bg-primary/10 text-primary border border-primary/20 px-3 py-2 lg:px-4 lg:py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all">
-                Request Backup
+            <button 
+                title="Request Backup"
+                className="flex-shrink-0 bg-primary/10 text-primary border border-primary/20 p-3 sm:px-4 sm:py-2.5 rounded-full sm:rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center space-x-2"
+            >
+                <Users className="w-5 h-5 sm:w-4 sm:h-4 shrink-0 text-primary" />
+                <span className="hidden sm:inline">Request Backup</span>
             </button>
-            <button className="flex-shrink-0 bg-surface-dim text-on-surface-dim border border-outline px-3 py-2 lg:px-4 lg:py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all">
-                Report Hazard
+            <button 
+                title="Report Hazard"
+                className="flex-shrink-0 bg-surface-dim text-on-surface-dim border border-outline p-3 sm:px-4 sm:py-2.5 rounded-full sm:rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center space-x-2"
+            >
+                <AlertTriangle className="w-5 h-5 sm:w-4 sm:h-4 shrink-0 text-on-surface-dim" />
+                <span className="hidden sm:inline">Report Hazard</span>
             </button>
         </div>
 
@@ -340,6 +391,64 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                         </ul>
                     </div>
                 </div>
+            </div>
+        )}
+
+        {/* DAILY or Diesel Equipment Allocations */}
+        {visibleEquipment && visibleEquipment.length > 0 && (
+            <div className="space-y-4">
+                <h3 className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.3em] px-1 flex items-center">
+                    <span className="w-4 h-[1px] bg-warning/40 mr-2"></span>
+                    Assigned Shift Allocations
+                </h3>
+                {visibleEquipment.map((eq: any, index: number) => {
+                    const isDiesel = eq.shift_type === 'DIESEL' || eq.equipment_id.startsWith('DT');
+                    return (
+                        <div key={`alloc-${index}`} className="card-premium border-l-4 border-l-warning overflow-hidden bg-surface-dim/20 hover:bg-surface-dim/40 transition-colors duration-300">
+                            <div className="p-6">
+                                <div className="flex justify-between items-start mb-4 gap-4">
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <span className="text-3xl font-black text-on-surface">{eq.equipment_id}</span>
+                                            <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black border uppercase tracking-wider ${
+                                                isDiesel ? 'bg-error/10 text-error border-error/20' : 'bg-primary/10 text-primary border-primary/20'
+                                            }`}>
+                                                {isDiesel ? 'DIESEL ALLOCATION' : 'DAILY ALLOCATION'}
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-2">
+                                            {eq.shift_type} SHIFT • OPERATOR ASSIGNMENT
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                         <div className="flex items-center justify-center text-warning bg-warning/10 w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl border border-warning/20">
+                                             <Truck className="w-4 h-4 sm:w-5 sm:h-5" />
+                                         </div>
+                                    </div>
+                                </div>
+                                <div className="mt-4 pt-4 border-t border-outline/30 flex flex-col sm:flex-row justify-between sm:items-center text-[11px] font-black uppercase tracking-widest text-on-surface-dim gap-4">
+                                    <span className="flex-1">
+                                        {eq.shift_type === 'DAILY' 
+                                            ? 'Assigned for morning daily equipment qc checks (not to operate this unit for the shift)' 
+                                            : 'Assigned to top up this equipment\'s diesel tank'
+                                        }
+                                    </span>
+                                    <div className="flex items-center justify-between sm:justify-start gap-3 shrink-0 w-full sm:w-auto">
+                                        <span className="text-success shrink-0">Active Allocation</span>
+                                        <button
+                                            onClick={() => handleCompleteAllocation(eq.id)}
+                                            className="py-1 px-2.5 sm:px-3 text-[9px] font-[900] tracking-widest bg-success/15 hover:bg-success/25 text-success border border-success/30 hover:border-success/50 flex items-center justify-center gap-1.5 rounded-xl transition-all shadow-sm shrink-0 active:scale-95 cursor-pointer"
+                                            title="Mark Completed"
+                                        >
+                                            <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                                            <span className="hidden sm:inline">MARK COMPLETED</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
         )}
 
@@ -406,20 +515,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                     </div>
                                 </div>
                                 <div className="bg-surface-dim p-6 flex flex-col justify-center border-t md:border-t-0 md:border-l border-outline w-full md:w-48">
-                                     {flight.status !== 'COMPLETED' ? (
-                                        <button 
-                                          onClick={() => onStartJob?.(flight as any)}
-                                          className="btn-command w-full text-[10px] py-3 lg:py-4 flex items-center justify-center group"
-                                        >
-                                            <Play className="w-3 h-3 mr-2 group-hover:scale-125 transition-transform" />
-                                            START JOB
-                                        </button>
-                                     ) : (
-                                        <button disabled className="w-full bg-surface-lowest text-on-surface-dim opacity-50 font-black py-3 lg:py-4 rounded-2xl text-[10px] cursor-not-allowed uppercase tracking-[0.2em]">
-                                            TASK LOGGED
-                                        </button>
-                                     )}
-                                </div>
+                                      {flight.status !== 'COMPLETED' ? (
+                                         user.role === UserRole.ITP_OPERATOR ? (
+                                             <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider text-center opacity-40">VIEW ONLY</span>
+                                         ) : (
+                                            <button 
+                                              onClick={() => onStartJob?.(flight as any)}
+                                              className="btn-command w-full text-[10px] py-3 lg:py-4 flex items-center justify-center group"
+                                            >
+                                                <Play className="w-3 h-3 mr-2 group-hover:scale-125 transition-transform" />
+                                                START JOB
+                                            </button>
+                                         )
+                                      ) : (
+                                         <button disabled className="w-full bg-surface-lowest text-on-surface-dim opacity-50 font-black py-3 lg:py-4 rounded-2xl text-[10px] cursor-not-allowed uppercase tracking-[0.2em]">
+                                             TASK LOGGED
+                                         </button>
+                                      )}
+                                 </div>
                              </div>
                             );
                         })}
@@ -432,30 +545,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
             </div>
         )}
 
-        {/* Equipment Assignment */}
-        {myEquipment && myEquipment.length > 0 && (
-            <div className="space-y-4">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Equipment Assignments</h3>
-                {myEquipment.map((eq: any, index: number) => (
-                    <div key={index} className="bg-surface-dim rounded-xl shadow-sm border border-outline border-l-4 border-l-warning overflow-hidden flex flex-col md:flex-row">
-                        <div className="p-6 flex-1">
-                            <div className="flex justify-between items-start mb-2">
-                                <div className="flex items-center space-x-3">
-                                    <div className="p-2 bg-orange-50 rounded-lg">
-                                        <Truck className="w-6 h-6 text-orange-600" />
-                                    </div>
-                                    <span className="text-2xl font-black text-slate-800">{eq.equipment_id}</span>
-                                </div>
-                                <span className="px-2 py-1 rounded text-xs font-bold uppercase bg-orange-100 text-orange-700">
-                                    {eq.shift_type} SHIFT
-                                </span>
-                            </div>
-                            <p className="text-slate-500 text-sm">You are assigned to operate this equipment.</p>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        )}
+
 
         {/* International Flights - Hidden if assigned to Domestic */}
         {!myDomesticTeam && myTasks.length > 0 && (
@@ -464,7 +554,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                 {myTasks.map((job) => {
                     const delayed = isDelayed(job.sta, job.eta);
                     const displayStatus = (delayed && job.status === 'PENDING') ? 'DELAYED' : job.status;
-                    const assigneeName = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => u.id === job.assignedTo)?.name || 'Unknown';
+                    const usersList = staff && staff.length > 0 ? staff : MOCK_USERS;
+                    const assigneeName = usersList.find(u => u.id === job.assignedTo)?.name || 'Unknown';
+                    const officerName = job.assignedOfficer ? usersList.find(u => u.id === job.assignedOfficer)?.name : null;
                     
                     return (
                         <div key={job.id} className="card-premium border-l-4 border-l-primary overflow-hidden active:scale-[0.99] transition-transform">
@@ -493,21 +585,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                          </div>
 
                                          {job.status !== 'COMPLETED' ? (
-                                            <button 
-                                              onClick={() => onStartJob?.(job)}
-                                              className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-lg sm:rounded-xl group shadow-premium kinetic-gradient text-white hover:scale-[1.05] active:scale-95 transition-all"
-                                              title="Start Job"
-                                            >
-                                                <Play className="!w-7 !h-7 !fill-white !text-white stroke-[2.5] ml-0.5 group-hover:scale-110 transition-transform" />
-                                            </button>
+                                            user.role === UserRole.ITP_OPERATOR ? null : (
+                                              <button 
+                                                onClick={() => onStartJob?.(job)}
+                                                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-lg sm:rounded-xl group shadow-premium kinetic-gradient text-white hover:scale-[1.05] active:scale-95 transition-all"
+                                                title="Start Job"
+                                              >
+                                                  <Play className="!w-7 !h-7 !fill-white !text-white stroke-[2.5] ml-0.5 group-hover:scale-110 transition-transform" />
+                                              </button>
+                                            )
                                          ) : (
-                                            <div 
-                                                onClick={() => notify(`Details for ${job.flightNumber} are in the history log.`, "info")}
-                                                className="w-10 h-10 sm:w-12 sm:h-12 bg-success/10 text-success border border-success/20 flex items-center justify-center rounded-lg sm:rounded-xl opacity-80 cursor-pointer" 
-                                                title="Task Completed"
-                                            >
-                                                <CheckCircle className="!w-7 !h-7 stroke-[2.5]" />
-                                            </div>
+                                             <div 
+                                                 onClick={() => notify(`Details for ${job.flightNumber} are in the history log.`, "info")}
+                                                 className="w-8 h-8 sm:w-10 sm:h-10 bg-success/10 text-success border border-success/20 flex items-center justify-center rounded-lg sm:rounded-xl opacity-80 cursor-pointer" 
+                                                 title="Task Completed"
+                                             >
+                                                 <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
+                                             </div>
                                          )}
                                     </div>
                                 </div>
@@ -530,15 +624,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                      </div>
 
                                      {/* Row 2: Operator (Left) & Status (Right) */}
-                                     <div className="flex items-center justify-between gap-4">
-                                         <div className="flex items-center text-on-surface-dim font-bold">
-                                             <div className="w-5 h-5 rounded-md bg-surface-dim border-transparent flex items-center justify-center mr-2 text-[10px] font-black">
-                                                 {assigneeName.charAt(0)}
-                                             </div>
-                                             <span className="text-[10px] uppercase tracking-tight">{assigneeName}</span>
-                                         </div>
-                                         
-                                         <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
+                                      <div className="flex items-center justify-between gap-4">
+                                          <div className="flex items-center text-on-surface-dim font-bold gap-3 flex-wrap">
+                                              <div className="flex items-center">
+                                                  <div className="w-5 h-5 rounded-md bg-surface-dim border-transparent flex items-center justify-center mr-2 text-[10px] font-black">
+                                                      {assigneeName.charAt(0)}
+                                                  </div>
+                                                  <span className="text-[10px] uppercase tracking-tight">{assigneeName} <span className="opacity-40 italic font-black text-[8px] ml-0.5">(OP)</span></span>
+                                              </div>
+                                              {officerName && (
+                                                  <div className="flex items-center">
+                                                      <div className="w-5 h-5 rounded-md bg-surface-dim border-transparent flex items-center justify-center mr-2 text-[10px] font-black text-primary bg-primary/5">
+                                                          {officerName.charAt(0)}
+                                                      </div>
+                                                      <span className="text-[10px] uppercase tracking-tight text-on-surface-dim">{officerName} <span className="opacity-40 italic font-black text-[8px] ml-0.5">(OFFICER)</span></span>
+                                                  </div>
+                                              )}
+                                          </div>
+                                          
+                                          <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
                                              displayStatus === 'COMPLETED' ? 'bg-success/10 text-success border-success/10' : 
                                              displayStatus === 'DELAYED' ? 'bg-error/10 text-error border-error/10 animate-pulse' :
                                              displayStatus === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/10 animate-pulse' : 'bg-surface-dim text-on-surface-dim border-outline'
@@ -678,53 +782,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                         <img src={op.avatar} alt="" className="w-12 h-12 rounded-2xl border border-outline shadow-sm group-hover:scale-110 transition-transform" />
                                         <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-4 border-surface-dim ${statusColor}`}></div>
                                     </div>
-                                    
-                                    {isItpManager && eqAssignment && eqAssignment.equipment_id.startsWith('RF') && (() => {
-                                        const isRequested = (alerts || []).some(a => a && !a.acknowledged && a.message.includes(`Replenishment requested for unit ${eqAssignment.equipment_id}`));
-                                        return (
-                                            <button 
-                                                onClick={async (e) => {
-                                                    e.stopPropagation();
-                                                    if (isRequested || pendingRequests.has(eqAssignment.equipment_id)) return;
-                                                    
-                                                    setPendingRequests(prev => new Set(prev).add(eqAssignment.equipment_id));
-                                                    try {
-                                                        const success = await createAlert({
-                                                            severity: 'medium',
-                                                            message: `Replenishment requested for unit ${eqAssignment.equipment_id}`,
-                                                            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-                                                            acknowledged: false,
-                                                            targetRole: UserRole.DEPOT_MANAGER
-                                                        });
-                                                        
-                                                        if (success) {
-                                                            await updateEquipmentStatus(eqAssignment.equipment_id, EqStatus.REFUELLING);
-                                                            notify(`Refuel request sent to Depot Operators for ${eqAssignment.equipment_id}`, 'success');
-                                                        }
-                                                    } catch (error) {
-                                                        console.error("Failed to send refuel request", error);
-                                                        notify(`Failed to send refuel request for ${eqAssignment.equipment_id}`, 'error');
-                                                    } finally {
-                                                        setPendingRequests(prev => {
-                                                            const next = new Set(prev);
-                                                            next.delete(eqAssignment.equipment_id);
-                                                            return next;
-                                                        });
-                                                    }
-                                                }}
-                                                disabled={isRequested || pendingRequests.has(eqAssignment.equipment_id)}
-                                                title={isRequested ? 'Replenishment already requested' : 'Request Replenishment'}
-                                                className={`absolute -top-1 -right-1 p-1.5 rounded-lg border transition-all ${
-                                                    isRequested || pendingRequests.has(eqAssignment.equipment_id)
-                                                    ? 'bg-surface-lowest text-on-surface-dim opacity-30 cursor-not-allowed border-outline' 
-                                                    : 'kinetic-gradient text-white border-none shadow-lg hover:scale-110 active:scale-95'
-                                                }`}
-                                            >
-                                                {isRequested || pendingRequests.has(eqAssignment.equipment_id) ? <RefreshCw className="w-2.5 h-2.5 animate-spin" /> : 
-                                                 <Send className="w-2.5 h-2.5" />}
-                                            </button>
-                                        );
-                                    })()}
+
                                 </div>
                                 <p className="text-[10px] font-[900] text-on-surface uppercase tracking-tight line-clamp-1">{op.name.split(' ')[0]}</p>
                                 
@@ -811,13 +869,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                   }
                                 }}
                                 disabled={isRequested || pendingRequests.has(eq.id)}
-                                className={`px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all shadow-premium ${
+                                className={`px-2.5 py-2 sm:px-4 sm:py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all shadow-premium flex items-center justify-center gap-1 active:scale-95 shrink-0 ${
                                   isRequested || pendingRequests.has(eq.id)
                                   ? 'bg-surface-lowest text-on-surface-dim opacity-30 cursor-not-allowed border border-outline' 
-                                  : 'kinetic-gradient text-white border-none hover:scale-105 active:scale-95'
+                                  : 'kinetic-gradient text-white border-none hover:scale-105'
                                 }`}
+                                title={isRequested ? 'Replenishment already requested' : pendingRequests.has(eq.id) ? 'Sending request...' : 'Request Replenishment'}
                               >
-                                {isRequested ? 'REQUESTED' : pendingRequests.has(eq.id) ? 'SENDING...' : 'REPLENISH'}
+                                {isRequested || pendingRequests.has(eq.id) ? (
+                                  <>
+                                    <RefreshCw className="w-3 h-3 animate-spin sm:hidden" />
+                                    <span className="hidden sm:inline">{isRequested ? 'REQUESTED' : 'SENDING...'}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Send className="w-3 h-3 sm:hidden" />
+                                    <span className="hidden sm:inline">REPLENISH</span>
+                                  </>
+                                )}
                               </button>
                             )}
                           </div>

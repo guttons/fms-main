@@ -5,7 +5,7 @@ export const MOCK_USERS: User[] = [
   { id: 'u1', name: 'System Admin', role: UserRole.ADMIN, avatar: 'https://picsum.photos/100/100?random=1' },
   { id: 'u2', name: 'ITP Duty Manager', role: UserRole.ITP_MANAGER, avatar: 'https://picsum.photos/100/100?random=2' },
   { id: 'u2b', name: 'Depot Manager', role: UserRole.DEPOT_MANAGER, avatar: 'https://picsum.photos/100/100?random=20' },
-  { id: 'u3', name: 'Apron Operator A', role: UserRole.ITP_OPERATOR, avatar: 'https://picsum.photos/100/100?random=3' },
+  { id: 'u3', name: 'Apron Officer A', role: UserRole.ITP_OFFICER, avatar: 'https://picsum.photos/100/100?random=3' },
   { id: 'u3b', name: 'Apron Operator B', role: UserRole.ITP_OPERATOR, avatar: 'https://picsum.photos/100/100?random=31' },
   { id: 'u4', name: 'Depot Operator', role: UserRole.DEPOT_OPERATOR, avatar: 'https://picsum.photos/100/100?random=4' },
   { id: 'u7', name: 'Hydrant Specialist A', role: UserRole.ITP_HD_OPERATOR, avatar: 'https://picsum.photos/100/100?random=7' },
@@ -17,9 +17,9 @@ export const MOCK_USERS: User[] = [
 ];
 
 export const MOCK_JOBS: FlightJob[] = [
-  { id: 'j1', flightNumber: 'SQ432', aircraftReg: '9V-SKT', aircraftType: 'A350-900', stand: 'F55', sta: '07:45', eta: '08:00', std: '09:30', assignedTo: 'u3', status: 'PENDING' },
+  { id: 'j1', flightNumber: 'SQ432', aircraftReg: '9V-SKT', aircraftType: 'A350-900', stand: 'F55', sta: '07:45', eta: '08:00', std: '09:30', assignedTo: 'u3b', assignedOfficer: 'u3', status: 'PENDING' },
   { id: 'j2', flightNumber: 'UL102', aircraftReg: '4R-ALM', aircraftType: 'A330-300', stand: 'C12', sta: '08:15', eta: '08:15', std: '09:45', assignedTo: 'u3b', status: 'PENDING' },
-  { id: 'j3', flightNumber: 'EK659', aircraftReg: 'A6-EEO', aircraftType: 'A380-800', stand: 'D14', sta: '09:30', eta: '09:45', std: '11:15', assignedTo: 'u3', status: 'IN_PROGRESS', vehicleId: 'HD-01' },
+  { id: 'j3', flightNumber: 'EK659', aircraftReg: 'A6-EEO', aircraftType: 'A380-800', stand: 'D14', sta: '09:30', eta: '09:45', std: '11:15', assignedTo: 'u3b', assignedOfficer: 'u3', status: 'IN_PROGRESS', vehicleId: 'HD-01' },
   { id: 'j4', flightNumber: 'QR882', aircraftReg: 'A7-BCX', aircraftType: 'B787-9', stand: 'E04', sta: '10:00', eta: '10:15', std: '12:00', assignedTo: 'u3b', status: 'COMPLETED', vehicleId: 'RF-04' },
 ];
 

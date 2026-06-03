@@ -36,6 +36,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     switch (user.role) {
       case UserRole.ITP_OPERATOR:
       case UserRole.ITP_HD_OPERATOR:
+      case UserRole.ITP_OFFICER:
       case UserRole.ITP_MANAGER:
         return [
           { id: 'dashboard', label: 'Tasks', icon: LayoutDashboard },
