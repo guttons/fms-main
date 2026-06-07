@@ -7,6 +7,37 @@ import { useOperationalData } from '../context/OperationalDataContext';
 import { supabaseService } from '../services/supabaseService';
 import { FlightLog, User, UserRole } from '../types';
 
+const parseGroundLog = (log: FlightLog) => {
+  const parts = (log.flightNumber || '').split('-');
+  const station = parts[1] || 'LFS';
+  const fuelType = parts[2] || 'DIESEL';
+  
+  const remarks = log.remarks || '';
+  const accountMatch = remarks.match(/On account of:\s*([^,)]+)/i);
+  const paymentMatch = remarks.match(/Payment:\s*([^,)]+)/i);
+  const receivedMatch = remarks.match(/Received by:\s*([^,)]+)/i);
+  const equipMatch = remarks.match(/Equipment:\s*([^,)]+)/i);
+  
+  return {
+    station: station === 'LFS' ? 'Landside (LFS)' : 'Airside (AFS)',
+    fuelType: fuelType,
+    account: accountMatch ? accountMatch[1].trim() : 'N/A',
+    paymentMode: paymentMatch ? paymentMatch[1].trim() : 'Credit',
+    receivedBy: receivedMatch ? receivedMatch[1].trim() : 'N/A',
+    equipmentName: equipMatch ? equipMatch[1].trim() : 'N/A',
+  };
+};
+
+const parseMarineLog = (log: FlightLog) => {
+  const vesselName = (log.flightNumber || '').replace('VESSEL-', '');
+  const remarks = log.remarks || '';
+  const supervisorMatch = remarks.match(/Supervised by\s+([^)]+)/i);
+  return {
+    vesselName,
+    supervisor: supervisorMatch ? supervisorMatch[1].trim() : 'N/A'
+  };
+};
+
 interface LogHistoryProps {
   user?: User;
 }
@@ -20,6 +51,16 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [filterDate, setFilterDate] = useState('');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [selectedLogType, setSelectedLogType] = useState<string>('ALL');
+
+  const resolveLogType = (log: FlightLog): string => {
+    if (log.logType) return log.logType;
+    const num = log.flightNumber || '';
+    if (num.startsWith('SEAPLANE')) return 'SEAPLANE';
+    if (num.startsWith('GROUND-')) return 'FILLING_STATION';
+    if (num.startsWith('VESSEL-')) return 'MARINE';
+    return 'FLIGHT';
+  };
   
   const [editingLog, setEditingLog] = useState<FlightLog | null>(null);
   const [editForm, setEditForm] = useState({
@@ -174,7 +215,12 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   };
 
   const filteredLogs = (logs || []).filter(log => {
-    const matchesSearch = log && (
+    if (!log) return false;
+    
+    const logType = resolveLogType(log);
+    const matchesType = selectedLogType === 'ALL' || logType === selectedLogType;
+
+    const matchesSearch = (
       log.flightNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.aircraftReg.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -185,7 +231,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
       matchesDate = logDate === filterDate;
     }
 
-    return matchesSearch && matchesDate;
+    return matchesType && matchesSearch && matchesDate;
   });
 
   const sortedLogs = [...filteredLogs].sort((a, b) => {
@@ -240,6 +286,52 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
         </div>
       </div>
 
+      {/* Log Type Filter Tabs */}
+      <div className="bg-surface-dim p-1.5 rounded-[22px] border border-outline relative flex w-full overflow-x-auto no-scrollbar shadow-inner max-w-fit">
+        {/* Mobile/tablet sliding indicator */}
+        <div
+          className={`absolute top-1.5 bottom-1.5 rounded-[18px] kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium md:hidden will-change-transform
+            ${selectedLogType === 'ALL'             ? 'left-1.5 w-[140px] translate-x-0'      : ''}
+            ${selectedLogType === 'FLIGHT'          ? 'left-1.5 w-[150px] translate-x-[140px]' : ''}
+            ${selectedLogType === 'SEAPLANE'        ? 'left-1.5 w-[110px] translate-x-[290px]' : ''}
+            ${selectedLogType === 'MARINE'          ? 'left-1.5 w-[150px] translate-x-[400px]' : ''}
+            ${selectedLogType === 'FILLING_STATION' ? 'left-1.5 w-[150px] translate-x-[550px]' : ''}
+          `}
+        />
+        {/* Desktop sliding indicator */}
+        <div
+          className={`absolute top-1.5 bottom-1.5 rounded-[18px] kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium hidden md:block w-[calc(20%-2.4px)] will-change-transform
+            ${selectedLogType === 'ALL'             ? 'translate-x-0' : ''}
+            ${selectedLogType === 'FLIGHT'          ? 'translate-x-[100%]' : ''}
+            ${selectedLogType === 'SEAPLANE'        ? 'translate-x-[200%]' : ''}
+            ${selectedLogType === 'MARINE'          ? 'translate-x-[300%]' : ''}
+            ${selectedLogType === 'FILLING_STATION' ? 'translate-x-[400%]' : ''}
+          `}
+        />
+        {[
+          { id: 'ALL', label: 'All Operations', w: 'w-[140px] md:w-[160px]' },
+          { id: 'FLIGHT', label: 'Into-Plane', w: 'w-[150px] md:w-[160px]' },
+          { id: 'SEAPLANE', label: 'Seaplane', w: 'w-[110px] md:w-[160px]' },
+          { id: 'MARINE', label: 'Marine Loading', w: 'w-[150px] md:w-[160px]' },
+          { id: 'FILLING_STATION', label: 'Filling Stations', w: 'w-[150px] md:w-[160px]' },
+        ].map((tab) => {
+          const isActive = selectedLogType === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setSelectedLogType(tab.id)}
+              className={`${tab.w} flex-shrink-0 flex items-center justify-center py-3 rounded-[18px] text-[10px] font-black uppercase tracking-widest relative z-10 transition-colors duration-300 active:scale-95 ${
+                isActive
+                  ? 'text-white'
+                  : 'text-on-surface-dim opacity-75 hover:text-on-surface'
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
       {showFilters && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-surface-dim border border-outline rounded-[24px] animate-in slide-in-from-top-2 duration-300">
            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -276,45 +368,210 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
             <table className="w-full">
               <thead>
                 <tr className="bg-surface-dim/50 border-b border-outline">
-                  <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Timestamp</th>
-                  <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Flight ID</th>
-                  <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Equipment Used</th>
-                  <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
-                  <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Delivery Ticket</th>
-                  <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
+                  {selectedLogType === 'ALL' && (
+                    <>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Timestamp</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Flight ID</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Equipment Used</th>
+                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Delivery Ticket</th>
+                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
+                    </>
+                  )}
+                  {selectedLogType === 'FLIGHT' && (
+                    <>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Timestamp</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Flight No</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Aircraft Reg / Type</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Stand</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Equipment</th>
+                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Ticket</th>
+                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
+                    </>
+                  )}
+                  {selectedLogType === 'SEAPLANE' && (
+                    <>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Date</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Operator</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Pump ID</th>
+                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Ticket</th>
+                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
+                    </>
+                  )}
+                  {selectedLogType === 'FILLING_STATION' && (
+                    <>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Date</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Station</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Product</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Vehicle Reg</th>
+                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Invoice</th>
+                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
+                    </>
+                  )}
+                  {selectedLogType === 'MARINE' && (
+                    <>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Date</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Vessel Name</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Source RF</th>
+                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Meter Open</th>
+                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Meter Close</th>
+                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Ticket</th>
+                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline">
                 {sortedLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-10 py-20 text-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 italic">Zero matches in historical database</td>
+                    <td colSpan={selectedLogType === 'FLIGHT' || selectedLogType === 'MARINE' ? 8 : (selectedLogType === 'FILLING_STATION' ? 7 : 6)} className="px-10 py-20 text-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 italic">Zero matches in historical database</td>
                   </tr>
                 ) : (
                   sortedLogs.map((log) => {
                       const operatorName = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => u.id === log.operatorId)?.name || 'Unknown';
                       const isExpanded = expandedLogId === log.id;
+                      
+                      const seaplaneOp = log.flightNumber.replace('SEAPLANE-', '');
+                      const pumpId = log.vehicleId || log.aircraftReg.replace('PUMP-', '');
+                      
+                      const groundData = parseGroundLog(log);
+                      const marineData = parseMarineLog(log);
+                      
+                      const colSpanCount = selectedLogType === 'FLIGHT' || selectedLogType === 'MARINE' ? 8 : (selectedLogType === 'FILLING_STATION' ? 7 : 6);
+
                       return (
                         <React.Fragment key={log.id}>
                         <tr 
                           onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
                           className={`hover:bg-primary/[0.02] transition-colors group cursor-pointer ${isExpanded ? 'bg-primary/[0.03]' : ''}`}
                         >
-                          <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
-                              {log.timestampStart ? new Date(log.timestampStart).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: false }) : 'PENDING'}
-                          </td>
-                          <td className="px-10 py-6">
-                              <div className="text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">{log.flightNumber}</div>
-                              <div className="text-[9px] font-black text-on-surface-dim opacity-30 uppercase tracking-widest mt-1">{log.aircraftReg} ({log.aircraftType})</div>
-                          </td>
-                          <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest font-mono">
-                              {log.vehicleId || 'N/A'}
-                          </td>
-                          <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
-                              {log.volume.toLocaleString()}
-                          </td>
-                          <td className="px-10 py-6 text-left text-[11px] font-black text-error font-mono tracking-widest">
-                              {log.deliveryNumber || 'N/A'}
-                          </td>
+                          {/* ALL View */}
+                          {selectedLogType === 'ALL' && (
+                            <>
+                              <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
+                                  {log.timestampStart ? new Date(log.timestampStart).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: false }) : 'PENDING'}
+                              </td>
+                              <td className="px-10 py-6">
+                                  <div className="text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">{log.flightNumber}</div>
+                                  <div className="text-[9px] font-black text-on-surface-dim opacity-30 uppercase tracking-widest mt-1">{log.aircraftReg} ({log.aircraftType})</div>
+                              </td>
+                              <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest font-mono">
+                                  {log.vehicleId || 'N/A'}
+                              </td>
+                              <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
+                                  {log.volume.toLocaleString()}
+                              </td>
+                              <td className="px-10 py-6 text-left text-[11px] font-black text-error font-mono tracking-widest">
+                                  {log.deliveryNumber || 'N/A'}
+                              </td>
+                            </>
+                          )}
+
+                          {/* FLIGHT View */}
+                          {selectedLogType === 'FLIGHT' && (
+                            <>
+                              <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
+                                  {log.timestampStart ? new Date(log.timestampStart).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: false }) : 'PENDING'}
+                              </td>
+                              <td className="px-10 py-6 text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">
+                                  {log.flightNumber}
+                              </td>
+                              <td className="px-10 py-6">
+                                  <div className="text-xs font-black text-on-surface uppercase tracking-widest">{log.aircraftReg}</div>
+                                  <div className="text-[9px] font-black text-on-surface-dim opacity-30 uppercase tracking-widest mt-0.5">{log.aircraftType}</div>
+                              </td>
+                              <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim uppercase tracking-widest">
+                                  {log.stand}
+                              </td>
+                              <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest font-mono">
+                                  {log.vehicleId}
+                              </td>
+                              <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
+                                  {log.volume.toLocaleString()}
+                              </td>
+                              <td className="px-10 py-6 text-left text-[11px] font-black text-error font-mono tracking-widest">
+                                  {log.deliveryNumber || 'N/A'}
+                              </td>
+                            </>
+                          )}
+
+                          {/* SEAPLANE View */}
+                          {selectedLogType === 'SEAPLANE' && (
+                            <>
+                              <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
+                                  {log.timestampStart ? new Date(log.timestampStart).toLocaleDateString([], { dateStyle: 'short' }) : 'PENDING'}
+                              </td>
+                              <td className="px-10 py-6 text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">
+                                  {seaplaneOp}
+                              </td>
+                              <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest font-mono">
+                                  {pumpId}
+                              </td>
+                              <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
+                                  {log.volume.toLocaleString()}
+                              </td>
+                              <td className="px-10 py-6 text-left text-[11px] font-black text-error font-mono tracking-widest">
+                                  {log.deliveryNumber || 'N/A'}
+                              </td>
+                            </>
+                          )}
+
+                          {/* FILLING_STATION View */}
+                          {selectedLogType === 'FILLING_STATION' && (
+                            <>
+                              <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
+                                  {log.timestampStart ? new Date(log.timestampStart).toLocaleDateString([], { dateStyle: 'short' }) : 'PENDING'}
+                              </td>
+                              <td className="px-10 py-6 text-xs font-black text-on-surface uppercase tracking-widest">
+                                  {groundData.station}
+                              </td>
+                              <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest">
+                                  {groundData.fuelType}
+                              </td>
+                              <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest font-mono">
+                                  {log.aircraftReg}
+                              </td>
+                              <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
+                                  {log.volume.toLocaleString()}
+                              </td>
+                              <td className="px-10 py-6 text-left text-[11px] font-black text-error font-mono tracking-widest">
+                                  {log.deliveryNumber || 'N/A'}
+                              </td>
+                            </>
+                          )}
+
+                          {/* MARINE View */}
+                          {selectedLogType === 'MARINE' && (
+                            <>
+                              <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
+                                  {log.timestampStart ? new Date(log.timestampStart).toLocaleDateString([], { dateStyle: 'short' }) : 'PENDING'}
+                              </td>
+                              <td className="px-10 py-6 text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">
+                                  {marineData.vesselName}
+                              </td>
+                              <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest font-mono">
+                                  {log.vehicleId}
+                              </td>
+                              <td className="px-10 py-6 text-right text-xs font-bold text-on-surface-dim font-mono">
+                                  {(log.meterOpen || 0).toLocaleString()}
+                              </td>
+                              <td className="px-10 py-6 text-right text-xs font-bold text-on-surface-dim font-mono">
+                                  {(log.meterClose || 0).toLocaleString()}
+                              </td>
+                              <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
+                                  {log.volume.toLocaleString()}
+                              </td>
+                              <td className="px-10 py-6 text-left text-[11px] font-black text-error font-mono tracking-widest">
+                                  {log.deliveryNumber || 'N/A'}
+                              </td>
+                            </>
+                          )}
+
+                          {/* Edit / Details Action Cell (always the last column) */}
                           <td className="px-10 py-6 text-right">
                               {canEdit ? (
                                 <button 
@@ -352,42 +609,157 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                         </tr>
                         {isExpanded && (
                            <tr className="bg-surface-dim/30 border-b border-outline">
-                              <td colSpan={6} className="px-10 py-6">
-                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-in fade-in duration-300">
-                                    <div className="flex flex-col gap-1">
-                                       <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Arrived</span>
-                                       <span className="text-[11px] font-mono text-on-surface">{formatTime(log.timestampArrived)}</span>
-                                    </div>
-                                    <div className="flex flex-col gap-1">
-                                       <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Positioned</span>
-                                       <span className="text-[11px] font-mono text-on-surface">{formatTime(log.timestampPosition)}</span>
-                                    </div>
-                                    <div className="flex flex-col gap-1">
-                                       <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Dispense Start</span>
-                                       <span className="text-[11px] font-mono text-success">{formatTime(log.timestampStart)}</span>
-                                    </div>
-                                    <div className="flex flex-col gap-1">
-                                       <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Dispense End</span>
-                                       <span className="text-[11px] font-mono text-error">{formatTime(log.timestampInitialEnd)}</span>
-                                    </div>
-                                    
-                                    <div className="flex flex-col gap-1">
-                                       <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Tactical Operator</span>
-                                       <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{operatorName}</span>
-                                    </div>
-                                    <div className="flex flex-col gap-1 col-span-2">
-                                       <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Remarks</span>
-                                       <span className="text-[11px] text-on-surface opacity-80">{log.remarks || 'No operational remarks.'}</span>
-                                    </div>
-                                 </div>
+                              <td colSpan={colSpanCount} className="px-10 py-6">
+                                 {/* Into-Plane details */}
+                                 {(selectedLogType === 'ALL' || selectedLogType === 'FLIGHT') && (
+                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-in fade-in duration-300">
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Arrived</span>
+                                         <span className="text-[11px] font-mono text-on-surface">{formatTime(log.timestampArrived)}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Positioned</span>
+                                         <span className="text-[11px] font-mono text-on-surface">{formatTime(log.timestampPosition)}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Dispense Start</span>
+                                         <span className="text-[11px] font-mono text-success">{formatTime(log.timestampStart)}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Dispense End</span>
+                                         <span className="text-[11px] font-mono text-error">{formatTime(log.timestampInitialEnd)}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC Panel check</span>
+                                         <span className={`text-[11px] font-black uppercase tracking-widest ${log.panelCheck ? 'text-success' : 'text-error'}`}>{log.panelCheck ? 'CLOSED' : 'OPEN'}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC Appearance</span>
+                                         <span className={`text-[11px] font-black uppercase tracking-widest ${log.appearanceCheck ? 'text-success' : 'text-error'}`}>{log.appearanceCheck ? 'CLEAR & BRIGHT' : 'FAIL'}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC Water Check</span>
+                                         <span className={`text-[11px] font-black uppercase tracking-widest ${log.waterCheck ? 'text-success' : 'text-error'}`}>{log.waterCheck ? 'FREE' : 'FAIL'}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Tactical Operator</span>
+                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{operatorName}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1 col-span-2 md:col-span-4">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Remarks</span>
+                                         <span className="text-[11px] text-on-surface opacity-80">{log.remarks || 'No operational remarks.'}</span>
+                                      </div>
+                                   </div>
+                                 )}
+
+                                 {/* Seaplane details */}
+                                 {selectedLogType === 'SEAPLANE' && (
+                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-in fade-in duration-300">
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Operator Name</span>
+                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{seaplaneOp}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Infrastructure Registry</span>
+                                         <span className="text-[11px] font-mono text-on-surface">PUMP-{pumpId}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Pumping Window</span>
+                                         <span className="text-[11px] font-mono text-on-surface">08:00 - 16:00</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Database Sync Time</span>
+                                         <span className="text-[11px] font-mono text-on-surface">{log.timestampClearance ? new Date(log.timestampClearance).toLocaleString() : 'N/A'}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1 col-span-2 md:col-span-4">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Remarks</span>
+                                         <span className="text-[11px] text-on-surface opacity-80">{log.remarks || 'No operational remarks.'}</span>
+                                      </div>
+                                   </div>
+                                 )}
+
+                                 {/* Filling Station details */}
+                                 {selectedLogType === 'FILLING_STATION' && (
+                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-in fade-in duration-300">
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Station Location</span>
+                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{groundData.station}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Product Delivered</span>
+                                         <span className="text-[11px] font-black text-primary uppercase tracking-widest">{groundData.fuelType}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">On account of</span>
+                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{groundData.account}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Payment Mode</span>
+                                         <span className="text-[11px] font-black text-success uppercase tracking-widest">{groundData.paymentMode}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Received By</span>
+                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{groundData.receivedBy}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Equipment Reference</span>
+                                         <span className="text-[11px] text-on-surface font-bold">{groundData.equipmentName}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Recorded By</span>
+                                         <span className="text-[11px] text-on-surface font-bold">{operatorName}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1 col-span-2 md:col-span-4">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Remarks</span>
+                                         <span className="text-[11px] text-on-surface opacity-80">{log.remarks || 'No operational remarks.'}</span>
+                                      </div>
+                                   </div>
+                                 )}
+
+                                 {/* Marine details */}
+                                 {selectedLogType === 'MARINE' && (
+                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-in fade-in duration-300">
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Vessel Name</span>
+                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{marineData.vesselName}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Source Refueller</span>
+                                         <span className="text-[11px] font-mono text-on-surface">{log.vehicleId}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Opening Meter</span>
+                                         <span className="text-[11px] font-mono text-on-surface">{(log.meterOpen || 0).toLocaleString()} L</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Closing Meter</span>
+                                         <span className="text-[11px] font-mono text-on-surface">{(log.meterClose || 0).toLocaleString()} L</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC Visual check</span>
+                                         <span className={`text-[11px] font-black uppercase tracking-widest ${log.appearanceCheck ? 'text-success' : 'text-error'}`}>{log.appearanceCheck ? 'PASS' : 'FAIL'}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC Water verification</span>
+                                         <span className={`text-[11px] font-black uppercase tracking-widest ${log.waterCheck ? 'text-success' : 'text-error'}`}>{log.waterCheck ? 'PASS' : 'FAIL'}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Verifying Officer</span>
+                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{marineData.supervisor}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1 col-span-2 md:col-span-4">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Remarks</span>
+                                         <span className="text-[11px] text-on-surface opacity-80">{log.remarks || 'No operational remarks.'}</span>
+                                      </div>
+                                   </div>
+                                 )}
                               </td>
                            </tr>
                         )}
                         </React.Fragment>
                       );
                   })
-                )}
-              </tbody>
+                )}</tbody>
             </table>
           </div>
         )}

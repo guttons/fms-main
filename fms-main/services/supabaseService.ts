@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import { User, Tank, FlightLog, BridgingLog, Alert, FlightJob, Equipment, StaffMember, UserRole, EquipmentStatus } from '../types';
+import { CustomerAccount, UpcomingPayment, Invoice, Receipt, ProformaRecord, FuelRequest, MonthEndVariance, ProcurementPR, SurchargeRecord, MpdSale, CustomsShipment } from '../context/FinanceDataContext';
 import { TANKS, MOCK_USERS, MOCK_JOBS, EQUIPMENT } from '../constants';
 
 const localBridgingLogs: BridgingLog[] = [
@@ -961,6 +962,564 @@ export const supabaseService = {
       }
     } catch (error) {
       console.error('[BigQuery Sync] Error:', error);
+    }
+  },
+
+  // ── Finance & Billing Module ───────────────────────────────────────────────
+  async getFinCustomers(): Promise<CustomerAccount[]> {
+    const { data, error } = await supabase.from('fin_customers').select('*').order('name');
+    if (error) {
+      console.error('[Supabase] getFinCustomers failed:', error);
+      return [];
+    }
+    return data.map(row => ({
+      id: row.id,
+      name: row.name,
+      classification: row.classification,
+      openingBalance: Number(row.opening_balance),
+      paymentsReceived: Number(row.payments_received),
+      advanceBalance: Number(row.advance_balance),
+      creditLimit: Number(row.credit_limit),
+      estimated5DaysSales: Number(row.estimated_5_days_sales),
+      runningBalance: Number(row.running_balance),
+      outstandingReceipts: Number(row.outstanding_receipts),
+      openingBalanceLiters: row.opening_balance_liters ? Number(row.opening_balance_liters) : undefined,
+      balanceLiters: row.balance_liters ? Number(row.balance_liters) : undefined,
+      associatedAirlines: row.associated_airlines || []
+    } as CustomerAccount));
+  },
+
+  async upsertFinCustomers(custs: CustomerAccount[]): Promise<void> {
+    const rows = custs.map(c => ({
+      id: c.id,
+      name: c.name,
+      classification: c.classification,
+      opening_balance: c.openingBalance,
+      payments_received: c.paymentsReceived,
+      advance_balance: c.advanceBalance,
+      credit_limit: c.creditLimit,
+      estimated_5_days_sales: c.estimated5DaysSales,
+      running_balance: c.runningBalance,
+      outstanding_receipts: c.outstandingReceipts,
+      opening_balance_liters: c.openingBalanceLiters ?? null,
+      balance_liters: c.balanceLiters ?? null,
+      associated_airlines: c.associatedAirlines || null
+    }));
+    const { error } = await supabase.from('fin_customers').upsert(rows);
+    if (error) {
+      console.error('[Supabase] upsertFinCustomers failed:', error);
+      throw error;
+    }
+  },
+
+  async getFinUpcomingPayments(): Promise<UpcomingPayment[]> {
+    const { data, error } = await supabase.from('fin_upcoming_payments').select('*').order('upload_date', { ascending: false });
+    if (error) {
+      console.error('[Supabase] getFinUpcomingPayments failed:', error);
+      return [];
+    }
+    return data.map(row => ({
+      id: row.id,
+      customerId: row.customer_id,
+      customerName: row.customer_name,
+      referenceNumber: row.reference_number,
+      amount: Number(row.amount),
+      uploadDate: row.upload_date,
+      status: row.status,
+      swiftCopyUrl: row.swift_copy_url
+    } as UpcomingPayment));
+  },
+
+  async createFinUpcomingPayment(payment: UpcomingPayment): Promise<void> {
+    const row = {
+      id: payment.id,
+      customer_id: payment.customerId,
+      customer_name: payment.customerName,
+      reference_number: payment.referenceNumber,
+      amount: payment.amount,
+      upload_date: payment.uploadDate,
+      status: payment.status,
+      swift_copy_url: payment.swiftCopyUrl || null
+    };
+    const { error } = await supabase.from('fin_upcoming_payments').insert([row]);
+    if (error) {
+      console.error('[Supabase] createFinUpcomingPayment failed:', error);
+      throw error;
+    }
+  },
+
+  async updateFinUpcomingPayment(id: string, updates: Partial<UpcomingPayment>): Promise<void> {
+    const row: Record<string, any> = {};
+    if ('status' in updates) row.status = updates.status;
+    if ('swiftCopyUrl' in updates) row.swift_copy_url = updates.swiftCopyUrl;
+
+    const { error } = await supabase.from('fin_upcoming_payments').update(row).eq('id', id);
+    if (error) {
+      console.error('[Supabase] updateFinUpcomingPayment failed:', error);
+      throw error;
+    }
+  },
+
+  async getFinInvoices(): Promise<Invoice[]> {
+    const { data, error } = await supabase.from('fin_invoices').select('*').order('date', { ascending: false });
+    if (error) {
+      console.error('[Supabase] getFinInvoices failed:', error);
+      return [];
+    }
+    return data.map(row => ({
+      id: row.id,
+      invoiceNumber: row.invoice_number,
+      customerId: row.customer_id,
+      customerName: row.customer_name,
+      classification: row.classification,
+      amount: Number(row.amount),
+      period: row.period,
+      date: row.date,
+      status: row.status,
+      remainingAmount: Number(row.remaining_amount)
+    } as Invoice));
+  },
+
+  async createFinInvoice(invoice: Invoice): Promise<void> {
+    const row = {
+      id: invoice.id,
+      invoice_number: invoice.invoiceNumber,
+      customer_id: invoice.customerId,
+      customer_name: invoice.customerName,
+      classification: invoice.classification,
+      amount: invoice.amount,
+      period: invoice.period,
+      date: invoice.date,
+      status: invoice.status,
+      remaining_amount: invoice.remainingAmount
+    };
+    const { error } = await supabase.from('fin_invoices').insert([row]);
+    if (error) {
+      console.error('[Supabase] createFinInvoice failed:', error);
+      throw error;
+    }
+  },
+
+  async upsertFinInvoices(invoices: Invoice[]): Promise<void> {
+    const rows = invoices.map(i => ({
+      id: i.id,
+      invoice_number: i.invoiceNumber,
+      customer_id: i.customerId,
+      customer_name: i.customerName,
+      classification: i.classification,
+      amount: i.amount,
+      period: i.period,
+      date: i.date,
+      status: i.status,
+      remaining_amount: i.remainingAmount
+    }));
+    const { error } = await supabase.from('fin_invoices').upsert(rows);
+    if (error) {
+      console.error('[Supabase] upsertFinInvoices failed:', error);
+      throw error;
+    }
+  },
+
+  async getFinReceipts(): Promise<Receipt[]> {
+    const { data, error } = await supabase.from('fin_receipts').select('*').order('date', { ascending: false });
+    if (error) {
+      console.error('[Supabase] getFinReceipts failed:', error);
+      return [];
+    }
+    return data.map(row => ({
+      id: row.id,
+      receiptNumber: row.receipt_number,
+      customerId: row.customer_id,
+      customerName: row.customer_name,
+      amount: Number(row.amount),
+      date: row.date,
+      status: row.status,
+      remainingAmount: Number(row.remaining_amount)
+    } as Receipt));
+  },
+
+  async createFinReceipt(receipt: Receipt): Promise<void> {
+    const row = {
+      id: receipt.id,
+      receipt_number: receipt.receiptNumber,
+      customer_id: receipt.customerId,
+      customer_name: receipt.customerName,
+      amount: receipt.amount,
+      date: receipt.date,
+      status: receipt.status,
+      remaining_amount: receipt.remainingAmount
+    };
+    const { error } = await supabase.from('fin_receipts').insert([row]);
+    if (error) {
+      console.error('[Supabase] createFinReceipt failed:', error);
+      throw error;
+    }
+  },
+
+  async upsertFinReceipts(receipts: Receipt[]): Promise<void> {
+    const rows = receipts.map(r => ({
+      id: r.id,
+      receipt_number: r.receiptNumber,
+      customer_id: r.customerId,
+      customer_name: r.customerName,
+      amount: r.amount,
+      date: r.date,
+      status: r.status,
+      remaining_amount: r.remainingAmount
+    }));
+    const { error } = await supabase.from('fin_receipts').upsert(rows);
+    if (error) {
+      console.error('[Supabase] upsertFinReceipts failed:', error);
+      throw error;
+    }
+  },
+
+  async getFinProformaRegister(): Promise<ProformaRecord[]> {
+    const { data, error } = await supabase.from('fin_proforma_register').select('*').order('date', { ascending: false });
+    if (error) {
+      console.error('[Supabase] getFinProformaRegister failed:', error);
+      return [];
+    }
+    return data.map(row => ({
+      id: row.id,
+      date: row.date,
+      customerId: row.customer_id,
+      customerName: row.customer_name,
+      amount: Number(row.amount),
+      period: row.period,
+      invoiceNumber: row.invoice_number
+    } as ProformaRecord));
+  },
+
+  async createFinProforma(record: ProformaRecord): Promise<void> {
+    const row = {
+      id: record.id,
+      date: record.date,
+      customer_id: record.customerId,
+      customer_name: record.customerName,
+      amount: record.amount,
+      period: record.period,
+      invoice_number: record.invoiceNumber
+    };
+    const { error } = await supabase.from('fin_proforma_register').insert([row]);
+    if (error) {
+      console.error('[Supabase] createFinProforma failed:', error);
+      throw error;
+    }
+  },
+
+  async getFinFuelRequests(): Promise<FuelRequest[]> {
+    const { data, error } = await supabase.from('fin_fuel_requests').select('*').order('date', { ascending: false });
+    if (error) {
+      console.error('[Supabase] getFinFuelRequests failed:', error);
+      return [];
+    }
+    return data.map(row => ({
+      id: row.id,
+      deliveryNumber: row.delivery_number,
+      customerId: row.customer_id,
+      customerName: row.customer_name,
+      date: row.date,
+      quantityLiters: Number(row.quantity_liters),
+      pricePerLiter: Number(row.price_per_liter),
+      amount: Number(row.amount),
+      aircraftReg: row.aircraft_reg,
+      status: row.status,
+      categorySector: row.category_sector,
+      operator: row.operator,
+      flightNumber: row.flight_number,
+      aircraftType: row.aircraft_type,
+      refuelTimePosition: row.refuel_time_position,
+      refuelTimeCommence: row.refuel_time_commence,
+      refuelTimeComplete: row.refuel_time_complete,
+      memoLine: row.memo_line,
+      currency: row.currency,
+      circularRate: Number(row.circular_rate),
+      discounts: Number(row.discounts),
+      gst: Number(row.gst),
+      transactionType: row.transaction_type,
+      cogsAccount: row.cogs_account,
+      invoiceNumber: row.invoice_number
+    } as FuelRequest));
+  },
+
+  async createFinFuelRequest(request: FuelRequest): Promise<void> {
+    const row = {
+      id: request.id,
+      delivery_number: request.deliveryNumber,
+      customer_id: request.customerId,
+      customer_name: request.customerName,
+      date: request.date,
+      quantity_liters: request.quantityLiters,
+      price_per_liter: request.pricePerLiter,
+      amount: request.amount,
+      aircraft_reg: request.aircraftReg,
+      status: request.status,
+      category_sector: request.categorySector,
+      operator: request.operator,
+      flight_number: request.flightNumber,
+      aircraft_type: request.aircraftType,
+      refuel_time_position: request.refuelTimePosition,
+      refuel_time_commence: request.refuelTimeCommence,
+      refuel_time_complete: request.refuelTimeComplete,
+      memo_line: request.memoLine,
+      currency: request.currency,
+      circular_rate: request.circularRate,
+      discounts: request.discounts,
+      gst: request.gst,
+      transaction_type: request.transactionType,
+      cogs_account: request.cogsAccount,
+      invoice_number: request.invoiceNumber || null
+    };
+    const { error } = await supabase.from('fin_fuel_requests').insert([row]);
+    if (error) {
+      console.error('[Supabase] createFinFuelRequest failed:', error);
+      throw error;
+    }
+  },
+
+  async updateFinFuelRequest(id: string, updates: Partial<FuelRequest>): Promise<void> {
+    const row: Record<string, any> = {};
+    if ('status' in updates) row.status = updates.status;
+    if ('invoiceNumber' in updates) row.invoice_number = updates.invoiceNumber;
+
+    const { error } = await supabase.from('fin_fuel_requests').update(row).eq('id', id);
+    if (error) {
+      console.error('[Supabase] updateFinFuelRequest failed:', error);
+      throw error;
+    }
+  },
+
+  async getFinVarianceLogs(): Promise<MonthEndVariance[]> {
+    const { data, error } = await supabase.from('fin_variance_logs').select('*').order('month', { ascending: false });
+    if (error) {
+      console.error('[Supabase] getFinVarianceLogs failed:', error);
+      return [];
+    }
+    return data.map(row => ({
+      id: row.id,
+      month: row.month,
+      fuelType: row.fuel_type,
+      fmsStockLiters: Number(row.fms_stock_liters),
+      oracleStockLiters: Number(row.oracle_stock_liters),
+      salesQuantityLiters: Number(row.sales_quantity_liters),
+      variancePercentage: Number(row.variance_percentage),
+      status: row.status,
+      physicalCheckUploaded: row.physical_check_uploaded,
+      notes: row.notes
+    } as MonthEndVariance));
+  },
+
+  async createFinVarianceLog(log: MonthEndVariance): Promise<void> {
+    const row = {
+      id: log.id,
+      month: log.month,
+      fuel_type: log.fuelType,
+      fms_stock_liters: log.fmsStockLiters,
+      oracle_stock_liters: log.oracleStockLiters,
+      sales_quantity_liters: log.salesQuantityLiters,
+      variance_percentage: log.variancePercentage,
+      status: log.status,
+      physical_check_uploaded: log.physicalCheckUploaded,
+      notes: log.notes || null
+    };
+    const { error } = await supabase.from('fin_variance_logs').insert([row]);
+    if (error) {
+      console.error('[Supabase] createFinVarianceLog failed:', error);
+      throw error;
+    }
+  },
+
+  async updateFinVarianceLog(id: string, updates: Partial<MonthEndVariance>): Promise<void> {
+    const row: Record<string, any> = {};
+    if ('status' in updates) row.status = updates.status;
+    if ('physicalCheckUploaded' in updates) row.physical_check_uploaded = updates.physicalCheckUploaded;
+    if ('notes' in updates) row.notes = updates.notes;
+
+    const { error } = await supabase.from('fin_variance_logs').update(row).eq('id', id);
+    if (error) {
+      console.error('[Supabase] updateFinVarianceLog failed:', error);
+      throw error;
+    }
+  },
+
+  async getFinProcurementPRs(): Promise<ProcurementPR[]> {
+    const { data, error } = await supabase.from('fin_procurement_prs').select('*').order('date', { ascending: false });
+    if (error) {
+      console.error('[Supabase] getFinProcurementPRs failed:', error);
+      return [];
+    }
+    return data.map(row => ({
+      id: row.id,
+      prNumber: row.pr_number,
+      date: row.date,
+      fuelType: row.fuel_type,
+      quantityLiters: Number(row.quantity_liters),
+      plattsRate: Number(row.platts_rate),
+      fobValue: Number(row.fob_value),
+      vendorInvoiceVerified: row.vendor_invoice_verified,
+      poNumber: row.po_number,
+      oracleInvoiceNumber: row.oracle_invoice_number,
+      status: row.status
+    } as ProcurementPR));
+  },
+
+  async createFinProcurementPR(pr: ProcurementPR): Promise<void> {
+    const row = {
+      id: pr.id,
+      pr_number: pr.prNumber,
+      date: pr.date,
+      fuel_type: pr.fuelType,
+      quantity_liters: pr.quantityLiters,
+      platts_rate: pr.plattsRate,
+      fob_value: pr.fobValue,
+      vendor_invoice_verified: pr.vendorInvoiceVerified,
+      po_number: pr.poNumber || null,
+      oracle_invoice_number: pr.oracleInvoiceNumber || null,
+      status: pr.status
+    };
+    const { error } = await supabase.from('fin_procurement_prs').insert([row]);
+    if (error) {
+      console.error('[Supabase] createFinProcurementPR failed:', error);
+      throw error;
+    }
+  },
+
+  async updateFinProcurementPR(id: string, updates: Partial<ProcurementPR>): Promise<void> {
+    const row: Record<string, any> = {};
+    if ('status' in updates) row.status = updates.status;
+    if ('vendorInvoiceVerified' in updates) row.vendor_invoice_verified = updates.vendorInvoiceVerified;
+    if ('poNumber' in updates) row.po_number = updates.poNumber;
+    if ('oracleInvoiceNumber' in updates) row.oracle_invoice_number = updates.oracleInvoiceNumber;
+
+    const { error } = await supabase.from('fin_procurement_prs').update(row).eq('id', id);
+    if (error) {
+      console.error('[Supabase] updateFinProcurementPR failed:', error);
+      throw error;
+    }
+  },
+
+  async getFinSurcharges(): Promise<SurchargeRecord[]> {
+    const { data, error } = await supabase.from('fin_surcharges').select('*').order('date', { ascending: false });
+    if (error) {
+      console.error('[Supabase] getFinSurcharges failed:', error);
+      return [];
+    }
+    return data.map(row => ({
+      grnNumber: row.grn_number,
+      originalValue: Number(row.original_value),
+      surchargeAmount: Number(row.surcharge_amount),
+      notes: row.notes,
+      date: row.date
+    } as SurchargeRecord));
+  },
+
+  async createFinSurcharge(surcharge: SurchargeRecord): Promise<void> {
+    const row = {
+      grn_number: surcharge.grnNumber,
+      original_value: surcharge.originalValue,
+      surcharge_amount: surcharge.surchargeAmount,
+      notes: surcharge.notes,
+      date: surcharge.date
+    };
+    const { error } = await supabase.from('fin_surcharges').insert([row]);
+    if (error) {
+      console.error('[Supabase] createFinSurcharge failed:', error);
+      throw error;
+    }
+  },
+
+  async getFinMpdSales(): Promise<MpdSale[]> {
+    const { data, error } = await supabase.from('fin_mpd_sales').select('*').order('date', { ascending: false });
+    if (error) {
+      console.error('[Supabase] getFinMpdSales failed:', error);
+      return [];
+    }
+    return data.map(row => ({
+      id: row.id,
+      deliveryNo: row.delivery_no,
+      date: row.date,
+      customerName: row.customer_name,
+      operatorName: row.operator_name,
+      regNo: row.reg_no,
+      dieselLiters: Number(row.diesel_liters),
+      petrolLiters: Number(row.petrol_liters),
+      rateDiesel: Number(row.rate_diesel),
+      ratePetrol: Number(row.rate_petrol),
+      amountDiesel: Number(row.amount_diesel),
+      amountPetrol: Number(row.amount_petrol),
+      invoiceNumber: row.invoice_number,
+      classification: row.classification,
+      type: row.type,
+      cogsAccount: row.cogs_account
+    } as MpdSale));
+  },
+
+  async createFinMpdSale(sale: MpdSale): Promise<void> {
+    const row = {
+      id: sale.id,
+      delivery_no: sale.deliveryNo,
+      date: sale.date,
+      customer_name: sale.customerName,
+      operator_name: sale.operatorName,
+      reg_no: sale.regNo,
+      diesel_liters: sale.dieselLiters,
+      petrol_liters: sale.petrolLiters,
+      rate_diesel: sale.rateDiesel,
+      rate_petrol: sale.ratePetrol,
+      amount_diesel: sale.amountDiesel,
+      amount_petrol: sale.amountPetrol,
+      invoice_number: sale.invoiceNumber || null,
+      classification: sale.classification,
+      type: sale.type,
+      cogs_account: sale.cogsAccount
+    };
+    const { error } = await supabase.from('fin_mpd_sales').insert([row]);
+    if (error) {
+      console.error('[Supabase] createFinMpdSale failed:', error);
+      throw error;
+    }
+  },
+
+  async getFinCustomsShipments(): Promise<CustomsShipment[]> {
+    const { data, error } = await supabase.from('fin_customs_shipments').select('*').order('arrival_date', { ascending: false });
+    if (error) {
+      console.error('[Supabase] getFinCustomsShipments failed:', error);
+      return [];
+    }
+    return data.map(row => ({
+      id: row.id,
+      shipmentNumber: row.shipment_number,
+      bFormNumber: row.b_form_number,
+      arrivalDate: row.arrival_date,
+      quantityLiters: Number(row.quantity_liters),
+      fobValue: Number(row.fob_value),
+      conversionFactor: row.conversion_factor,
+      metricTons: Number(row.metric_tons),
+      dutyPaid: Number(row.duty_paid),
+      royaltyRatePercent: Number(row.royalty_rate_percent),
+      royaltyAmount: Number(row.royalty_amount)
+    } as CustomsShipment));
+  },
+
+  async createFinCustomsShipment(shipment: CustomsShipment): Promise<void> {
+    const row = {
+      id: shipment.id,
+      shipment_number: shipment.shipmentNumber,
+      b_form_number: shipment.bFormNumber,
+      arrival_date: shipment.arrivalDate,
+      quantity_liters: shipment.quantityLiters,
+      fob_value: shipment.fobValue,
+      conversion_factor: shipment.conversionFactor,
+      metric_tons: shipment.metricTons,
+      duty_paid: shipment.dutyPaid,
+      royalty_rate_percent: shipment.royaltyRatePercent,
+      royalty_amount: shipment.royaltyAmount
+    };
+    const { error } = await supabase.from('fin_customs_shipments').insert([row]);
+    if (error) {
+      console.error('[Supabase] createFinCustomsShipment failed:', error);
+      throw error;
     }
   }
 };

@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { UserRole } from '../types';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { UserRole, User } from '../types';
+import { supabaseService } from '../services/supabaseService';
+import { supabase } from '../supabase';
 
 export type CustomerClassification = 'ADVANCE' | 'CREDIT' | 'CASH';
 
@@ -196,7 +198,7 @@ interface FinanceDataContextType {
 
 const FinanceDataContext = createContext<FinanceDataContextType | undefined>(undefined);
 
-export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const FinanceDataProvider: React.FC<{ children: React.ReactNode; user?: User | null }> = ({ children, user }) => {
   // Initialize mock customer list matching MACL actual worksheets
   const [customers, setCustomers] = useState<CustomerAccount[]>(() => {
     const saved = localStorage.getItem('fms_fin_customers');
@@ -514,6 +516,59 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
     localStorage.setItem('fms_fin_customs', JSON.stringify(customsShipments));
   }, [customsShipments]);
 
+  // Load from Supabase on login
+  const refreshData = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [
+        fetchedCusts,
+        fetchedUpcoming,
+        fetchedInvoices,
+        fetchedReceipts,
+        fetchedProforma,
+        fetchedRequests,
+        fetchedVariances,
+        fetchedPRs,
+        fetchedSurcharges,
+        fetchedMpd,
+        fetchedCustoms
+      ] = await Promise.all([
+        supabaseService.getFinCustomers(),
+        supabaseService.getFinUpcomingPayments(),
+        supabaseService.getFinInvoices(),
+        supabaseService.getFinReceipts(),
+        supabaseService.getFinProformaRegister(),
+        supabaseService.getFinFuelRequests(),
+        supabaseService.getFinVarianceLogs(),
+        supabaseService.getFinProcurementPRs(),
+        supabaseService.getFinSurcharges(),
+        supabaseService.getFinMpdSales(),
+        supabaseService.getFinCustomsShipments()
+      ]);
+
+      if (fetchedCusts && fetchedCusts.length > 0) setCustomers(fetchedCusts);
+      if (fetchedUpcoming && fetchedUpcoming.length > 0) setUpcomingPayments(fetchedUpcoming);
+      if (fetchedInvoices && fetchedInvoices.length > 0) setInvoices(fetchedInvoices);
+      if (fetchedReceipts && fetchedReceipts.length > 0) setReceipts(fetchedReceipts);
+      if (fetchedProforma && fetchedProforma.length > 0) setProformaRegister(fetchedProforma);
+      if (fetchedRequests && fetchedRequests.length > 0) setFuelRequests(fetchedRequests);
+      if (fetchedVariances && fetchedVariances.length > 0) setVarianceLogs(fetchedVariances);
+      if (fetchedPRs && fetchedPRs.length > 0) setProcurementPRs(fetchedPRs);
+      if (fetchedSurcharges && fetchedSurcharges.length > 0) setSurcharges(fetchedSurcharges);
+      if (fetchedMpd && fetchedMpd.length > 0) setMpdSales(fetchedMpd);
+      if (fetchedCustoms && fetchedCustoms.length > 0) setCustomsShipments(fetchedCustoms);
+    } catch (error) {
+      console.error('Error refreshing finance data:', error);
+    }
+  }, [user]);
+
+  // Sync with Supabase when user logs in
+  useEffect(() => {
+    if (user) {
+      refreshData();
+    }
+  }, [user, refreshData]);
+
   // Upload SWIFT Payment copies by a customer
   const uploadSwiftCopy = (customerId: string, referenceNumber: string, amount: number) => {
     const customer = customers.find(c => c.id === customerId);
@@ -531,31 +586,53 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
     };
 
     setUpcomingPayments(prev => [newPayment, ...prev]);
+
+    if (user) {
+      supabaseService.createFinUpcomingPayment(newPayment).catch(err => {
+        console.error('Failed to upload swift copy to Supabase:', err);
+      });
+    }
   };
 
   // Review SWIFT by Billing Team
   const reviewSwiftCopy = (paymentId: string, action: 'APPROVE' | 'REJECT') => {
+    const targetPayment = upcomingPayments.find(p => p.id === paymentId);
+    if (!targetPayment) return;
+
+    const updatedStatus = action === 'APPROVE' ? 'APPROVED' : 'PENDING_REVIEW';
+    
     setUpcomingPayments(prev => 
       prev.map(p => {
         if (p.id === paymentId) {
-          const status: 'PENDING_REVIEW' | 'APPROVED' | 'CLEARED_IN_ORACLE' = action === 'APPROVE' ? 'APPROVED' : 'PENDING_REVIEW';
-          // If approved, temporarily increase customer's advance balance in FMS (Upcoming Payment credit)
-          if (action === 'APPROVE') {
-            setCustomers(custs => 
-              custs.map(c => {
-                if (c.id === p.customerId && c.classification === 'ADVANCE') {
-                  const updatedBalance = c.advanceBalance + p.amount;
-                  return { ...c, advanceBalance: updatedBalance, runningBalance: updatedBalance };
-                }
-                return c;
-              })
-            );
-          }
-          return { ...p, status };
+          return { ...p, status: updatedStatus as any };
         }
         return p;
-      }).filter(p => !(action === 'REJECT' && p.id === paymentId)) // Remove rejected payments
+      }).filter(p => !(action === 'REJECT' && p.id === paymentId))
     );
+
+    if (action === 'APPROVE') {
+      setCustomers(custs => 
+        custs.map(c => {
+          if (c.id === targetPayment.customerId && c.classification === 'ADVANCE') {
+            const updatedBalance = c.advanceBalance + targetPayment.amount;
+            const updatedCust = { ...c, advanceBalance: updatedBalance, runningBalance: updatedBalance };
+            if (user) {
+              supabaseService.upsertFinCustomers([updatedCust]).catch(err => console.error(err));
+            }
+            return updatedCust;
+          }
+          return c;
+        })
+      );
+    }
+
+    if (user) {
+      if (action === 'REJECT') {
+        Promise.resolve(supabase.from('fin_upcoming_payments').delete().eq('id', paymentId)).catch(err => console.error(err));
+      } else {
+        supabaseService.updateFinUpcomingPayment(paymentId, { status: updatedStatus }).catch(err => console.error(err));
+      }
+    }
   };
 
   // Sync actual cleared payments entered in Oracle
@@ -563,7 +640,6 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const customer = customers.find(c => c.id === customerId);
     if (!customer) return;
 
-    // 1. Create cleared Oracle receipt
     const newReceipt: Receipt = {
       id: `rec-${Date.now()}`,
       receiptNumber: `REC-${referenceNumber}`,
@@ -577,27 +653,31 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     setReceipts(prev => [newReceipt, ...prev]);
 
-    // 2. Adjust FMS Balance if it clears a pending SWIFT copy
-    setUpcomingPayments(prev => {
-      // Find if there is an approved SWIFT copy matching this ref
-      const swift = prev.find(p => p.customerId === customerId && p.referenceNumber === referenceNumber);
-      if (swift) {
-        // If it was already approved and added to balance, keep it but change status to cleared
-        return prev.map(p => p.id === swift.id ? { ...p, status: 'CLEARED_IN_ORACLE' as const } : p).filter(p => p.id !== swift.id);
-      } else {
-        // If there was no SWIFT copy, directly increase Customer FMS balance
-        setCustomers(custs => 
-          custs.map(c => {
-            if (c.id === customerId) {
-              const updatedBal = c.advanceBalance + amount;
-              return { ...c, advanceBalance: updatedBal, runningBalance: updatedBal };
-            }
-            return c;
-          })
-        );
+    if (user) {
+      supabaseService.createFinReceipt(newReceipt).catch(err => console.error(err));
+    }
+
+    const swift = upcomingPayments.find(p => p.customerId === customerId && p.referenceNumber === referenceNumber);
+    if (swift) {
+      setUpcomingPayments(prev => prev.filter(p => p.id !== swift.id));
+      if (user) {
+        Promise.resolve(supabase.from('fin_upcoming_payments').delete().eq('id', swift.id)).catch(err => console.error(err));
       }
-      return prev;
-    });
+    } else {
+      setCustomers(custs => 
+        custs.map(c => {
+          if (c.id === customerId) {
+            const updatedBal = c.advanceBalance + amount;
+            const updatedCust = { ...c, advanceBalance: updatedBal, runningBalance: updatedBal };
+            if (user) {
+              supabaseService.upsertFinCustomers([updatedCust]).catch(err => console.error(err));
+            }
+            return updatedCust;
+          }
+          return c;
+        })
+      );
+    }
   };
 
   // Fuel request validator
@@ -605,16 +685,14 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const customer = customers.find(c => c.id === customerId);
     if (!customer) return { success: false, message: 'Customer account not found.' };
 
-    const pricePerLiter = 1.19197; // circular Jet A-1 rate mock from image
+    const pricePerLiter = 1.19197; 
     const amount = quantityLiters * pricePerLiter;
 
-    // Real-Time balance check
     if (customer.classification === 'ADVANCE') {
       if (customer.advanceBalance < amount) {
         const remaining = customer.advanceBalance;
         const short = amount - remaining;
         
-        // Log a blocked request
         const newReq: FuelRequest = {
           id: `fr-${Date.now()}`,
           deliveryNumber: `${Math.floor(312000 + Math.random() * 9000)}`,
@@ -642,18 +720,23 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
           cogsAccount: 'ISSUES'
         };
         setFuelRequests(prev => [newReq, ...prev]);
+        if (user) {
+          supabaseService.createFinFuelRequest(newReq).catch(err => console.error(err));
+        }
 
         return {
           success: false,
           message: `Insufficient Funds! Total request is $${amount.toLocaleString()} but your remaining balance is $${remaining.toLocaleString()}. Please upload a SWIFT Copy for $${short.toLocaleString()} or contact billing.`
         };
       } else {
-        // Deduct balance and approve
+        const updatedCusts: CustomerAccount[] = [];
         setCustomers(prev => 
           prev.map(c => {
             if (c.id === customerId) {
               const updatedBal = c.advanceBalance - amount;
-              return { ...c, advanceBalance: updatedBal, runningBalance: updatedBal };
+              const updated = { ...c, advanceBalance: updatedBal, runningBalance: updatedBal };
+              updatedCusts.push(updated);
+              return updated;
             }
             return c;
           })
@@ -688,19 +771,28 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
         };
         setFuelRequests(prev => [newReq, ...prev]);
 
+        if (user) {
+          supabaseService.createFinFuelRequest(newReq).catch(err => console.error(err));
+          if (updatedCusts.length > 0) {
+            supabaseService.upsertFinCustomers(updatedCusts).catch(err => console.error(err));
+          }
+        }
+
         return { success: true, message: `Fuel Request approved! $${amount.toLocaleString()} has been reserved. Dispatch in progress.` };
       }
     } else if (customer.classification === 'CREDIT') {
-      // For credit customer, check credit limit
       const debt = Math.abs(customer.runningBalance < 0 ? customer.runningBalance : 0);
       if (debt + amount > customer.creditLimit) {
         return { success: false, message: `Credit Limit Exceeded! Current outstanding is $${debt.toLocaleString()} + new request $${amount.toLocaleString()} exceeds your $${customer.creditLimit.toLocaleString()} limit.` };
       }
 
+      const updatedCusts: CustomerAccount[] = [];
       setCustomers(prev => 
         prev.map(c => {
           if (c.id === customerId) {
-            return { ...c, runningBalance: c.runningBalance - amount };
+            const updated = { ...c, runningBalance: c.runningBalance - amount };
+            updatedCusts.push(updated);
+            return updated;
           }
           return c;
         })
@@ -735,9 +827,15 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
       };
       setFuelRequests(prev => [newReq, ...prev]);
 
+      if (user) {
+        supabaseService.createFinFuelRequest(newReq).catch(err => console.error(err));
+        if (updatedCusts.length > 0) {
+          supabaseService.upsertFinCustomers(updatedCusts).catch(err => console.error(err));
+        }
+      }
+
       return { success: true, message: `Credit Uplift approved! Fuel delivery registered. Invoicing will trigger in the next periodic run.` };
     } else {
-      // Cash customer - approved but must clear immediate cash payment counter
       const newReq: FuelRequest = {
         id: `fr-${Date.now()}`,
         deliveryNumber: `${Math.floor(312000 + Math.random() * 9000)}`,
@@ -766,8 +864,11 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
         invoiceNumber: `FFF/2025/250000${Math.floor(1200 + Math.random() * 200)}`
       };
       setFuelRequests(prev => [newReq, ...prev]);
+
+      if (user) {
+        supabaseService.createFinFuelRequest(newReq).catch(err => console.error(err));
+      }
       
-      // Auto run immediate cash invoice
       setTimeout(() => {
         runBillingProcess('CASH');
       }, 500);
@@ -785,7 +886,6 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     if (targetRequests.length === 0) return;
 
-    // Group by customer
     const grouped: Record<string, typeof targetRequests> = {};
     targetRequests.forEach(r => {
       if (!grouped[r.customerId]) grouped[r.customerId] = [];
@@ -813,6 +913,9 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
 
     setInvoices(prev => [...newInvoices, ...prev]);
+    if (user) {
+      supabaseService.upsertFinInvoices(newInvoices).catch(err => console.error(err));
+    }
   };
 
   // FIFO Application of receipts against invoices
@@ -845,6 +948,11 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (modified) {
       setInvoices(activeInvoices);
       setReceipts(activeReceipts);
+
+      if (user) {
+        supabaseService.upsertFinInvoices(activeInvoices).catch(err => console.error(err));
+        supabaseService.upsertFinReceipts(activeReceipts).catch(err => console.error(err));
+      }
     }
   };
 
@@ -864,31 +972,42 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
     };
 
     setProformaRegister(prev => [newRecord, ...prev]);
+
+    if (user) {
+      supabaseService.createFinProforma(newRecord).catch(err => console.error(err));
+    }
   };
 
   // Month-end Stock Variance Approval Hierarchies
   const approveVariance = (varianceId: string, notes?: string, physicalCheckFile?: boolean) => {
+    let targetLog: MonthEndVariance | null = null;
     setVarianceLogs(prev => 
       prev.map(v => {
         if (v.id === varianceId) {
           if (v.status === 'PENDING_T3' && !v.physicalCheckUploaded && !physicalCheckFile) {
             return v; 
           }
-          return {
+          const updated = {
             ...v,
             status: 'APPROVED' as const,
             physicalCheckUploaded: physicalCheckFile || v.physicalCheckUploaded,
             notes: notes || v.notes
           };
+          targetLog = updated;
+          return updated;
         }
         return v;
       })
     );
+
+    if (user && targetLog) {
+      supabaseService.updateFinVarianceLog(varianceId, targetLog).catch(err => console.error(err));
+    }
   };
 
   // Procurement Workflow Mocks
   const createProcurementPR = (fuelType: string, quantityLiters: number, plattsRate: number) => {
-    const barrelVolume = 159; // 1 barrel = 159 liters
+    const barrelVolume = 159; 
     const barrels = quantityLiters / barrelVolume;
     const fobValue = Math.round(barrels * plattsRate);
 
@@ -905,24 +1024,64 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
     };
 
     setProcurementPRs(prev => [newPR, ...prev]);
+
+    if (user) {
+      supabaseService.createFinProcurementPR(newPR).catch(err => console.error(err));
+    }
   };
 
   const verifyVendorInvoice = (prId: string) => {
+    let targetPR: ProcurementPR | null = null;
     setProcurementPRs(prev => 
-      prev.map(pr => pr.id === prId ? { ...pr, vendorInvoiceVerified: true, status: 'INVOICE_VERIFIED' } : pr)
+      prev.map(pr => {
+        if (pr.id === prId) {
+          const updated = { ...pr, vendorInvoiceVerified: true, status: 'INVOICE_VERIFIED' as const };
+          targetPR = updated;
+          return updated;
+        }
+        return pr;
+      })
     );
+
+    if (user && targetPR) {
+      supabaseService.updateFinProcurementPR(prId, targetPR).catch(err => console.error(err));
+    }
   };
 
   const raisePO = (prId: string, poNumber: string) => {
+    let targetPR: ProcurementPR | null = null;
     setProcurementPRs(prev => 
-      prev.map(pr => pr.id === prId ? { ...pr, poNumber, status: 'PO_RAISED' } : pr)
+      prev.map(pr => {
+        if (pr.id === prId) {
+          const updated = { ...pr, poNumber, status: 'PO_RAISED' as const };
+          targetPR = updated;
+          return updated;
+        }
+        return pr;
+      })
     );
+
+    if (user && targetPR) {
+      supabaseService.updateFinProcurementPR(prId, targetPR).catch(err => console.error(err));
+    }
   };
 
   const enterAPInvoice = (prId: string, oracleInvoiceNumber: string) => {
+    let targetPR: ProcurementPR | null = null;
     setProcurementPRs(prev => 
-      prev.map(pr => pr.id === prId ? { ...pr, oracleInvoiceNumber, status: 'AP_ENTERED_ORACLE' } : pr)
+      prev.map(pr => {
+        if (pr.id === prId) {
+          const updated = { ...pr, oracleInvoiceNumber, status: 'AP_ENTERED_ORACLE' as const };
+          targetPR = updated;
+          return updated;
+        }
+        return pr;
+      })
     );
+
+    if (user && targetPR) {
+      supabaseService.updateFinProcurementPR(prId, targetPR).catch(err => console.error(err));
+    }
   };
 
   const addSurcharge = (grnNumber: string, amount: number, notes: string) => {
@@ -938,6 +1097,10 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
     };
 
     setSurcharges(prev => [newSurcharge, ...prev]);
+
+    if (user) {
+      supabaseService.createFinSurcharge(newSurcharge).catch(err => console.error(err));
+    }
   };
 
   const resetAllFinanceMockData = () => {

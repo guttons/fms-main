@@ -88,6 +88,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'forecasting', label: 'Stock Forecasting', icon: TrendingUp },
           { id: 'depot-reports', label: 'Fuel Reports', icon: ClipboardList },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
+          { id: 'history', label: 'Log History', icon: FileText },
         ];
 
       case UserRole.EXECUTIVE:

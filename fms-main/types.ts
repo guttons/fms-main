@@ -113,6 +113,7 @@ export interface FlightLog {
   deliveryNumber?: string;
   pitNumber?: string;
   operationalDate?: string;
+  logType?: 'FLIGHT' | 'SEAPLANE' | 'FILLING_STATION' | 'MARINE';
   
   // Granular Timestamps
   timestampArrived?: string;      // Arrived at Stand

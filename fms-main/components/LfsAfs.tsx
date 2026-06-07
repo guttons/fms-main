@@ -72,6 +72,7 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                 operatorId: user?.id || 'System Admin',
                 vehicleId: formData.vehicleReg.toUpperCase(),
                 status: 'COMPLETED' as const,
+                logType: 'FILLING_STATION' as const,
                 deliveryNumber: formData.invoiceNumber ? `MLE-${formData.invoiceNumber}` : undefined,
                 timestampStart: `${formData.date}T08:00:00.000Z`,
                 timestampFinalEnd: `${formData.date}T16:00:00.000Z`,

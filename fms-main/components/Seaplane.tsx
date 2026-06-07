@@ -56,6 +56,7 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                 operatorId: user?.id || 'System Admin',
                 vehicleId: formData.pumpId.toUpperCase(),
                 status: 'COMPLETED' as const,
+                logType: 'SEAPLANE' as const,
                 deliveryNumber: formData.deliveryNumber ? `MLE-${formData.deliveryNumber}` : undefined,
                 timestampStart: `${formData.date}T08:00:00.000Z`,
                 timestampFinalEnd: `${formData.date}T16:00:00.000Z`,

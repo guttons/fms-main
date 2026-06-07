@@ -226,6 +226,7 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
           operatorId: formData.operatorName || 'System Admin',
           vehicleId: formData.refuellerId.toUpperCase(),
           status: 'COMPLETED' as const,
+          logType: 'MARINE' as const,
           deliveryNumber: formData.deliveryNumber ? `MLE-${formData.deliveryNumber}` : undefined,
           timestampStart: `${formData.date}T${formData.startTime}:00.000Z`,
           timestampFinalEnd: `${formData.date}T${formData.endTime}:00.000Z`,

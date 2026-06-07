@@ -103,7 +103,7 @@ const App: React.FC = () => {
   // Wrap everything in ONE NotificationProvider so both Login and App can use toasts
   return (
     <NotificationProvider>
-      <FinanceDataProvider>
+      <FinanceDataProvider user={currentUser}>
         {!currentUser ? (
           <LoginWrapper onLogin={handleLoginSuccess} />
         ) : (
