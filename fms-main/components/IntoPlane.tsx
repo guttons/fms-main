@@ -173,20 +173,41 @@ const ScreenDashboard: React.FC<{
       const delayed = isDelayed(job.sta, job.eta);
       
       const displayStatus = (delayed && job.status === 'PENDING') ? 'DELAYED' : job.status;
+
+      // Take the first 2 characters of the flight number as the airline code (e.g. EK659→ek, Q2102→q2)
+      const airlineCode = (job.flightNumber || '').slice(0, 2).toLowerCase();
+      const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/webfids/images/${airlineCode}.gif` : null;
       
       return (
           <div key={job.id} className={`bg-surface-container-lowest p-6 rounded-2xl relative overflow-hidden transition-all shrink-0 border ${isAssignedToMe ? 'border-primary border-l-[6px] shadow-sm' : 'border-outline opacity-80'}`}>
               <div className="relative z-10">
                   <div className="flex justify-between items-start mb-6 gap-4">
                       <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                               <h3 className="text-2xl sm:text-3xl font-[900] text-on-surface tracking-tighter truncate">{job.flightNumber}</h3>
-                               {job.vehicleId && job.status !== 'PENDING' && (
-                                   <div className={`flex items-center space-x-1 px-2 py-1 rounded-md border shadow-sm animate-in fade-in zoom-in-95 duration-500 shrink-0 ${equipmentBadgeClass(job.vehicleId)}`}>
-                                       <Truck className="w-3 h-3" />
-                                       <span className="text-[9px] font-black uppercase tracking-widest leading-none">{job.vehicleId}</span>
-                                   </div>
-                               )}
+                          <div className="flex flex-wrap items-center gap-0">
+                               <h3 className="text-2xl sm:text-3xl font-[900] text-on-surface tracking-tighter">{job.flightNumber}</h3>
+                               {/* Logo + Equipment badge — grouped so they never split on mobile */}
+                               <div className="flex items-center flex-shrink-0">
+                                 {logoUrl && (
+                                   <img
+                                     src={logoUrl}
+                                     alt=""
+                                     aria-hidden="true"
+                                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                     className="h-4 w-auto object-contain select-none flex-shrink-0 -ml-1"
+                                     style={{
+                                       opacity: 0.5,
+                                       WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                       maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                     }}
+                                   />
+                                 )}
+                                 {job.vehicleId && job.status !== 'PENDING' && (
+                                     <div className={`flex items-center space-x-1 px-2 py-1 rounded-md border shadow-sm animate-in fade-in zoom-in-95 duration-500 shrink-0 ml-2 sm:ml-3 ${equipmentBadgeClass(job.vehicleId)}`}>
+                                         <Truck className="w-3 h-3" />
+                                         <span className="text-[9px] font-black uppercase tracking-widest leading-none">{job.vehicleId}</span>
+                                     </div>
+                                 )}
+                               </div>
                           </div>
                           <div className="flex flex-wrap items-center mt-2 text-on-surface-dim text-[11px] sm:text-[12px] font-bold gap-x-2.5 gap-y-1.5">
                                <div className="flex items-center whitespace-nowrap">

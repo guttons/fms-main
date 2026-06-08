@@ -187,15 +187,15 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
           </div>
 
           {/* Date Selector - Protected for Depot Operators */}
-          <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner flex items-center">
-            <Calendar className="w-3.5 h-3.5 text-primary opacity-40 ml-2.5" />
+          <div className="relative bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner flex items-center">
+            <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-primary opacity-40 pointer-events-none" />
             <input
               type="date"
               disabled={isOperator}
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
               onClick={(e) => { try { if (!isOperator && 'showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
-              className={`bg-transparent text-[11px] font-black uppercase tracking-widest text-on-surface outline-none px-3 py-1.5 [&::-webkit-calendar-picker-indicator]:cursor-pointer ${
+              className={`bg-transparent text-[11px] font-black uppercase tracking-widest text-on-surface outline-none pl-8 pr-3 py-1.5 ${
                 isOperator ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
               }`}
             />

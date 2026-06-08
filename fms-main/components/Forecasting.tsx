@@ -539,6 +539,7 @@ export const Forecasting: React.FC = () => {
                      value={targetDate}
                      min={new Date().toISOString().split('T')[0]}
                      onChange={(e) => setTargetDate(e.target.value)}
+                     onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
                      className="w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
                   />
                </div>

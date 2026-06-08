@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FuelType, BridgingLog, UserRole, EquipmentType, EquipmentStatus, User } from '../types';
-import { Droplet, Truck, CheckCircle, AlertTriangle, Save, Clock, ArrowRight, History, FileText, Users } from 'lucide-react';
+import { Droplet, Truck, CheckCircle, AlertTriangle, Save, Clock, ArrowRight, History, FileText, Users, Calendar } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useNotification } from '../context/NotificationContext';
 import { useOperationalData } from '../context/OperationalDataContext';
@@ -506,17 +506,21 @@ export const Bridging: React.FC<BridgingProps> = ({ user }) => {
                         <div className="space-y-6">
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Operational Date</label>
-                                <input 
-                                    type="date" 
-                                    name="date"
-                                    required
-                                    disabled={isOperator}
-                                    value={formData.date}
-                                    onChange={handleInputChange}
-                                    className={`w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all ${
-                                      isOperator ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                                    }`}
-                                />
+                                <div className="relative">
+                                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
+                                    <input 
+                                        type="date" 
+                                        name="date"
+                                        required
+                                        disabled={isOperator}
+                                        value={formData.date}
+                                        onChange={handleInputChange}
+                                        onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                                        className={`w-full pl-10 pr-4 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all ${
+                                          isOperator ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                                        }`}
+                                    />
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Commencement</label>

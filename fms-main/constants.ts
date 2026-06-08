@@ -17,10 +17,10 @@ export const MOCK_USERS: User[] = [
 ];
 
 export const MOCK_JOBS: FlightJob[] = [
-  { id: 'j1', flightNumber: 'SQ432', aircraftReg: '9V-SKT', aircraftType: 'A350-900', stand: 'F55', sta: '07:45', eta: '08:00', std: '09:30', assignedTo: 'u3b', assignedOfficer: 'u3', status: 'PENDING' },
-  { id: 'j2', flightNumber: 'UL102', aircraftReg: '4R-ALM', aircraftType: 'A330-300', stand: 'C12', sta: '08:15', eta: '08:15', std: '09:45', assignedTo: 'u3b', status: 'PENDING' },
-  { id: 'j3', flightNumber: 'EK659', aircraftReg: 'A6-EEO', aircraftType: 'A380-800', stand: 'D14', sta: '09:30', eta: '09:45', std: '11:15', assignedTo: 'u3b', assignedOfficer: 'u3', status: 'IN_PROGRESS', vehicleId: 'HD-01' },
-  { id: 'j4', flightNumber: 'QR882', aircraftReg: 'A7-BCX', aircraftType: 'B787-9', stand: 'E04', sta: '10:00', eta: '10:15', std: '12:00', assignedTo: 'u3b', status: 'COMPLETED', vehicleId: 'RF-04' },
+  { id: 'j1', flightNumber: 'SQ432', aircraftReg: '9V-SKT', aircraftType: 'A350-900', stand: 'F55', sta: '07:45', eta: '08:00', std: '09:30', assignedTo: 'u3b', assignedOfficer: 'u3', status: 'PENDING', route: 'SIN ➔ MLE ➔ SIN', equipmentUsage: 'HYDRANT' },
+  { id: 'j2', flightNumber: 'UL102', aircraftReg: '4R-ALM', aircraftType: 'A330-300', stand: 'C12', sta: '08:15', eta: '08:15', std: '09:45', assignedTo: 'u3b', status: 'PENDING', route: 'CMB ➔ MLE ➔ CMB', equipmentUsage: 'HYDRANT' },
+  { id: 'j3', flightNumber: 'EK659', aircraftReg: 'A6-EEO', aircraftType: 'A380-800', stand: 'D14', sta: '09:30', eta: '09:45', std: '11:15', assignedTo: 'u3b', assignedOfficer: 'u3', status: 'IN_PROGRESS', vehicleId: 'HD-01', route: 'DXB ➔ MLE ➔ DXB', equipmentUsage: 'HYDRANT' },
+  { id: 'j4', flightNumber: 'QR882', aircraftReg: 'A7-BCX', aircraftType: 'B787-9', stand: 'E04', sta: '10:00', eta: '10:15', std: '12:00', assignedTo: 'u3b', status: 'COMPLETED', vehicleId: 'RF-04', route: 'DOH ➔ MLE ➔ DOH', equipmentUsage: 'REFUELLER' },
 ];
 
 export const MOCK_DOMESTIC_FLIGHTS = [

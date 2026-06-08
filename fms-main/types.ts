@@ -99,6 +99,7 @@ export interface FlightJob {
   remarks?: string;
   deliveryNumber?: string;
   pitNumber?: string;
+  route?: string;
 }
 
 export interface FlightLog {

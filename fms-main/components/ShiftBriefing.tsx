@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Users, 
   Truck, 
@@ -256,19 +257,20 @@ export const ShiftBriefing: React.FC = () => {
                 </div>
 
                 {/* Date Picker */}
-                <div className={`flex items-center space-x-3 border rounded-xl p-2.5 shadow-inner focus-within:border-primary transition-colors w-full md:w-auto ${
+                <div className={`relative flex items-center border rounded-xl shadow-inner focus-within:border-primary transition-colors w-full md:w-auto ${
                   isHistoricalView 
                     ? 'bg-amber-500/5 border-amber-500/30 focus-within:border-amber-500' 
                     : 'bg-surface-dim border-outline'
                 }`}>
-                  <Calendar className={`w-4 h-4 shrink-0 ${isHistoricalView ? 'text-amber-400' : 'text-primary'}`} />
+                  <Calendar className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none shrink-0 ${isHistoricalView ? 'text-amber-400' : 'text-primary'}`} />
                   <input 
                     type="date"
                     id="briefing-date-picker"
                     value={selectedBriefingDate}
                     max={todayStr}
                     onChange={(e) => setSelectedBriefingDate(e.target.value)}
-                    className="bg-transparent text-[11px] font-black text-on-surface outline-none cursor-pointer w-full md:w-auto min-w-[130px]"
+                    onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                    className="bg-transparent text-[11px] font-black text-on-surface outline-none cursor-pointer w-full md:w-auto min-w-[130px] pl-9 pr-3 py-2"
                     style={{ colorScheme: 'dark' }}
                   />
                 </div>
@@ -294,6 +296,92 @@ export const ShiftBriefing: React.FC = () => {
         {/* LEFT COLUMN: Operations & Personnel */}
         <div className="col-span-12 lg:col-span-8 space-y-8">
           
+          {/* BRIEFING ATTENDANCE CARD (SUMMARY) */}
+          <div className="card-premium p-5 sm:p-8 space-y-6 group max-w-md mx-auto md:max-w-none w-full">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-primary/5 rounded-xl">
+                  <UserCheck className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Briefing Attendance</h3>
+                  <p className="text-[10px] text-on-surface-dim opacity-50 uppercase tracking-widest mt-1">Manage shift briefing attendance</p>
+                </div>
+              </div>
+              
+              <button 
+                onClick={() => setIsAttendanceModalOpen(true)}
+                className="p-2.5 bg-primary/10 text-primary hover:bg-primary/20 transition-all border border-primary/20 rounded-xl flex items-center space-x-2 px-4 shadow-sm"
+              >
+                <UserCheck className="w-4 h-4" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Mark Attendance</span>
+              </button>
+            </div>
+
+            {(() => {
+              const uniqueStaff = Array.from(new Set([
+                ...staffAssignments.activeOperators,
+                ...staffAssignments.activeOfficers,
+                ...staffAssignments.hydrantOpsOfficers,
+                staffAssignments.dutySupervisor,
+                staffAssignments.shiftInCharge
+              ].filter(Boolean)));
+
+              const presentCount = uniqueStaff.filter(id => attendees.includes(id)).length;
+
+              if (uniqueStaff.length === 0) {
+                return (
+                  <div className="text-[10px] font-bold opacity-30 uppercase italic text-center py-6 border border-dashed border-outline rounded-2xl">
+                    Assign staff above to track briefing attendance.
+                  </div>
+                );
+              }
+
+              const presentUsers = uniqueStaff
+                .map(id => activeStaff.find(u => u.id === id))
+                .filter(Boolean)
+                .filter(u => attendees.includes(u!.id));
+
+              return (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider">
+                      Present Staff ({presentCount} of {uniqueStaff.length})
+                    </span>
+                    <span className="text-[9px] font-bold text-success uppercase tracking-widest bg-success/10 border border-success/20 px-2 py-1 rounded-md">
+                      {uniqueStaff.length > 0 && presentCount === uniqueStaff.length ? 'ALL PRESENT' : 'PARTIAL ATTENDANCE'}
+                    </span>
+                  </div>
+
+                  {presentUsers.length === 0 ? (
+                    <div className="text-[10px] font-bold opacity-30 uppercase italic text-center py-4 border border-dashed border-outline rounded-xl">
+                      No staff marked present yet.
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2.5">
+                      {presentUsers.map((user: any) => (
+                        <div 
+                          key={user.id} 
+                          className="flex items-center space-x-2 bg-surface-dim border border-outline rounded-xl p-2 px-3"
+                          title={`${user.name} (${user.role.replace('_', ' ')})`}
+                        >
+                          {user.avatar ? (
+                            <img src={user.avatar} alt="" className="w-5 h-5 rounded-md object-cover" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-md bg-surface-lowest border border-outline flex items-center justify-center font-bold text-[9px] uppercase">
+                              {user.name.charAt(0)}
+                            </div>
+                          )}
+                          <span className="text-[11px] font-black text-on-surface uppercase tracking-tight truncate max-w-[100px]">{user.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl">
             {/* International Flights Card */}
             <div className="card-premium p-5 sm:p-8 space-y-6 sm:space-y-8 group hover:border-primary/20 max-w-md mx-auto md:max-w-none w-full">
@@ -427,91 +515,6 @@ export const ShiftBriefing: React.FC = () => {
             </div>
           </div>
 
-          {/* BRIEFING ATTENDANCE CARD (SUMMARY) */}
-          <div className="card-premium p-5 sm:p-8 space-y-6 group max-w-md mx-auto md:max-w-none w-full">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center space-x-4">
-                <div className="p-3 bg-primary/5 rounded-xl">
-                  <UserCheck className="w-6 h-6 text-primary" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Briefing Attendance</h3>
-                  <p className="text-[10px] text-on-surface-dim opacity-50 uppercase tracking-widest mt-1">Manage shift briefing attendance</p>
-                </div>
-              </div>
-              
-              <button 
-                onClick={() => setIsAttendanceModalOpen(true)}
-                className="p-2.5 bg-primary/10 text-primary hover:bg-primary/20 transition-all border border-primary/20 rounded-xl flex items-center space-x-2 px-4 shadow-sm"
-              >
-                <UserCheck className="w-4 h-4" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Mark Attendance</span>
-              </button>
-            </div>
-
-            {(() => {
-              const uniqueStaff = Array.from(new Set([
-                ...staffAssignments.activeOperators,
-                ...staffAssignments.activeOfficers,
-                ...staffAssignments.hydrantOpsOfficers,
-                staffAssignments.dutySupervisor,
-                staffAssignments.shiftInCharge
-              ].filter(Boolean)));
-
-              const presentCount = uniqueStaff.filter(id => attendees.includes(id)).length;
-
-              if (uniqueStaff.length === 0) {
-                return (
-                  <div className="text-[10px] font-bold opacity-30 uppercase italic text-center py-6 border border-dashed border-outline rounded-2xl">
-                    Assign staff above to track briefing attendance.
-                  </div>
-                );
-              }
-
-              const presentUsers = uniqueStaff
-                .map(id => activeStaff.find(u => u.id === id))
-                .filter(Boolean)
-                .filter(u => attendees.includes(u!.id));
-
-              return (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider">
-                      Present Staff ({presentCount} of {uniqueStaff.length})
-                    </span>
-                    <span className="text-[9px] font-bold text-success uppercase tracking-widest bg-success/10 border border-success/20 px-2 py-1 rounded-md">
-                      {uniqueStaff.length > 0 && presentCount === uniqueStaff.length ? 'ALL PRESENT' : 'PARTIAL ATTENDANCE'}
-                    </span>
-                  </div>
-
-                  {presentUsers.length === 0 ? (
-                    <div className="text-[10px] font-bold opacity-30 uppercase italic text-center py-4 border border-dashed border-outline rounded-xl">
-                      No staff marked present yet.
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-2.5">
-                      {presentUsers.map((user: any) => (
-                        <div 
-                          key={user.id} 
-                          className="flex items-center space-x-2 bg-surface-dim border border-outline rounded-xl p-2 px-3"
-                          title={`${user.name} (${user.role.replace('_', ' ')})`}
-                        >
-                          {user.avatar ? (
-                            <img src={user.avatar} alt="" className="w-5 h-5 rounded-md object-cover" />
-                          ) : (
-                            <div className="w-5 h-5 rounded-md bg-surface-lowest border border-outline flex items-center justify-center font-bold text-[9px] uppercase">
-                              {user.name.charAt(0)}
-                            </div>
-                          )}
-                          <span className="text-[11px] font-black text-on-surface uppercase tracking-tight truncate max-w-[100px]">{user.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
 
           {/* Tactical Briefing Points */}
           <div className="card-premium p-5 sm:p-10 space-y-6 sm:space-y-10 relative overflow-hidden group max-w-5xl mx-auto lg:mx-0 w-full">
@@ -741,8 +744,8 @@ export const ShiftBriefing: React.FC = () => {
       )}
 
       {/* Attendance Modal */}
-      {isAttendanceModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {isAttendanceModalOpen && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           {/* Backdrop overlay */}
           <div 
             className="absolute inset-0 bg-surface-lowest/70 backdrop-blur-md transition-opacity" 
@@ -869,7 +872,8 @@ export const ShiftBriefing: React.FC = () => {
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

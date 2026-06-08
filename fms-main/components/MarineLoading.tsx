@@ -542,6 +542,7 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
                                         disabled={isOperator}
                                         value={formData.date}
                                         onChange={handleInputChange}
+                                        onClick={(e) => { try { if (!isOperator && 'showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
                                         className={`w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all ${
                                           isOperator ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
                                         }`}

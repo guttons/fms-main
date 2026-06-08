@@ -18,6 +18,25 @@ export const Schedule: React.FC = () => {
     return (etaH * 60 + etaM) > (staH * 60 + staM);
   };
 
+  const renderRoute = (route?: string) => {
+    if (!route) return <span className="text-sm font-black tracking-tight text-on-surface-dim opacity-30">---</span>;
+    const parts = route.split(/\s+/);
+    return (
+      <div className="flex items-center text-sm font-black tracking-tight select-none">
+        {parts.map((part, idx) => {
+          if (part === 'MLE' || part === '➔' || part === '->') {
+            return (
+              <span key={idx} className="text-[10px] opacity-30 mx-1 font-bold">
+                {part}
+              </span>
+            );
+          }
+          return <span key={idx}>{part}</span>;
+        })}
+      </div>
+    );
+  };
+
   const [scheduledFlights, setScheduledFlights] = useState(flightJobs);
 
   useEffect(() => {
@@ -149,6 +168,11 @@ export const Schedule: React.FC = () => {
   const handleAddFlight = (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
+    const rawRoute = formData.get('route') as string || '';
+    const formattedRoute = rawRoute
+        .replace(/\s*➔\s*/g, ' - ')
+        .replace(/\s*-\s*/g, ' ➔ ')
+        .toUpperCase() || undefined;
     const newFlight: FlightJob = {
         id: `sf${Date.now()}`,
         flightNumber: formData.get('flight') as string,
@@ -159,7 +183,9 @@ export const Schedule: React.FC = () => {
         eta: formData.get('eta') as string,
         std: formData.get('std') as string,
         status: 'PENDING',
-        assignedTo: ''
+        assignedTo: '',
+        route: formattedRoute,
+        equipmentUsage: 'HYDRANT'
     };
     addFlightJob(newFlight);
     setIsModalOpen(false);
@@ -274,149 +300,182 @@ export const Schedule: React.FC = () => {
                 <thead className="bg-surface-dim">
                   <tr>
                     <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">FLIGHT / TASK</th>
-                    <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">PLATFORM / SECTOR</th>
-                    <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STA</th>
-                    <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">ETA</th>
-                    <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STD</th>
+                    <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">REG / STAND / ROUTE</th>
+                    <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">TIMINGS</th>
                     <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">OPERATOR ASSIGNED</th>
                     <th className="px-8 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STATUS</th>
                   </tr>
                 </thead>
                 <tbody className="bg-surface divide-y divide-outline text-on-surface">
-                  {scheduledFlights.map((item, idx) => (
-                    <tr key={item.id} className={`hover:bg-primary/[0.02] transition-colors group animate-in fade-in slide-in-from-left-4 duration-300 stagger-${Math.min(idx + 1, 5)}`}>
-                      <td className="px-8 py-6 whitespace-nowrap">
-                          <div className="flex items-center">
-                              <div className="p-3 bg-surface-lowest rounded-2xl border border-outline mr-4 group-hover:border-primary/20 transition-all">
-                                  <Plane className="w-5 h-5 text-primary" />
-                              </div>
-                              <span className="text-xl font-[900] tracking-tighter italic">{item.flightNumber}</span>
-                          </div>
-                      </td>
-                      <td className="px-8 py-6 whitespace-nowrap">
-                          <div className="text-sm font-black tracking-tight">{item.aircraftReg}</div>
-                          <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Stand {item.stand}</div>
-                      </td>
-                      <td className="px-8 py-6 whitespace-nowrap">
-                          <div className="flex items-center text-sm font-black">
-                              <Clock className="w-4 h-4 mr-2.5 text-primary opacity-40" />
-                              {(item as any).sta || '--:--'}
-                          </div>
-                      </td>
-                      <td className="px-8 py-6 whitespace-nowrap">
-                          <div className="flex items-center text-sm font-black">
-                              <Clock className="w-4 h-4 mr-2.5 text-primary" />
-                              {item.eta}
-                          </div>
-                      </td>
-                      <td className="px-8 py-6 whitespace-nowrap">
-                          <div className="flex items-center text-sm font-black">
-                              <Clock className="w-4 h-4 mr-2.5 text-primary opacity-40" />
-                              {(item as any).std || '--:--'}
-                          </div>
-                      </td>
-                      <td className="px-8 py-6 whitespace-nowrap max-w-[240px]">
-                          {item.equipmentUsage === 'REFUELLER' ? (
-                            <div className="flex space-x-2">
-                                <div className="flex-1">
-                                    <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OPERATOR</label>
-                                    {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val))}
+                  {scheduledFlights.map((item, idx) => {
+                    const airlineCode = (item.flightNumber || '').slice(0, 2).toLowerCase();
+                    const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/webfids/images/${airlineCode}.gif` : null;
+                    const delayed = isDelayed(item.sta, item.eta);
+                    const activeEquipmentUsage = item.equipmentUsage || 'HYDRANT';
+                    return (
+                      <tr key={item.id} className={`hover:bg-primary/[0.02] transition-colors group animate-in fade-in slide-in-from-left-4 duration-300 stagger-${Math.min(idx + 1, 5)}`}>
+                        <td className="px-8 py-6 whitespace-nowrap">
+                            <div className="flex items-center gap-0">
+                                <span className="text-xl font-[900] tracking-tighter italic">{item.flightNumber}</span>
+                                {logoUrl && (
+                                  <img
+                                    src={logoUrl}
+                                    alt=""
+                                    aria-hidden="true"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    className="h-4 w-auto object-contain select-none flex-shrink-0 -ml-1"
+                                    style={{
+                                      opacity: 0.5,
+                                      WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                      maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                    }}
+                                  />
+                                )}
+                            </div>
+                        </td>
+                        <td className="px-8 py-6 whitespace-nowrap">
+                            <div className="flex items-center gap-6">
+                                <div>
+                                    <div className="text-sm font-black tracking-tight">{item.aircraftReg}</div>
+                                    <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Stand {item.stand}</div>
                                 </div>
-                                <div className="flex-1">
-                                    <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OFFICER</label>
-                                    {renderOperatorSelect(item.assignedOfficer || '', (val) => handleAssignFlight(item.id, 'assignedOfficer', val))}
+                                <div className="h-6 w-[1px] bg-outline/30" />
+                                <div>
+                                    {renderRoute(item.route)}
                                 </div>
                             </div>
-                          ) : (
-                            <div>
-                                <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OPERATOR</label>
-                                {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val))}
+                        </td>
+                        <td className="px-8 py-6 whitespace-nowrap">
+                            <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-dim/30 px-4 py-2 rounded-full border border-outline/30 w-fit">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-on-surface-dim opacity-40">STA</span>
+                                    <span className="text-on-surface text-xs font-black tracking-tight">{(item as any).sta || '--:--'}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <span className={`${delayed ? 'text-error opacity-60' : 'text-primary opacity-60'}`}>ETA</span>
+                                    <span className={`${delayed ? 'text-error' : 'text-primary'} text-xs font-black tracking-tight`}>{item.eta || '--:--'}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-warning opacity-60">STD</span>
+                                    <span className="text-warning text-xs font-black tracking-tight">{(item as any).std || '--:--'}</span>
+                                </div>
                             </div>
-                          )}
-                      </td>
-                      <td className="px-8 py-6 whitespace-nowrap text-right text-sm font-medium">
-                          {!item.equipmentUsage && configuringFlightId !== item.id ? (
-                              <button 
-                                  onClick={() => setConfiguringFlightId(item.id)}
-                                  className="text-[10px] font-black text-on-surface-dim hover:text-primary uppercase tracking-[0.2em] transition-all"
-                              >
-                                  CONFIGURE
-                              </button>
-                          ) : (
-                              <div className="flex justify-end items-center space-x-2">
-                                  <button onClick={() => { handleAssignFlight(item.id, 'equipmentUsage', 'HYDRANT'); setConfiguringFlightId(null); }} className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all ${item.equipmentUsage === 'HYDRANT' ? 'bg-cyan-500 text-white border-cyan-500 shadow-[0_0_12px_rgba(6,182,212,0.4)]' : 'bg-surface-dim text-on-surface-dim border-outline hover:text-cyan-500 hover:border-cyan-500/50'}`}>HD</button>
-                                  <button onClick={() => { handleAssignFlight(item.id, 'equipmentUsage', 'REFUELLER'); setConfiguringFlightId(null); }} className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all ${item.equipmentUsage === 'REFUELLER' ? 'bg-amber-500 text-white border-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.4)]' : 'bg-surface-dim text-on-surface-dim border-outline hover:text-amber-500 hover:border-amber-500/50'}`}>RF</button>
+                        </td>
+                        <td className="px-8 py-6 whitespace-nowrap max-w-[240px]">
+                            {activeEquipmentUsage === 'REFUELLER' ? (
+                              <div className="flex space-x-2">
+                                  <div className="flex-1">
+                                      <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OPERATOR</label>
+                                      {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val))}
+                                  </div>
+                                  <div className="flex-1">
+                                      <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OFFICER</label>
+                                      {renderOperatorSelect(item.assignedOfficer || '', (val) => handleAssignFlight(item.id, 'assignedOfficer', val))}
+                                  </div>
                               </div>
-                          )}
-                      </td>
-                    </tr>
-                  ))}
+                            ) : (
+                              <div>
+                                  <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OPERATOR</label>
+                                  {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val))}
+                              </div>
+                            )}
+                        </td>
+                        <td className="px-8 py-6 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex justify-end items-center space-x-2">
+                                <button onClick={() => handleAssignFlight(item.id, 'equipmentUsage', 'HYDRANT')} className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all ${activeEquipmentUsage === 'HYDRANT' ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white border-transparent' : 'bg-surface-dim text-on-surface-dim border-outline hover:text-cyan-500 hover:border-cyan-500/50'}`}>HD</button>
+                                <button onClick={() => handleAssignFlight(item.id, 'equipmentUsage', 'REFUELLER')} className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all ${activeEquipmentUsage === 'REFUELLER' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white border-transparent' : 'bg-surface-dim text-on-surface-dim border-outline hover:text-amber-500 hover:border-amber-500/50'}`}>RF</button>
+                            </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             {/* Mobile View */}
             <div className="block md:hidden p-4 space-y-4">
-              {scheduledFlights.map((item) => (
-                <div key={item.id} className="card-premium p-4 sm:p-6 border-outline group transition-all active:scale-[0.98] max-w-md mx-auto w-full">
-                  <div className="flex justify-between items-start mb-6">
-                    <div className="flex items-center">
-                      <div className="p-3 bg-surface-dim rounded-2xl border border-outline mr-4">
-                        <Plane className="w-5 h-5 text-primary" />
-                      </div>
-                      <div>
-                        <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">{item.flightNumber}</h3>
-                        <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">{item.aircraftReg} • Stand {item.stand}</p>
-                      </div>
-                    </div>
-                    <button className="p-2 text-primary opacity-40 hover:opacity-100">
-                      <Settings className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 mb-6 p-3 bg-surface-dim rounded-xl border border-outline">
-                    <div className="text-center border-r border-outline/30">
-                      <p className="text-[8px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-1">STA</p>
-                      <p className="text-[11px] font-[900] text-on-surface">{(item as any).sta || '--:--'}</p>
-                    </div>
-                    <div className="text-center border-r border-outline/30">
-                      <p className="text-[8px] font-black text-primary uppercase tracking-widest mb-1">ETA</p>
-                      <p className="text-[11px] font-[900] text-primary">{item.eta}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-[8px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-1">STD</p>
-                      <p className="text-[11px] font-[900] text-on-surface">{(item as any).std || '--:--'}</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Assigned Crew</label>
-                        <div className="flex space-x-2">
-                            <button onClick={() => handleAssignFlight(item.id, 'equipmentUsage', 'HYDRANT')} className={`px-2 py-1 text-[8px] font-black uppercase rounded transition-all ${item.equipmentUsage === 'HYDRANT' ? 'bg-cyan-500 text-white shadow-[0_0_8px_rgba(6,182,212,0.4)]' : 'bg-surface-dim text-on-surface-dim hover:text-cyan-500'}`}>HD</button>
-                            <button onClick={() => handleAssignFlight(item.id, 'equipmentUsage', 'REFUELLER')} className={`px-2 py-1 text-[8px] font-black uppercase rounded transition-all ${item.equipmentUsage === 'REFUELLER' ? 'bg-amber-500 text-white shadow-[0_0_8px_rgba(245,158,11,0.4)]' : 'bg-surface-dim text-on-surface-dim hover:text-amber-500'}`}>RF</button>
-                        </div>
-                    </div>
-                    {item.equipmentUsage === 'REFUELLER' ? (
-                        <div className="grid grid-cols-2 gap-2">
-                            <div>
-                                <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OPERATOR</label>
-                                {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val))}
-                            </div>
-                            <div>
-                                <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OFFICER</label>
-                                {renderOperatorSelect(item.assignedOfficer || '', (val) => handleAssignFlight(item.id, 'assignedOfficer', val))}
-                            </div>
-                        </div>
-                    ) : (
+              {scheduledFlights.map((item) => {
+                const airlineCode = (item.flightNumber || '').slice(0, 2).toLowerCase();
+                const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/webfids/images/${airlineCode}.gif` : null;
+                const delayed = isDelayed(item.sta, item.eta);
+                const activeEquipmentUsage = item.equipmentUsage || 'HYDRANT';
+                return (
+                  <div key={item.id} className="card-premium p-4 sm:p-6 border-outline group transition-all active:scale-[0.98] max-w-md mx-auto w-full">
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="flex items-center min-w-0">
                         <div>
-                            <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OPERATOR</label>
-                            {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val))}
+                          <div className="flex items-center gap-0">
+                            <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">{item.flightNumber}</h3>
+                            {logoUrl && (
+                              <img
+                                src={logoUrl}
+                                alt=""
+                                aria-hidden="true"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                className="h-4 w-auto object-contain select-none flex-shrink-0 -ml-1"
+                                style={{
+                                  opacity: 0.5,
+                                  WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                  maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                }}
+                              />
+                            )}
+                          </div>
+                          <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">
+                            {item.aircraftReg} • Stand {item.stand} {item.route ? `• ${item.route}` : ''}
+                          </p>
                         </div>
-                    )}
+                      </div>
+                      <button className="p-2 text-primary opacity-40 hover:opacity-100">
+                        <Settings className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 mb-6 p-3 bg-surface-dim rounded-xl border border-outline">
+                      <div className="text-center border-r border-outline/30">
+                        <p className="text-[8px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-1">STA</p>
+                        <p className="text-[11px] font-[900] text-on-surface">{(item as any).sta || '--:--'}</p>
+                      </div>
+                      <div className="text-center border-r border-outline/30">
+                        <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${delayed ? 'text-error opacity-60' : 'text-primary opacity-60'}`}>ETA</p>
+                        <p className={`text-[11px] font-[900] ${delayed ? 'text-error' : 'text-primary'}`}>{item.eta}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[8px] font-black text-warning opacity-60 uppercase tracking-widest mb-1">STD</p>
+                        <p className="text-[11px] font-[900] text-warning">{(item as any).std || '--:--'}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Assigned Crew</label>
+                          <div className="flex space-x-2">
+                              <button onClick={() => handleAssignFlight(item.id, 'equipmentUsage', 'HYDRANT')} className={`px-2 py-1 text-[8px] font-black uppercase rounded transition-all ${activeEquipmentUsage === 'HYDRANT' ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white border-transparent' : 'bg-surface-dim text-on-surface-dim hover:text-cyan-500'}`}>HD</button>
+                              <button onClick={() => handleAssignFlight(item.id, 'equipmentUsage', 'REFUELLER')} className={`px-2 py-1 text-[8px] font-black uppercase rounded transition-all ${activeEquipmentUsage === 'REFUELLER' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white border-transparent' : 'bg-surface-dim text-on-surface-dim hover:text-amber-500'}`}>RF</button>
+                          </div>
+                      </div>
+                      {activeEquipmentUsage === 'REFUELLER' ? (
+                          <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                  <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OPERATOR</label>
+                                  {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val))}
+                              </div>
+                              <div>
+                                  <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OFFICER</label>
+                                  {renderOperatorSelect(item.assignedOfficer || '', (val) => handleAssignFlight(item.id, 'assignedOfficer', val))}
+                              </div>
+                          </div>
+                      ) : (
+                          <div>
+                              <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OPERATOR</label>
+                              {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val))}
+                          </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -726,9 +785,15 @@ export const Schedule: React.FC = () => {
                 
                 <h3 className="text-3xl font-[900] text-on-surface mb-8 tracking-tighter uppercase italic relative z-10">INITIATE TASK</h3>
                 <form onSubmit={handleAddFlight} className="space-y-8 relative z-10">
-                    <div>
-                        <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Flight Identity</label>
-                        <input name="flight" required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="E.G. EK405" />
+                    <div className="grid grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Flight Identity</label>
+                            <input name="flight" required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="E.G. EK405" />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Route</label>
+                            <input name="route" required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="E.G. DXB-MLE-DXB" />
+                        </div>
                     </div>
                     <div className="grid grid-cols-2 gap-6">
                         <div>

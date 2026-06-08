@@ -4,6 +4,7 @@ import { Equipment, EquipmentStatus as EqStatus, EquipmentType, MaintenanceDetai
 import { EQUIPMENT } from '../constants';
 import { 
   Truck, 
+  Calendar,
   Settings, 
   AlertCircle, 
   CheckCircle2, 
@@ -639,21 +640,29 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-2 tracking-[0.2em]">Breakdown Date</label>
-                  <input 
-                    type="date"
-                    className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-sm text-on-surface focus:border-primary outline-none"
-                    value={maintForm.breakdownDate}
-                    onChange={e => setMaintForm({...maintForm, breakdownDate: e.target.value})}
-                  />
+                  <div className="relative">
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
+                    <input 
+                      type="date"
+                      className="w-full pl-10 pr-4 py-3 bg-surface-lowest border border-outline rounded-xl text-sm text-on-surface focus:border-primary outline-none cursor-pointer"
+                      value={maintForm.breakdownDate}
+                      onChange={e => setMaintForm({...maintForm, breakdownDate: e.target.value})}
+                      onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-2 tracking-[0.2em]">Expected Return</label>
-                  <input 
-                    type="date"
-                    className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-sm text-on-surface focus:border-primary outline-none"
-                    value={maintForm.expectedReturnDate}
-                    onChange={e => setMaintForm({...maintForm, expectedReturnDate: e.target.value})}
-                  />
+                  <div className="relative">
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
+                    <input 
+                      type="date"
+                      className="w-full pl-10 pr-4 py-3 bg-surface-lowest border border-outline rounded-xl text-sm text-on-surface focus:border-primary outline-none cursor-pointer"
+                      value={maintForm.expectedReturnDate}
+                      onChange={e => setMaintForm({...maintForm, expectedReturnDate: e.target.value})}
+                      onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>

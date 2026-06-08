@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { MOCK_USERS } from '../constants';
-import { FileText, Search, Download, Filter, X } from 'lucide-react';
+import { FileText, Search, Download, Filter, X, Calendar } from 'lucide-react';
 import { Logo } from './Logo';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { supabaseService } from '../services/supabaseService';
@@ -337,13 +337,16 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex flex-col">
                  <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2">Filter By Date</label>
-                 <input 
-                    type="date"
-                    value={filterDate}
-                    onChange={(e) => setFilterDate(e.target.value)}
-                    onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
-                    className="bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-[12px] font-bold text-on-surface focus:border-primary outline-none [&::-webkit-calendar-picker-indicator]:cursor-pointer cursor-pointer"
-                 />
+                 <div className="relative">
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
+                    <input 
+                       type="date"
+                       value={filterDate}
+                       onChange={(e) => setFilterDate(e.target.value)}
+                       onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                       className="w-full pl-10 pr-4 py-3 bg-surface-lowest border border-outline rounded-xl text-[12px] font-bold text-on-surface focus:border-primary outline-none cursor-pointer"
+                    />
+                 </div>
               </div>
               {filterDate && (
                  <button onClick={() => setFilterDate('')} className="mt-6 text-[10px] font-black text-error uppercase tracking-widest hover:underline">Clear Date</button>
@@ -883,12 +886,16 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Operation Date</label>
-                    <input 
-                      type="date"
-                      value={editForm.date}
-                      onChange={e => setEditForm({...editForm, date: e.target.value})}
-                      className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
-                    />
+                    <div className="relative">
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
+                      <input 
+                        type="date"
+                        value={editForm.date}
+                        onChange={e => setEditForm({...editForm, date: e.target.value})}
+                        onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                        className="w-full pl-10 pr-4 py-2 bg-surface-lowest border border-outline rounded-xl text-on-surface text-[12px] font-bold focus:border-primary outline-none cursor-pointer"
+                      />
+                    </div>
                   </div>
                   
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

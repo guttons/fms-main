@@ -5,7 +5,8 @@ import {
 } from 'recharts';
 import { 
   Calendar, FileText, TrendingUp, ShieldCheck, AlertTriangle, 
-  ArrowUpRight, Info, Database, Layers, Ship, Plane, Compass, Activity
+  ArrowUpRight, Info, Database, Layers, Ship, Plane, Compass, Activity, Clock,
+  Plus, Trash2, Sliders
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -28,6 +29,17 @@ interface StockSummarySnapshot {
   orderQtyLiters: number;
   daysToShipment: number;
   coverageStatus: 'secure' | 'warning' | 'critical';
+}
+
+interface ShipmentData {
+  id: string;
+  shipmentNumber: string;
+  vessel: string;
+  arrivalDate: string;
+  isConfirmed: boolean;
+  orderQtyMt: number;
+  averageSales: number;
+  deadStock: number;
 }
 
 // Deterministic mock snapshot generator based on selected date string
@@ -107,6 +119,37 @@ const generate30DayTrend = (endDateStr: string) => {
   return data;
 };
 
+const CustomTooltip: React.FC<any> = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    const closingStockObj = payload.find((item: any) => item.name === 'Closing Stock');
+    const ullageObj = payload.find((item: any) => item.name === 'Available Ullage');
+    const rawData = payload[0]?.payload || {};
+    const closingStock = rawData.closingStock;
+    const availableUllage = rawData.remainingUllageAfterReceipt !== undefined 
+      ? Math.max(0, rawData.remainingUllageAfterReceipt)
+      : (ullageObj ? Number(ullageObj.value) : 0);
+
+    return (
+      <div className="bg-[var(--color-surface-dim)] border border-[var(--color-outline)] p-4 rounded-xl shadow-premium space-y-1.5 min-w-[200px]">
+        <p className="text-xs font-black text-[var(--color-on-surface)] uppercase tracking-wider mb-2">{label}</p>
+        {closingStockObj && (
+          <div className="flex justify-between items-center gap-6">
+            <span className="font-bold text-[var(--color-on-surface-dim)] opacity-85">Closing Stock:</span>
+            <span className="font-mono font-black text-primary">{closingStock?.toLocaleString()} L</span>
+          </div>
+        )}
+        {ullageObj && (
+          <div className="flex justify-between items-center gap-6">
+            <span className="font-bold text-[var(--color-on-surface-dim)] opacity-85">Available Ullage:</span>
+            <span className="font-mono font-black text-[var(--color-on-surface)]">{availableUllage?.toLocaleString()} L</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
+
 export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
   // Static daily view calendar state (initializes to Velana operational day)
   const [selectedDate, setSelectedDate] = useState<string>('2026-06-02');
@@ -131,8 +174,178 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
     return parseFloat((snapshot.daysRemaining - snapshot.daysToShipment).toFixed(1));
   }, [snapshot]);
 
+  const [activeTab, setActiveTab] = useState<'daily' | 'shipment'>('daily');
+  const [currentDate, setCurrentDate] = useState<string>('2026-06-07');
+  const [initialStock, setInitialStock] = useState<number>(33765840);
+  
+  const [shipments, setShipments] = useState<ShipmentData[]>([
+    {
+      id: '168',
+      shipmentNumber: '168 Delivery',
+      vessel: 'MT.ALIMAS',
+      arrivalDate: '2026-06-12',
+      isConfirmed: true,
+      orderQtyMt: 10000,
+      averageSales: 552887,
+      deadStock: 2500000
+    },
+    {
+      id: '169',
+      shipmentNumber: '169 Delivery',
+      vessel: 'MT.NEON',
+      arrivalDate: '2026-07-14',
+      isConfirmed: false,
+      orderQtyMt: 13000,
+      averageSales: 665000,
+      deadStock: 2500000
+    },
+    {
+      id: '170',
+      shipmentNumber: '170 Delivery',
+      vessel: 'MT.NEON',
+      arrivalDate: '2026-08-02',
+      isConfirmed: false,
+      orderQtyMt: 11000,
+      averageSales: 745000,
+      deadStock: 2500000
+    },
+    {
+      id: '171',
+      shipmentNumber: '171 Delivery',
+      vessel: 'MT.NEON',
+      arrivalDate: '2026-08-21',
+      isConfirmed: false,
+      orderQtyMt: 10000,
+      averageSales: 732000,
+      deadStock: 2500000
+    },
+    {
+      id: '172',
+      shipmentNumber: '172 Delivery',
+      vessel: 'MT.NEON',
+      arrivalDate: '2026-09-09',
+      isConfirmed: false,
+      orderQtyMt: 10000,
+      averageSales: 727000,
+      deadStock: 2500000
+    }
+  ]);
+
+  const getDaysBetween = (d1Str: string, d2Str: string) => {
+    const d1 = new Date(d1Str);
+    const d2 = new Date(d2Str);
+    d1.setHours(0,0,0,0);
+    d2.setHours(0,0,0,0);
+    const diffTime = d2.getTime() - d1.getTime();
+    return Math.round(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  const calculatedShipments = useMemo(() => {
+    let prevDate = currentDate;
+    let prevClosingStock = initialStock;
+    
+    return shipments.map((shipment, index) => {
+      let days = getDaysBetween(prevDate, shipment.arrivalDate);
+      if (index === 0) {
+        days = Math.max(0, days - 1);
+      }
+      
+      const estimatedSales = days * shipment.averageSales;
+      const orderQtyLiters = shipment.orderQtyMt * 1270;
+      const openingStock = index === 0 ? initialStock : prevClosingStock;
+      const availableUllageAtArrival = Math.max(0, 45000000 - openingStock);
+      const closingStock = openingStock - estimatedSales + orderQtyLiters;
+      const remainingUllageAfterReceipt = 45000000 - closingStock;
+      const stockAvailableAtVesselArrival = openingStock - estimatedSales - shipment.deadStock;
+      
+      const stockDaysAtArrival = shipment.averageSales > 0 
+        ? parseFloat(((stockAvailableAtVesselArrival / shipment.averageSales) - 1).toFixed(2))
+        : 0;
+        
+      prevDate = shipment.arrivalDate;
+      prevClosingStock = closingStock;
+      
+      return {
+        ...shipment,
+        daysBetween: days,
+        openingStock,
+        orderQtyLiters,
+        estimatedSales,
+        availableUllageAtArrival,
+        closingStock,
+        remainingUllageAfterReceipt,
+        remainingUllageDisplay: Math.max(0, remainingUllageAfterReceipt),
+        stockAvailableAtVesselArrival,
+        stockDaysAtArrival
+      };
+    });
+  }, [shipments, currentDate, initialStock]);
+
+  const visibleShipments = useMemo(() => {
+    return calculatedShipments.slice(-6);
+  }, [calculatedShipments]);
+
+  const renderCustomTick = (props: any) => {
+    const { x, y, payload } = props;
+    const shipment = calculatedShipments.find(s => s.shipmentNumber === payload.value);
+    const color = shipment?.isConfirmed ? '#22c55e' : '#f59e0b'; // success green / warning yellow-orange
+    return (
+      <text x={x} y={y + 12} textAnchor="middle" fill={color} fontSize={9} fontWeight={900} className="uppercase tracking-wider">
+        {payload.value}
+      </text>
+    );
+  };
+
+  const handleUpdateShipment = (index: number, fields: Partial<ShipmentData>) => {
+    setShipments(prev => prev.map((s, i) => i === index ? { ...s, ...fields } : s));
+  };
+
+  const handleAddShipment = () => {
+    setShipments(prev => {
+      const lastShipment = prev[prev.length - 1];
+      const match = lastShipment.shipmentNumber.match(/(\d+)/);
+      const lastNum = match ? parseInt(match[1], 10) : 172;
+      const nextNum = lastNum + 1;
+      
+      const lastDate = new Date(lastShipment.arrivalDate);
+      lastDate.setDate(lastDate.getDate() + 19);
+      const nextArrivalDate = lastDate.toISOString().split('T')[0];
+
+      return [
+        ...prev,
+        {
+          id: String(nextNum),
+          shipmentNumber: `${nextNum} Delivery`,
+          vessel: lastShipment.vessel,
+          arrivalDate: nextArrivalDate,
+          isConfirmed: false,
+          orderQtyMt: lastShipment.orderQtyMt,
+          averageSales: lastShipment.averageSales,
+          deadStock: lastShipment.deadStock
+        }
+      ];
+    });
+  };
+
+  const handleRemoveShipment = () => {
+    setShipments(prev => {
+      if (prev.length <= 1) return prev;
+      return prev.slice(0, -1);
+    });
+  };
+
   return (
-    <div className="p-4 lg:p-10 space-y-6 lg:space-y-10 pb-32">
+    <div 
+      className="p-4 lg:p-10 space-y-6 lg:space-y-10 pb-32"
+      onClick={(e) => {
+        const activeEl = document.activeElement;
+        if (activeEl instanceof HTMLInputElement && activeEl.type === 'date') {
+          if (e.target !== activeEl) {
+            activeEl.blur();
+          }
+        }
+      }}
+    >
       {/* Header Panel */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 lg:gap-8 border-b border-outline pb-6 lg:pb-10">
         <div>
@@ -154,286 +367,825 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
         <div className="flex flex-col space-y-2 shrink-0">
           <label className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Archive Snapshot Date</label>
           <div className="relative flex items-center gap-3 bg-surface-dim border border-outline px-5 py-3 rounded-2xl shadow-inner hover:border-primary/50 transition-colors">
-            <Calendar className="w-4 h-4 text-primary shrink-0" />
+            <Calendar className="w-4 h-4 text-primary shrink-0 opacity-50 pointer-events-none" />
             <input 
               type="date" 
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
+              onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
               className="bg-transparent border-none outline-none text-xs font-black uppercase text-on-surface cursor-pointer select-none focus:ring-0 w-[140px]"
             />
           </div>
         </div>
       </div>
 
-      {/* ── DAILY SUMMARY STATUS BANNER ── */}
-      <div className="card-premium p-6 lg:p-8 flex flex-col md:flex-row justify-between items-center gap-6 border-l-4 border-l-primary relative overflow-hidden">
-        <div className="flex items-center gap-4">
-          <div className={`p-4 rounded-2xl flex items-center justify-center shrink-0 border transition-all ${
-            snapshot.coverageStatus === 'secure' ? 'bg-success/10 text-success border-success/20 shadow-glow' : 
-            snapshot.coverageStatus === 'warning' ? 'bg-warning/10 text-warning border-warning/20' : 
-            'bg-error/10 text-error border-error/20 animate-pulse shadow-glow'
-          }`}>
-            {snapshot.coverageStatus === 'secure' ? <ShieldCheck className="w-6 h-6" /> : 
-             snapshot.coverageStatus === 'warning' ? <AlertTriangle className="w-6 h-6 text-warning" /> : 
-             <AlertTriangle className="w-6 h-6 text-error" />}
-          </div>
-          <div>
-            <h4 className="text-xs font-black uppercase tracking-widest text-on-surface">Static Daily Summary snapshot</h4>
-            <p className="text-[10px] font-bold text-on-surface-dim opacity-60 mt-1 leading-relaxed">
-              Recorded on <span className="text-on-surface font-mono">{snapshot.date}</span>. This view remains constant throughout the operational day and compiles static figures generated for this historical date.
-            </p>
-          </div>
-        </div>
-        
-        {/* Coverage Threshold indicator */}
-        <div className="flex flex-col items-end">
-          <span className={`text-[9px] font-black px-3.5 py-1.5 rounded-full uppercase tracking-wider ${
-            snapshot.coverageStatus === 'secure' ? 'bg-success/15 text-success border border-success/25' : 
-            snapshot.coverageStatus === 'warning' ? 'bg-warning/15 text-warning border border-warning/25' : 
-            'bg-error/15 text-error border border-error/25 animate-pulse'
-          }`}>
-            {snapshot.coverageStatus === 'secure' ? 'Secure Coverage (≥ 22D)' : 
-             snapshot.coverageStatus === 'warning' ? 'Warning Coverage (15D - 22D)' : 
-             'Critical stock Coverage (< 15D)'}
-          </span>
+      {/* Tab Selector */}
+      <div className="mb-6 flex justify-center sm:justify-start">
+        <div className="bg-surface-dim p-1.5 rounded-[22px] border border-outline flex relative w-full max-w-[340px] sm:max-w-none sm:w-[680px] shadow-inner overflow-hidden">
+          <div 
+            className={`absolute top-1.5 bottom-1.5 left-1.5 w-[calc(50%-6px)] kinetic-gradient rounded-[18px] transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${
+              activeTab === 'shipment' ? 'translate-x-full' : 'translate-x-0'
+            }`}
+          />
+          <button
+            onClick={() => setActiveTab('daily')}
+            className={`flex-1 py-3 px-2 sm:px-6 rounded-[18px] text-[9px] sm:text-[10px] font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] relative z-10 transition-colors duration-300 sm:whitespace-nowrap ${
+              activeTab === 'daily' ? 'text-white' : 'text-on-surface-dim opacity-60'
+            }`}
+          >
+            Daily Stock & Coverage
+          </button>
+          <button
+            onClick={() => setActiveTab('shipment')}
+            className={`flex-1 py-3 px-2 sm:px-6 rounded-[18px] text-[9px] sm:text-[10px] font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] relative z-10 transition-colors duration-300 sm:whitespace-nowrap ${
+              activeTab === 'shipment' ? 'text-white' : 'text-on-surface-dim opacity-60'
+            }`}
+          >
+            Shipment Forecast Summer 2026
+          </button>
         </div>
       </div>
 
-      {/* ── DAILY SUMMARY SECTION ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-10">
-        
-        {/* Widget 1: Stock Position */}
-        <div className="card-premium p-6 lg:p-8 flex flex-col justify-between space-y-6">
-          <div>
-            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Stock Position</span>
-            <h3 className="text-sm font-black uppercase text-on-surface mt-1 border-b border-outline/45 pb-3 flex items-center">
-              <Database className="w-4 h-4 mr-2.5 text-primary opacity-60" /> Inventory Sounding Dips
-            </h3>
+      {activeTab === 'daily' ? (
+        <>
+          {/* ── DAILY SUMMARY STATUS BANNER ── */}
+          <div className="card-premium p-6 lg:p-8 flex flex-col md:flex-row justify-between items-center gap-6 border-l-4 border-l-primary relative overflow-hidden">
+            <div className="flex items-center gap-4">
+              <div className={`p-4 rounded-2xl flex items-center justify-center shrink-0 border transition-all ${
+                snapshot.coverageStatus === 'secure' ? 'bg-success/10 text-success border-success/20 shadow-glow' : 
+                snapshot.coverageStatus === 'warning' ? 'bg-warning/10 text-warning border-warning/20' : 
+                'bg-error/10 text-error border-error/20 animate-pulse shadow-glow'
+              }`}>
+                {snapshot.coverageStatus === 'secure' ? <ShieldCheck className="w-6 h-6" /> : 
+                 snapshot.coverageStatus === 'warning' ? <AlertTriangle className="w-6 h-6 text-warning" /> : 
+                 <AlertTriangle className="w-6 h-6 text-error" />}
+              </div>
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-widest text-on-surface">Static Daily Summary snapshot</h4>
+                <p className="text-[10px] font-bold text-on-surface-dim opacity-60 mt-1 leading-relaxed">
+                  Recorded on <span className="text-on-surface font-mono">{snapshot.date}</span>. This view remains constant throughout the operational day and compiles static figures generated for this historical date.
+                </p>
+              </div>
+            </div>
             
-            <div className="space-y-4 mt-6">
-              <div className="flex justify-between items-center text-xs font-bold text-on-surface-dim border-b border-outline/30 pb-2">
-                <span>Opening Inventory Stock:</span>
-                <span className="font-mono text-on-surface">{snapshot.openingStock.toLocaleString()} L</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-bold text-on-surface-dim border-b border-outline/30 pb-2">
-                <span>Physical sound Balance:</span>
-                <span className="font-mono text-on-surface">{snapshot.physicalBalance.toLocaleString()} L</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-bold text-on-surface-dim border-b border-outline/30 pb-2">
-                <span>Dead Stock calibration:</span>
-                <span className="font-mono text-on-surface-dim opacity-70">{snapshot.deadStock.toLocaleString()} L</span>
-              </div>
-              <div className="flex justify-between items-baseline text-xs font-black text-primary pt-2">
-                <span>Usable Fuel Available:</span>
-                <span className="font-mono text-xl">{snapshot.usableFuel.toLocaleString()} L</span>
-              </div>
-            </div>
-          </div>
-          
-          {/* Visual Usable Progress Bar */}
-          <div className="space-y-2 pt-4">
-            <div className="flex justify-between text-[9px] font-black text-on-surface-dim uppercase">
-              <span>Dead Stock ({Math.round((snapshot.deadStock / snapshot.physicalBalance) * 100)}%)</span>
-              <span>Usable ({Math.round((snapshot.usableFuel / snapshot.physicalBalance) * 100)}%)</span>
-            </div>
-            <div className="h-2 w-full bg-surface-dim rounded-full overflow-hidden flex border border-outline/20">
-              <div className="h-full bg-on-surface-dim opacity-30" style={{ width: `${(snapshot.deadStock / snapshot.physicalBalance) * 100}%` }}></div>
-              <div className="h-full kinetic-gradient shadow-glow" style={{ width: `${(snapshot.usableFuel / snapshot.physicalBalance) * 100}%` }}></div>
-            </div>
-          </div>
-        </div>
-
-        {/* Widget 2: Sales Analysis */}
-        <div className="card-premium p-6 lg:p-8 flex flex-col justify-between space-y-6">
-          <div>
-            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Sales Analysis</span>
-            <h3 className="text-sm font-black uppercase text-on-surface mt-1 border-b border-outline/45 pb-3 flex items-center">
-              <TrendingUp className="w-4 h-4 mr-2.5 text-primary opacity-60" /> Daily Burn Rates
-            </h3>
-            
-            <div className="space-y-5 mt-6">
-              <div className="bg-surface-dim/40 border border-outline p-4 rounded-xl flex justify-between items-center">
-                <div>
-                  <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50">Previous Day Sales</span>
-                  <span className="text-base font-black text-on-surface font-mono">{snapshot.prevDaySales.toLocaleString()} L</span>
-                </div>
-                <div className="p-2 bg-primary/10 rounded-lg text-primary text-[10px] font-black font-mono">
-                  Day Sale
-                </div>
-              </div>
-
-              <div className="bg-surface-dim/40 border border-outline p-4 rounded-xl flex justify-between items-center">
-                <div>
-                  <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50">7-Day Moving average</span>
-                  <span className="text-base font-black text-on-surface font-mono">{snapshot.sevenDayAvgSales.toLocaleString()} L</span>
-                </div>
-                <div className="p-2 bg-success/10 rounded-lg text-success text-[10px] font-black font-mono">
-                  7D average
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-outline/30 flex justify-between items-center">
-            <span className="text-[10px] font-bold text-on-surface-dim uppercase">Comparison Variance:</span>
-            <span className={`text-[10px] font-black flex items-center gap-1 ${
-              snapshot.prevDaySales > snapshot.sevenDayAvgSales ? 'text-primary' : 'text-success'
-            }`}>
-              {snapshot.prevDaySales > snapshot.sevenDayAvgSales ? (
-                <>
-                  <ArrowUpRight className="w-4 h-4" /> +{Math.round(((snapshot.prevDaySales - snapshot.sevenDayAvgSales) / snapshot.sevenDayAvgSales) * 100)}% vs Average
-                </>
-              ) : (
-                <>
-                  <ArrowUpRight className="w-4 h-4 rotate-90" /> -{Math.round(((snapshot.sevenDayAvgSales - snapshot.prevDaySales) / snapshot.sevenDayAvgSales) * 100)}% vs Average
-                </>
-              )}
-            </span>
-          </div>
-        </div>
-
-        {/* Widget 3: Availability Projections */}
-        <div className="card-premium p-6 lg:p-8 flex flex-col justify-between space-y-6">
-          <div>
-            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Availability Projections</span>
-            <h3 className="text-sm font-black uppercase text-on-surface mt-1 border-b border-outline/45 pb-3 flex items-center">
-              <Compass className="w-4 h-4 mr-2.5 text-primary opacity-60" /> Endurance Forecasting
-            </h3>
-
-            <div className="grid grid-cols-2 gap-4 mt-6">
-              <div className="bg-surface-dim/40 border border-outline p-4 rounded-xl">
-                <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50">Stock Duration</span>
-                <span className="text-2xl font-[900] text-primary font-mono tracking-tighter block mt-1">{snapshot.daysRemaining} <span className="text-[10px] font-black not-italic uppercase opacity-55">Days</span></span>
-              </div>
-              <div className="bg-surface-dim/40 border border-outline p-4 rounded-xl">
-                <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50">Depletion Date</span>
-                <span className="text-sm font-black text-on-surface font-mono block mt-2 whitespace-nowrap">{snapshot.estimatedLastTill}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl flex gap-3">
-            <Info className="w-5 h-5 text-primary shrink-0 opacity-70" />
-            <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider leading-relaxed">
-              Depletion date reflects usable stocks only, based on current moving sales averages. Reorder point is 22 days.
-            </p>
-          </div>
-        </div>
-
-      </div>
-
-      {/* ── SHIPMENT WINDOW ANALYSIS & MONTHLY PERFORMANCE OVERVIEW ── */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-10">
-        
-        {/* Shipment Window Analysis Widget */}
-        <div className="xl:col-span-2 card-premium p-6 lg:p-8 flex flex-col justify-between space-y-6">
-          <div>
-            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Shipment Window Analysis</span>
-            <h3 className="text-sm font-black uppercase text-on-surface mt-1 border-b border-outline/45 pb-3 flex items-center">
-              <Ship className="w-4 h-4 mr-2.5 text-primary opacity-60" /> Tanker Discharge Interface Window
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
-              {/* Next Arrival */}
-              <div className="bg-surface-dim/40 border border-outline rounded-xl overflow-hidden">
-                <div className="px-4 pt-4 pb-3">
-                  <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50 mb-2">Next Arrival Date</span>
-                  <span className="text-sm font-black text-on-surface font-mono block leading-tight">{snapshot.nextShipmentArrival}</span>
-                  <span className="text-[9px] font-bold text-primary block mt-1.5 uppercase tracking-wide">MT ALIMAS Vol. 18</span>
-                </div>
-              </div>
-              {/* Order Quantity */}
-              <div className="bg-surface-dim/40 border border-outline rounded-xl overflow-hidden">
-                <div className="px-4 pt-4 pb-3">
-                  <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50 mb-2">Order Quantity</span>
-                  <span className="text-base font-black text-on-surface font-mono block leading-tight">{snapshot.orderQtyMt.toLocaleString()} MT</span>
-                  <span className="text-[9px] font-bold text-on-surface-dim opacity-60 block mt-1 font-mono">{(snapshot.orderQtyLiters / 1000000).toFixed(2)}M Liters</span>
-                </div>
-              </div>
-              {/* Arrival Window */}
-              <div className="bg-surface-dim/40 border border-outline rounded-xl overflow-hidden">
-                <div className="px-4 pt-4 pb-3">
-                  <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50 mb-2">Arrival Window</span>
-                  <span className="text-base font-black text-on-surface font-mono block leading-tight">{snapshot.daysToShipment} Days</span>
-                  <span className="text-[9px] font-bold text-on-surface-dim opacity-60 block mt-1 uppercase">Tanks ready for ullage</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className={`p-4 border rounded-xl flex items-center justify-between gap-4 text-xs font-bold
-            ${safetyWindow >= 0 ? 'bg-success/5 border-success/20 text-success' : 'bg-error/5 border-error/20 text-error'}
-          `}>
-            <div className="flex items-center gap-3">
-              <ShieldCheck className="w-5 h-5 shrink-0" />
-              <span className="text-[10px] font-black uppercase tracking-wider">
-                {safetyWindow >= 0 
-                  ? `Safety Window Secure: Next tanker arrives ${safetyWindow} days before stock depletion.`
-                  : `Safety Window Critical Alert: Depletion projected ${Math.abs(safetyWindow)} days before shipment arrival!`
-                }
+            {/* Coverage Threshold indicator */}
+            <div className="flex flex-col items-end">
+              <span className={`text-[9px] font-black px-3.5 py-1.5 rounded-full uppercase tracking-wider ${
+                snapshot.coverageStatus === 'secure' ? 'bg-success/15 text-success border border-success/25' : 
+                snapshot.coverageStatus === 'warning' ? 'bg-warning/15 text-warning border border-warning/25' : 
+                'bg-error/15 text-error border border-error/25 animate-pulse'
+              }`}>
+                {snapshot.coverageStatus === 'secure' ? 'Secure Coverage (≥ 22D)' : 
+                 snapshot.coverageStatus === 'warning' ? 'Warning Coverage (15D - 22D)' : 
+                 'Critical stock Coverage (< 15D)'}
               </span>
             </div>
-            <span className="font-mono text-sm font-black whitespace-nowrap">
-              {safetyWindow >= 0 ? `+${safetyWindow} Days` : `${safetyWindow} Days`}
-            </span>
           </div>
-        </div>
 
-        {/* Monthly Performance Overview (MTD) */}
-        <div className="card-premium p-6 lg:p-8 flex flex-col justify-between space-y-6">
-          <div>
-            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Monthly Performance Overview</span>
-            <h3 className="text-sm font-black uppercase text-on-surface mt-1 border-b border-outline/45 pb-3 flex items-center">
-              <Layers className="w-4 h-4 mr-2.5 text-primary opacity-60" /> Month-to-Date (MTD) Summary
-            </h3>
+          {/* ── DAILY SUMMARY SECTION ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-10">
+            
+            {/* Widget 1: Stock Position */}
+            <div className="card-premium p-6 lg:p-8 flex flex-col justify-between space-y-6">
+              <div>
+                <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Stock Position</span>
+                <h3 className="text-sm font-black uppercase text-on-surface mt-1 border-b border-outline/45 pb-3 flex items-center">
+                  <Database className="w-4 h-4 mr-2.5 text-primary opacity-60" /> Inventory Sounding Dips
+                </h3>
+                
+                <div className="space-y-4 mt-6">
+                  <div className="flex justify-between items-center text-xs font-bold text-on-surface-dim border-b border-outline/30 pb-2">
+                    <span>Opening Inventory Stock:</span>
+                    <span className="font-mono text-on-surface">{snapshot.openingStock.toLocaleString()} L</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-bold text-on-surface-dim border-b border-outline/30 pb-2">
+                    <span>Physical sound Balance:</span>
+                    <span className="font-mono text-on-surface">{snapshot.physicalBalance.toLocaleString()} L</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-bold text-on-surface-dim border-b border-outline/30 pb-2">
+                    <span>Dead Stock calibration:</span>
+                    <span className="font-mono text-on-surface-dim opacity-70">{snapshot.deadStock.toLocaleString()} L</span>
+                  </div>
+                  <div className="flex justify-between items-baseline text-xs font-black text-primary pt-2">
+                    <span>Usable Fuel Available:</span>
+                    <span className="font-mono text-xl">{snapshot.usableFuel.toLocaleString()} L</span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Visual Usable Progress Bar */}
+              <div className="space-y-2 pt-4">
+                <div className="flex justify-between text-[9px] font-black text-on-surface-dim uppercase">
+                  <span>Dead Stock ({Math.round((snapshot.deadStock / snapshot.physicalBalance) * 100)}%)</span>
+                  <span>Usable ({Math.round((snapshot.usableFuel / snapshot.physicalBalance) * 100)}%)</span>
+                </div>
+                <div className="h-2 w-full bg-surface-dim rounded-full overflow-hidden flex border border-outline/20">
+                  <div className="h-full bg-on-surface-dim opacity-30" style={{ width: `${(snapshot.deadStock / snapshot.physicalBalance) * 100}%` }}></div>
+                  <div className="h-full kinetic-gradient shadow-glow" style={{ width: `${(snapshot.usableFuel / snapshot.physicalBalance) * 100}%` }}></div>
+                </div>
+              </div>
+            </div>
 
-            <div className="space-y-4 mt-6">
-              <div className="flex justify-between items-center text-xs font-bold text-on-surface-dim border-b border-outline/30 pb-2">
-                <span>Total Uplift Volume (L):</span>
-                <span className="font-mono text-on-surface font-black text-sm">{(mtdDetails.volume / 1000).toFixed(0)}K L</span>
+            {/* Widget 2: Sales Analysis */}
+            <div className="card-premium p-6 lg:p-8 flex flex-col justify-between space-y-6">
+              <div>
+                <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Sales Analysis</span>
+                <h3 className="text-sm font-black uppercase text-on-surface mt-1 border-b border-outline/45 pb-3 flex items-center">
+                  <TrendingUp className="w-4 h-4 mr-2.5 text-primary opacity-60" /> Daily Burn Rates
+                </h3>
+                
+                <div className="space-y-5 mt-6">
+                  <div className="bg-surface-dim/40 border border-outline p-4 rounded-xl flex justify-between items-center">
+                    <div>
+                      <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50">Previous Day Sales</span>
+                      <span className="text-base font-black text-on-surface font-mono">{snapshot.prevDaySales.toLocaleString()} L</span>
+                    </div>
+                    <div className="p-2 bg-primary/10 rounded-lg text-primary text-[10px] font-black font-mono">
+                      Day Sale
+                    </div>
+                  </div>
+
+                  <div className="bg-surface-dim/40 border border-outline p-4 rounded-xl flex justify-between items-center">
+                    <div>
+                      <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50">7-Day Moving average</span>
+                      <span className="text-base font-black text-on-surface font-mono">{snapshot.sevenDayAvgSales.toLocaleString()} L</span>
+                    </div>
+                    <div className="p-2 bg-success/10 rounded-lg text-success text-[10px] font-black font-mono">
+                      7D average
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="flex justify-between items-center text-xs font-bold text-on-surface-dim border-b border-outline/30 pb-2">
-                <span>Total Flights Served:</span>
-                <span className="font-mono text-on-surface font-black text-sm">{mtdDetails.flights} Flights</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-black text-success pt-1">
-                <span>YoY Variance (vs. Last Year):</span>
-                <span className="flex items-center font-mono gap-1 text-sm font-black">
-                  <ArrowUpRight className="w-4 h-4" /> +{mtdDetails.variance}%
+
+              <div className="pt-4 border-t border-outline/30 flex justify-between items-center">
+                <span className="text-[10px] font-bold text-on-surface-dim uppercase">Comparison Variance:</span>
+                <span className={`text-[10px] font-black flex items-center gap-1 ${
+                  snapshot.prevDaySales > snapshot.sevenDayAvgSales ? 'text-primary' : 'text-success'
+                }`}>
+                  {snapshot.prevDaySales > snapshot.sevenDayAvgSales ? (
+                    <>
+                      <ArrowUpRight className="w-4 h-4" /> +{Math.round(((snapshot.prevDaySales - snapshot.sevenDayAvgSales) / snapshot.sevenDayAvgSales) * 100)}% vs Average
+                    </>
+                  ) : (
+                    <>
+                      <ArrowUpRight className="w-4 h-4 rotate-90" /> -{Math.round(((snapshot.sevenDayAvgSales - snapshot.prevDaySales) / snapshot.sevenDayAvgSales) * 100)}% vs Average
+                    </>
+                  )}
                 </span>
               </div>
             </div>
+
+            {/* Widget 3: Availability Projections */}
+            <div className="card-premium p-6 lg:p-8 flex flex-col justify-between space-y-6">
+              <div>
+                <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Availability Projections</span>
+                <h3 className="text-sm font-black uppercase text-on-surface mt-1 border-b border-outline/45 pb-3 flex items-center">
+                  <Compass className="w-4 h-4 mr-2.5 text-primary opacity-60" /> Endurance Forecasting
+                </h3>
+
+                <div className="grid grid-cols-2 gap-4 mt-6">
+                  <div className="bg-surface-dim/40 border border-outline p-4 rounded-xl">
+                    <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50">Stock Duration</span>
+                    <span className="text-2xl font-[900] text-primary font-mono tracking-tighter block mt-1">{snapshot.daysRemaining} <span className="text-[10px] font-black not-italic uppercase opacity-55">Days</span></span>
+                  </div>
+                  <div className="bg-surface-dim/40 border border-outline p-4 rounded-xl">
+                    <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50">Depletion Date</span>
+                    <span className="text-sm font-black text-on-surface font-mono block mt-2 whitespace-nowrap">{snapshot.estimatedLastTill}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl flex gap-3">
+                <Info className="w-5 h-5 text-primary shrink-0 opacity-70" />
+                <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider leading-relaxed">
+                  Depletion date reflects usable stocks only, based on current moving sales averages. Reorder point is 22 days.
+                </p>
+              </div>
+            </div>
+
           </div>
 
-          <div className="pt-4 border-t border-outline/30 flex justify-between items-center text-[9px] font-black uppercase text-on-surface-dim opacity-50 tracking-wider">
-            <span>Billing Period: MTD Real-Time</span>
-            <span>Aviation Sector</span>
+          {/* ── SHIPMENT WINDOW ANALYSIS & MONTHLY PERFORMANCE OVERVIEW ── */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-10">
+            
+            {/* Shipment Window Analysis Widget */}
+            <div className="xl:col-span-2 card-premium p-6 lg:p-8 flex flex-col justify-between space-y-6">
+              <div>
+                <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Shipment Window Analysis</span>
+                <h3 className="text-sm font-black uppercase text-on-surface mt-1 border-b border-outline/45 pb-3 flex items-center">
+                  <Ship className="w-4 h-4 mr-2.5 text-primary opacity-60" /> Tanker Discharge Interface Window
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+                  {/* Next Arrival */}
+                  <div className="bg-surface-dim/40 border border-outline rounded-xl overflow-hidden">
+                    <div className="px-4 pt-4 pb-3">
+                      <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50 mb-2">Next Arrival Date</span>
+                      <span className="text-sm font-black text-on-surface font-mono block leading-tight">{snapshot.nextShipmentArrival}</span>
+                      <span className="text-[9px] font-bold text-primary block mt-1.5 uppercase tracking-wide">MT ALIMAS Vol. 18</span>
+                    </div>
+                  </div>
+                  {/* Order Quantity */}
+                  <div className="bg-surface-dim/40 border border-outline rounded-xl overflow-hidden">
+                    <div className="px-4 pt-4 pb-3">
+                      <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50 mb-2">Order Quantity</span>
+                      <span className="text-base font-black text-on-surface font-mono block leading-tight">{snapshot.orderQtyMt.toLocaleString()} MT</span>
+                      <span className="text-[9px] font-bold text-on-surface-dim opacity-60 block mt-1 font-mono">{(snapshot.orderQtyLiters / 1000000).toFixed(2)}M Liters</span>
+                    </div>
+                  </div>
+                  {/* Arrival Window */}
+                  <div className="bg-surface-dim/40 border border-outline rounded-xl overflow-hidden">
+                    <div className="px-4 pt-4 pb-3">
+                      <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50 mb-2">Arrival Window</span>
+                      <span className="text-base font-black text-on-surface font-mono block leading-tight">{snapshot.daysToShipment} Days</span>
+                      <span className="text-[9px] font-bold text-on-surface-dim opacity-60 block mt-1 uppercase">Tanks ready for ullage</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className={`p-4 border rounded-xl flex items-center justify-between gap-4 text-xs font-bold
+                ${safetyWindow >= 0 ? 'bg-success/5 border-success/20 text-success' : 'bg-error/5 border-error/20 text-error'}
+              `}>
+                <div className="flex items-center gap-3">
+                  <ShieldCheck className="w-5 h-5 shrink-0" />
+                  <span className="text-[10px] font-black uppercase tracking-wider">
+                    {safetyWindow >= 0 
+                      ? `Safety Window Secure: Next tanker arrives ${safetyWindow} days before stock depletion.`
+                      : `Safety Window Critical Alert: Depletion projected ${Math.abs(safetyWindow)} days before shipment arrival!`
+                    }
+                  </span>
+                </div>
+                <span className="font-mono text-sm font-black whitespace-nowrap">
+                  {safetyWindow >= 0 ? `+${safetyWindow} Days` : `${safetyWindow} Days`}
+                </span>
+              </div>
+            </div>
+
+            {/* Monthly Performance Overview (MTD) */}
+            <div className="card-premium p-6 lg:p-8 flex flex-col justify-between space-y-6">
+              <div>
+                <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Monthly Performance Overview</span>
+                <h3 className="text-sm font-black uppercase text-on-surface mt-1 border-b border-outline/45 pb-3 flex items-center">
+                  <Layers className="w-4 h-4 mr-2.5 text-primary opacity-60" /> Month-to-Date (MTD) Summary
+                </h3>
+
+                <div className="space-y-4 mt-6">
+                  <div className="flex justify-between items-center text-xs font-bold text-on-surface-dim border-b border-outline/30 pb-2">
+                    <span>Total Uplift Volume (L):</span>
+                    <span className="font-mono text-on-surface font-black text-sm">{(mtdDetails.volume / 1000).toFixed(0)}K L</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-bold text-on-surface-dim border-b border-outline/30 pb-2">
+                    <span>Total Flights Served:</span>
+                    <span className="font-mono text-on-surface font-black text-sm">{mtdDetails.flights} Flights</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-black text-success pt-1">
+                    <span>YoY Variance (vs. Last Year):</span>
+                    <span className="flex items-center font-mono gap-1 text-sm font-black">
+                      <ArrowUpRight className="w-4 h-4" /> +{mtdDetails.variance}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-outline/30 flex justify-between items-center text-[9px] font-black uppercase text-on-surface-dim opacity-50 tracking-wider">
+                <span>Billing Period: MTD Real-Time</span>
+                <span>Aviation Sector</span>
+              </div>
+            </div>
+
+          </div>
+
+          {/* ── STOCK DAYS COVERAGE TREND GRAPH (30 DAYS) ── */}
+          <div className="grid grid-cols-1 gap-6 lg:gap-10">
+            <div className="card-premium p-6 lg:p-8">
+              <h3 className="text-xs font-black text-on-surface uppercase tracking-[0.2em] mb-8 flex items-center">
+                <Activity className="w-4 h-4 mr-3 text-primary opacity-60 animate-pulse" />
+                Stock Coverage Days Remaining Trend Curve [Last 30-Day Snapshot Archive]
+              </h3>
+              <div className="h-[280px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trendData} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
+                    <XAxis dataKey="date" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)', fontWeight: 900}} axisLine={false} tickLine={false} />
+                    <YAxis label={{ value: 'Days Remaining', angle: -90, position: 'insideLeft', style: {fontSize: '9px', fill: 'var(--color-on-surface-dim)', fontWeight: 900} }} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--color-surface-dim)', border: '1px solid var(--color-outline)', borderRadius: '12px' }} />
+                    <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900 }} iconType="circle" />
+                    <Line type="monotone" dataKey="daysRemaining" name="Stock Days Remaining" stroke="var(--color-primary)" strokeWidth={3.5} dot={false} activeDot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="space-y-6 lg:space-y-10 animate-in fade-in duration-300">
+          {/* ── SHIPMENT FORECAST STRATEGY BOARD ── */}
+          <div className="card-premium p-6 lg:p-8 overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 border-b border-outline/30 pb-6">
+              <div>
+                <h3 className="text-sm font-black uppercase text-on-surface flex items-center">
+                  <Ship className="w-4 h-4 mr-2.5 text-primary opacity-60" /> Shipment Forecast Strategy Board
+                </h3>
+                <p className="text-[10px] font-bold text-on-surface-dim opacity-60 mt-1.5 uppercase tracking-wider">
+                  Operational Window: Summer 2026 • Max Capacity: 45,000,000 L (3 Tanks at NFF)
+                </p>
+              </div>
+              
+              {/* Controls */}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 bg-surface-dim/40 border border-outline/50 p-4 rounded-2xl w-full sm:w-auto">
+                {/* Current Date Control */}
+                <div className="flex flex-col items-center space-y-1.5 text-center w-full sm:w-auto">
+                  <label className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Forecast Base Date</label>
+                  <input 
+                    type="date" 
+                    value={currentDate}
+                    onChange={(e) => setCurrentDate(e.target.value)}
+                    onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                    className="bg-surface-lowest border border-outline px-3.5 py-2 rounded-xl text-[11px] font-black uppercase text-on-surface focus:ring-1 focus:ring-primary outline-none cursor-pointer text-center w-full max-w-[180px]"
+                  />
+                </div>
+                
+                {/* Initial Stock Control */}
+                <div className="flex flex-col items-center space-y-1.5 text-center w-full sm:w-auto">
+                  <label className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Starting Inventory [L]</label>
+                  <input 
+                    type="text" 
+                    inputMode="numeric"
+                    value={initialStock.toLocaleString()}
+                    onChange={(e) => {
+                      const clean = e.target.value.replace(/,/g, '').replace(/\D/g, '');
+                      const num = clean === '' ? 0 : parseInt(clean, 10);
+                      setInitialStock(num);
+                    }}
+                    className="bg-surface-lowest border border-outline px-3.5 py-2 rounded-xl text-[11px] font-mono text-on-surface font-black focus:ring-1 focus:ring-primary outline-none w-full max-w-[180px] text-center"
+                  />
+                </div>
+
+                {/* Add / Remove Delivery Controls */}
+                <div className="flex items-center justify-center gap-2 pt-2 sm:pt-4 w-full sm:w-auto">
+                  <button 
+                    onClick={handleAddShipment}
+                    className="bg-primary/15 text-primary border border-primary/25 hover:bg-gradient-to-br hover:from-[#0ea5e9] hover:to-[#0369a1] hover:text-white hover:border-transparent px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 h-[38px] shadow-premium"
+                  >
+                    <Plus className="w-4 h-4" /> Add Delivery
+                  </button>
+                  {shipments.length > 5 && (
+                    <button 
+                      onClick={handleRemoveShipment}
+                      className="bg-error/15 text-error border border-error/25 hover:bg-gradient-to-br hover:from-[#ef4444] hover:to-[#b91c1c] hover:text-white hover:border-transparent px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 h-[38px]"
+                    >
+                      <Trash2 className="w-4 h-4" /> Remove Last
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Horizontal Scroll Table wrapper */}
+            <div className="overflow-x-auto custom-scrollbar border border-outline rounded-2xl bg-surface-dim/20 shadow-inner">
+              <table className="w-full border-collapse text-left text-xs table-fixed min-w-[1000px]">
+                <thead>
+                  <tr>
+                    <th className="sticky left-0 bg-surface border-r border-b border-outline px-2 sm:px-5 py-4 font-black uppercase text-on-surface tracking-wider w-14 sm:w-64 z-20 text-center sm:text-left">
+                      <span className="hidden sm:inline">Parameter</span>
+                      <span className="inline sm:hidden flex justify-center"><Sliders className="w-4 h-4 text-primary" /></span>
+                    </th>
+                    {visibleShipments.map((s) => {
+                      const originalIdx = shipments.findIndex(item => item.id === s.id);
+                      return (
+                        <th 
+                          key={s.id} 
+                          className={`px-4 py-4 text-center font-bold border-b border-outline w-48 transition-colors duration-300 z-10 ${
+                            s.isConfirmed ? 'bg-primary/10 text-primary' : 'bg-surface-lowest'
+                          }`}
+                        >
+                          <div className="flex flex-col items-center space-y-1.5">
+                            <span className="text-[10px] font-black uppercase tracking-wider">{s.shipmentNumber}</span>
+                            <button
+                              onClick={() => handleUpdateShipment(originalIdx, { isConfirmed: !s.isConfirmed })}
+                              className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest transition-all ${
+                                s.isConfirmed 
+                                  ? 'bg-success/20 text-success border border-success/30 hover:bg-success hover:text-white' 
+                                  : 'bg-warning/20 text-warning border border-warning/30 hover:bg-warning hover:text-white'
+                              }`}
+                            >
+                              {s.isConfirmed ? '✓ Confirmed' : '⚡ Forecast'}
+                            </button>
+                          </div>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Vessel Name */}
+                  <tr className="hover:bg-surface-dim/20 transition-colors border-b border-outline/30">
+                    <td className="sticky left-0 bg-surface border-r border-outline px-2 sm:px-5 py-1 font-bold text-on-surface-dim z-10 w-14 sm:w-64 group cursor-pointer focus:outline-none" tabIndex={0}>
+                      <div className="flex items-center justify-center sm:justify-start h-12">
+                        <Ship className="w-3.5 h-3.5 sm:mr-2.5 text-primary opacity-50 shrink-0" />
+                        <span className="hidden sm:inline">Vessel Name</span>
+                        <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 sm:hidden">
+                          Vessel Name
+                        </div>
+                      </div>
+                    </td>
+                    {visibleShipments.map((s) => {
+                      const originalIdx = shipments.findIndex(item => item.id === s.id);
+                      return (
+                        <td key={s.id} className={`px-3 py-1 text-center ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                          <input 
+                            type="text" 
+                            value={s.vessel}
+                            onChange={(e) => handleUpdateShipment(originalIdx, { vessel: e.target.value })}
+                            className="bg-transparent border border-transparent hover:border-outline/50 focus:border-primary focus:bg-surface-lowest outline-none rounded-lg px-2.5 py-1.5 text-xs font-black text-center text-on-surface w-full transition-all"
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+
+                  {/* Date of Arrival */}
+                  <tr className="hover:bg-surface-dim/20 transition-colors border-b border-outline/30">
+                    <td className="sticky left-0 bg-surface border-r border-outline px-2 sm:px-5 py-1 font-bold text-on-surface-dim z-10 w-14 sm:w-64 group cursor-pointer focus:outline-none" tabIndex={0}>
+                      <div className="flex items-center justify-center sm:justify-start h-12">
+                        <Calendar className="w-3.5 h-3.5 sm:mr-2.5 text-primary opacity-50 shrink-0" />
+                        <span className="hidden sm:inline">Date of Arrival</span>
+                        <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 sm:hidden">
+                          Date of Arrival
+                        </div>
+                      </div>
+                    </td>
+                    {visibleShipments.map((s) => {
+                      const originalIdx = shipments.findIndex(item => item.id === s.id);
+                      return (
+                        <td key={s.id} className={`px-3 py-1 text-center ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                          <input 
+                            type="date" 
+                            value={s.arrivalDate}
+                            onChange={(e) => handleUpdateShipment(originalIdx, { arrivalDate: e.target.value })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {}
+                            }}
+                            className="bg-transparent border border-transparent hover:border-outline/50 focus:border-primary focus:bg-surface-lowest outline-none rounded-lg px-2.5 py-1.5 text-xs font-mono text-center text-on-surface w-full transition-all cursor-pointer font-black"
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+
+                  {/* Days Until/Between Arrival */}
+                  <tr className="hover:bg-surface-dim/20 transition-colors border-b border-outline/30">
+                    <td className="sticky left-0 bg-surface border-r border-outline px-2 sm:px-5 py-1 font-bold text-on-surface-dim z-10 w-14 sm:w-64 group cursor-pointer focus:outline-none" tabIndex={0}>
+                      <div className="flex items-center justify-center sm:justify-start h-12">
+                        <Clock className="w-3.5 h-3.5 sm:mr-2.5 text-primary opacity-50 shrink-0" />
+                        <span className="hidden sm:inline">Days until / between arrival</span>
+                        <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 sm:hidden">
+                          Days until / between arrival
+                        </div>
+                      </div>
+                    </td>
+                    {visibleShipments.map((s) => (
+                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-black text-on-surface ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                        {s.daysBetween} Days
+                      </td>
+                    ))}
+                  </tr>
+
+                  {/* Opening Stock */}
+                  <tr className="hover:bg-surface-dim/20 transition-colors border-b border-outline/30">
+                    <td className="sticky left-0 bg-surface border-r border-outline px-2 sm:px-5 py-1 font-bold text-on-surface-dim z-10 w-14 sm:w-64 group cursor-pointer focus:outline-none" tabIndex={0}>
+                      <div className="flex items-center justify-center sm:justify-start h-12">
+                        <Database className="w-3.5 h-3.5 sm:mr-2.5 text-primary opacity-50 shrink-0" />
+                        <span className="hidden sm:inline">Opening Stock [L]</span>
+                        <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 sm:hidden">
+                          Opening Stock [L]
+                        </div>
+                      </div>
+                    </td>
+                    {visibleShipments.map((s) => (
+                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-bold text-on-surface-dim ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                        {s.openingStock.toLocaleString()}
+                      </td>
+                    ))}
+                  </tr>
+
+                  {/* Order Quantity [MT] */}
+                  <tr className="hover:bg-surface-dim/20 transition-colors border-b border-outline/30">
+                    <td className="sticky left-0 bg-surface border-r border-outline px-2 sm:px-5 py-1 font-bold text-on-surface-dim z-10 w-14 sm:w-64 group cursor-pointer focus:outline-none" tabIndex={0}>
+                      <div className="flex items-center justify-center sm:justify-start h-12">
+                        <Layers className="w-3.5 h-3.5 sm:mr-2.5 text-primary opacity-50 shrink-0" />
+                        <span className="hidden sm:inline">Order Quantity [MT]</span>
+                        <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 sm:hidden">
+                          Order Quantity [MT]
+                        </div>
+                      </div>
+                    </td>
+                    {visibleShipments.map((s) => {
+                      const originalIdx = shipments.findIndex(item => item.id === s.id);
+                      return (
+                        <td key={s.id} className={`px-3 py-1 text-center ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                          <input 
+                            type="text" 
+                            inputMode="numeric"
+                            value={s.orderQtyMt.toLocaleString()}
+                            onChange={(e) => {
+                              const clean = e.target.value.replace(/,/g, '').replace(/\D/g, '');
+                              const num = clean === '' ? 0 : parseInt(clean, 10);
+                              handleUpdateShipment(originalIdx, { orderQtyMt: num });
+                            }}
+                            className={`bg-transparent border border-transparent hover:border-outline/50 focus:border-primary focus:bg-surface-lowest outline-none rounded-lg px-2.5 py-1.5 text-xs font-mono text-center w-full transition-all font-black ${
+                              s.isConfirmed ? 'text-success' : 'text-warning'
+                            }`}
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+
+                  {/* Order Quantity [L] */}
+                  <tr className="hover:bg-surface-dim/20 transition-colors border-b border-outline/30">
+                    <td className="sticky left-0 bg-surface border-r border-outline px-2 sm:px-5 py-1 font-bold text-on-surface-dim z-10 w-14 sm:w-64 group cursor-pointer focus:outline-none" tabIndex={0}>
+                      <div className="flex items-center justify-center sm:justify-start h-12">
+                        <Layers className="w-3.5 h-3.5 sm:mr-2.5 text-primary opacity-50 shrink-0" />
+                        <span className="hidden sm:inline">Order Quantity [L]</span>
+                        <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 sm:hidden">
+                          Order Quantity [L]
+                        </div>
+                      </div>
+                    </td>
+                    {visibleShipments.map((s) => (
+                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-black ${s.isConfirmed ? 'text-success bg-primary/5' : 'text-warning'}`}>
+                        {s.orderQtyLiters.toLocaleString()}
+                      </td>
+                    ))}
+                  </tr>
+
+                  {/* Total Estimated Sales */}
+                  <tr className="hover:bg-surface-dim/20 transition-colors border-b border-outline/30">
+                    <td className="sticky left-0 bg-surface border-r border-outline px-2 sm:px-5 py-1 font-bold text-on-surface-dim z-10 w-14 sm:w-64 group cursor-pointer focus:outline-none" tabIndex={0}>
+                      <div className="flex items-center justify-center sm:justify-start h-12">
+                        <TrendingUp className="w-3.5 h-3.5 sm:mr-2.5 text-primary opacity-50 shrink-0" />
+                        <span className="hidden sm:inline">Total Estimated Sales [L]</span>
+                        <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 sm:hidden">
+                          Total Estimated Sales [L]
+                        </div>
+                      </div>
+                    </td>
+                    {visibleShipments.map((s) => (
+                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-bold text-on-surface-dim ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                        {s.estimatedSales.toLocaleString()}
+                      </td>
+                    ))}
+                  </tr>
+
+                  {/* Available Ullage */}
+                  <tr className="hover:bg-surface-dim/20 transition-colors border-b border-outline/30">
+                    <td className="sticky left-0 bg-surface border-r border-outline px-2 sm:px-5 py-1 font-bold text-on-surface-dim z-10 w-14 sm:w-64 group cursor-pointer focus:outline-none" tabIndex={0}>
+                      <div className="flex items-center justify-center sm:justify-start h-12">
+                        <Info className="w-3.5 h-3.5 sm:mr-2.5 text-primary opacity-50 shrink-0" />
+                        <span className="hidden sm:inline">Available Ullage at arrival [L]</span>
+                        <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 sm:hidden">
+                          Available Ullage at arrival [L]
+                        </div>
+                      </div>
+                    </td>
+                    {visibleShipments.map((s) => (
+                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-bold text-on-surface-dim ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                        {s.availableUllageAtArrival.toLocaleString()}
+                      </td>
+                    ))}
+                  </tr>
+
+                  {/* Closing Stock */}
+                  <tr className="hover:bg-surface-dim/20 transition-colors border-b border-outline/30">
+                    <td className="sticky left-0 bg-surface border-r border-outline px-2 sm:px-5 py-1 font-bold text-on-surface-dim z-10 w-14 sm:w-64 group cursor-pointer focus:outline-none" tabIndex={0}>
+                      <div className="flex items-center justify-center sm:justify-start h-12">
+                        <Database className="w-3.5 h-3.5 sm:mr-2.5 text-primary opacity-50 shrink-0" />
+                        <span className="hidden sm:inline">Closing Stock [L]</span>
+                        <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 sm:hidden">
+                          Closing Stock [L]
+                        </div>
+                      </div>
+                    </td>
+                    {visibleShipments.map((s) => (
+                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-black text-on-surface ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                        {s.closingStock.toLocaleString()}
+                      </td>
+                    ))}
+                  </tr>
+
+                  {/* Remaining Ullage after receipt */}
+                  <tr className="hover:bg-surface-dim/20 transition-colors border-b border-outline/30">
+                    <td className="sticky left-0 bg-surface border-r border-outline px-2 sm:px-5 py-1 font-bold text-on-surface-dim z-10 w-14 sm:w-64 group cursor-pointer focus:outline-none" tabIndex={0}>
+                      <div className="flex items-center justify-center sm:justify-start h-12">
+                        <Info className="w-3.5 h-3.5 sm:mr-2.5 text-primary opacity-50 shrink-0" />
+                        <span className="hidden sm:inline">Remaining Ullage after receipt [L]</span>
+                        <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 sm:hidden">
+                          Remaining Ullage after receipt [L]
+                        </div>
+                      </div>
+                    </td>
+                    {visibleShipments.map((s) => {
+                      const isOverfill = s.remainingUllageAfterReceipt < 0;
+                      return (
+                        <td 
+                          key={s.id} 
+                          className={`px-4 py-3 text-center font-mono ${
+                            isOverfill ? 'text-error font-black bg-error/10 animate-pulse' : 'text-on-surface-dim font-bold'
+                          } ${s.isConfirmed && !isOverfill ? 'bg-primary/5' : ''}`}
+                        >
+                          {isOverfill ? (
+                            <span className="flex flex-col items-center">
+                              <span>OVERFILL RISK!</span>
+                              <span className="text-[10px] font-black">-{Math.abs(s.remainingUllageAfterReceipt).toLocaleString()}</span>
+                            </span>
+                          ) : (
+                            s.remainingUllageAfterReceipt.toLocaleString()
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+
+                  {/* Dead Stock */}
+                  <tr className="hover:bg-surface-dim/20 transition-colors border-b border-outline/30">
+                    <td className="sticky left-0 bg-surface border-r border-outline px-2 sm:px-5 py-1 font-bold text-on-surface-dim z-10 w-14 sm:w-64 group cursor-pointer focus:outline-none" tabIndex={0}>
+                      <div className="flex items-center justify-center sm:justify-start h-12">
+                        <ShieldCheck className="w-3.5 h-3.5 sm:mr-2.5 text-primary opacity-50 shrink-0" />
+                        <span className="hidden sm:inline">Dead Stock [L]</span>
+                        <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 sm:hidden">
+                          Dead Stock [L]
+                        </div>
+                      </div>
+                    </td>
+                    {visibleShipments.map((s) => {
+                      const originalIdx = shipments.findIndex(item => item.id === s.id);
+                      return (
+                        <td key={s.id} className={`px-3 py-1 text-center ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                          <input 
+                            type="text" 
+                            inputMode="numeric"
+                            value={s.deadStock.toLocaleString()}
+                            onChange={(e) => {
+                              const clean = e.target.value.replace(/,/g, '').replace(/\D/g, '');
+                              const num = clean === '' ? 0 : parseInt(clean, 10);
+                              handleUpdateShipment(originalIdx, { deadStock: num });
+                            }}
+                            className="bg-transparent border border-transparent hover:border-outline/50 focus:border-primary focus:bg-surface-lowest outline-none rounded-lg px-2.5 py-1.5 text-xs font-mono text-center text-on-surface w-full transition-all font-black text-error"
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+
+                  {/* Stock Available at arrival */}
+                  <tr className="hover:bg-surface-dim/20 transition-colors border-b border-outline/30">
+                    <td className="sticky left-0 bg-surface border-r border-outline px-2 sm:px-5 py-1 font-bold text-on-surface-dim z-10 w-14 sm:w-64 group cursor-pointer focus:outline-none" tabIndex={0}>
+                      <div className="flex items-center justify-center sm:justify-start h-12">
+                        <Database className="w-3.5 h-3.5 sm:mr-2.5 text-primary opacity-50 shrink-0" />
+                        <span className="hidden sm:inline">Stock available at arrival [L]</span>
+                        <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 sm:hidden">
+                          Stock available at arrival [L]
+                        </div>
+                      </div>
+                    </td>
+                    {visibleShipments.map((s) => (
+                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-bold text-on-surface-dim ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                        {s.stockAvailableAtVesselArrival.toLocaleString()}
+                      </td>
+                    ))}
+                  </tr>
+
+                  {/* Average Daily Sales */}
+                  <tr className="hover:bg-surface-dim/20 transition-colors border-b border-outline/30">
+                    <td className="sticky left-0 bg-surface border-r border-outline px-2 sm:px-5 py-1 font-bold text-on-surface-dim z-10 w-14 sm:w-64 group cursor-pointer focus:outline-none" tabIndex={0}>
+                      <div className="flex items-center justify-center sm:justify-start h-12">
+                        <TrendingUp className="w-3.5 h-3.5 sm:mr-2.5 text-primary opacity-50 shrink-0" />
+                        <span className="hidden sm:inline">Average Daily Sales [L]</span>
+                        <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 sm:hidden">
+                          Average Daily Sales [L]
+                        </div>
+                      </div>
+                    </td>
+                    {visibleShipments.map((s) => {
+                      const originalIdx = shipments.findIndex(item => item.id === s.id);
+                      return (
+                        <td key={s.id} className={`px-3 py-1 text-center ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                          <input 
+                            type="text" 
+                            inputMode="numeric"
+                            value={s.averageSales.toLocaleString()}
+                            onChange={(e) => {
+                              const clean = e.target.value.replace(/,/g, '').replace(/\D/g, '');
+                              const num = clean === '' ? 0 : parseInt(clean, 10);
+                              handleUpdateShipment(originalIdx, { averageSales: num });
+                            }}
+                            className="bg-transparent border border-transparent hover:border-outline/50 focus:border-primary focus:bg-surface-lowest outline-none rounded-lg px-2.5 py-1.5 text-xs font-mono text-center text-on-surface w-full transition-all font-black"
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+
+                  {/* Stock days at arrival */}
+                  <tr className="hover:bg-surface-dim/20 transition-colors">
+                    <td className="sticky left-0 bg-surface border-r border-outline px-2 sm:px-5 py-1 font-bold text-on-surface-dim z-10 w-14 sm:w-64 group cursor-pointer focus:outline-none" tabIndex={0}>
+                      <div className="flex items-center justify-center sm:justify-start h-12">
+                        <Clock className="w-3.5 h-3.5 sm:mr-2.5 text-primary opacity-50 shrink-0" />
+                        <span className="hidden sm:inline">Stock days at arrival</span>
+                        <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 sm:hidden">
+                          Stock days at arrival
+                        </div>
+                      </div>
+                    </td>
+                    {visibleShipments.map((s) => {
+                      const isRedAlert = s.stockDaysAtArrival < 22;
+                      return (
+                        <td 
+                          key={s.id} 
+                          className={`px-4 py-3 text-center font-mono font-black ${
+                            isRedAlert ? 'text-error bg-error/15 text-sm animate-pulse' : 'text-success bg-success/5'
+                          } ${s.isConfirmed && !isRedAlert ? 'bg-primary/5' : ''}`}
+                        >
+                          {isRedAlert ? (
+                            <span className="flex items-center justify-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5 text-error shrink-0 animate-bounce" />
+                              <span>{Math.round(s.stockDaysAtArrival)} Days</span>
+                            </span>
+                          ) : (
+                            <span className="flex items-center justify-center gap-1">
+                              <ShieldCheck className="w-3.5 h-3.5 text-success shrink-0" />
+                              <span>{Math.round(s.stockDaysAtArrival)} Days</span>
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Forecast Visual Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 mt-10">
+            {/* Chart 1: Stock Levels */}
+            <div className="card-premium p-6 lg:p-8">
+              <h4 className="text-xs font-black text-on-surface uppercase tracking-[0.2em] mb-6 flex items-center">
+                <Activity className="w-4 h-4 mr-2.5 text-primary opacity-60" /> Closing Inventory vs Capacity
+              </h4>
+              <div className="h-[250px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={visibleShipments} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
+                    <XAxis dataKey="shipmentNumber" tick={renderCustomTick} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={(val) => `${(val / 1000000).toFixed(1)}M`} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                    <Tooltip content={<CustomTooltip />} cursor={false} />
+                    <Bar dataKey="closingStock" name="Closing Stock" stackId="a" fill="var(--color-primary)" radius={[0, 0, 0, 0]}>
+                      {visibleShipments.map((entry, index) => (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={entry.remainingUllageAfterReceipt < 0 ? '#ef4444' : 'var(--color-primary)'} 
+                        />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="remainingUllageDisplay" name="Available Ullage" stackId="a" fill="var(--color-surface-container-highest)" stroke="var(--color-outline)" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Chart 2: Days Coverage */}
+            <div className="card-premium p-6 lg:p-8">
+              <h4 className="text-xs font-black text-on-surface uppercase tracking-[0.2em] mb-6 flex items-center">
+                <TrendingUp className="w-4 h-4 mr-2.5 text-primary opacity-60" /> Coverage Days at Vessel Arrival
+              </h4>
+              <div className="h-[250px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={visibleShipments} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
+                    <XAxis dataKey="shipmentNumber" tick={renderCustomTick} axisLine={false} tickLine={false} />
+                    <YAxis tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                    <Tooltip 
+                      formatter={(value: any) => [`${Math.round(value)} Days`, 'Stock Coverage']}
+                      contentStyle={{ backgroundColor: 'var(--color-surface-dim)', border: '1px solid var(--color-outline)', borderRadius: '12px' }} 
+                    />
+                    <Line type="monotone" dataKey="stockDaysAtArrival" name="Stock Days" stroke="var(--color-primary)" strokeWidth={3} activeDot={{ r: 6 }} dot={(props) => {
+                      const { cx, cy, payload } = props;
+                      const isAlert = payload.stockDaysAtArrival < 22;
+                      return (
+                        <circle key={`dot-${payload.id}`} cx={cx} cy={cy} r={isAlert ? 6 : 4} fill={isAlert ? '#ef4444' : 'var(--color-success)'} stroke="white" strokeWidth={1.5} />
+                      );
+                    }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
         </div>
-
-      </div>
-
-      {/* ── STOCK DAYS COVERAGE TREND GRAPH (30 DAYS) ── */}
-      <div className="grid grid-cols-1 gap-6 lg:gap-10">
-        <div className="card-premium p-6 lg:p-8">
-          <h3 className="text-xs font-black text-on-surface uppercase tracking-[0.2em] mb-8 flex items-center">
-            <Activity className="w-4 h-4 mr-3 text-primary opacity-60 animate-pulse" />
-            Stock Coverage Days Remaining Trend Curve [Last 30-Day Snapshot Archive]
-          </h3>
-          <div className="h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendData} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
-                <XAxis dataKey="date" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)', fontWeight: 900}} axisLine={false} tickLine={false} />
-                <YAxis label={{ value: 'Days Remaining', angle: -90, position: 'insideLeft', style: {fontSize: '9px', fill: 'var(--color-on-surface-dim)', fontWeight: 900} }} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ backgroundColor: 'var(--color-surface-dim)', border: '1px solid var(--color-outline)', borderRadius: '12px' }} />
-                <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900 }} iconType="circle" />
-                <Line type="monotone" dataKey="daysRemaining" name="Stock Days Remaining" stroke="var(--color-primary)" strokeWidth={3.5} dot={false} activeDot={{ r: 6 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
+      )}
 
     </div>
   );
