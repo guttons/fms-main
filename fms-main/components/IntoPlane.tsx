@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FlightLog, User, FlightJob, Equipment, EquipmentStatus, UserRole } from '../types';
-import { MOCK_JOBS, MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, PIT_MAPPING } from '../constants';
-import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Lock, Calendar, X, CreditCard, Ban, Eye } from 'lucide-react';
+import { MOCK_JOBS, MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, MOCK_ADHOC_FLIGHTS, PIT_MAPPING } from '../constants';
+import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Users, Lock, Calendar, X, CreditCard, Ban, Eye, Zap, Bell } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { equipmentBadgeClass, equipmentDotClass, getEquipmentHexColor } from '../utils/equipmentColors';
 import { useNotification } from '../context/NotificationContext';
@@ -64,7 +64,7 @@ const MobileHeader: React.FC<{
                               key={eq.id} 
                               value={eq.id} 
                               style={{ color: getEquipmentHexColor(eq.id) }}
-                              className="bg-surface-container-low font-bold uppercase"
+                              className="bg-surface-dim text-on-surface font-bold uppercase"
                             >
                               {eq.id}
                             </option>
@@ -88,9 +88,9 @@ const MobileHeader: React.FC<{
                           `}
                           style={paymentType === 'CASH' ? { backgroundColor: 'rgba(34,197,94,0.1)' } : undefined}
                       >
-                          <option value="CREDIT" className="bg-surface-container-highest text-on-surface">CREDIT</option>
-                          <option value="CASH" className="bg-surface-container-highest text-on-surface">CASH</option>
-                          <option value="VOID" className="bg-surface-container-highest text-on-surface">VOID</option>
+                          <option value="CREDIT" className="bg-surface-dim text-on-surface">CREDIT</option>
+                          <option value="CASH" className="bg-surface-dim text-on-surface">CASH</option>
+                          <option value="VOID" className="bg-surface-dim text-on-surface">VOID</option>
                       </select>
                       <ChevronRight className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-on-surface-dim rotate-90 pointer-events-none" />
                   </div>
@@ -128,12 +128,15 @@ const ScreenDashboard: React.FC<{
     user: User, 
     onStartJob: (job: FlightJob) => void,
     selectedVehicleId: string,
-    setSelectedVehicleId: (id: string) => void
-}> = ({ user, onStartJob }) => {
+    setSelectedVehicleId: (id: string) => void,
+    flightLogs: FlightLog[],
+    activeFlight: Partial<FlightLog> | null
+}> = ({ user, onStartJob, selectedVehicleId, setSelectedVehicleId, flightLogs, activeFlight }) => {
   const { notify } = useNotification();
-  const { flightJobs, domesticFlights, staff } = useOperationalData();
-  const [viewMode, setViewMode] = useState<'INT' | 'DOM'>('INT');
+  const { flightJobs, domesticFlights, staff, alerts, createAlert, deleteAlerts } = useOperationalData();
+  const [viewMode, setViewMode] = useState<'INT' | 'DOM' | 'ADHOC'>('INT');
   const [filterMyTasks, setFilterMyTasks] = useState(false);
+  const [activeMenuJobId, setActiveMenuJobId] = useState<string | null>(null);
   
   const intlJobs = flightJobs || [];
   const domesticJobs = (domesticFlights || []).map((df: any) => ({
@@ -148,15 +151,33 @@ const ScreenDashboard: React.FC<{
       assignedTo: df.assignedTeam === 'Team 1' ? user.id : 'u1',
       assignedOfficer: undefined,
       status: df.status as any,
+      assignedTeam: df.assignedTeam,
   }));
 
-
-
+  const adhocJobs = MOCK_ADHOC_FLIGHTS.map((f: any) => ({
+      id: f.id,
+      flightNumber: f.flightNumber,
+      aircraftReg: f.aircraftReg,
+      aircraftType: f.aircraftType,
+      stand: f.stand,
+      sta: f.sta,
+      eta: f.eta,
+      std: f.std,
+      assignedTo: f.id === 'ah1' ? user.id : 'u3b',
+      assignedOfficer: undefined,
+      status: f.status as any,
+      route: f.route,
+      isAdhoc: true,
+  }));
 
   const filteredIntlJobs = filterMyTasks ? intlJobs.filter(j => j.assignedTo === user.id || j.assignedOfficer === user.id) : intlJobs;
   const filteredDomesticJobs = filterMyTasks ? domesticJobs.filter(j => j.assignedTo === user.id || j.assignedOfficer === user.id) : domesticJobs;
+  const filteredAdhocJobs = filterMyTasks ? adhocJobs.filter(j => j.assignedTo === user.id || j.assignedOfficer === user.id) : adhocJobs;
 
-  const activeJobs = viewMode === 'INT' ? filteredIntlJobs : filteredDomesticJobs;
+  const activeJobs = 
+      viewMode === 'INT' ? filteredIntlJobs : 
+      viewMode === 'DOM' ? filteredDomesticJobs : 
+      filteredAdhocJobs;
 
   const isDelayed = (sta?: string, eta?: string) => {
       if (!sta || !eta) return false;
@@ -177,14 +198,38 @@ const ScreenDashboard: React.FC<{
       // Take the first 2 characters of the flight number as the airline code (e.g. EK659→ek, Q2102→q2)
       const airlineCode = (job.flightNumber || '').slice(0, 2).toLowerCase();
       const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/webfids/images/${airlineCode}.gif` : null;
-      
+      const activeAlert = (alerts || []).find(a => 
+          !a.acknowledged && 
+          (a.message.toLowerCase().includes('requested') || a.message.toLowerCase().includes('no fuel')) &&
+          a.message.includes(job.flightNumber)
+      );
+      const isAlreadyRequested = !!activeAlert;
+      const isNoFuelAlert = activeAlert?.message.toLowerCase().includes('no fuel');
+
+      // Find active vehicle (Eq ID) for in-progress jobs
+      let activeEqId = job.vehicleId;
+      if (!activeEqId && displayStatus === 'IN_PROGRESS') {
+          if (activeFlight && activeFlight.flightNumber === job.flightNumber) {
+              activeEqId = activeFlight.vehicleId;
+          } else {
+              const matchingLog = (flightLogs || []).find(log => log.flightNumber === job.flightNumber && log.status === 'IN_PROGRESS');
+              if (matchingLog) {
+                  activeEqId = matchingLog.vehicleId;
+              }
+          }
+      }
+
       return (
           <div key={job.id} className={`bg-surface-container-lowest p-6 rounded-2xl relative overflow-hidden transition-all shrink-0 border ${isAssignedToMe ? 'border-primary border-l-[6px] shadow-sm' : 'border-outline opacity-80'}`}>
               <div className="relative z-10">
-                  <div className="flex justify-between items-start mb-6 gap-4">
-                      <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-0">
-                               <h3 className="text-2xl sm:text-3xl font-[900] text-on-surface tracking-tighter">{job.flightNumber}</h3>
+                  <div className="flex justify-between items-center mb-6 gap-4 w-full relative">
+                      <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                               {/* Yellow gradient stand badge next to flight number on desktop view */}
+                               <div className="hidden md:block bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider">
+                                   {job.stand}
+                               </div>
+                               <h3 className="text-2xl sm:text-3xl font-[900] text-on-surface tracking-tighter leading-none">{job.flightNumber}</h3>
                                {/* Logo + Equipment badge — grouped so they never split on mobile */}
                                <div className="flex items-center flex-shrink-0">
                                  {logoUrl && (
@@ -208,26 +253,159 @@ const ScreenDashboard: React.FC<{
                                      </div>
                                  )}
                                </div>
+
+                               {/* Desktop-only details: type and reg on the same row as flight number after logo */}
+                               <div className="hidden md:flex items-center gap-2.5 text-[11px] sm:text-[12px] font-bold text-on-surface-dim">
+                                   <span className="opacity-20">|</span>
+                                   <span className="opacity-60">{job.aircraftType}</span>
+                                   <span className="opacity-20">|</span>
+                                   <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black text-on-surface-dim border-transparent uppercase tracking-wider">{job.aircraftReg}</span>
+                               </div>
                           </div>
-                          <div className="flex flex-wrap items-center mt-2 text-on-surface-dim text-[11px] sm:text-[12px] font-bold gap-x-2.5 gap-y-1.5">
+
+                          {/* Mobile-only details: Stand, type, and reg grouped together on the same row */}
+                          <div className="flex flex-wrap items-center mt-2 text-on-surface-dim text-[11px] sm:text-[12px] font-bold gap-x-2 gap-y-1.5 md:hidden">
                                <div className="flex items-center whitespace-nowrap">
-                                   <MapPin className="w-3.5 h-3.5 mr-1.5 text-primary opacity-60 shrink-0" />
+                                   <MapPin className="w-3.5 h-3.5 mr-1 text-primary opacity-60 shrink-0" />
                                    <span>Stand {job.stand}</span>
                                 </div>
                                <span className="opacity-20 shrink-0">|</span>
                                <span className="opacity-60 whitespace-nowrap">{job.aircraftType}</span>
                                <span className="opacity-20 shrink-0">|</span>
                                <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black text-on-surface-dim border-transparent uppercase tracking-wider whitespace-nowrap">{job.aircraftReg}</span>
-                           </div>
-                       </div>
-                       <div className="flex items-center gap-3 shrink-0">
-                           {/* Indicators & Actions */}
-                            {isAssignedToMe && (
-                               <div className="flex items-center justify-center text-primary bg-primary/10 w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl border border-primary/20" title="My Task">
-                                   <UserIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                               </div>
+                          </div>
+                      </div>
+
+                      {/* Desktop Center-Aligned Timings (Larger Font) */}
+                      <div className="hidden md:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/30 px-4 py-2 rounded-xl border border-outline/10 absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm">
+                          <div className="flex items-center gap-2">
+                              <span className="opacity-40 text-[10px]">STA</span>
+                              <span className="text-on-surface text-[14px] font-black tracking-tight">{job.sta || '--:--'}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                              <span className="text-primary opacity-60 text-[10px]">ETA</span>
+                              <span className={`${delayed ? 'text-error' : 'text-primary'} text-[14px] font-black tracking-tight`}>{job.eta || '--:--'}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                              <span className="text-warning opacity-60 text-[10px]">STD</span>
+                              <span className="text-warning text-[14px] font-black tracking-tight">{job.std || '--:--'}</span>
+                          </div>
+                      </div>
+
+                      {/* Actions row (right-aligned, same row as flight number and logo on mobile) */}
+                      <div className="flex items-center gap-2 sm:gap-3 shrink-0 z-20 relative">
+                           {/* requested button to click for ITP MANAGER to send requested alerts to the assigned officer and operator */}
+                           {(user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN) && (
+                               isAlreadyRequested ? (
+                                   <button 
+                                       onClick={async () => {
+                                           try {
+                                               const matchingAlerts = (alerts || []).filter(a => 
+                                                   !a.acknowledged && 
+                                                   (a.message.toLowerCase().includes('requested') || a.message.toLowerCase().includes('no fuel')) &&
+                                                   a.message.includes(job.flightNumber)
+                                               );
+                                               if (matchingAlerts.length > 0) {
+                                                   await deleteAlerts(matchingAlerts.map(a => a.id));
+                                               }
+                                               notify(`Cancelled alert request for flight ${job.flightNumber}.`, 'info');
+                                           } catch (err) {
+                                               console.error(err);
+                                               notify('Failed to cancel alert request.', 'error');
+                                           }
+                                       }}
+                                       className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all bg-red-500/10 text-red-500 hover:bg-red-500/20 active:scale-95 border border-red-500/25 shadow-sm cursor-pointer"
+                                       title={isNoFuelAlert ? "No Fuel Alert Active. Click to Cancel." : "Fuel Request Active. Click to Cancel."}
+                                   >
+                                       {isNoFuelAlert ? <Ban className="w-5 h-5" /> : <Bell className="w-5 h-5" />}
+                                   </button>
+                               ) : (
+                                   <div className="relative">
+                                       <button 
+                                           onClick={() => setActiveMenuJobId(activeMenuJobId === job.id ? null : job.id)}
+                                           className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all bg-amber-500/10 text-amber-500 border border-amber-500/25 hover:bg-amber-500/20 active:scale-95 shadow-sm cursor-pointer"
+                                           title="Send Alert Menu"
+                                       >
+                                           <Bell className="w-5 h-5" />
+                                       </button>
+
+                                       {activeMenuJobId === job.id && (
+                                           <>
+                                               <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setActiveMenuJobId(null); }} />
+                                               <div className="absolute right-0 top-12 z-50 w-56 bg-surface border border-outline rounded-xl shadow-premium p-1.5 flex flex-col gap-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                   <button 
+                                                       onClick={async (e) => {
+                                                           e.stopPropagation();
+                                                           setActiveMenuJobId(null);
+                                                           try {
+                                                               await createAlert({
+                                                                   severity: 'medium',
+                                                                   message: `Into-Plane: Alert requested for Flight ${job.flightNumber}${assigneeName ? ` (Operator: ${assigneeName})` : ''}.`,
+                                                                   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                                                                   acknowledged: false,
+                                                                   targetRole: UserRole.ITP_OPERATOR
+                                                               });
+
+                                                               await createAlert({
+                                                                   severity: 'medium',
+                                                                   message: `Into-Plane: Alert requested for Flight ${job.flightNumber}${officerName ? ` (Officer: ${officerName})` : ''}.`,
+                                                                   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                                                                   acknowledged: false,
+                                                                   targetRole: UserRole.ITP_OFFICER
+                                                               });
+
+                                                               notify(`Requested alert sent successfully for flight ${job.flightNumber}!`, 'success');
+                                                           } catch (err) {
+                                                               console.error(err);
+                                                               notify('Failed to send request alert.', 'error');
+                                                           }
+                                                       }}
+                                                       className="w-full text-left px-3.5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/10 hover:text-amber-500 text-on-surface-dim transition-all flex items-center gap-2 cursor-pointer"
+                                                   >
+                                                       <Bell className="w-3.5 h-3.5" />
+                                                       Request Fueling
+                                                   </button>
+                                                   <button 
+                                                       onClick={async (e) => {
+                                                           e.stopPropagation();
+                                                           setActiveMenuJobId(null);
+                                                           try {
+                                                               await createAlert({
+                                                                   severity: 'medium',
+                                                                   message: `Into-Plane: No Fuel required for Flight ${job.flightNumber}${assigneeName ? ` (Operator: ${assigneeName})` : ''}.`,
+                                                                   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                                                                   acknowledged: false,
+                                                                   targetRole: UserRole.ITP_OPERATOR
+                                                               });
+
+                                                               await createAlert({
+                                                                   severity: 'medium',
+                                                                   message: `Into-Plane: No Fuel required for Flight ${job.flightNumber}${officerName ? ` (Officer: ${officerName})` : ''}.`,
+                                                                   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                                                                   acknowledged: false,
+                                                                   targetRole: UserRole.ITP_OFFICER
+                                                               });
+
+                                                               notify(`No-Uplift alert sent successfully for flight ${job.flightNumber}!`, 'success');
+                                                           } catch (err) {
+                                                               console.error(err);
+                                                               notify('Failed to send No-Uplift alert.', 'error');
+                                                           }
+                                                       }}
+                                                       className="w-full text-left px-3.5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-red-500/10 hover:text-red-500 text-on-surface-dim transition-all flex items-center gap-2 cursor-pointer border-t border-outline/20 pt-2"
+                                                   >
+                                                       <Ban className="w-3.5 h-3.5" />
+                                                       No Fuel Required
+                                                   </button>
+                                               </div>
+                                           </>
+                                       )}
+                                   </div>
+                               )
                            )}
-                           {user.role === UserRole.ITP_OPERATOR ? null : (
+
+                           {/* play action button only if assigned to me or completed */}
+                           {(isAssignedToMe || job.status === 'COMPLETED') && (
                                <button 
                                    onClick={() => {
                                        if (job.status === 'COMPLETED') {
@@ -236,53 +414,54 @@ const ScreenDashboard: React.FC<{
                                            onStartJob(job);
                                        }
                                    }}
-                                   disabled={!isAssignedToMe && job.status !== 'COMPLETED'}
                                    className={`w-10 h-10 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm
-                                        ${job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/20' : 
-                                          isAssignedToMe ? 'kinetic-gradient text-white hover:scale-[1.05] active:scale-95 shadow-premium' : 'bg-surface-container-low text-on-surface-dim opacity-40 border-outline'}
+                                        ${job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/20' : 'kinetic-gradient text-white hover:scale-[1.05] active:scale-95 shadow-premium'}
                                     `}
-                                   title={job.status === 'COMPLETED' ? 'View Log' : (!isAssignedToMe ? 'Locked' : 'Start Job')}
+                                   title={job.status === 'COMPLETED' ? 'View Log' : 'Start Job'}
                                >
-                                   {job.status === 'COMPLETED' ? <ChevronRight className="w-6 h-6 sm:w-7 sm:h-7 stroke-[3]" /> : 
-                                    (!isAssignedToMe ? <Lock className="w-5 h-5 sm:w-5 sm:h-5 stroke-[2.5]" /> : <Play className="w-[24px] h-[24px] sm:w-[28px] sm:h-[28px] flex-shrink-0 ml-0.5 sm:ml-1" fill="white" color="white" strokeWidth={2.5} />)}
+                                   {job.status === 'COMPLETED' ? <ChevronRight className="w-6 h-6 sm:w-7 sm:h-7 stroke-[3]" /> : <Play className="w-[24px] h-[24px] sm:w-[28px] sm:h-[28px] flex-shrink-0 ml-0.5 sm:ml-1" fill="white" color="white" strokeWidth={2.5} />}
                                </button>
                            )}
                       </div>
                   </div>
 
                   <div className="mt-6 pt-6 border-t border-outline/50 space-y-4">
-                      {/* Row 1: Tactical Times */}
-                      <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/30 px-3 py-2 rounded-xl border border-outline/10 w-fit">
-                          <div className="flex items-center gap-2">
-                              <span className="opacity-40">STA</span>
-                              <span className="text-on-surface text-xs font-black tracking-tight">{job.sta || '--:--'}</span>
+                      {/* Timings as they were before displayed on mobile view only — moved above operator/status */}
+                      <div className="grid grid-cols-3 gap-2 p-3 bg-surface-dim rounded-xl border border-outline md:hidden">
+                          <div className="text-center border-r border-outline/30">
+                              <p className="text-[8px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-1">STA</p>
+                              <p className="text-[11px] font-[900] text-on-surface">{job.sta || '--:--'}</p>
                           </div>
-                          <div className="flex items-center gap-2">
-                              <span className="text-primary opacity-60">ETA</span>
-                              <span className={`${delayed ? 'text-error' : 'text-primary'} text-xs font-black tracking-tight`}>{job.eta || '--:--'}</span>
+                          <div className="text-center border-r border-outline/30">
+                              <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${delayed ? 'text-error opacity-60' : 'text-primary opacity-60'}`}>ETA</p>
+                              <p className={`text-[11px] font-[900] ${delayed ? 'text-error' : 'text-primary'}`}>{job.eta || '--:--'}</p>
                           </div>
-                          <div className="flex items-center gap-2">
-                              <span className="text-warning opacity-60">STD</span>
-                              <span className="text-warning text-xs font-black tracking-tight">{job.std || '--:--'}</span>
+                          <div className="text-center">
+                              <p className="text-[8px] font-black text-warning opacity-60 uppercase tracking-widest mb-1">STD</p>
+                              <p className="text-[11px] font-[900] text-warning">{job.std || '--:--'}</p>
                           </div>
                       </div>
 
                       {/* Row 2: Operator (Left) & Status (Right) */}
                       <div className="flex items-center justify-between gap-4">
                           <div className="flex items-center text-on-surface-dim font-bold gap-3 flex-wrap">
-                               <div className="flex items-center">
-                                   <div className="w-5 h-5 rounded-md bg-surface-container-low border-transparent flex items-center justify-center mr-2 text-[10px] font-black">
-                                       {assigneeName.charAt(0)}
-                                   </div>
-                                   <span className="text-[10px] uppercase tracking-tight">{assigneeName} <span className="opacity-40 italic font-black text-[8px] ml-0.5">(OP)</span></span>
-                               </div>
-                               {officerName && (
-                                   <div className="flex items-center">
-                                       <div className="w-5 h-5 rounded-md bg-surface-container-low border-transparent flex items-center justify-center mr-2 text-[10px] font-black text-primary bg-primary/5">
-                                           {officerName.charAt(0)}
+                               {viewMode === 'INT' && (
+                                   <>
+                                       <div className="flex items-center">
+                                           <div className="w-5 h-5 rounded-md bg-surface-container-low border-transparent flex items-center justify-center mr-2 text-[10px] font-black">
+                                               {assigneeName.charAt(0)}
+                                           </div>
+                                           <span className="text-[10px] uppercase tracking-tight">{assigneeName} <span className="opacity-40 italic font-black text-[8px] ml-0.5">(OP)</span></span>
                                        </div>
-                                       <span className="text-[10px] uppercase tracking-tight text-on-surface-dim">{officerName} <span className="opacity-40 italic font-black text-[8px] ml-0.5">(OFFICER)</span></span>
-                                   </div>
+                                       {officerName && (
+                                           <div className="flex items-center">
+                                               <div className="w-5 h-5 rounded-md bg-surface-container-low border-transparent flex items-center justify-center mr-2 text-[10px] font-black text-primary bg-primary/5">
+                                                   {officerName.charAt(0)}
+                                               </div>
+                                               <span className="text-[10px] uppercase tracking-tight">{officerName} <span className="opacity-40 italic font-black text-[8px] ml-0.5">(OFFICER)</span></span>
+                                           </div>
+                                       )}
+                                   </>
                                )}
                           </div>
                           
@@ -294,6 +473,26 @@ const ScreenDashboard: React.FC<{
                               {displayStatus.replace('_', ' ')}
                           </span>
                       </div>
+
+                      {displayStatus === 'IN_PROGRESS' && (
+                          <div className="mt-4 p-3 bg-warning/5 rounded-xl border border-warning/10 flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300">
+                              <div className="flex items-center gap-3">
+                                  {(job as any).assignedTeam && (
+                                      <div className="flex items-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest">
+                                          <Users className="w-3.5 h-3.5 mr-1.5 text-warning opacity-70" />
+                                          <span>{(job as any).assignedTeam}</span>
+                                      </div>
+                                  )}
+                                  {activeEqId && (
+                                      <div className="flex items-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest">
+                                          <Truck className="w-3.5 h-3.5 mr-1.5 text-warning opacity-70" />
+                                          <span>EQ: {activeEqId}</span>
+                                      </div>
+                                  )}
+                              </div>
+                              <span className="text-[8px] font-black text-warning uppercase tracking-widest animate-pulse">ACTIVE FUELING</span>
+                          </div>
+                      )}
                   </div>
               </div>
           </div>
@@ -304,9 +503,12 @@ const ScreenDashboard: React.FC<{
     <div className="p-5 flex flex-col space-y-8 pb-24">
       {/* Category Toggle */}
       <div className="flex justify-center items-center mt-2 mb-4">
-          <div className="bg-surface-container-low p-1 rounded-[22px] border-transparent flex relative w-full max-w-[320px] h-[38px]">
+          <div className="bg-surface-container-low p-1 rounded-[22px] border-transparent flex relative w-full max-w-[360px] h-[38px]">
               <div 
-                  className={`absolute top-1 bottom-1 w-[calc(50%-4px)] kinetic-gradient rounded-[18px] transition-all duration-300 ${viewMode === 'DOM' ? 'translate-x-full' : 'translate-x-0'}`}
+                  className={`absolute top-1 bottom-1 w-[calc(33.333%-2.6px)] kinetic-gradient rounded-[18px] transition-all duration-300 ${
+                    viewMode === 'INT' ? 'translate-x-0' : 
+                    viewMode === 'DOM' ? 'translate-x-[100%] ml-[1px]' : 'translate-x-[200%] ml-[2px]'
+                  }`}
               />
               <button 
                   onClick={() => setViewMode('INT')}
@@ -321,6 +523,13 @@ const ScreenDashboard: React.FC<{
               >
                   <span className="hidden sm:inline">Domestic</span>
                   <span className="sm:hidden">DOM</span>
+              </button>
+              <button 
+                  onClick={() => setViewMode('ADHOC')}
+                  className={`flex-1 flex items-center justify-center rounded-[18px] text-[10px] font-black uppercase tracking-[0.2em] relative z-10 transition-colors duration-300 ${viewMode === 'ADHOC' ? 'text-white' : 'text-on-surface-dim opacity-60'}`}
+              >
+                  <span className="hidden sm:inline">Ad-Hoc</span>
+                  <span className="sm:hidden">ADHOC</span>
               </button>
           </div>
 
@@ -343,7 +552,7 @@ const ScreenDashboard: React.FC<{
       <div key={viewMode} className={`space-y-4 animate-in fade-in duration-500 ${viewMode === 'INT' ? 'slide-in-from-left-4' : 'slide-in-from-right-4'}`}>
           <div className="flex justify-between items-center px-1">
               <h2 className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">
-                  {viewMode === 'INT' ? 'International Operations' : 'Domestic Operations'}
+                  {viewMode === 'INT' ? 'International Operations' : viewMode === 'DOM' ? 'Domestic Operations' : 'Ad-Hoc Operations'}
               </h2>
               <span className="text-[10px] font-black bg-primary/5 text-primary px-3 py-1 rounded-full border border-primary/10">{activeJobs.length} Flights</span>
           </div>
@@ -407,6 +616,24 @@ const ScreenTimestamps: React.FC<{
                   />
               </div>
           </div>
+
+          {activeFlight?.isAdhoc && (
+              <div className="card-premium p-6 border-outline overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
+                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">C/O (Charterer/Operator)</label>
+                  <div className="flex items-center gap-2 max-w-full overflow-hidden">
+                      <input 
+                          type="text" 
+                          disabled={user.role === UserRole.ITP_OPERATOR}
+                          className="w-full text-3xl font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-primary placeholder:text-primary/10 uppercase tracking-widest"
+                          placeholder="ENTER C/O"
+                          value={activeFlight.co || ''}
+                          onChange={(e) => {
+                              onInputChange('co', e.target.value.toUpperCase());
+                          }}
+                      />
+                  </div>
+              </div>
+          )}
 
           {activeFlight?.vehicleId?.startsWith('HD') && (
             <div className="card-premium p-6 border-outline overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
@@ -903,6 +1130,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       appearanceCheck: false,
       waterCheck: false,
       remarks: '',
+      isAdhoc: job.isAdhoc,
     });
     setCurrentScreen('timestamps');
   };
@@ -1027,7 +1255,9 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         remarks: activeFlight.remarks || '',
         meterClose: (activeFlight.meterOpen || 0) + (activeFlight.volume || 0),
         deliveryNumber: activeFlight.deliveryNumber,
-        pitNumber: activeFlight.pitNumber
+        pitNumber: activeFlight.pitNumber,
+        co: activeFlight.co,
+        isAdhoc: activeFlight.isAdhoc
       };
 
       await supabaseService.createFlightLog(logToSave);
@@ -1173,6 +1403,8 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 onStartJob={startJob} 
                 selectedVehicleId={selectedVehicleId}
                 setSelectedVehicleId={setSelectedVehicleId}
+                flightLogs={flightLogs}
+                activeFlight={activeFlight}
               />
             )}
             {currentScreen === 'timestamps' && (

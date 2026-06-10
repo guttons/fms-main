@@ -1,15 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, EQUIPMENT } from '../constants';
+import { MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, MOCK_ADHOC_FLIGHTS, EQUIPMENT } from '../constants';
 import { UserRole, EquipmentType, FlightJob } from '../types';
-import { Calendar, Plus, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home } from 'lucide-react';
+import { Calendar, Zap, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
+import { BriefingShift } from '../context/OperationalDataContext';
 
 export const Schedule: React.FC = () => {
-  const { equipment, flightJobs, briefingInfo, updateFlightJob, addFlightJob, staff } = useOperationalData();
-  const [activeTab, setActiveTab] = useState<'international' | 'domestic' | 'equipment' | 'status'>('international');
+  const { equipment, flightJobs, briefingInfo, updateFlightJob, addFlightJob, staff, selectedBriefingShift, setSelectedBriefingShift, domesticAssignments, updateDomesticAssignment } = useOperationalData();
+  const [activeTab, setActiveTab] = useState<'international' | 'domestic' | 'adhoc' | 'equipment' | 'status'>('international');
   const [configuringFlightId, setConfiguringFlightId] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleAddFlight = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const target = e.currentTarget;
+    const formData = new FormData(target);
+    const flight = formData.get('flight') as string;
+    const route = formData.get('route') as string;
+    const ac = formData.get('ac') as string;
+    const stand = formData.get('stand') as string;
+    const sta = formData.get('sta') as string;
+    const eta = formData.get('eta') as string;
+    const std = formData.get('std') as string;
+
+    if (!flight || !route || !ac || !stand || !sta || !eta || !std) return;
+
+    try {
+      await addFlightJob({
+        id: `fj-${Date.now()}`,
+        flightNumber: flight,
+        aircraftReg: ac,
+        aircraftType: ac,
+        stand,
+        sta,
+        eta,
+        std,
+        assignedTo: '',
+        status: 'PENDING'
+      });
+      setIsModalOpen(false);
+      target.reset();
+    } catch (error) {
+      console.error("Failed to add flight job:", error);
+    }
+  };
 
   const isDelayed = (sta?: string, eta?: string) => {
     if (!sta || !eta) return false;
@@ -26,7 +62,7 @@ export const Schedule: React.FC = () => {
         {parts.map((part, idx) => {
           if (part === 'MLE' || part === '➔' || part === '->') {
             return (
-              <span key={idx} className="text-[10px] opacity-30 mx-1 font-bold">
+              <span key={idx} className="text-[10px] opacity-30 mx-[2px] font-bold">
                 {part}
               </span>
             );
@@ -37,23 +73,42 @@ export const Schedule: React.FC = () => {
     );
   };
 
+  // Shift time ranges for filtering flights
+  const shiftRanges: Record<BriefingShift, { start: string; end: string; crossesMidnight: boolean }> = {
+    'Morning': { start: '07:30', end: '16:00', crossesMidnight: false },
+    'Evening': { start: '15:00', end: '23:30', crossesMidnight: false },
+    'Night': { start: '22:30', end: '08:30', crossesMidnight: true },
+  };
+
+  const isFlightInShift = (sta?: string) => {
+    if (!sta) return true; // Show flights without STA always
+    const range = shiftRanges[selectedBriefingShift];
+    if (range.crossesMidnight) {
+      return sta >= range.start || sta <= range.end;
+    }
+    return sta >= range.start && sta <= range.end;
+  };
+
   const [scheduledFlights, setScheduledFlights] = useState(flightJobs);
 
   useEffect(() => {
-    setScheduledFlights(flightJobs);
-  }, [flightJobs]);
+    const filtered = flightJobs.filter(f => isFlightInShift(f.sta));
+    setScheduledFlights(filtered);
+  }, [flightJobs, selectedBriefingShift]);
 
-  const [domesticTeams, setDomesticTeams] = useState([
+  const domesticFlightsToRender = MOCK_DOMESTIC_FLIGHTS.filter(f => isFlightInShift(f.sta));
+  const adhocFlightsToRender = MOCK_ADHOC_FLIGHTS.filter(f => isFlightInShift(f.sta));
+
+  const domesticTeams = [
     { id: 't1', name: 'Team 1', op1: '', op2: '' },
     { id: 't2', name: 'Team 2', op1: '', op2: '' },
     { id: 't3', name: 'Team 3', op1: '', op2: '' },
-  ]);
+  ].map(team => {
+    const dbTeam = (domesticAssignments || []).find(d => d.team_name === team.name);
+    return dbTeam ? { ...team, op1: dbTeam.operator1_id || '', op2: dbTeam.operator2_id || '' } : team;
+  });
 
-  const currentHour = new Date().getHours();
-  const isDieselTime = currentHour >= 15 && currentHour < 23;
-  const currentShiftLabel = isDieselTime ? 'DIESEL' : 'DAILY';
-
-  const [equipmentShift, setEquipmentShift] = useState<'DAILY' | 'DIESEL'>(currentShiftLabel);
+  const currentShiftLabel = selectedBriefingShift === 'Evening' ? 'DIESEL' : 'DAILY';
   const [dieselNeeds, setDieselNeeds] = useState<string[]>(briefingInfo?.dieselNeeds || []);
   
   const rfHdEquipment = (equipment || []).filter(eq => 
@@ -61,23 +116,12 @@ export const Schedule: React.FC = () => {
   );
 
   const [equipmentAssignments, setEquipmentAssignments] = useState(
-    (rfHdEquipment || []).map(eq => ({ id: eq.id, eqNumber: eq.id, op1: '', op2: '', shift_type: equipmentShift, eqType: eq.type }))
+    (rfHdEquipment || []).map(eq => ({ id: eq.id, eqNumber: eq.id, op1: '', op2: '', shift_type: currentShiftLabel, eqType: eq.type }))
   );
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Modal removed — replaced by shift selector
   const operators = (staff && staff.length > 0 ? staff : MOCK_USERS).filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(u.role));
   const todayDate = new Date().toISOString().split('T')[0];
-
-  useEffect(() => {
-    if (isModalOpen) {
-      document.documentElement.classList.add('modal-open');
-    } else {
-      document.documentElement.classList.remove('modal-open');
-    }
-    return () => {
-      document.documentElement.classList.remove('modal-open');
-    };
-  }, [isModalOpen]);
 
   useEffect(() => {
     if (briefingInfo?.dieselNeeds) {
@@ -88,20 +132,8 @@ export const Schedule: React.FC = () => {
   useEffect(() => {
     const loadAssignments = async () => {
       try {
-        // Load Domestic Assignments
-        const domesticData = await supabaseService.getDomesticAssignments(todayDate);
-        if (domesticData && domesticData.length > 0) {
-          setDomesticTeams(prev => prev.map(team => {
-            const dbTeam = domesticData.find(d => d.team_name === team.name);
-            if (dbTeam) {
-              return { ...team, op1: dbTeam.operator1_id || '', op2: dbTeam.operator2_id || '' };
-            }
-            return team;
-          }));
-        }
-
         // Load Equipment Assignments
-        const equipmentData = await supabaseService.getEquipmentAssignments(todayDate, equipmentShift);
+        const equipmentData = await supabaseService.getEquipmentAssignments(todayDate, currentShiftLabel);
         
         if (equipmentData && equipmentData.length > 0) {
           setEquipmentAssignments(prev => prev.map(eq => {
@@ -109,37 +141,29 @@ export const Schedule: React.FC = () => {
             if (dbEq) {
               return { ...eq, op1: dbEq.operator1_id || '', op2: dbEq.operator2_id || '', shift_type: dbEq.shift_type };
             }
-            return eq;
+            return { ...eq, op1: '', op2: '' };
           }));
         } else {
-          // Reset if no data for this shift
-          setEquipmentAssignments((rfHdEquipment || []).map(eq => ({ id: eq.id, eqNumber: eq.id, op1: '', op2: '', shift_type: equipmentShift, eqType: eq.type })));
+          setEquipmentAssignments(prev => prev.map(eq => ({ ...eq, op1: '', op2: '' })));
         }
       } catch (error) {
         console.error("Failed to load assignments:", error);
       }
     };
     loadAssignments();
-  }, [equipmentShift, todayDate, rfHdEquipment.length]);
+  }, [currentShiftLabel, todayDate, rfHdEquipment.length]);
 
   const handleAssignFlight = (flightId: string, field: 'assignedTo' | 'assignedOfficer' | 'equipmentUsage', value: string) => {
     updateFlightJob(flightId, { [field]: value });
   };
 
-
   const handleAssignDomestic = async (teamId: string, opIndex: 1 | 2, userId: string) => {
-    const updatedTeams = domesticTeams.map(t => {
-      if (t.id === teamId) {
-        return opIndex === 1 ? { ...t, op1: userId } : { ...t, op2: userId };
-      }
-      return t;
-    });
-    setDomesticTeams(updatedTeams);
-
-    const team = updatedTeams.find(t => t.id === teamId);
+    const team = domesticTeams.find(t => t.id === teamId);
     if (team) {
+      const newOp1 = opIndex === 1 ? userId : team.op1;
+      const newOp2 = opIndex === 2 ? userId : team.op2;
       try {
-        await supabaseService.upsertDomesticAssignment(todayDate, team.name, team.op1, team.op2);
+        await updateDomesticAssignment(team.name, newOp1, newOp2);
       } catch (error) {
         console.error("Failed to save domestic assignment:", error);
       }
@@ -158,38 +182,14 @@ export const Schedule: React.FC = () => {
     const eq = updatedEqs.find(e => e.id === eqId);
     if (eq) {
       try {
-        await supabaseService.upsertEquipmentAssignment(todayDate, eq.eqNumber, equipmentShift, eq.op1, eq.op2);
+        await supabaseService.upsertEquipmentAssignment(todayDate, eq.eqNumber, currentShiftLabel, eq.op1, eq.op2);
       } catch (error) {
         console.error("Failed to save equipment assignment:", error);
       }
     }
   };
 
-  const handleAddFlight = (e: React.FormEvent) => {
-    e.preventDefault();
-    const formData = new FormData(e.target as HTMLFormElement);
-    const rawRoute = formData.get('route') as string || '';
-    const formattedRoute = rawRoute
-        .replace(/\s*➔\s*/g, ' - ')
-        .replace(/\s*-\s*/g, ' ➔ ')
-        .toUpperCase() || undefined;
-    const newFlight: FlightJob = {
-        id: `sf${Date.now()}`,
-        flightNumber: formData.get('flight') as string,
-        aircraftReg: formData.get('ac') as string,
-        aircraftType: 'B737', // Default or from form
-        stand: formData.get('stand') as string,
-        sta: formData.get('sta') as string,
-        eta: formData.get('eta') as string,
-        std: formData.get('std') as string,
-        status: 'PENDING',
-        assignedTo: '',
-        route: formattedRoute,
-        equipmentUsage: 'HYDRANT'
-    };
-    addFlightJob(newFlight);
-    setIsModalOpen(false);
-  };
+
 
   const renderOperatorSelect = (value: string, onChange: (val: string) => void) => (
     <div className="relative group/select">
@@ -200,9 +200,9 @@ export const Schedule: React.FC = () => {
           value ? 'bg-surface-dim text-on-surface border-outline' : 'bg-surface-dim text-error border-error/30'
         }`}
       >
-        <option value="" className="bg-surface-container text-on-surface">-- UNASSIGNED --</option>
+        <option value="" className="bg-surface-dim text-on-surface">-- UNASSIGNED --</option>
         {operators.map(op => (
-          <option key={op.id} value={op.id} className="bg-surface-container text-on-surface">{op.name.toUpperCase()}</option>
+          <option key={op.id} value={op.id} className="bg-surface-dim text-on-surface">{op.name.toUpperCase()}</option>
         ))}
       </select>
       <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-on-surface-dim opacity-40 pointer-events-none" />
@@ -223,16 +223,21 @@ export const Schedule: React.FC = () => {
           </div>
         </div>
         
-        <div className="flex flex-col sm:flex-row gap-4">
-          {activeTab === 'international' && (
-            <button 
-                onClick={() => setIsModalOpen(true)}
-                className="flex items-center px-6 py-3 kinetic-gradient text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all"
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+          {/* Shift Selector */}
+          <div className="relative">
+            <select
+              value={selectedBriefingShift}
+              onChange={(e) => setSelectedBriefingShift(e.target.value as BriefingShift)}
+              className="appearance-none px-6 py-3 pr-10 kinetic-gradient text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-premium cursor-pointer outline-none"
+              style={{ colorScheme: 'dark' }}
             >
-                <Plus className="w-4 h-4 mr-2" />
-                NEW TASK
-            </button>
-          )}
+              <option value="Morning" className="bg-surface-dim text-on-surface">Morning (07:30-16:00)</option>
+              <option value="Evening" className="bg-surface-dim text-on-surface">Evening (15:00-23:30)</option>
+              <option value="Night" className="bg-surface-dim text-on-surface">Night (22:30-08:30)</option>
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white pointer-events-none" />
+          </div>
         </div>
       </div>
 
@@ -240,10 +245,11 @@ export const Schedule: React.FC = () => {
       <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner relative flex w-full md:w-fit overflow-hidden">
         <div 
           className={`absolute top-1.5 bottom-1.5 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
-            ${activeTab === 'international' ? 'left-1.5 w-[calc(25%-3px)] md:w-[calc(140px)] translate-x-0' : ''}
-            ${activeTab === 'domestic' ? 'left-1.5 w-[calc(25%-3px)] md:w-[calc(120px)] translate-x-[100%] md:translate-x-[140px]' : ''}
-            ${activeTab === 'equipment' ? 'left-1.5 w-[calc(25%-3px)] md:w-[calc(120px)] translate-x-[200%] md:translate-x-[260px]' : ''}
-            ${activeTab === 'status' ? 'left-1.5 w-[calc(25%-3px)] md:w-[calc(160px)] translate-x-[300%] md:translate-x-[380px]' : ''}
+            ${activeTab === 'international' ? 'w-[calc(20%-3px)] left-1.5 md:w-[140px] md:translate-x-0' : ''}
+            ${activeTab === 'domestic' ? 'w-[calc(20%-3px)] left-[calc(20%+1.5px)] md:w-[110px] md:left-1.5 md:translate-x-[140px]' : ''}
+            ${activeTab === 'adhoc' ? 'w-[calc(20%-3px)] left-[calc(40%+1.5px)] md:w-[110px] md:left-1.5 md:translate-x-[250px]' : ''}
+            ${activeTab === 'equipment' ? 'w-[calc(20%-3px)] left-[calc(60%+1.5px)] md:w-[110px] md:left-1.5 md:translate-x-[360px]' : ''}
+            ${activeTab === 'status' ? 'w-[calc(20%-3px)] left-[calc(80%+1.5px)] md:w-[150px] md:left-1.5 md:translate-x-[470px]' : ''}
           `}
         />
         <button
@@ -253,38 +259,47 @@ export const Schedule: React.FC = () => {
           }`}
         >
           <Plane className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-          <span className="hidden sm:block whitespace-nowrap">International</span>
-          <span className="block sm:hidden">INT</span>
+          <span className="hidden md:block whitespace-nowrap">International</span>
         </button>
         <button
           onClick={() => setActiveTab('domestic')}
-          className={`flex-1 md:w-[120px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+          className={`flex-1 md:w-[110px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
             activeTab === 'domestic' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
           <Home className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-          <span className="hidden sm:block whitespace-nowrap">Domestic</span>
-          <span className="block sm:hidden">DOM</span>
+          <span className="hidden md:block whitespace-nowrap">Domestic</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('adhoc')}
+          className={`flex-1 md:w-[110px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+            activeTab === 'adhoc' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+          }`}
+        >
+          <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+          <span className="hidden md:block whitespace-nowrap">Ad-Hoc</span>
         </button>
         <button
           onClick={() => setActiveTab('equipment')}
-          className={`flex-1 md:w-[120px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+          className={`flex-1 md:w-[110px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
             activeTab === 'equipment' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
-          <Truck className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-          <span className="hidden sm:block whitespace-nowrap">{currentShiftLabel}</span>
-          <span className="block sm:hidden">{currentShiftLabel}</span>
+          {currentShiftLabel === 'DIESEL' ? (
+            <Droplet className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+          ) : (
+            <Truck className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+          )}
+          <span className="hidden md:block whitespace-nowrap">{currentShiftLabel}</span>
         </button>
         <button
           onClick={() => setActiveTab('status')}
-          className={`flex-1 md:w-[160px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+          className={`flex-1 md:w-[150px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
             activeTab === 'status' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
           }`}
         >
           <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-          <span className="hidden sm:block whitespace-nowrap">Status Board</span>
-          <span className="block sm:hidden">STATUS</span>
+          <span className="hidden md:block whitespace-nowrap">Status Board</span>
         </button>
       </div>
 
@@ -299,11 +314,11 @@ export const Schedule: React.FC = () => {
               <table className="min-w-full divide-y divide-outline">
                 <thead className="bg-surface-dim">
                   <tr>
-                    <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">FLIGHT / TASK</th>
-                    <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">REG / STAND / ROUTE</th>
-                    <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">TIMINGS</th>
-                    <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">OPERATOR ASSIGNED</th>
-                    <th className="px-8 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STATUS</th>
+                    <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">FLIGHT / TASK</th>
+                    <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">REG / TYPE / ROUTE</th>
+                    <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">TIMINGS</th>
+                    <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">OPERATOR ASSIGNED</th>
+                    <th className="px-4 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STATUS</th>
                   </tr>
                 </thead>
                 <tbody className="bg-surface divide-y divide-outline text-on-surface">
@@ -314,30 +329,36 @@ export const Schedule: React.FC = () => {
                     const activeEquipmentUsage = item.equipmentUsage || 'HYDRANT';
                     return (
                       <tr key={item.id} className={`hover:bg-primary/[0.02] transition-colors group animate-in fade-in slide-in-from-left-4 duration-300 stagger-${Math.min(idx + 1, 5)}`}>
-                        <td className="px-8 py-6 whitespace-nowrap">
-                            <div className="flex items-center gap-0">
-                                <span className="text-xl font-[900] tracking-tighter italic">{item.flightNumber}</span>
-                                {logoUrl && (
-                                  <img
-                                    src={logoUrl}
-                                    alt=""
-                                    aria-hidden="true"
-                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                    className="h-4 w-auto object-contain select-none flex-shrink-0 -ml-1"
-                                    style={{
-                                      opacity: 0.5,
-                                      WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                      maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                    }}
-                                  />
-                                )}
+                        <td className="px-4 py-6 whitespace-nowrap">
+                            <div className="flex items-center gap-3">
+                                {/* Yellow gradient stand badge */}
+                                <div className="bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider">
+                                    {item.stand}
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-xl font-[900] tracking-tighter italic">{item.flightNumber}</span>
+                                    {logoUrl && (
+                                      <img
+                                        src={logoUrl}
+                                        alt=""
+                                        aria-hidden="true"
+                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        className="h-4 w-auto object-contain select-none flex-shrink-0"
+                                        style={{
+                                          opacity: 0.5,
+                                          WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                          maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                        }}
+                                      />
+                                    )}
+                                </div>
                             </div>
                         </td>
-                        <td className="px-8 py-6 whitespace-nowrap">
+                        <td className="px-4 py-6 whitespace-nowrap">
                             <div className="flex items-center gap-6">
                                 <div>
                                     <div className="text-sm font-black tracking-tight">{item.aircraftReg}</div>
-                                    <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Stand {item.stand}</div>
+                                    <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">{item.aircraftType}</div>
                                 </div>
                                 <div className="h-6 w-[1px] bg-outline/30" />
                                 <div>
@@ -345,7 +366,7 @@ export const Schedule: React.FC = () => {
                                 </div>
                             </div>
                         </td>
-                        <td className="px-8 py-6 whitespace-nowrap">
+                        <td className="px-4 py-6 whitespace-nowrap">
                             <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-dim/30 px-4 py-2 rounded-full border border-outline/30 w-fit">
                                 <div className="flex items-center gap-1.5">
                                     <span className="text-on-surface-dim opacity-40">STA</span>
@@ -361,7 +382,7 @@ export const Schedule: React.FC = () => {
                                 </div>
                             </div>
                         </td>
-                        <td className="px-8 py-6 whitespace-nowrap max-w-[240px]">
+                        <td className="px-4 py-6 whitespace-nowrap w-[320px]">
                             {activeEquipmentUsage === 'REFUELLER' ? (
                               <div className="flex space-x-2">
                                   <div className="flex-1">
@@ -380,7 +401,7 @@ export const Schedule: React.FC = () => {
                               </div>
                             )}
                         </td>
-                        <td className="px-8 py-6 whitespace-nowrap text-right text-sm font-medium">
+                        <td className="px-4 py-6 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex justify-end items-center space-x-2">
                                 <button onClick={() => handleAssignFlight(item.id, 'equipmentUsage', 'HYDRANT')} className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all ${activeEquipmentUsage === 'HYDRANT' ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white border-transparent' : 'bg-surface-dim text-on-surface-dim border-outline hover:text-cyan-500 hover:border-cyan-500/50'}`}>HD</button>
                                 <button onClick={() => handleAssignFlight(item.id, 'equipmentUsage', 'REFUELLER')} className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all ${activeEquipmentUsage === 'REFUELLER' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white border-transparent' : 'bg-surface-dim text-on-surface-dim border-outline hover:text-amber-500 hover:border-amber-500/50'}`}>RF</button>
@@ -404,32 +425,35 @@ export const Schedule: React.FC = () => {
                   <div key={item.id} className="card-premium p-4 sm:p-6 border-outline group transition-all active:scale-[0.98] max-w-md mx-auto w-full">
                     <div className="flex justify-between items-start mb-6">
                       <div className="flex items-center min-w-0">
-                        <div>
-                          <div className="flex items-center gap-0">
-                            <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">{item.flightNumber}</h3>
-                            {logoUrl && (
-                              <img
-                                src={logoUrl}
-                                alt=""
-                                aria-hidden="true"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                className="h-4 w-auto object-contain select-none flex-shrink-0 -ml-1"
-                                style={{
-                                  opacity: 0.5,
-                                  WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                  maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                }}
-                              />
-                            )}
+                        <div className="flex items-center gap-3">
+                          {/* Yellow gradient stand badge */}
+                          <div className="bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider">
+                              {item.stand}
                           </div>
-                          <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">
-                            {item.aircraftReg} • Stand {item.stand} {item.route ? `• ${item.route}` : ''}
-                          </p>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">{item.flightNumber}</h3>
+                              {logoUrl && (
+                                <img
+                                  src={logoUrl}
+                                  alt=""
+                                  aria-hidden="true"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  className="h-4 w-auto object-contain select-none flex-shrink-0"
+                                  style={{
+                                    opacity: 0.5,
+                                    WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                    maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                  }}
+                                />
+                              )}
+                            </div>
+                            <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">
+                              {item.aircraftReg} • {item.aircraftType} {item.route ? `• ${item.route}` : ''}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                      <button className="p-2 text-primary opacity-40 hover:opacity-100">
-                        <Settings className="w-5 h-5" />
-                      </button>
                     </div>
 
                     <div className="grid grid-cols-3 gap-2 mb-6 p-3 bg-surface-dim rounded-xl border border-outline">
@@ -510,58 +534,297 @@ export const Schedule: React.FC = () => {
               ))}
             </div>
 
-            <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] mb-8 flex items-center">
-               <span className="w-1.5 h-6 bg-primary/40 rounded-full mr-4"></span>
-               Tactical Flight Log
-            </h3>
-            <div className="bg-surface-lowest border border-outline rounded-[32px] overflow-hidden shadow-inner">
+            {/* Desktop View */}
+            <div className="hidden md:block bg-surface-lowest border border-outline rounded-[32px] overflow-hidden shadow-inner">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-outline">
                   <thead className="bg-surface-dim">
                     <tr>
-                      <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">TASK ID</th>
-                      <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">ASSET / SECTOR</th>
-                      <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">ETD/ETA</th>
-                      <th className="px-8 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STATUS</th>
+                      <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">TASK ID</th>
+                      <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">ASSET / SECTOR</th>
+                      <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">ETD/ETA</th>
+                      <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STATUS</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline text-on-surface">
-                    {MOCK_DOMESTIC_FLIGHTS.map((flight, idx) => (
-                      <tr key={flight.id} className={`hover:bg-primary/[0.01] transition-colors group animate-in fade-in slide-in-from-left-4 duration-300 stagger-${Math.min(idx + 1, 5)}`}>
-                        <td className="px-8 py-6 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="p-3 bg-surface-dim rounded-2xl border border-outline mr-4">
-                              <Plane className="w-5 h-5 text-on-surface-dim" />
+                    {domesticFlightsToRender.map((flight, idx) => {
+                      const airlineCode = (flight.flightNumber || '').slice(0, 2).toLowerCase();
+                      const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/webfids/images/${airlineCode}.gif` : null;
+                      return (
+                        <tr key={flight.id} className={`hover:bg-primary/[0.01] transition-colors group animate-in fade-in slide-in-from-left-4 duration-300 stagger-${Math.min(idx + 1, 5)}`}>
+                          <td className="px-4 py-6 whitespace-nowrap">
+                            <div className="flex items-center gap-3">
+                              {/* Yellow gradient stand badge */}
+                              <div className="bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider">
+                                {flight.stand}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-lg font-[900] italic tracking-tighter">{flight.flightNumber}</span>
+                                {logoUrl && (
+                                  <img
+                                    src={logoUrl}
+                                    alt=""
+                                    aria-hidden="true"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    className="h-4 w-auto object-contain select-none flex-shrink-0"
+                                    style={{
+                                      opacity: 0.5,
+                                      WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                      maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                    }}
+                                  />
+                                )}
+                              </div>
                             </div>
-                            <span className="text-lg font-[900] italic tracking-tighter">{flight.flightNumber}</span>
-                          </div>
-                        </td>
-                        <td className="px-8 py-6 whitespace-nowrap">
-                          <div className="text-sm font-black tracking-tight">{flight.aircraftType}</div>
-                          <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1">
-                            {flight.aircraftReg} • Stand {flight.stand}
-                          </div>
-                        </td>
-                        <td className="px-8 py-6 whitespace-nowrap">
-                          <div className="flex items-center text-sm font-black">
-                            <Clock className="w-4 h-4 mr-2.5 opacity-40" />
-                            {flight.eta}
-                          </div>
-                        </td>
+                          </td>
+                          <td className="px-4 py-6 whitespace-nowrap">
+                            <div className="text-sm font-black tracking-tight">{flight.aircraftType}</div>
+                            <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1">
+                              {flight.aircraftReg}
+                            </div>
+                          </td>
+                          <td className="px-4 py-6 whitespace-nowrap">
+                            <div className="flex items-center text-sm font-black">
+                              <Clock className="w-4 h-4 mr-2.5 opacity-40" />
+                              {flight.eta}
+                            </div>
+                          </td>
 
-                        <td className="px-8 py-6 whitespace-nowrap">
-                          <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
-                              flight.status === 'COMPLETED' ? 'bg-success/10 text-success border-success/20 shadow-[0_0_12px_rgba(34,197,94,0.1)]' : 
-                              flight.status === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/20' : 'bg-surface-dim text-on-surface-dim border-outline'
-                          }`}>
-                              {flight.status.replace('_', ' ')}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                          <td className="px-4 py-6 whitespace-nowrap">
+                            <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+                                flight.status === 'COMPLETED' ? 'bg-success/10 text-success border-success/20 shadow-[0_0_12px_rgba(34,197,94,0.1)]' : 
+                                flight.status === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/20' : 'bg-surface-dim text-on-surface-dim border-outline'
+                            }`}>
+                                {flight.status.replace('_', ' ')}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            {/* Mobile View */}
+            <div className="block md:hidden space-y-4">
+              {domesticFlightsToRender.map((flight) => {
+                const airlineCode = (flight.flightNumber || '').slice(0, 2).toLowerCase();
+                const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/webfids/images/${airlineCode}.gif` : null;
+                const delayed = isDelayed(flight.sta, flight.eta);
+                return (
+                  <div key={flight.id} className="card-premium p-4 sm:p-6 border-outline group transition-all active:scale-[0.98] max-w-md mx-auto w-full">
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="flex items-center min-w-0">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider">
+                              {flight.stand}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">{flight.flightNumber}</h3>
+                              {logoUrl && (
+                                <img
+                                  src={logoUrl}
+                                  alt=""
+                                  aria-hidden="true"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  className="h-4 w-auto object-contain select-none flex-shrink-0"
+                                  style={{
+                                    opacity: 0.5,
+                                    WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                    maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                  }}
+                                />
+                              )}
+                            </div>
+                            <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">
+                              {flight.aircraftReg} • {flight.aircraftType}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 mb-6 p-3 bg-surface-dim rounded-xl border border-outline">
+                      <div className="text-center border-r border-outline/30">
+                        <p className="text-[8px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-1">STA</p>
+                        <p className="text-[11px] font-[900] text-on-surface">{flight.sta || '--:--'}</p>
+                      </div>
+                      <div className="text-center border-r border-outline/30">
+                        <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${delayed ? 'text-error opacity-60' : 'text-primary opacity-60'}`}>ETA</p>
+                        <p className={`text-[11px] font-[900] ${delayed ? 'text-error' : 'text-primary'}`}>{flight.eta}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[8px] font-black text-warning opacity-60 uppercase tracking-widest mb-1">STD</p>
+                        <p className="text-[11px] font-[900] text-warning">{flight.std || '--:--'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center mt-4 pt-4 border-t border-outline/30">
+                      <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Status</span>
+                      <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+                          flight.status === 'COMPLETED' ? 'bg-success/10 text-success border-success/20' : 
+                          flight.status === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/20' : 'bg-surface-dim text-on-surface-dim border-outline'
+                      }`}>
+                          {flight.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Ad-Hoc Assignments */}
+        {activeTab === 'adhoc' && (
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500 p-4 md:p-8 lg:p-10">
+            {/* Desktop View */}
+            <div className="hidden md:block bg-surface-lowest border border-outline rounded-[32px] overflow-hidden shadow-inner">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-outline">
+                  <thead className="bg-surface-dim">
+                    <tr>
+                      <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">TASK ID</th>
+                      <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">ASSET / SECTOR</th>
+                      <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">ETD/ETA</th>
+                      <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STATUS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline text-on-surface">
+                    {adhocFlightsToRender.map((flight, idx) => {
+                      const airlineCode = (flight.flightNumber || '').slice(0, 2).toLowerCase();
+                      const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/webfids/images/${airlineCode}.gif` : null;
+                      return (
+                        <tr key={flight.id} className={`hover:bg-primary/[0.01] transition-colors group animate-in fade-in slide-in-from-left-4 duration-300 stagger-${Math.min(idx + 1, 5)}`}>
+                          <td className="px-4 py-6 whitespace-nowrap">
+                            <div className="flex items-center gap-3">
+                              {/* Yellow gradient stand badge */}
+                              <div className="bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider">
+                                {flight.stand}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-lg font-[900] italic tracking-tighter">{flight.flightNumber}</span>
+                                {logoUrl && (
+                                  <img
+                                    src={logoUrl}
+                                    alt=""
+                                    aria-hidden="true"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    className="h-4 w-auto object-contain select-none flex-shrink-0"
+                                    style={{
+                                      opacity: 0.5,
+                                      WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                      maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                    }}
+                                  />
+                                )}
+                                <span className="ml-2 bg-amber-500/10 text-amber-500 text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider border border-amber-500/20">
+                                  Ad-Hoc
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-6 whitespace-nowrap">
+                            <div className="text-sm font-black tracking-tight">{flight.aircraftType}</div>
+                            <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1">
+                              {flight.aircraftReg} {flight.route ? `• ${flight.route}` : ''}
+                            </div>
+                          </td>
+                          <td className="px-4 py-6 whitespace-nowrap">
+                            <div className="flex items-center text-sm font-black">
+                              <Clock className="w-4 h-4 mr-2.5 opacity-40" />
+                              {flight.eta}
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-6 whitespace-nowrap">
+                            <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+                                flight.status === 'COMPLETED' ? 'bg-success/10 text-success border-success/20 shadow-[0_0_12px_rgba(34,197,94,0.1)]' : 
+                                flight.status === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/20' : 'bg-surface-dim text-on-surface-dim border-outline'
+                            }`}>
+                                {flight.status.replace('_', ' ')}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Mobile View */}
+            <div className="block md:hidden space-y-4">
+              {adhocFlightsToRender.map((flight) => {
+                const airlineCode = (flight.flightNumber || '').slice(0, 2).toLowerCase();
+                const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/webfids/images/${airlineCode}.gif` : null;
+                const delayed = isDelayed(flight.sta, flight.eta);
+                return (
+                  <div key={flight.id} className="card-premium p-4 sm:p-6 border-outline group transition-all active:scale-[0.98] max-w-md mx-auto w-full">
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="flex items-center min-w-0">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider">
+                              {flight.stand}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">{flight.flightNumber}</h3>
+                              {logoUrl && (
+                                <img
+                                  src={logoUrl}
+                                  alt=""
+                                  aria-hidden="true"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  className="h-4 w-auto object-contain select-none flex-shrink-0"
+                                  style={{
+                                    opacity: 0.5,
+                                    WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                    maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
+                                  }}
+                                />
+                              )}
+                              <span className="bg-amber-500/10 text-amber-500 text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider border border-amber-500/20">
+                                Ad-Hoc
+                              </span>
+                            </div>
+                            <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1">
+                              {flight.aircraftReg} • {flight.aircraftType} {flight.route ? `• ${flight.route}` : ''}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 mb-6 p-3 bg-surface-dim rounded-xl border border-outline">
+                      <div className="text-center border-r border-outline/30">
+                        <p className="text-[8px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-1">STA</p>
+                        <p className="text-[11px] font-[900] text-on-surface">{flight.sta || '--:--'}</p>
+                      </div>
+                      <div className="text-center border-r border-outline/30">
+                        <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${delayed ? 'text-error opacity-60' : 'text-primary opacity-60'}`}>ETA</p>
+                        <p className={`text-[11px] font-[900] ${delayed ? 'text-error' : 'text-primary'}`}>{flight.eta}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[8px] font-black text-warning opacity-60 uppercase tracking-widest mb-1">STD</p>
+                        <p className="text-[11px] font-[900] text-warning">{flight.std || '--:--'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center mt-4 pt-4 border-t border-outline/30">
+                      <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Status</span>
+                      <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+                          flight.status === 'COMPLETED' ? 'bg-success/10 text-success border-success/20' : 
+                          flight.status === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/20' : 'bg-surface-dim text-on-surface-dim border-outline'
+                      }`}>
+                          {flight.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -572,34 +835,13 @@ export const Schedule: React.FC = () => {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
               <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
                  <span className="w-1.5 h-6 bg-primary rounded-full mr-4"></span>
-                 Tactical Fleet Assignment
+                 Tactical Fleet Assignment - {currentShiftLabel}
               </h3>
-              <div className="flex bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner relative w-[200px] overflow-hidden">
-                <div 
-                  className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] kinetic-gradient rounded-xl transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${equipmentShift === 'DIESEL' ? 'translate-x-full' : 'translate-x-0'}`}
-                />
-                <button
-                  onClick={() => setEquipmentShift('DAILY')}
-                  className={`flex-1 py-2.5 text-[10px] font-black rounded-xl transition-all uppercase tracking-widest relative z-10 ${
-                    equipmentShift === 'DAILY' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
-                  }`}
-                >
-                  DAILY
-                </button>
-                <button
-                  onClick={() => setEquipmentShift('DIESEL')}
-                  className={`flex-1 py-2.5 text-[10px] font-black rounded-xl transition-all uppercase tracking-widest relative z-10 ${
-                    equipmentShift === 'DIESEL' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
-                  }`}
-                >
-                  DIESEL
-                </button>
-              </div>
             </div>
 
             <div className="space-y-12">
               {['Refueller', 'Hydrant Dispenser'].map(type => {
-                const eqs = equipmentAssignments.filter(eq => (equipmentShift === 'DAILY' || dieselNeeds.includes(eq.eqNumber)) && eq.eqType === type);
+                const eqs = equipmentAssignments.filter(eq => (currentShiftLabel === 'DAILY' || dieselNeeds.includes(eq.eqNumber)) && eq.eqType === type);
                 if (eqs.length === 0) return null;
                 return (
                   <div key={type}>
@@ -628,7 +870,7 @@ export const Schedule: React.FC = () => {
                               <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Operator</label>
                               {renderOperatorSelect(eq.op1, (val) => handleAssignEquipment(eq.id, 1, val))}
                             </div>
-                            {type === 'Refueller' && equipmentShift !== 'DIESEL' && (
+                            {type === 'Refueller' && currentShiftLabel !== 'DIESEL' && (
                               <div>
                                 <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Officer</label>
                                 {renderOperatorSelect(eq.op2, (val) => handleAssignEquipment(eq.id, 2, val))}

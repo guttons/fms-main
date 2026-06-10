@@ -100,6 +100,7 @@ export interface FlightJob {
   deliveryNumber?: string;
   pitNumber?: string;
   route?: string;
+  isAdhoc?: boolean;
 }
 
 export interface FlightLog {
@@ -136,6 +137,8 @@ export interface FlightLog {
   appearanceCheck: boolean;   // Clear & Bright?
   waterCheck: boolean;        // Water/Sediments Free?
   remarks?: string;
+  co?: string;
+  isAdhoc?: boolean;
 }
 
 export interface BridgingLog {

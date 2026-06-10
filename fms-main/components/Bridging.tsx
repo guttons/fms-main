@@ -7,18 +7,17 @@ import { useOperationalData } from '../context/OperationalDataContext';
 
 interface BridgingProps {
   user?: User | null;
+  setActiveView?: (view: string) => void;
 }
 
-export const Bridging: React.FC<BridgingProps> = ({ user }) => {
+export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
   const { tanks, updateTankLevel, alerts, acknowledgeAlert, createAlert, equipment, updateEquipment, staff } = useOperationalData();
   const [logs, setLogs] = useState<BridgingLog[]>([]);
   const { notify } = useNotification();
 
   const isOperator = user?.role === UserRole.DEPOT_OPERATOR;
 
-  // ── IMPORTANT: compute replenishment data BEFORE using it in availableRefuelers ──
-
-  // Filter alerts for replenishment requests (unacknowledged) to highlight them
+  // Filter alerts for replenishment requests (unacknowledged) to highlight them in the active feed
   const replenishmentRequests = (alerts || []).filter(a => 
     a && !a.acknowledged && (
       a.message.toLowerCase().includes('request') && (
@@ -27,24 +26,6 @@ export const Bridging: React.FC<BridgingProps> = ({ user }) => {
       )
     )
   );
-
-  // Extract vehicle IDs from replenishment request alerts
-  const requestedRFs = Array.from(new Set(
-    replenishmentRequests
-      .map(a => {
-        const match = a.message.match(/unit\s+(RF-\d+)/i);
-        return match ? match[1].toUpperCase() : null;
-      })
-      .filter(Boolean) as string[]
-  ));
-
-  // Now it's safe to use requestedRFs here
-  const availableRefuelers = (equipment || [])
-    .filter(eq => eq.type === EquipmentType.REFUELLER && (
-      eq.status === EquipmentStatus.AVAILABLE || 
-      eq.status === EquipmentStatus.REFUELLING || 
-      requestedRFs.includes(eq.id)    // Always include RF units with a pending replenish request
-    ));
 
   // Extract staff roles for personnel dropdowns
   const activeOperators = (staff || []).filter(s => [UserRole.DEPOT_OPERATOR, UserRole.ITP_OPERATOR].includes(s.role));
@@ -87,6 +68,36 @@ export const Bridging: React.FC<BridgingProps> = ({ user }) => {
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  // Extract pending replenishment vehicle IDs regardless of acknowledgment status
+  const replenishmentAlerts = (alerts || []).filter(a => 
+    a && (
+      a.message.toLowerCase().includes('replenish') || 
+      a.message.toLowerCase().includes('refuel')
+    )
+  );
+
+  const requestedRFs = Array.from(new Set(
+    (equipment || [])
+      .filter(eq => eq.type === EquipmentType.REFUELLER)
+      .map(eq => eq.id)
+  )).filter(vehicleId => {
+    const vehicleAlerts = replenishmentAlerts.filter(a => {
+      const match = a.message.match(/RF-\d+/i);
+      return match && match[0].toUpperCase() === vehicleId;
+    });
+    if (vehicleAlerts.length === 0) return false;
+    const latestAlert = vehicleAlerts[0];
+    return latestAlert.message.toLowerCase().includes('request');
+  });
+
+  const availableRefuelers = (equipment || [])
+    .filter(eq => eq.type === EquipmentType.REFUELLER && (
+      eq.status === EquipmentStatus.AVAILABLE || 
+      eq.status === EquipmentStatus.REFUELLING || 
+      requestedRFs.includes(eq.id) ||
+      formData.vehicleId === eq.id // Always include currently selected vehicle to avoid blank dropdown selection
+    ));
 
   // Prefill vehicle from dashboard "Dispatch" action
   useEffect(() => {
@@ -678,7 +689,15 @@ export const Bridging: React.FC<BridgingProps> = ({ user }) => {
                     )}
                 </div>
                 <div className="p-6 border-t border-outline bg-surface-dim/30">
-                    <button className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-[0.3em] transition-all w-full flex items-center justify-center">
+                    <button 
+                        onClick={() => {
+                            localStorage.setItem('fms_log_history_default_tab', 'BRIDGING');
+                            if (setActiveView) {
+                                setActiveView('history');
+                            }
+                        }}
+                        className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-[0.3em] transition-all w-full flex items-center justify-center"
+                    >
                         <FileText className="w-3.5 h-3.5 mr-3" />
                         ACCESS ARCHIVE
                     </button>

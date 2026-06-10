@@ -22,10 +22,10 @@ import {
   X
 } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
-import { MOCK_USERS, MOCK_JOBS, MOCK_DOMESTIC_FLIGHTS, EQUIPMENT } from '../constants';
+import { MOCK_USERS, MOCK_JOBS, MOCK_DOMESTIC_FLIGHTS, MOCK_ADHOC_FLIGHTS, EQUIPMENT } from '../constants';
 import { User, UserRole, EquipmentType, EquipmentStatus } from '../types';
 import { useNotification } from '../context/NotificationContext';
-import { useOperationalData } from '../context/OperationalDataContext';
+import { useOperationalData, BriefingShift } from '../context/OperationalDataContext';
 
 export const ShiftBriefing: React.FC = () => {
   const { notify } = useNotification();
@@ -37,9 +37,78 @@ export const ShiftBriefing: React.FC = () => {
     setSelectedBriefingShift, 
     staff,
     selectedBriefingDate,
-    setSelectedBriefingDate
+    setSelectedBriefingDate,
+    flightJobs
   } = useOperationalData();
   const activeStaff = staff && staff.length > 0 ? staff : MOCK_USERS;
+
+  const staffHistory = [
+    { staffId: 'u3', lastDomestic: { date: '2026-06-09', shift: 'Morning', team: 'Team 1' }, lastDaily: { date: '2026-06-09', shift: 'Morning' }},
+    { staffId: 'u3b', lastDomestic: { date: '2026-06-08', shift: 'Evening', team: 'Team 2' }, lastDaily: { date: '2026-06-09', shift: 'Morning' }},
+    { staffId: 'u7', lastDomestic: { date: '2026-06-08', shift: 'Morning', team: 'Team 1' }, lastDaily: { date: '2026-06-08', shift: 'Night' }},
+    { staffId: 'u1', lastDomestic: { date: '2026-06-07', shift: 'Night', team: 'Team 3' }, lastDaily: { date: '2026-06-08', shift: 'Evening' }},
+    { staffId: 'u2', lastDomestic: { date: '2026-06-07', shift: 'Morning', team: 'Team 2' }, lastDaily: { date: '2026-06-07', shift: 'Morning' }},
+  ];
+
+  const sortHistory = (a: any, b: any) => {
+    // 1. Date ascending (oldest date first / ranked 1)
+    const dateComp = a.lastDomestic.date.localeCompare(b.lastDomestic.date);
+    if (dateComp !== 0) return dateComp;
+    
+    // 2. Shift weight ascending (Morning=1 < Evening=2 < Night=3)
+    const shiftWeight = (s: string) => s === 'Morning' ? 1 : s === 'Evening' ? 2 : 3;
+    const shiftComp = shiftWeight(a.lastDomestic.shift) - shiftWeight(b.lastDomestic.shift);
+    if (shiftComp !== 0) return shiftComp;
+
+    // 3. Team weight ascending (Team 1=1 < Team 2=2 < Team 3=3)
+    const teamWeight = (t: string) => t === 'Team 1' ? 1 : t === 'Team 2' ? 2 : 3;
+    return teamWeight(a.lastDomestic.team || '') - teamWeight(b.lastDomestic.team || '');
+  };
+
+  const sortDailyHistory = (a: any, b: any) => {
+    // 1. Date ascending (oldest date first / ranked 1)
+    const dateComp = a.lastDaily.date.localeCompare(b.lastDaily.date);
+    if (dateComp !== 0) return dateComp;
+    
+    // 2. Shift weight ascending (Morning=1 < Evening=2 < Night=3)
+    const shiftWeight = (s: string) => s === 'Morning' ? 1 : s === 'Evening' ? 2 : 3;
+    return shiftWeight(a.lastDaily.shift) - shiftWeight(b.lastDaily.shift);
+  };
+
+  const rankedStaffList = [...staffHistory].sort(sortHistory);
+  const rankedDailyStaffList = [...staffHistory].sort(sortDailyHistory);
+
+  // Shift time ranges for filtering flights
+  const shiftRanges: Record<BriefingShift, { start: string; end: string; crossesMidnight: boolean }> = {
+    'Morning': { start: '07:30', end: '16:00', crossesMidnight: false },
+    'Evening': { start: '15:00', end: '23:30', crossesMidnight: false },
+    'Night': { start: '22:30', end: '08:30', crossesMidnight: true },
+  };
+
+  const isFlightInShift = (sta?: string) => {
+    if (!sta) return true; // Show flights without STA always
+    const range = shiftRanges[selectedBriefingShift];
+    if (range.crossesMidnight) {
+      return sta >= range.start || sta <= range.end;
+    }
+    return sta >= range.start && sta <= range.end;
+  };
+
+  const intlFlightsToRender = (flightJobs || []).filter(f => isFlightInShift(f.sta));
+  const domesticFlightsToRender = MOCK_DOMESTIC_FLIGHTS.filter(f => isFlightInShift(f.sta));
+  const adhocFlightsToRender = MOCK_ADHOC_FLIGHTS.filter(f => isFlightInShift(f.sta));
+
+  const formatDateShort = (dateStr: string) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const day = parts[2];
+    const monthIndex = parseInt(parts[1], 10) - 1;
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const month = monthNames[monthIndex] || '';
+    return `${day}-${month}`;
+  };
+
   const [isSaving, setIsSaving] = useState(false);
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
 
@@ -94,12 +163,7 @@ export const ShiftBriefing: React.FC = () => {
     }
   }, [briefingInfo]);
 
-  const [ongoingTasks, setOngoingTasks] = useState({
-    int: 'Preparing for morning wave of arrivals',
-    dom: '3 teams active for Dash-8 operations',
-    adhoc: 'No adhoc requests currently',
-    vvip: 'VVIP flight expected at 14:00'
-  });
+
 
   const [remarks, setRemarks] = useState('Safety first. Ensure all grounding cables are checked before each operation.');
 
@@ -135,9 +199,9 @@ export const ShiftBriefing: React.FC = () => {
           onChange={(e) => onSelect(e.target.value)}
           className="bg-surface-dim border border-outline rounded-xl p-3 text-[13px] font-bold text-on-surface outline-none focus:border-primary transition-colors cursor-pointer appearance-none shadow-sm"
         >
-          <option value="" className="bg-surface-container">-- Unassigned --</option>
+          <option value="" className="bg-surface-dim text-on-surface">-- Unassigned --</option>
           {roleUsers.map(u => (
-            <option key={u.id} value={u.id} className="bg-surface-container">{u.name}</option>
+            <option key={u.id} value={u.id} className="bg-surface-dim text-on-surface">{u.name}</option>
           ))}
         </select>
       </div>
@@ -154,36 +218,67 @@ export const ShiftBriefing: React.FC = () => {
              <Plus className="w-3 h-3" />
              <span className="text-[9px] font-bold uppercase tracking-wider">Add</span>
            </button>
-        </div>
+         </div>
         {values.length === 0 ? (
           <div className="text-[10px] font-bold opacity-20 uppercase italic text-center py-4 border border-dashed border-outline rounded-xl">No {label.toLowerCase()} assigned</div>
         ) : values.map((val, idx) => (
-          <div key={idx} className="flex items-center space-x-3 bg-surface-dim border border-outline rounded-xl p-2 pl-4 focus-within:border-primary/50 transition-colors">
-            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`}></div>
-            <select 
-              value={val}
-              onChange={(e) => {
-                const newVals = [...values];
-                newVals[idx] = e.target.value;
-                onUpdate(newVals);
-              }}
-              className="bg-transparent text-[13px] font-bold text-on-surface outline-none cursor-pointer appearance-none flex-1 py-2"
-            >
-              <option value="" className="bg-surface-container text-on-surface-dim italic">Select Staff...</option>
-              {roleUsers.map(u => (
-                <option key={u.id} value={u.id} className="bg-surface-container text-on-surface font-normal not-italic">{u.name}</option>
-              ))}
-            </select>
-            <button 
-              onClick={() => {
-                const newVals = values.filter((_, i) => i !== idx);
-                onUpdate(newVals);
-              }}
-              className="p-2 text-error/40 hover:text-error hover:bg-error/10 rounded-lg transition-colors flex-shrink-0"
-              title="Remove Assignment"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+          <div key={idx} className="flex flex-col bg-surface-dim border border-outline rounded-xl p-3 focus-within:border-primary/50 transition-colors">
+            <div className="flex items-center space-x-3 w-full">
+              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`}></div>
+              <select 
+                value={val}
+                onChange={(e) => {
+                  const newVals = [...values];
+                  newVals[idx] = e.target.value;
+                  onUpdate(newVals);
+                }}
+                className="bg-transparent text-[13px] font-bold text-on-surface outline-none cursor-pointer appearance-none flex-1 py-2"
+              >
+                <option value="" className="bg-surface-dim text-on-surface-dim italic">Select Staff...</option>
+                {roleUsers.map(u => {
+                  const rankIdx = rankedStaffList.findIndex(h => h.staffId === u.id);
+                  const rankLabel = rankIdx !== -1 ? `${rankIdx + 1} ` : '';
+                  return (
+                    <option key={u.id} value={u.id} className="bg-surface-dim text-on-surface font-normal not-italic">{rankLabel}{u.name}</option>
+                  );
+                })}
+              </select>
+              <button 
+                onClick={() => {
+                  const newVals = values.filter((_, i) => i !== idx);
+                  onUpdate(newVals);
+                }}
+                className="p-2 text-error/40 hover:text-error hover:bg-error/10 rounded-lg transition-colors flex-shrink-0"
+                title="Remove Assignment"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+            {val && (() => {
+              const hist = staffHistory.find(h => h.staffId === val);
+              if (hist) {
+                const domRankIdx = rankedStaffList.findIndex(h => h.staffId === val);
+                const dailyRankIdx = rankedDailyStaffList.findIndex(h => h.staffId === val);
+                const domRank = domRankIdx !== -1 ? domRankIdx + 1 : '-';
+                const dailyRank = dailyRankIdx !== -1 ? dailyRankIdx + 1 : '-';
+                const formattedDomDate = formatDateShort(hist.lastDomestic.date);
+                const formattedDailyDate = formatDateShort(hist.lastDaily.date);
+                return (
+                  <div className="text-[10px] font-black text-on-surface-dim opacity-75 mt-2 pl-5 border-t border-outline/20 pt-2 tracking-wider uppercase flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <div>
+                      DOM: <span className="text-on-surface font-[900]">{formattedDomDate}</span>
+                      <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-[8.5px] font-black ml-1.5 border border-primary/20">{domRank}</span>
+                    </div>
+                    <div className="h-3.5 w-[1px] bg-outline/20 hidden sm:block"></div>
+                    <div>
+                      DAILY: <span className="text-on-surface font-[900]">{formattedDailyDate}</span>
+                      <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-[8.5px] font-black ml-1.5 border border-primary/20">{dailyRank}</span>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
         ))}
       </div>
@@ -382,9 +477,9 @@ export const ShiftBriefing: React.FC = () => {
             })()}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full max-w-5xl">
             {/* International Flights Card */}
-            <div className="card-premium p-5 sm:p-8 space-y-6 sm:space-y-8 group hover:border-primary/20 max-w-md mx-auto md:max-w-none w-full">
+            <div className="card-premium p-5 sm:p-8 space-y-6 sm:space-y-8 group hover:border-primary/20 w-full">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-4">
                   <div className="p-3 bg-primary/5 rounded-xl group-hover:bg-primary/10 transition-colors">
@@ -392,18 +487,17 @@ export const ShiftBriefing: React.FC = () => {
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">International Ops</h3>
                 </div>
-                <span className="bg-surface-dim px-4 py-1.5 rounded-full text-[10px] font-black opacity-40 group-hover:opacity-100 transition-opacity">{MOCK_JOBS.length} UNITS</span>
+                <span className="bg-surface-dim px-4 py-1.5 rounded-full text-[10px] font-black opacity-40 group-hover:opacity-100 transition-opacity">{intlFlightsToRender.length}</span>
               </div>
               <div className="space-y-4">
-                {MOCK_JOBS.map((job) => (
+                {intlFlightsToRender.map((job) => (
                   <div key={job.id} className="flex items-center justify-between p-5 bg-surface-dim border border-outline rounded-3xl group/item hover:bg-surface-container hover:border-primary/20 transition-all cursor-default shadow-sm hover:shadow-md">
                     <div className="flex items-center space-x-5">
-                      <div className="w-14 h-14 rounded-[20px] kinetic-gradient text-white flex items-center justify-center font-black text-base shadow-lg group-hover/item:scale-105 transition-transform">
-                        {job.stand}
-                      </div>
                       <div>
                         <div className="text-base font-black tracking-tight text-on-surface">{job.flightNumber}</div>
-                        <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">{job.aircraftType}</div>
+                        <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
+                          ETA: {job.eta} • DEP: {job.std}
+                        </div>
                       </div>
                     </div>
                     <div className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${
@@ -418,7 +512,7 @@ export const ShiftBriefing: React.FC = () => {
             </div>
 
             {/* Domestic Flights Card */}
-            <div className="card-premium p-5 sm:p-8 space-y-6 sm:space-y-8 group hover:border-primary/20 max-w-md mx-auto md:max-w-none w-full">
+            <div className="card-premium p-5 sm:p-8 space-y-6 sm:space-y-8 group hover:border-primary/20 w-full">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-4">
                   <div className="p-3 bg-primary/5 rounded-xl group-hover:bg-primary/10 transition-colors">
@@ -426,18 +520,52 @@ export const ShiftBriefing: React.FC = () => {
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Domestic Ops</h3>
                 </div>
-                <span className="bg-surface-dim px-4 py-1.5 rounded-full text-[10px] font-black opacity-40">ACTIVE STREAM</span>
+                <span className="bg-surface-dim px-4 py-1.5 rounded-full text-[10px] font-black opacity-40">{domesticFlightsToRender.length}</span>
               </div>
               <div className="space-y-4">
-                {MOCK_DOMESTIC_FLIGHTS.slice(0, 4).map((flight) => (
+                {domesticFlightsToRender.map((flight) => (
                   <div key={flight.id} className="flex items-center justify-between p-5 bg-surface-dim border border-outline rounded-3xl group/item hover:bg-surface-container hover:border-primary/20 transition-all cursor-default shadow-sm hover:shadow-md">
                     <div className="flex items-center space-x-5">
-                      <div className="w-14 h-14 rounded-[20px] kinetic-gradient text-white flex items-center justify-center font-black text-base shadow-lg group-hover/item:scale-105 transition-transform">
-                        {flight.stand}
-                      </div>
                       <div>
                         <div className="text-base font-black tracking-tight text-on-surface">{flight.flightNumber}</div>
-                        <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">ETA: {flight.eta}</div>
+                        <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
+                          DEP: {flight.std}
+                        </div>
+                      </div>
+                    </div>
+                    <div className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${
+                      flight.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/10' : 
+                      flight.status === 'IN_PROGRESS' ? 'bg-amber-500/10 text-amber-500 animate-pulse-subtle border border-amber-500/10' : 'bg-on-surface/5 opacity-40 border border-transparent'
+                    }`}>
+                      {flight.status.replace('_', ' ')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Ad-Hoc Flights Card */}
+            <div className="card-premium p-5 sm:p-8 space-y-6 sm:space-y-8 group hover:border-amber-500/20 w-full">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-amber-500/5 rounded-xl group-hover:bg-amber-500/10 transition-colors">
+                    <Zap className="w-6 h-6 text-amber-500" />
+                  </div>
+                  <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Ad-Hoc Flights</h3>
+                </div>
+                <span className="bg-amber-500/10 text-amber-500 px-4 py-1.5 rounded-full text-[10px] font-black border border-amber-500/20">{adhocFlightsToRender.length}</span>
+              </div>
+              <div className="space-y-4">
+                {adhocFlightsToRender.map((flight) => (
+                  <div key={flight.id} className="flex items-center justify-between p-5 bg-surface-dim border border-outline rounded-3xl group/item hover:bg-surface-container hover:border-amber-500/20 transition-all cursor-default shadow-sm hover:shadow-md">
+                    <div className="flex items-center space-x-5">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-base font-black tracking-tight text-on-surface">{flight.flightNumber}</div>
+                        </div>
+                        <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
+                          ETA: {flight.eta} • DEP: {flight.std}
+                        </div>
                       </div>
                     </div>
                     <div className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${
@@ -514,6 +642,8 @@ export const ShiftBriefing: React.FC = () => {
               </div>
             </div>
           </div>
+
+
 
 
           {/* Tactical Briefing Points */}

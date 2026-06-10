@@ -173,7 +173,7 @@ const AppContextContent: React.FC<any> = ({
   pendingVehicleId, setPendingVehicleId,
   showAlertsPanel, setShowAlertsPanel, isSettingsOpen, setIsSettingsOpen, handleLogout
 }) => {
-  const { alerts, acknowledgeAlert, acknowledgeAllAlerts, clearAllAlerts, equipment, flightJobs, refreshData } = useOperationalData();
+  const { alerts, acknowledgeAlert, acknowledgeAllAlerts, clearAllAlerts, equipment, flightJobs, refreshData, domesticFlights, domesticAssignments } = useOperationalData();
   const { notify, notifyWithAction, dismiss } = useNotification();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -215,6 +215,23 @@ const AppContextContent: React.FC<any> = ({
     // Filter unacknowledged alerts matching this user's role
     const activeAlerts = alerts.filter(a => {
       if (!a || a.acknowledged) return false;
+
+      // Targeted request/no-fuel alerts: only visible to assigned operator/officer, or supervisors
+      const msgLower = (a.message || '').toLowerCase();
+      const isRequestAlert = msgLower.includes('alert requested') || msgLower.includes('no fuel');
+      if (isRequestAlert && ![UserRole.ADMIN, UserRole.ITP_MANAGER].includes(currentUser.role)) {
+        const isDomestic = (domesticFlights || []).some(df => msgLower.includes((df.flightNumber || '').toLowerCase()));
+        if (isDomestic) {
+          const isUserInDomesticTeam = (domesticAssignments || []).some(da => da.op1 === currentUser.id || da.op2 === currentUser.id);
+          if (!isUserInDomesticTeam) return false;
+        } else {
+          const hasOperator = msgLower.includes('(operator:');
+          const hasOfficer = msgLower.includes('(officer:');
+          const hasName = msgLower.includes(currentUser.name.toLowerCase());
+          if ((hasOperator || hasOfficer) && !hasName) return false;
+        }
+      }
+
       if ([UserRole.ADMIN, UserRole.EXECUTIVE].includes(currentUser.role)) return true;
       if (a.targetRole === currentUser.role) return true;
       if ([UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(currentUser.role) && 
@@ -386,7 +403,7 @@ const AppContextContent: React.FC<any> = ({
       }
     };
 
-    const handleTouchEnd = async () => {
+    const handleTouchEnd = () => {
       if (!pullingRef.current || pullStateRef.current.isRefreshing) return;
       pullingRef.current = false;
 
@@ -395,16 +412,11 @@ const AppContextContent: React.FC<any> = ({
       if (currentPull >= 60) {
         setIsRefreshing(true);
         setPullDistance(60);
-        try {
-          await pullStateRef.current.refreshData();
-        } catch (err) {
-          console.error(err);
-        } finally {
-          setTimeout(() => {
-            setIsRefreshing(false);
-            setPullDistance(0);
-          }, 800);
-        }
+        // Wait 800ms to allow the spinner animation to play, then trigger a page reload
+        // to cleanly refresh and reset all React contexts and states
+        setTimeout(() => {
+          window.location.reload();
+        }, 800);
       } else {
         setPullDistance(0);
       }
@@ -450,6 +462,15 @@ const AppContextContent: React.FC<any> = ({
       }
     }
   }, [isMobileMenuOpen, showAlertsPanel, isSettingsOpen, showIOSGuide, activeView]);
+
+  // Clean up history state on session unmount / logout
+  useEffect(() => {
+    return () => {
+      if (window.history.state?.fmsActive) {
+        window.history.back();
+      }
+    };
+  }, []);
 
   // Header scroll listener
   const lastScrollYRef = React.useRef(0);
@@ -501,6 +522,23 @@ const AppContextContent: React.FC<any> = ({
   // Filter alerts by role — must match the same logic as the toast notification system
   const userAlerts = (alerts || []).filter(a => {
     if (!a || !currentUser || !currentUser.role) return false;
+
+    // Targeted request/no-fuel alerts: only visible to assigned operator/officer, or supervisors
+    const msgLower = (a.message || '').toLowerCase();
+    const isRequestAlert = msgLower.includes('alert requested') || msgLower.includes('no fuel');
+    if (isRequestAlert && ![UserRole.ADMIN, UserRole.ITP_MANAGER].includes(currentUser.role)) {
+      const isDomestic = (domesticFlights || []).some(df => msgLower.includes((df.flightNumber || '').toLowerCase()));
+      if (isDomestic) {
+        const isUserInDomesticTeam = (domesticAssignments || []).some(da => da.op1 === currentUser.id || da.op2 === currentUser.id);
+        if (!isUserInDomesticTeam) return false;
+      } else {
+        const hasOperator = msgLower.includes('(operator:');
+        const hasOfficer = msgLower.includes('(officer:');
+        const hasName = msgLower.includes(currentUser.name.toLowerCase());
+        if ((hasOperator || hasOfficer) && !hasName) return false;
+      }
+    }
+
     if ([UserRole.ADMIN, UserRole.EXECUTIVE].includes(currentUser.role)) return true;
     if (a.targetRole === currentUser.role) return true;
     // Depot role group: both DEPOT_MANAGER and DEPOT_OPERATOR see depot-targeted alerts
@@ -558,7 +596,7 @@ const AppContextContent: React.FC<any> = ({
         }
         return <Forecasting />;
       case 'bridging':
-        return <Bridging user={currentUser} />;
+        return <Bridging user={currentUser} setActiveView={setActiveView} />;
       case 'marine-loading':
         return <MarineLoading user={currentUser} />;
       case 'marine':
@@ -926,6 +964,34 @@ const AppContextContent: React.FC<any> = ({
                                   </div>
                                   <p className="text-[11px] font-bold text-on-surface leading-normal pr-8">{alert.message}</p>
                                   
+                                  {(() => {
+                                    const isReplenishRequest = alert.message.toLowerCase().includes('request') && (
+                                      alert.message.toLowerCase().includes('replenish') || 
+                                      alert.message.toLowerCase().includes('refuel')
+                                    );
+                                    const canInitiate = isReplenishRequest && [UserRole.DEPOT_OPERATOR, UserRole.DEPOT_MANAGER, UserRole.ADMIN].includes(currentUser?.role);
+                                    if (canInitiate) {
+                                      const match = alert.message.match(/unit\s+(RF-\d+)/i);
+                                      const vehicleId = match ? match[1].toUpperCase() : null;
+                                      if (vehicleId) {
+                                        return (
+                                          <button
+                                            onClick={() => {
+                                              localStorage.setItem('fms_initiate_loading_vehicle', vehicleId);
+                                              setActiveView('bridging');
+                                              setShowAlertsPanel(false);
+                                              notify(`Redirecting to Refueler Loading for unit ${vehicleId}`, 'success');
+                                            }}
+                                            className="mt-2.5 px-4 py-2 bg-primary text-white rounded-xl text-[10px] font-black uppercase tracking-[0.15em] transition-all hover:scale-105 active:scale-95 shadow-sm block w-fit kinetic-gradient"
+                                          >
+                                            Initiate Loading
+                                          </button>
+                                        );
+                                      }
+                                    }
+                                    return null;
+                                  })()}
+
                                   {!alert.acknowledged && (
                                     <button 
                                       onClick={(e) => {

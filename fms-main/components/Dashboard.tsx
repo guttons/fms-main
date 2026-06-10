@@ -58,7 +58,7 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onStartJob, onSelectEquipment }) => {
-  const { tanks = [], equipment = [], briefingInfo, flightJobs = [], domesticFlights = [], alerts = [], createAlert, acknowledgeAlert, staff = [], updateEquipmentStatus } = useOperationalData();
+  const { tanks = [], equipment = [], briefingInfo, flightJobs = [], domesticFlights = [], alerts = [], createAlert, acknowledgeAlert, staff = [], updateEquipmentStatus, domesticAssignments } = useOperationalData();
   const { notify } = useNotification();
   // Logic to determine initial view and if switching is allowed
 
@@ -74,6 +74,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
   const userAlerts = (alerts || []).filter(a => {
     if (!user) return false;
+
+    // Targeted request/no-fuel alerts: only visible to assigned operator/officer, or supervisors
+    const msgLower = (a.message || '').toLowerCase();
+    const isRequestAlert = msgLower.includes('alert requested') || msgLower.includes('no fuel');
+    if (isRequestAlert && ![UserRole.ADMIN, UserRole.ITP_MANAGER].includes(user.role)) {
+      const isDomestic = (domesticFlights || []).some(df => msgLower.includes((df.flightNumber || '').toLowerCase()));
+      if (isDomestic) {
+        const isUserInDomesticTeam = (domesticAssignments || []).some(da => da.op1 === user.id || da.op2 === user.id);
+        if (!isUserInDomesticTeam) return false;
+      } else {
+        const hasOperator = msgLower.includes('(operator:');
+        const hasOfficer = msgLower.includes('(officer:');
+        const hasName = msgLower.includes(user.name.toLowerCase());
+        if ((hasOperator || hasOfficer) && !hasName) return false;
+      }
+    }
+
     if (isDualRole) return true;
     if (a.targetRole === user.role) return true;
     if (isDepotRole && [UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(a.targetRole as UserRole)) return true;

@@ -51,7 +51,14 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [filterDate, setFilterDate] = useState('');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
-  const [selectedLogType, setSelectedLogType] = useState<string>('ALL');
+  const [selectedLogType, setSelectedLogType] = useState<string>(() => {
+    const defaultTab = localStorage.getItem('fms_log_history_default_tab');
+    if (defaultTab) {
+      localStorage.removeItem('fms_log_history_default_tab');
+      return defaultTab;
+    }
+    return 'ALL';
+  });
 
   const resolveLogType = (log: FlightLog): string => {
     if (log.logType) return log.logType;
@@ -141,8 +148,34 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   const fetchLogs = async () => {
     try {
       setLoading(true);
-      const fetchedLogs = await supabaseService.getFlightLogs();
-      setLogs(fetchedLogs);
+      const [fetchedFlightLogs, fetchedBridgingLogs] = await Promise.all([
+        supabaseService.getFlightLogs(),
+        supabaseService.getBridgingLogs()
+      ]);
+
+      const mappedBridgingLogs: FlightLog[] = (fetchedBridgingLogs || []).map(blog => ({
+        id: blog.id,
+        flightNumber: `LOAD-${blog.vehicleId}`,
+        aircraftReg: blog.sourceTankId,
+        aircraftType: 'REFUELLER LOADING',
+        stand: 'DEPOT',
+        operatorId: blog.operatorId,
+        vehicleId: blog.vehicleId,
+        status: 'COMPLETED',
+        deliveryNumber: blog.id,
+        operationalDate: blog.date,
+        logType: 'BRIDGING' as any,
+        timestampStart: blog.startTime ? combineDateAndTime(blog.date || '', blog.startTime) : undefined,
+        timestampFinalEnd: blog.endTime ? combineDateAndTime(blog.date || '', blog.endTime) : undefined,
+        volume: blog.volume,
+        remarks: `QC Visual: ${blog.visualCheckPassed ? 'PASS' : 'FAIL'}, CWD: ${blog.cwdCheckPassed ? 'PASS' : 'FAIL'}` + (blog.density ? `, Density: ${blog.density}` : '') + (blog.temperature ? `, Temp: ${blog.temperature}` : ''),
+        visualCheckPassed: blog.visualCheckPassed,
+        cwdCheckPassed: blog.cwdCheckPassed,
+        density: blog.density,
+        temperature: blog.temperature
+      } as any));
+
+      setLogs([...(fetchedFlightLogs || []), ...mappedBridgingLogs]);
     } catch (error) {
       console.error('Error fetching logs from Firebase:', error);
     } finally {
@@ -296,16 +329,18 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
             ${selectedLogType === 'SEAPLANE'        ? 'left-1.5 w-[110px] translate-x-[290px]' : ''}
             ${selectedLogType === 'MARINE'          ? 'left-1.5 w-[150px] translate-x-[400px]' : ''}
             ${selectedLogType === 'FILLING_STATION' ? 'left-1.5 w-[150px] translate-x-[550px]' : ''}
+            ${selectedLogType === 'BRIDGING'        ? 'left-1.5 w-[160px] translate-x-[700px]' : ''}
           `}
         />
         {/* Desktop sliding indicator */}
         <div
-          className={`absolute top-1.5 bottom-1.5 rounded-[18px] kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium hidden md:block w-[calc(20%-2.4px)] will-change-transform
+          className={`absolute top-1.5 bottom-1.5 rounded-[18px] kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium hidden md:block w-[calc(16.666%-2px)] will-change-transform
             ${selectedLogType === 'ALL'             ? 'translate-x-0' : ''}
             ${selectedLogType === 'FLIGHT'          ? 'translate-x-[100%]' : ''}
             ${selectedLogType === 'SEAPLANE'        ? 'translate-x-[200%]' : ''}
             ${selectedLogType === 'MARINE'          ? 'translate-x-[300%]' : ''}
             ${selectedLogType === 'FILLING_STATION' ? 'translate-x-[400%]' : ''}
+            ${selectedLogType === 'BRIDGING'        ? 'translate-x-[500%]' : ''}
           `}
         />
         {[
@@ -314,6 +349,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           { id: 'SEAPLANE', label: 'Seaplane', w: 'w-[110px] md:w-[160px]' },
           { id: 'MARINE', label: 'Marine Loading', w: 'w-[150px] md:w-[160px]' },
           { id: 'FILLING_STATION', label: 'Filling Stations', w: 'w-[150px] md:w-[160px]' },
+          { id: 'BRIDGING', label: 'Refueller Loading', w: 'w-[160px] md:w-[160px]' },
         ].map((tab) => {
           const isActive = selectedLogType === tab.id;
           return (
@@ -423,6 +459,16 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Meter Close</th>
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Ticket</th>
+                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
+                    </>
+                  )}
+                  {selectedLogType === 'BRIDGING' && (
+                    <>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Date</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Source Tank</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Refueller</th>
+                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Time (Start / End)</th>
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
                     </>
                   )}
@@ -574,9 +620,30 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                             </>
                           )}
 
+                          {/* BRIDGING View */}
+                          {selectedLogType === 'BRIDGING' && (
+                            <>
+                              <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
+                                  {log.operationalDate ? new Date(log.operationalDate).toLocaleDateString([], { dateStyle: 'short' }) : 'PENDING'}
+                              </td>
+                              <td className="px-10 py-6 text-xs font-black text-on-surface uppercase tracking-widest">
+                                  {log.aircraftReg /* sourceTankId */}
+                              </td>
+                              <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest font-mono">
+                                  {log.vehicleId}
+                              </td>
+                              <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
+                                  {log.volume.toLocaleString()}
+                              </td>
+                              <td className="px-10 py-6 text-left text-[11px] font-black text-on-surface-dim font-mono tracking-widest">
+                                  {log.timestampStart ? formatTime(log.timestampStart) : '--:--'} / {log.timestampFinalEnd ? formatTime(log.timestampFinalEnd) : '--:--'}
+                              </td>
+                            </>
+                          )}
+
                           {/* Edit / Details Action Cell (always the last column) */}
                           <td className="px-10 py-6 text-right">
-                              {canEdit ? (
+                              {canEdit && resolveLogType(log) !== 'BRIDGING' ? (
                                 <button 
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -753,6 +820,52 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                       <div className="flex flex-col gap-1 col-span-2 md:col-span-4">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Remarks</span>
                                          <span className="text-[11px] text-on-surface opacity-80">{log.remarks || 'No operational remarks.'}</span>
+                                      </div>
+                                   </div>
+                                 )}
+
+                                 {/* Bridging details */}
+                                 {selectedLogType === 'BRIDGING' && (
+                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-in fade-in duration-300">
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Source Tank</span>
+                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.aircraftReg /* sourceTankId */}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Target Refueller</span>
+                                         <span className="text-[11px] font-mono text-on-surface">{log.vehicleId}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Start Time</span>
+                                         <span className="text-[11px] font-mono text-on-surface">{formatTime(log.timestampStart)}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">End Time</span>
+                                         <span className="text-[11px] font-mono text-on-surface">{formatTime(log.timestampFinalEnd)}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC Visual Check</span>
+                                         <span className={`text-[11px] font-black uppercase tracking-widest ${(log as any).visualCheckPassed ? 'text-success' : 'text-error'}`}>{(log as any).visualCheckPassed ? 'PASS' : 'FAIL'}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC CWD Check</span>
+                                         <span className={`text-[11px] font-black uppercase tracking-widest ${(log as any).cwdCheckPassed ? 'text-success' : 'text-error'}`}>{(log as any).cwdCheckPassed ? 'PASS' : 'FAIL'}</span>
+                                      </div>
+                                      {(log as any).density !== undefined && (
+                                        <div className="flex flex-col gap-1">
+                                           <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Observed Density</span>
+                                           <span className="text-[11px] font-mono text-on-surface">{(log as any).density} kg/L</span>
+                                        </div>
+                                      )}
+                                      {(log as any).temperature !== undefined && (
+                                        <div className="flex flex-col gap-1">
+                                           <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Observed Temperature</span>
+                                           <span className="text-[11px] font-mono text-on-surface">{(log as any).temperature} °C</span>
+                                        </div>
+                                      )}
+                                      <div className="flex flex-col gap-1 col-span-2 md:col-span-4">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Recorded Operator / Supervisor</span>
+                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.operatorId}</span>
                                       </div>
                                    </div>
                                  )}

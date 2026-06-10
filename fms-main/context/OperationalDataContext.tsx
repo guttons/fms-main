@@ -32,6 +32,7 @@ interface OperationalDataContextType {
   selectedBriefingDate: string;
   setSelectedBriefingDate: (date: string) => void;
   alerts: Alert[];
+  domesticAssignments: any[];
   flightLogs: FlightLog[];
   isAlertsLoading: boolean;
   updateEquipmentStatus: (id: string, status: EqStatus) => void;
@@ -49,6 +50,8 @@ interface OperationalDataContextType {
   acknowledgeAlert: (id: string) => Promise<void>;
   acknowledgeAllAlerts: (ids: string[]) => Promise<void>;
   clearAllAlerts: () => Promise<void>;
+  deleteAlerts: (ids: string[]) => Promise<void>;
+  updateDomesticAssignment: (teamName: string, op1: string, op2: string) => Promise<void>;
   refreshData: () => Promise<void>;
   isLoading: boolean;
   staff: StaffMember[];
@@ -164,6 +167,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
   });
   const [flightLogs, setFlightLogs] = useState<FlightLog[]>([]);
+  const [domesticAssignments, setDomesticAssignments] = useState<any[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [isAlertsLoading, setIsAlertsLoading] = useState(false);
 
@@ -232,14 +236,15 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     try {
       setIsLoading(true);
       setIsAlertsLoading(true);
-      const [fetchedTanks, fetchedJobs, fetchedBriefing, fetchedAlerts, fetchedEq, fetchedLogs, fetchedStaff] = await Promise.all([
+      const [fetchedTanks, fetchedJobs, fetchedBriefing, fetchedAlerts, fetchedEq, fetchedLogs, fetchedStaff, fetchedDomAssign] = await Promise.all([
         supabaseService.getTanks(),
         supabaseService.getFlightJobs(),
         supabaseService.getShiftBriefingInfo(selectedBriefingDate, selectedBriefingShift),
         supabaseService.getAlerts(),
         supabaseService.getEquipment(),
         supabaseService.getFlightLogs(),
-        supabaseService.getStaff()
+        supabaseService.getStaff(),
+        supabaseService.getDomesticAssignments(selectedBriefingDate)
       ]);
 
       if (fetchedTanks && fetchedTanks.length > 0) {
@@ -279,6 +284,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       if (fetchedAlerts && Array.isArray(fetchedAlerts)) setAlerts(fetchedAlerts);
       if (fetchedLogs && Array.isArray(fetchedLogs)) setFlightLogs(fetchedLogs);
       if (fetchedStaff && fetchedStaff.length > 0) setStaff(fetchedStaff);
+      if (fetchedDomAssign && Array.isArray(fetchedDomAssign)) setDomesticAssignments(fetchedDomAssign);
       
     } catch (error) {
       console.error('Error refreshing operational data:', error);
@@ -357,6 +363,16 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       }
     });
 
+    const channelDomAssign = supabase
+      .channel('public:domestic_assignments')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'domestic_assignments' }, () => {
+        console.log("SYNC: postgres change on domestic_assignments for date:", selectedBriefingDate);
+        supabaseService.getDomesticAssignments(selectedBriefingDate).then(data => {
+          if (data) setDomesticAssignments(data);
+        });
+      })
+      .subscribe();
+
     return () => {
       console.log("PROVIDER: Tearing down listeners for user:", appUser.id);
       if (unsubscribeAlerts) unsubscribeAlerts();
@@ -364,8 +380,9 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       if (unsubscribeTanks) unsubscribeTanks();
       if (unsubscribeStaff) unsubscribeStaff();
       if (unsubscribeFlightJobs) unsubscribeFlightJobs();
+      if (channelDomAssign) channelDomAssign.unsubscribe();
     };
-  }, [appUser]);
+  }, [appUser, selectedBriefingDate]);
 
   const updateEquipmentStatus = async (id: string, status: EqStatus) => {
     setEquipment(prev => prev.map(eq => 
@@ -560,6 +577,16 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
   };
 
+  const deleteAlerts = async (ids: string[]) => {
+    try {
+      await supabaseService.deleteAlerts(ids);
+      setAlerts(prev => prev.filter(a => !ids.includes(a.id)));
+    } catch (error) {
+      console.error('Failed to delete alerts:', error);
+      throw error;
+    }
+  };
+
   const addStaff = async (member: Omit<StaffMember, 'id'>) => {
     await supabaseService.addStaff(member);
   };
@@ -570,6 +597,27 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
   const deleteStaff = async (id: string) => {
     await supabaseService.deleteStaff(id);
+  };
+
+  const updateDomesticAssignment = async (teamName: string, op1: string, op2: string) => {
+    setDomesticAssignments(prev => {
+      const existingIdx = prev.findIndex(da => da.team_name === teamName);
+      if (existingIdx >= 0) {
+        const copy = [...prev];
+        copy[existingIdx] = { ...copy[existingIdx], op1, op2 };
+        return copy;
+      } else {
+        return [...prev, { date: selectedBriefingDate, team_name: teamName, op1, op2 }];
+      }
+    });
+
+    if (appUser) {
+      try {
+        await supabaseService.upsertDomesticAssignment(selectedBriefingDate, teamName, op1, op2);
+      } catch (error) {
+        console.error('Failed to sync domestic assignment to Supabase:', error);
+      }
+    }
   };
 
   const addEquipment = async (eq: Omit<Equipment, 'id' | 'lastUpdated'>) => {
@@ -613,9 +661,12 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       acknowledgeAlert,
       acknowledgeAllAlerts,
       clearAllAlerts,
+      deleteAlerts,
       refreshData,
       isLoading,
       alerts: alerts || [],
+      domesticAssignments: domesticAssignments || [],
+      updateDomesticAssignment,
       flightLogs: flightLogs || [],
       isAlertsLoading,
       staff: staff || [],
