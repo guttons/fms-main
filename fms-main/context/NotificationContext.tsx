@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { Check, AlertTriangle, Info, X, AlertOctagon, Download } from 'lucide-react';
+import { sendNativeNotification } from '../utils/pwa';
 
 export type NotificationType = 'success' | 'error' | 'warning' | 'info';
 
@@ -56,6 +57,9 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   const notify = useCallback((message: string, type: NotificationType = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
     addNotification({ id, message, type });
+    if (document.visibilityState === 'hidden') {
+      sendNativeNotification(`FMS ${type.toUpperCase()}`, message);
+    }
   }, [addNotification]);
 
   const notifyWithAction = useCallback((
@@ -66,6 +70,9 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   ): string => {
     const id = Math.random().toString(36).substring(2, 9);
     addNotification({ id, message, type, action, duration });
+    if (document.visibilityState === 'hidden') {
+      sendNativeNotification(`FMS ${type.toUpperCase()}`, message);
+    }
     return id;
   }, [addNotification]);
 

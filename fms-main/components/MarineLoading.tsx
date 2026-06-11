@@ -364,7 +364,7 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
                         Asset Assignment
                     </h3>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
                         <div>
                             <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Source Refueller</label>
                             <div className="relative">
@@ -407,6 +407,14 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
                                     onChange={handleInputChange}
                                     className="w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all"
                                 />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Fuel Type / Product</label>
+                            <div className="w-full px-6 py-4 bg-primary/5 border border-primary/20 rounded-2xl text-primary font-black uppercase tracking-widest flex items-center shadow-inner h-[53px]">
+                                <Droplet className="w-4 h-4 mr-3 opacity-60" />
+                                JET A-1
                             </div>
                         </div>
                     </div>

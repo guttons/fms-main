@@ -135,13 +135,29 @@ function logToRow(log: Record<string, any>, id: string): Record<string, any> {
 // ─── Express app ─────────────────────────────────────────────────────────────
 const app = express();
 
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'https://macl-fms.web.app',
+  'https://macl-fms.firebaseapp.com',
+  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()) : [])
+];
+
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'https://macl-fms.web.app',
-    'https://macl-fms.firebaseapp.com',
-  ],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, or server-to-server)
+    if (!origin) return callback(null, true);
+
+    const isAllowed = allowedOrigins.includes(origin) || 
+                      origin.endsWith('.netlify.app') || 
+                      origin.endsWith('.netlify.live');
+
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   allowedHeaders: ['Content-Type', 'Authorization'],
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
 }));

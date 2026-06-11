@@ -22,6 +22,7 @@
   --color-surface-container-lowest: #ffffff;
   --color-surface-container-highest: #e0e3e5;
   --color-primary: #002046;
+  --color-primary-rgb: 0, 32, 70;
   --color-primary-container: #1b365d;
   --color-on-surface: #191c1e;
   --color-on-surface-dim: rgba(25, 28, 30, 0.7);
@@ -31,7 +32,9 @@
   --color-tertiary: #361900;
   
   --color-success: #22c55e;
+  --color-success-rgb: 34, 197, 94;
   --color-warning: #f59e0b;
+  --color-warning-rgb: 245, 158, 11;
 }
 
 /* Dark Theme Overrides */
@@ -42,6 +45,7 @@
   --color-surface-container-lowest: #0b121f;
   --color-surface-container-highest: #202945;
   --color-primary: #56c8eb;
+  --color-primary-rgb: 86, 200, 235;
   --color-primary-container: #0369a1;
   --color-on-surface: #f8fafc;
   --color-on-surface-dim: rgba(248, 250, 252, 0.7);
@@ -51,7 +55,9 @@
   --color-tertiary: #d97706;
   
   --color-success: #22c55e;
+  --color-success-rgb: 34, 197, 94;
   --color-warning: #f59e0b;
+  --color-warning-rgb: 245, 158, 11;
 }
 
 /* Logo Theme Handling */
@@ -383,5 +389,37 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   left: 0 !important;
   top: 0 !important;
   cursor: pointer !important;
+}
+
+/* Custom Badges using RGB variables to support opacity in browsers */
+.badge-custom-primary {
+  background-color: rgba(var(--color-primary-rgb), 0.1) !important;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.2) !important;
+  color: var(--color-primary) !important;
+}
+
+.badge-custom-success {
+  background-color: rgba(var(--color-success-rgb), 0.1) !important;
+  border: 1px solid rgba(var(--color-success-rgb), 0.2) !important;
+  color: var(--color-success) !important;
+}
+
+.badge-custom-warning {
+  background-color: rgba(var(--color-warning-rgb), 0.1) !important;
+  border: 1px solid rgba(var(--color-warning-rgb), 0.2) !important;
+  color: var(--color-warning) !important;
+}
+
+/* Custom Hover Border Highlights (No box-shadow glow) */
+.hover-glow-primary:hover {
+  border-color: rgba(var(--color-primary-rgb), 0.35) !important;
+}
+
+.hover-glow-success:hover {
+  border-color: rgba(var(--color-success-rgb), 0.35) !important;
+}
+
+.hover-glow-warning:hover {
+  border-color: rgba(var(--color-warning-rgb), 0.35) !important;
 }
 

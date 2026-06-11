@@ -210,8 +210,6 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                             >
                                 <option value="Diesel">DIESEL</option>
                                 <option value="Petrol">PETROL</option>
-                                <option value="Lube Oil">LUBE OIL</option>
-                                <option value="Internal">INTERNAL</option>
                             </select>
                          </div>
 

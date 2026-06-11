@@ -4,6 +4,7 @@ import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightL
 import { EQUIPMENT, TANKS, MOCK_JOBS, MOCK_DOMESTIC_FLIGHTS, MOCK_ALERTS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
 import { supabase } from '../supabase';
+import { sendNativeNotification } from '../utils/pwa';
 
 interface ShiftBriefingInfo {
   info: { text: string; type: string; isHighAlert?: boolean }[];
@@ -173,6 +174,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
   const [isLoading, setIsLoading] = useState(true);
   const pendingAlertHashes = React.useRef<Set<string>>(new Set());
+  const initialAlertsLoadedRef = React.useRef(false);
+  const loadedAlertIdsRef = React.useRef<Set<string>>(new Set());
   const replenishmentLocks = React.useRef<Record<string, number>>({});
 
   // Local sync to localStorage for persistence fallback
@@ -307,6 +310,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       // Revert to mock data if signed out
       setEquipment(EQUIPMENT);
       setAlerts(MOCK_ALERTS);
+      initialAlertsLoadedRef.current = false;
+      loadedAlertIdsRef.current.clear();
       return;
     }
 
@@ -315,6 +320,24 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
     const unsubscribeAlerts = supabaseService.subscribeToAlerts((updatedAlerts) => {
       console.log("SYNC: Alerts received from Supabase. Count:", updatedAlerts.length);
+      
+      if (!initialAlertsLoadedRef.current) {
+        // Record existing alert IDs on startup to avoid spamming the user
+        const existingIds = new Set(updatedAlerts.map(a => a.id));
+        loadedAlertIdsRef.current = existingIds;
+        initialAlertsLoadedRef.current = true;
+      } else {
+        // Notify for any new, unacknowledged alerts
+        updatedAlerts.forEach((alert) => {
+          if (!loadedAlertIdsRef.current.has(alert.id)) {
+            loadedAlertIdsRef.current.add(alert.id);
+            if (!alert.acknowledged) {
+              sendNativeNotification('New FMS Alert', alert.message);
+            }
+          }
+        });
+      }
+
       setAlerts(updatedAlerts);
       setIsAlertsLoading(false);
     });

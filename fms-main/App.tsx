@@ -28,12 +28,25 @@ import { CustomerPortal } from './components/CustomerPortal';
 import { ExecutiveModule } from './components/ExecutiveModule';
 import { MOCK_USERS } from './constants';
 import { User, UserRole, FlightJob, Alert } from './types';
-import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, CheckCircle, Share2, Smartphone, Trash2, Download } from 'lucide-react';
-import { updatePWAManifestAndTheme } from './utils/pwa';
+import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, CheckCircle, Share2, Smartphone, Trash2, Download, Laptop, Globe } from 'lucide-react';
+import { updatePWAManifestAndTheme, requestNotificationPermission, sendNativeNotification } from './utils/pwa';
 
 const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [activeView, setActiveView] = useState('dashboard');
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('fms_logged_in_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [activeView, setActiveView] = useState(() => {
+    const savedUser = localStorage.getItem('fms_logged_in_user');
+    if (savedUser) {
+      const user = JSON.parse(savedUser) as User;
+      const savedView = localStorage.getItem('fms_active_view');
+      if (savedView) return savedView;
+      if (user.role === UserRole.CUSTOMER) return 'customer-portal';
+      if (user.role === UserRole.FINANCE) return 'finance';
+    }
+    return 'dashboard';
+  });
   const [showAlertsPanel, setShowAlertsPanel] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -46,6 +59,11 @@ const App: React.FC = () => {
   const scrollRef = React.useRef<HTMLElement>(null);
   const [pendingJob, setPendingJob] = useState<FlightJob | null>(null);
   const [pendingVehicleId, setPendingVehicleId] = useState<string | null>(null);
+
+  // Sync activeView to localStorage
+  useEffect(() => {
+    localStorage.setItem('fms_active_view', activeView);
+  }, [activeView]);
 
   // Theme management
   useEffect(() => {
@@ -85,19 +103,23 @@ const App: React.FC = () => {
   }, []);
 
   const handleLogout = () => {
+    localStorage.removeItem('fms_logged_in_user');
+    localStorage.removeItem('fms_active_view');
     setCurrentUser(null);
     setActiveView('dashboard');
   };
 
   const handleLoginSuccess = (user: User) => {
+    localStorage.setItem('fms_logged_in_user', JSON.stringify(user));
     setCurrentUser(user);
+    let defaultView = 'dashboard';
     if (user.role === UserRole.CUSTOMER) {
-      setActiveView('customer-portal');
+      defaultView = 'customer-portal';
     } else if (user.role === UserRole.FINANCE) {
-      setActiveView('finance');
-    } else {
-      setActiveView('dashboard');
+      defaultView = 'finance';
     }
+    localStorage.setItem('fms_active_view', defaultView);
+    setActiveView(defaultView);
   };
 
   // Wrap everything in ONE NotificationProvider so both Login and App can use toasts
@@ -277,13 +299,36 @@ const AppContextContent: React.FC<any> = ({
     prevAlertsRef.current = alerts;
   }, [alerts, currentUser, notify]);
 
-  // --- Dynamic PWA Install States & Events ---
+  // --- PWA Install & Environment States ---
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
+  const [showMacGuide, setShowMacGuide] = useState(false);
+  const [showOtherGuide, setShowOtherGuide] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
   const installToastIdRef = React.useRef<string | null>(null);
 
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+  const isMac = /Macintosh/.test(navigator.userAgent);
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  const isMacSafari = isMac && isSafari;
+
+  useEffect(() => {
+    if ('Notification' in window) {
+      setNotificationPermission(Notification.permission);
+    }
+  }, []);
+
+  const handleEnableNotifications = async () => {
+    const perm = await requestNotificationPermission();
+    setNotificationPermission(perm);
+    if (perm === 'granted') {
+      notify('Native notifications enabled successfully!', 'success');
+      sendNativeNotification('FMS Notifications', 'You will now receive native alerts on this device.');
+    } else if (perm === 'denied') {
+      notify('Notification permission was denied. Please check your browser settings.', 'warning');
+    }
+  };
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -322,13 +367,13 @@ const AppContextContent: React.FC<any> = ({
       if (isStandalone) return;
       const dismissed = localStorage.getItem('fms-install-dismissed');
       if (dismissed) return;
-      if (!deferredPrompt && !isIOS) return;
 
+      const needsGuide = isIOS || isMacSafari || !deferredPrompt;
       const toastId = notifyWithAction(
         'Install FMS on your home screen for offline access and native performance.',
         'info',
         {
-          label: isIOS ? 'Show Guide' : 'Install Now',
+          label: needsGuide ? 'Show Guide' : 'Install Now',
           onClick: () => handleInstallApp()
         },
         0 // persist until user dismisses
@@ -338,24 +383,38 @@ const AppContextContent: React.FC<any> = ({
 
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deferredPrompt, isIOS]);
+  }, [deferredPrompt, isIOS, isMacSafari]);
 
   const handleInstallApp = async () => {
     if (isIOS) {
       setShowIOSGuide(true);
-      // Dismiss install toast
       if (installToastIdRef.current) {
         dismiss(installToastIdRef.current);
         installToastIdRef.current = null;
       }
       return;
     }
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setDeferredPrompt(null);
-      localStorage.setItem('fms-install-dismissed', 'true');
+    if (isMacSafari) {
+      setShowMacGuide(true);
+      if (installToastIdRef.current) {
+        dismiss(installToastIdRef.current);
+        installToastIdRef.current = null;
+      }
+      return;
+    }
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+        localStorage.setItem('fms-install-dismissed', 'true');
+        if (installToastIdRef.current) {
+          dismiss(installToastIdRef.current);
+          installToastIdRef.current = null;
+        }
+      }
+    } else {
+      setShowOtherGuide(true);
       if (installToastIdRef.current) {
         dismiss(installToastIdRef.current);
         installToastIdRef.current = null;
@@ -1069,24 +1128,38 @@ const AppContextContent: React.FC<any> = ({
                                 </button>
                             </div>
 
+                            {/* Native Notifications Section */}
+                            <div className="p-4 bg-surface-dim/40 rounded-[32px] flex items-center justify-between hover:scale-[1.02] transition-all duration-300">
+                                <div className="flex items-center space-x-3 text-left">
+                                  <div className={`p-2.5 rounded-lg transition-all ${notificationPermission === 'granted' ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary'}`}>
+                                    <Bell className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight">Notifications</h4>
+                                    <p className="text-[9px] font-bold text-on-surface-dim opacity-50">
+                                      {notificationPermission === 'granted' ? 'Enabled for updates' : notificationPermission === 'denied' ? 'Permission denied' : 'Enable device alerts'}
+                                    </p>
+                                  </div>
+                                </div>
+                                {notificationPermission !== 'granted' ? (
+                                  <button
+                                    onClick={handleEnableNotifications}
+                                    className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary hover:border-primary/40 border border-primary/20 text-[9px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95"
+                                  >
+                                    Enable
+                                  </button>
+                                ) : (
+                                  <div className="text-[10px] font-black uppercase text-success tracking-wide flex items-center gap-1">
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    Active
+                                  </div>
+                                )}
+                            </div>
+
                             {/* Install FMS button if not installed */}
                             {!isInstalled && (
                               <button
-                                onClick={() => {
-                                  if (deferredPrompt) {
-                                    handleInstallApp();
-                                  } else {
-                                    notify(
-                                      isIOS
-                                        ? 'Tap the Share button in Safari and select "Add to Home Screen" to install.'
-                                        : 'To install FMS, click the Install icon in your browser address bar or menu.',
-                                      'info'
-                                    );
-                                    if (isIOS) {
-                                      setShowIOSGuide(true);
-                                    }
-                                  }
-                                }}
+                                onClick={handleInstallApp}
                                 className="w-full p-4 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 hover:border-primary/30 rounded-[32px] flex items-center justify-between transition-all active:scale-[0.98] group"
                               >
                                 <div className="flex items-center space-x-3 text-left">
@@ -1192,6 +1265,82 @@ const AppContextContent: React.FC<any> = ({
               
               <button 
                 onClick={() => setShowIOSGuide(false)}
+                className="w-full py-3 kinetic-gradient text-white text-[9px] font-black uppercase tracking-[0.2em] rounded-xl shadow-lg active:scale-95 transition-all"
+              >
+                Got It
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* macOS PWA Install Guide Modal */}
+        {showMacGuide && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="bg-surface border border-outline rounded-[32px] p-6 w-full max-w-sm shadow-premium flex flex-col items-center text-center animate-in slide-in-from-bottom-2 duration-400">
+              <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-4">
+                <Laptop className="w-6 h-6" />
+              </div>
+              
+              <h3 className="text-xs font-black uppercase tracking-widest text-on-surface">Install on macOS Safari</h3>
+              <p className="text-[10px] font-bold text-on-surface-dim opacity-60 mt-2 leading-relaxed">
+                Add FMS to your Dock to use it as a standalone app:
+              </p>
+              
+              <div className="w-full space-y-4 my-6 text-left border-t border-b border-outline/40 py-5">
+                <div className="flex items-center space-x-3 text-[10px] font-bold text-on-surface-dim">
+                  <div className="w-6 h-6 rounded-full bg-surface-dim flex items-center justify-center text-[9px] font-black text-primary border border-outline">1</div>
+                  <p className="flex-1">Open the <strong className="text-primary uppercase tracking-wider">File</strong> menu in Safari's top menu bar.</p>
+                </div>
+                <div className="flex items-center space-x-3 text-[10px] font-bold text-on-surface-dim">
+                  <div className="w-6 h-6 rounded-full bg-surface-dim flex items-center justify-center text-[9px] font-black text-primary border border-outline">2</div>
+                  <p className="flex-1">Click <strong className="text-primary uppercase tracking-wider">Add to Dock...</strong></p>
+                </div>
+                <div className="flex items-center space-x-3 text-[10px] font-bold text-on-surface-dim">
+                  <div className="w-6 h-6 rounded-full bg-surface-dim flex items-center justify-center text-[9px] font-black text-primary border border-outline">3</div>
+                  <p className="flex-1">Confirm by clicking <strong className="text-primary uppercase tracking-wider">Add</strong> in the dialog.</p>
+                </div>
+              </div>
+              
+              <button 
+                onClick={() => setShowMacGuide(false)}
+                className="w-full py-3 kinetic-gradient text-white text-[9px] font-black uppercase tracking-[0.2em] rounded-xl shadow-lg active:scale-95 transition-all"
+              >
+                Got It
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* General Browser PWA Install Guide Modal */}
+        {showOtherGuide && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="bg-surface border border-outline rounded-[32px] p-6 w-full max-w-sm shadow-premium flex flex-col items-center text-center animate-in slide-in-from-bottom-2 duration-400">
+              <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-4">
+                <Globe className="w-6 h-6" />
+              </div>
+              
+              <h3 className="text-xs font-black uppercase tracking-widest text-on-surface">Install FMS App</h3>
+              <p className="text-[10px] font-bold text-on-surface-dim opacity-60 mt-2 leading-relaxed">
+                Add FMS to your desktop or home screen manually:
+              </p>
+              
+              <div className="w-full space-y-4 my-6 text-left border-t border-b border-outline/40 py-5">
+                <div className="flex items-center space-x-3 text-[10px] font-bold text-on-surface-dim">
+                  <div className="w-6 h-6 rounded-full bg-surface-dim flex items-center justify-center text-[9px] font-black text-primary border border-outline">1</div>
+                  <p className="flex-1">Look at your browser's <strong className="text-primary uppercase tracking-wider">Address Bar</strong> (top right).</p>
+                </div>
+                <div className="flex items-center space-x-3 text-[10px] font-bold text-on-surface-dim">
+                  <div className="w-6 h-6 rounded-full bg-surface-dim flex items-center justify-center text-[9px] font-black text-primary border border-outline">2</div>
+                  <p className="flex-1">Click the <strong className="text-primary uppercase tracking-wider">Install icon</strong> (a monitor icon with an arrow, or a '+' symbol).</p>
+                </div>
+                <div className="flex items-center space-x-3 text-[10px] font-bold text-on-surface-dim">
+                  <div className="w-6 h-6 rounded-full bg-surface-dim flex items-center justify-center text-[9px] font-black text-primary border border-outline">3</div>
+                  <p className="flex-1">Alternatively, open the browser menu and select <strong className="text-primary uppercase tracking-wider">Save and Share &gt; Install page as app</strong>.</p>
+                </div>
+              </div>
+              
+              <button 
+                onClick={() => setShowOtherGuide(false)}
                 className="w-full py-3 kinetic-gradient text-white text-[9px] font-black uppercase tracking-[0.2em] rounded-xl shadow-lg active:scale-95 transition-all"
               >
                 Got It

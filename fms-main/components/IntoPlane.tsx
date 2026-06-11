@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FlightLog, User, FlightJob, Equipment, EquipmentStatus, UserRole } from '../types';
 import { MOCK_JOBS, MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, MOCK_ADHOC_FLIGHTS, PIT_MAPPING } from '../constants';
-import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Users, Lock, Calendar, X, CreditCard, Ban, Eye, Zap, Bell } from 'lucide-react';
+import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Users, Lock, Calendar, X, CreditCard, Ban, Eye, Zap, Bell, Droplet } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { equipmentBadgeClass, equipmentDotClass, getEquipmentHexColor } from '../utils/equipmentColors';
 import { useNotification } from '../context/NotificationContext';
@@ -152,6 +152,7 @@ const ScreenDashboard: React.FC<{
       assignedOfficer: undefined,
       status: df.status as any,
       assignedTeam: df.assignedTeam,
+      vehicleId: df.vehicleId,
   }));
 
   const adhocJobs = MOCK_ADHOC_FLIGHTS.map((f: any) => ({
@@ -168,6 +169,7 @@ const ScreenDashboard: React.FC<{
       status: f.status as any,
       route: f.route,
       isAdhoc: true,
+      vehicleId: f.vehicleId,
   }));
 
   const filteredIntlJobs = filterMyTasks ? intlJobs.filter(j => j.assignedTo === user.id || j.assignedOfficer === user.id) : intlJobs;
@@ -442,7 +444,7 @@ const ScreenDashboard: React.FC<{
                           </div>
                       </div>
 
-                      {/* Row 2: Operator (Left) & Status (Right) */}
+                      {/* Row 2: Operator/Team/EQ (Left) & Status/Active Fueling (Right) */}
                       <div className="flex items-center justify-between gap-4">
                           <div className="flex items-center text-on-surface-dim font-bold gap-3 flex-wrap">
                                {viewMode === 'INT' && (
@@ -463,36 +465,33 @@ const ScreenDashboard: React.FC<{
                                        )}
                                    </>
                                )}
+                               {viewMode === 'DOM' && (job as any).assignedTeam && (
+                                   <div className="flex items-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest">
+                                       <Users className="w-3.5 h-3.5 mr-1.5 text-primary opacity-70" />
+                                       <span>{(job as any).assignedTeam}</span>
+                                   </div>
+                               )}
+                               {activeEqId && (
+                                   <div className={`flex items-center space-x-1 px-2 py-0.5 rounded-md border shadow-sm animate-in fade-in zoom-in-95 duration-500 shrink-0 ${equipmentBadgeClass(activeEqId)}`}>
+                                       <Truck className="w-3 h-3" />
+                                       <span className="text-[9px] font-black uppercase tracking-widest leading-none">{activeEqId}</span>
+                                   </div>
+                               )}
                           </div>
                           
-                          <span className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border shrink-0 ${
-                              displayStatus === 'COMPLETED' ? 'bg-success/10 text-success border-success/10' : 
-                              displayStatus === 'DELAYED' ? 'bg-error/10 text-error border-error/10' :
-                              displayStatus === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/10' : 'bg-surface-container-low text-on-surface-dim border-outline'
-                          }`}>
-                              {displayStatus.replace('_', ' ')}
-                          </span>
-                      </div>
-
-                      {displayStatus === 'IN_PROGRESS' && (
-                          <div className="mt-4 p-3 bg-warning/5 rounded-xl border border-warning/10 flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300">
-                              <div className="flex items-center gap-3">
-                                  {(job as any).assignedTeam && (
-                                      <div className="flex items-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest">
-                                          <Users className="w-3.5 h-3.5 mr-1.5 text-warning opacity-70" />
-                                          <span>{(job as any).assignedTeam}</span>
-                                      </div>
-                                  )}
-                                  {activeEqId && (
-                                      <div className="flex items-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest">
-                                          <Truck className="w-3.5 h-3.5 mr-1.5 text-warning opacity-70" />
-                                          <span>EQ: {activeEqId}</span>
-                                      </div>
-                                  )}
-                              </div>
-                              <span className="text-[8px] font-black text-warning uppercase tracking-widest animate-pulse">ACTIVE FUELING</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                              {displayStatus === 'IN_PROGRESS' && (
+                                  <span className="text-[8px] font-black text-warning uppercase tracking-widest animate-pulse">ACTIVE FUELING</span>
+                              )}
+                              <span className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border shrink-0 ${
+                                  displayStatus === 'COMPLETED' ? 'bg-success/10 text-success border-success/10' : 
+                                  displayStatus === 'DELAYED' ? 'bg-error/10 text-error border-error/10' :
+                                  displayStatus === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/10' : 'bg-surface-container-low text-on-surface-dim border-outline'
+                              }`}>
+                                  {displayStatus.replace('_', ' ')}
+                              </span>
                           </div>
-                      )}
+                      </div>
                   </div>
               </div>
           </div>
@@ -596,6 +595,15 @@ const ScreenTimestamps: React.FC<{
               </div>
           </div>
 
+          {/* Fuel Type / Product Display */}
+          <div className="card-premium p-6 border-outline overflow-hidden">
+              <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Fuel Type / Product</label>
+              <div className="w-full px-6 py-4 bg-primary/5 border border-primary/20 rounded-2xl text-primary font-black uppercase tracking-widest flex items-center shadow-inner">
+                  <Droplet className="w-4 h-4 mr-3 opacity-60" />
+                  JET A-1
+              </div>
+          </div>
+
           <div className="card-premium p-6 border-outline overflow-hidden">
               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Delivery Ticket Number</label>
               <div className="flex items-center gap-2 max-w-full overflow-hidden">
@@ -619,16 +627,18 @@ const ScreenTimestamps: React.FC<{
 
           {activeFlight?.isAdhoc && (
               <div className="card-premium p-6 border-outline overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
-                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">C/O (Charterer/Operator)</label>
+                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">C/O (Billing Account)</label>
                   <div className="flex items-center gap-2 max-w-full overflow-hidden">
+                      <span className="text-2xl sm:text-3xl font-mono font-black text-on-surface-dim opacity-30 shrink-0">C/O-</span>
                       <input 
                           type="text" 
                           disabled={user.role === UserRole.ITP_OPERATOR}
-                          className="w-full text-3xl font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-primary placeholder:text-primary/10 uppercase tracking-widest"
-                          placeholder="ENTER C/O"
-                          value={activeFlight.co || ''}
+                          className="flex-1 min-w-0 text-3xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-primary placeholder:text-primary/10 uppercase tracking-widest"
+                          placeholder="ENTER ACCOUNT"
+                          value={activeFlight.co?.replace(/^C\/O-/i, '') || ''}
                           onChange={(e) => {
-                              onInputChange('co', e.target.value.toUpperCase());
+                              const val = e.target.value.replace(/^C\/O-/i, '').toUpperCase();
+                              onInputChange('co', val ? `C/O-${val}` : '');
                           }}
                       />
                   </div>
@@ -1066,7 +1076,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>(() => {
     if (initialJob?.vehicleId) return initialJob.vehicleId;
     if (initialVehicleId) return initialVehicleId;
-    const available = equipment.find(eq => eq.status === EquipmentStatus.AVAILABLE);
+    const available = equipment.find(eq => eq.status === EquipmentStatus.AVAILABLE && (eq.id.startsWith('RF') || eq.id.startsWith('HD')));
     return available ? available.id : 'RF-04';
   });
   const [showTopUp, setShowTopUp] = useState(false);

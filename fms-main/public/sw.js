@@ -88,7 +88,7 @@ self.addEventListener('fetch', (e) => {
     caches.match(e.request).then((cached) => {
       const fetchAndUpdate = fetch(e.request)
         .then((response) => {
-          if (response && response.ok && response.type !== 'opaque') {
+          if (response && response.ok && response.type !== 'opaque' && !response.bodyUsed) {
             caches.open(CACHE_NAME).then((cache) => cache.put(e.request, response.clone()));
           }
           return response;

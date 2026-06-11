@@ -38,12 +38,15 @@ export const updatePWAManifestAndTheme = async (isDark: boolean) => {
 
   // ── 4. Dynamic manifest blob ─────────────────────────────────────────────
   try {
+    const origin = window.location.origin;
+    const absIconSrc = origin + iconSrc;
+
     const manifestData = {
       name: 'Fuel Management System',
       short_name: 'FMS',
       description: 'MACL Aviation Fuel Management System — real-time operations, fueling logs, and fleet tracking.',
-      start_url: '/',
-      scope: '/',
+      start_url: origin + '/',
+      scope: origin + '/',
       display: 'standalone',
       orientation: 'any',
       background_color: backgroundColor,
@@ -52,13 +55,13 @@ export const updatePWAManifestAndTheme = async (isDark: boolean) => {
       prefer_related_applications: false,
       icons: [
         {
-          src: iconSrc,
+          src: absIconSrc,
           sizes: 'any',
           type: 'image/svg+xml',
           purpose: 'any'
         },
         {
-          src: iconSrc,
+          src: absIconSrc,
           sizes: 'any',
           type: 'image/svg+xml',
           purpose: 'maskable'
@@ -69,15 +72,15 @@ export const updatePWAManifestAndTheme = async (isDark: boolean) => {
           name: 'Dashboard',
           short_name: 'Dashboard',
           description: 'Open the operations dashboard',
-          url: '/?view=dashboard',
-          icons: [{ src: iconSrc, sizes: 'any' }]
+          url: origin + '/?view=dashboard',
+          icons: [{ src: absIconSrc, sizes: 'any' }]
         },
         {
           name: 'Into-Plane Fueling',
           short_name: 'Into-Plane',
           description: 'Log a fueling operation',
-          url: '/?view=intoplane',
-          icons: [{ src: iconSrc, sizes: 'any' }]
+          url: origin + '/?view=intoplane',
+          icons: [{ src: absIconSrc, sizes: 'any' }]
         }
       ]
     };
@@ -101,5 +104,60 @@ export const updatePWAManifestAndTheme = async (isDark: boolean) => {
 
   } catch (error) {
     console.warn('[PWA] Failed to update dynamic manifest:', error);
+  }
+};
+
+/**
+ * Request permission for sending native push notifications.
+ */
+export const requestNotificationPermission = async (): Promise<NotificationPermission> => {
+  if (!('Notification' in window)) {
+    console.warn('[PWA] Browser does not support desktop notifications');
+    return 'default';
+  }
+  try {
+    const permission = await Notification.requestPermission();
+    return permission;
+  } catch (err) {
+    console.error('[PWA] Error requesting notification permission:', err);
+    return 'default';
+  }
+};
+
+/**
+ * Triggers a native device notification using Service Worker (or fallback constructor).
+ */
+export const sendNativeNotification = async (title: string, body: string) => {
+  if (!('Notification' in window) || Notification.permission !== 'granted') {
+    return;
+  }
+
+  try {
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title, {
+        body,
+        icon: '/icon-dark.svg',
+        badge: '/icon-dark.svg',
+        tag: 'fms-alert',
+        renotify: true,
+        vibrate: [200, 100, 200]
+      } as any);
+    } else {
+      new Notification(title, {
+        body,
+        icon: '/icon-dark.svg'
+      });
+    }
+  } catch (error) {
+    console.warn('[PWA] Service Worker notification failed, falling back to Constructor:', error);
+    try {
+      new Notification(title, {
+        body,
+        icon: '/icon-dark.svg'
+      });
+    } catch (fallbackError) {
+      console.error('[PWA] Fallback native notification failed:', fallbackError);
+    }
   }
 };

@@ -78,6 +78,27 @@ export const ShiftBriefing: React.FC = () => {
   const rankedStaffList = [...staffHistory].sort(sortHistory);
   const rankedDailyStaffList = [...staffHistory].sort(sortDailyHistory);
 
+  const getRankInRoles = (staffId: string, roles: UserRole[], type: 'DOM' | 'DAILY') => {
+    // 1. Get all staff members who have one of the compatible roles
+    const compatibleStaffIds = activeStaff
+      .filter(u => roles.includes(u.role))
+      .map(u => u.id);
+
+    // 2. Filter staffHistory to only include these compatible staff
+    const filteredHistory = staffHistory.filter(h => compatibleStaffIds.includes(h.staffId));
+
+    // 3. Sort them using the appropriate sorting function
+    if (type === 'DOM') {
+      const sorted = [...filteredHistory].sort(sortHistory);
+      const rankIdx = sorted.findIndex(h => h.staffId === staffId);
+      return rankIdx !== -1 ? rankIdx + 1 : '-';
+    } else {
+      const sorted = [...filteredHistory].sort(sortDailyHistory);
+      const rankIdx = sorted.findIndex(h => h.staffId === staffId);
+      return rankIdx !== -1 ? rankIdx + 1 : '-';
+    }
+  };
+
   // Shift time ranges for filtering flights
   const shiftRanges: Record<BriefingShift, { start: string; end: string; crossesMidnight: boolean }> = {
     'Morning': { start: '07:30', end: '16:00', crossesMidnight: false },
@@ -138,7 +159,7 @@ export const ShiftBriefing: React.FC = () => {
   }
 
   const [staffAssignments, setStaffAssignments] = useState<StaffAssignments>(briefingInfo?.staffAssignments || {
-    activeOperators: ['u3', 'u3b'],
+    activeOperators: ['u3b'],
     activeOfficers: ['u1'],
     hydrantOpsOfficers: ['u7'],
     dutySupervisor: 'u2',
@@ -146,6 +167,16 @@ export const ShiftBriefing: React.FC = () => {
   });
 
   const [attendees, setAttendees] = useState<string[]>(briefingInfo?.staffAssignments?.attendees || []);
+
+  const uniqueStaff = Array.from(new Set([
+    ...staffAssignments.activeOperators,
+    ...staffAssignments.activeOfficers,
+    ...staffAssignments.hydrantOpsOfficers,
+    staffAssignments.dutySupervisor,
+    staffAssignments.shiftInCharge
+  ].filter(Boolean)));
+
+  const presentCount = uniqueStaff.filter(id => attendees.includes(id)).length;
 
   // Sync local state when context changes (e.g., on load or shift switch)
   useEffect(() => {
@@ -208,13 +239,13 @@ export const ShiftBriefing: React.FC = () => {
     );
   };
 
-  const renderStaffSelectArray = (values: string[], roles: UserRole[], label: string, dotColor: string, onUpdate: (newValues: string[]) => void) => {
+  const renderStaffSelectArray = (values: string[], roles: UserRole[], label: string, dotColor: string, themeType: 'primary' | 'success' | 'warning', onUpdate: (newValues: string[]) => void) => {
     const roleUsers = activeStaff.filter(u => roles.includes(u.role));
     return (
       <div className="flex flex-col space-y-3">
         <div className="flex justify-between items-center mb-1">
            <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">{label}</label>
-           <button onClick={() => onUpdate([...values, ''])} className="text-primary hover:text-primary/70 transition-colors p-1 flex items-center space-x-1 border border-primary/20 rounded-md px-2 bg-primary/5">
+           <button onClick={() => onUpdate([...values, ''])} className={`transition-all p-1 flex items-center space-x-1 rounded-md px-2 badge-custom-${themeType} hover:opacity-80`}>
              <Plus className="w-3 h-3" />
              <span className="text-[9px] font-bold uppercase tracking-wider">Add</span>
            </button>
@@ -235,13 +266,9 @@ export const ShiftBriefing: React.FC = () => {
                 className="bg-transparent text-[13px] font-bold text-on-surface outline-none cursor-pointer appearance-none flex-1 py-2"
               >
                 <option value="" className="bg-surface-dim text-on-surface-dim italic">Select Staff...</option>
-                {roleUsers.map(u => {
-                  const rankIdx = rankedStaffList.findIndex(h => h.staffId === u.id);
-                  const rankLabel = rankIdx !== -1 ? `${rankIdx + 1} ` : '';
-                  return (
-                    <option key={u.id} value={u.id} className="bg-surface-dim text-on-surface font-normal not-italic">{rankLabel}{u.name}</option>
-                  );
-                })}
+                {roleUsers.map(u => (
+                  <option key={u.id} value={u.id} className="bg-surface-dim text-on-surface font-normal not-italic">{u.name}</option>
+                ))}
               </select>
               <button 
                 onClick={() => {
@@ -254,25 +281,28 @@ export const ShiftBriefing: React.FC = () => {
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
-            {val && (() => {
+            {val && roleUsers.some(u => u.id === val) && (() => {
               const hist = staffHistory.find(h => h.staffId === val);
               if (hist) {
-                const domRankIdx = rankedStaffList.findIndex(h => h.staffId === val);
-                const dailyRankIdx = rankedDailyStaffList.findIndex(h => h.staffId === val);
-                const domRank = domRankIdx !== -1 ? domRankIdx + 1 : '-';
-                const dailyRank = dailyRankIdx !== -1 ? dailyRankIdx + 1 : '-';
+                const domRank = getRankInRoles(val, roles, 'DOM');
+                const dailyRank = getRankInRoles(val, roles, 'DAILY');
                 const formattedDomDate = formatDateShort(hist.lastDomestic.date);
                 const formattedDailyDate = formatDateShort(hist.lastDaily.date);
+                const isHydrant = label === "Hydrant Officers";
                 return (
                   <div className="text-[10px] font-black text-on-surface-dim opacity-75 mt-2 pl-5 border-t border-outline/20 pt-2 tracking-wider uppercase flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <div>
-                      DOM: <span className="text-on-surface font-[900]">{formattedDomDate}</span>
-                      <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-[8.5px] font-black ml-1.5 border border-primary/20">{domRank}</span>
-                    </div>
-                    <div className="h-3.5 w-[1px] bg-outline/20 hidden sm:block"></div>
+                    {!isHydrant && (
+                      <>
+                        <div>
+                          DOM: <span className="text-on-surface font-[900]">{formattedDomDate}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-black ml-1.5 badge-custom-${themeType}`}>{domRank}</span>
+                        </div>
+                        <div className="h-3.5 w-[1px] bg-outline/20 hidden sm:block"></div>
+                      </>
+                    )}
                     <div>
                       DAILY: <span className="text-on-surface font-[900]">{formattedDailyDate}</span>
-                      <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-[8.5px] font-black ml-1.5 border border-primary/20">{dailyRank}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-black ml-1.5 badge-custom-${themeType}`}>{dailyRank}</span>
                     </div>
                   </div>
                 );
@@ -392,46 +422,41 @@ export const ShiftBriefing: React.FC = () => {
         <div className="col-span-12 lg:col-span-8 space-y-8">
           
           {/* BRIEFING ATTENDANCE CARD (SUMMARY) */}
-          <div className="card-premium p-5 sm:p-8 space-y-6 group max-w-md mx-auto md:max-w-none w-full">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center space-x-4">
-                <div className="p-3 bg-primary/5 rounded-xl">
-                  <UserCheck className="w-6 h-6 text-primary" />
+          <div className="card-premium p-5 sm:p-8 space-y-6 group max-w-md mx-auto md:max-w-none w-full hover-glow-primary">
+            <div className="flex justify-between items-center gap-4">
+              <div className="flex items-center space-x-4 min-w-0">
+                <div className="p-3 badge-custom-primary rounded-xl transition-all shrink-0">
+                  <UserCheck className="w-6 h-6" />
                 </div>
-                <div>
-                  <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Briefing Attendance</h3>
-                  <p className="text-[10px] text-on-surface-dim opacity-50 uppercase tracking-widest mt-1">Manage shift briefing attendance</p>
+                <div className="min-w-0">
+                  <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em] truncate">Briefing Attendance</h3>
+                  <p className="text-[10px] text-on-surface-dim opacity-50 uppercase tracking-widest mt-1 truncate">Manage shift briefing attendance</p>
                 </div>
               </div>
               
-              <button 
-                onClick={() => setIsAttendanceModalOpen(true)}
-                className="p-2.5 bg-primary/10 text-primary hover:bg-primary/20 transition-all border border-primary/20 rounded-xl flex items-center space-x-2 px-4 shadow-sm"
-              >
-                <UserCheck className="w-4 h-4" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Mark Attendance</span>
-              </button>
+              <div className="flex items-center space-x-3 shrink-0">
+                {uniqueStaff.length > 0 && (
+                  <span className="hidden sm:inline-block text-[9px] font-bold text-success uppercase tracking-widest bg-success/10 border border-success/20 px-2.5 py-1.5 rounded-md">
+                    {presentCount === uniqueStaff.length ? 'ALL PRESENT' : 'PARTIAL ATTENDANCE'}
+                  </span>
+                )}
+                
+                <button 
+                  onClick={() => setIsAttendanceModalOpen(true)}
+                  className="p-2.5 sm:px-4 bg-primary/10 text-primary hover:bg-primary/20 transition-all border border-primary/20 rounded-xl flex items-center justify-center gap-2 shadow-sm"
+                  title="Mark Attendance"
+                >
+                  <UserCheck className="w-4 h-4" />
+                  <span className="hidden sm:inline text-[10px] font-black uppercase tracking-widest">Mark Attendance</span>
+                </button>
+              </div>
             </div>
 
-            {(() => {
-              const uniqueStaff = Array.from(new Set([
-                ...staffAssignments.activeOperators,
-                ...staffAssignments.activeOfficers,
-                ...staffAssignments.hydrantOpsOfficers,
-                staffAssignments.dutySupervisor,
-                staffAssignments.shiftInCharge
-              ].filter(Boolean)));
-
-              const presentCount = uniqueStaff.filter(id => attendees.includes(id)).length;
-
-              if (uniqueStaff.length === 0) {
-                return (
-                  <div className="text-[10px] font-bold opacity-30 uppercase italic text-center py-6 border border-dashed border-outline rounded-2xl">
-                    Assign staff above to track briefing attendance.
-                  </div>
-                );
-              }
-
+            {uniqueStaff.length === 0 ? (
+              <div className="text-[10px] font-bold opacity-30 uppercase italic text-center py-6 border border-dashed border-outline rounded-2xl">
+                Assign staff above to track briefing attendance.
+              </div>
+            ) : (() => {
               const presentUsers = uniqueStaff
                 .map(id => activeStaff.find(u => u.id === id))
                 .filter(Boolean)
@@ -443,8 +468,8 @@ export const ShiftBriefing: React.FC = () => {
                     <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider">
                       Present Staff ({presentCount} of {uniqueStaff.length})
                     </span>
-                    <span className="text-[9px] font-bold text-success uppercase tracking-widest bg-success/10 border border-success/20 px-2 py-1 rounded-md">
-                      {uniqueStaff.length > 0 && presentCount === uniqueStaff.length ? 'ALL PRESENT' : 'PARTIAL ATTENDANCE'}
+                    <span className="sm:hidden text-[9px] font-bold text-success uppercase tracking-widest bg-success/10 border border-success/20 px-2 py-1 rounded-md">
+                      {presentCount === uniqueStaff.length ? 'ALL PRESENT' : 'PARTIAL ATTENDANCE'}
                     </span>
                   </div>
 
@@ -479,11 +504,11 @@ export const ShiftBriefing: React.FC = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full max-w-5xl">
             {/* International Flights Card */}
-            <div className="card-premium p-5 sm:p-8 space-y-6 sm:space-y-8 group hover:border-primary/20 w-full">
+            <div className="card-premium p-5 sm:p-8 space-y-6 sm:space-y-8 group hover-glow-primary w-full">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-primary/5 rounded-xl group-hover:bg-primary/10 transition-colors">
-                    <Plane className="w-6 h-6 text-primary" />
+                  <div className="p-3 badge-custom-primary rounded-xl transition-all">
+                    <Plane className="w-6 h-6" />
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">International Ops</h3>
                 </div>
@@ -491,20 +516,19 @@ export const ShiftBriefing: React.FC = () => {
               </div>
               <div className="space-y-4">
                 {intlFlightsToRender.map((job) => (
-                  <div key={job.id} className="flex items-center justify-between p-5 bg-surface-dim border border-outline rounded-3xl group/item hover:bg-surface-container hover:border-primary/20 transition-all cursor-default shadow-sm hover:shadow-md">
-                    <div className="flex items-center space-x-5">
-                      <div>
-                        <div className="text-base font-black tracking-tight text-on-surface">{job.flightNumber}</div>
-                        <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
-                          ETA: {job.eta} • DEP: {job.std}
-                        </div>
+                  <div key={job.id} className="flex flex-col p-5 bg-surface-dim border border-outline rounded-3xl group/item hover:bg-surface-container hover:border-sky-400/30 transition-all cursor-default shadow-sm hover:shadow-md w-full">
+                    <div className="flex justify-between items-center w-full mb-1">
+                      <div className="text-base font-black tracking-tight text-on-surface">{job.flightNumber}</div>
+                      <div className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${
+                        job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/10' : 
+                        job.status === 'IN_PROGRESS' ? 'bg-amber-500/10 text-amber-500 animate-pulse-subtle border border-amber-500/10' : 
+                        'bg-surface border border-white/10 text-on-surface-dim'
+                      }`}>
+                        {job.status.replace('_', ' ')}
                       </div>
                     </div>
-                    <div className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${
-                      job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/10' : 
-                      job.status === 'IN_PROGRESS' ? 'bg-amber-500/10 text-amber-500 animate-pulse-subtle border border-amber-500/10' : 'bg-on-surface/5 opacity-40 border border-transparent'
-                    }`}>
-                      {job.status.replace('_', ' ')}
+                    <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
+                      {job.eta ? `ETA: ${job.eta}` : job.sta ? `STA: ${job.sta}` : `DEP: ${job.std || '-'}`}
                     </div>
                   </div>
                 ))}
@@ -512,11 +536,11 @@ export const ShiftBriefing: React.FC = () => {
             </div>
 
             {/* Domestic Flights Card */}
-            <div className="card-premium p-5 sm:p-8 space-y-6 sm:space-y-8 group hover:border-primary/20 w-full">
+            <div className="card-premium p-5 sm:p-8 space-y-6 sm:space-y-8 group hover-glow-primary w-full">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-primary/5 rounded-xl group-hover:bg-primary/10 transition-colors">
-                    <Activity className="w-6 h-6 text-primary" />
+                  <div className="p-3 badge-custom-primary rounded-xl transition-all">
+                    <Activity className="w-6 h-6" />
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Domestic Ops</h3>
                 </div>
@@ -524,20 +548,19 @@ export const ShiftBriefing: React.FC = () => {
               </div>
               <div className="space-y-4">
                 {domesticFlightsToRender.map((flight) => (
-                  <div key={flight.id} className="flex items-center justify-between p-5 bg-surface-dim border border-outline rounded-3xl group/item hover:bg-surface-container hover:border-primary/20 transition-all cursor-default shadow-sm hover:shadow-md">
-                    <div className="flex items-center space-x-5">
-                      <div>
-                        <div className="text-base font-black tracking-tight text-on-surface">{flight.flightNumber}</div>
-                        <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
-                          DEP: {flight.std}
-                        </div>
+                  <div key={flight.id} className="flex flex-col p-5 bg-surface-dim border border-outline rounded-3xl group/item hover:bg-surface-container hover:border-sky-400/30 transition-all cursor-default shadow-sm hover:shadow-md w-full">
+                    <div className="flex justify-between items-center w-full mb-1">
+                      <div className="text-base font-black tracking-tight text-on-surface">{flight.flightNumber}</div>
+                      <div className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${
+                        flight.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/10' : 
+                        flight.status === 'IN_PROGRESS' ? 'bg-amber-500/10 text-amber-500 animate-pulse-subtle border border-amber-500/10' : 
+                        'bg-surface border border-white/10 text-on-surface-dim'
+                      }`}>
+                        {flight.status.replace('_', ' ')}
                       </div>
                     </div>
-                    <div className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${
-                      flight.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/10' : 
-                      flight.status === 'IN_PROGRESS' ? 'bg-amber-500/10 text-amber-500 animate-pulse-subtle border border-amber-500/10' : 'bg-on-surface/5 opacity-40 border border-transparent'
-                    }`}>
-                      {flight.status.replace('_', ' ')}
+                    <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
+                      DEP: {flight.std}
                     </div>
                   </div>
                 ))}
@@ -545,11 +568,11 @@ export const ShiftBriefing: React.FC = () => {
             </div>
 
             {/* Ad-Hoc Flights Card */}
-            <div className="card-premium p-5 sm:p-8 space-y-6 sm:space-y-8 group hover:border-amber-500/20 w-full">
+            <div className="card-premium p-5 sm:p-8 space-y-6 sm:space-y-8 group hover-glow-warning w-full">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-amber-500/5 rounded-xl group-hover:bg-amber-500/10 transition-colors">
-                    <Zap className="w-6 h-6 text-amber-500" />
+                  <div className="p-3 badge-custom-warning rounded-xl transition-all">
+                    <Zap className="w-6 h-6" />
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Ad-Hoc Flights</h3>
                 </div>
@@ -557,22 +580,19 @@ export const ShiftBriefing: React.FC = () => {
               </div>
               <div className="space-y-4">
                 {adhocFlightsToRender.map((flight) => (
-                  <div key={flight.id} className="flex items-center justify-between p-5 bg-surface-dim border border-outline rounded-3xl group/item hover:bg-surface-container hover:border-amber-500/20 transition-all cursor-default shadow-sm hover:shadow-md">
-                    <div className="flex items-center space-x-5">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <div className="text-base font-black tracking-tight text-on-surface">{flight.flightNumber}</div>
-                        </div>
-                        <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
-                          ETA: {flight.eta} • DEP: {flight.std}
-                        </div>
+                  <div key={flight.id} className="flex flex-col p-5 bg-surface-dim border border-outline rounded-3xl group/item hover:bg-surface-container hover:border-amber-500/30 transition-all cursor-default shadow-sm hover:shadow-md w-full">
+                    <div className="flex justify-between items-center w-full mb-1">
+                      <div className="text-base font-black tracking-tight text-on-surface">{flight.flightNumber}</div>
+                      <div className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${
+                        flight.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/10' : 
+                        flight.status === 'IN_PROGRESS' ? 'bg-amber-500/10 text-amber-500 animate-pulse-subtle border border-amber-500/10' : 
+                        'bg-surface border border-white/10 text-on-surface-dim'
+                      }`}>
+                        {flight.status.replace('_', ' ')}
                       </div>
                     </div>
-                    <div className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${
-                      flight.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/10' : 
-                      flight.status === 'IN_PROGRESS' ? 'bg-amber-500/10 text-amber-500 animate-pulse-subtle border border-amber-500/10' : 'bg-on-surface/5 opacity-40 border border-transparent'
-                    }`}>
-                      {flight.status.replace('_', ' ')}
+                    <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
+                      ETA: {flight.eta} • DEP: {flight.std}
                     </div>
                   </div>
                 ))}
@@ -583,53 +603,53 @@ export const ShiftBriefing: React.FC = () => {
           {/* PERSONNEL SECTOR: Split into 4 Separate Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl">
             {/* Active Operators Card */}
-            <div className="card-premium p-5 sm:p-8 space-y-4 sm:space-y-6 group max-w-md mx-auto md:max-w-none w-full">
+            <div className="card-premium p-5 sm:p-8 space-y-4 sm:space-y-6 group max-w-md mx-auto md:max-w-none w-full hover-glow-success">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-success/5 rounded-xl">
-                    <Users className="w-6 h-6 text-success" />
+                  <div className="p-3 badge-custom-success rounded-xl transition-all">
+                    <Users className="w-6 h-6" />
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Active Operators</h3>
                 </div>
                 <span className="bg-surface-dim border border-outline px-3 py-1 rounded-full text-[10px] font-black opacity-60 group-hover:opacity-100 transition-opacity">{staffAssignments.activeOperators.length} STAFF</span>
               </div>
-              {renderStaffSelectArray(staffAssignments.activeOperators, [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.DEPOT_OPERATOR], "Operators", "bg-success shadow-[0_0_10px_rgba(34,197,94,0.4)]", (newVals) => setStaffAssignments(prev => ({...prev, activeOperators: newVals})))}
+              {renderStaffSelectArray(staffAssignments.activeOperators, [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.DEPOT_OPERATOR], "Operators", "bg-success shadow-[0_0_10px_rgba(34,197,94,0.4)]", 'success', (newVals) => setStaffAssignments(prev => ({...prev, activeOperators: newVals})))}
             </div>
 
             {/* Active Officers Card */}
-            <div className="card-premium p-5 sm:p-8 space-y-4 sm:space-y-6 group max-w-md mx-auto md:max-w-none w-full">
+            <div className="card-premium p-5 sm:p-8 space-y-4 sm:space-y-6 group max-w-md mx-auto md:max-w-none w-full hover-glow-primary">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-primary/5 rounded-xl">
-                    <Shield className="w-6 h-6 text-primary" />
+                  <div className="p-3 badge-custom-primary rounded-xl transition-all">
+                    <Shield className="w-6 h-6" />
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Active Officers</h3>
                 </div>
                 <span className="bg-surface-dim border border-outline px-3 py-1 rounded-full text-[10px] font-black opacity-60 group-hover:opacity-100 transition-opacity">{staffAssignments.activeOfficers.length} STAFF</span>
               </div>
-              {renderStaffSelectArray(staffAssignments.activeOfficers, [UserRole.ITP_OFFICER, UserRole.ADMIN], "Officers", "bg-primary shadow-[0_0_10px_rgba(14,165,233,0.4)]", (newVals) => setStaffAssignments(prev => ({...prev, activeOfficers: newVals})))}
+              {renderStaffSelectArray(staffAssignments.activeOfficers, [UserRole.ITP_OFFICER, UserRole.ADMIN], "Officers", "bg-primary shadow-[0_0_10px_rgba(14,165,233,0.4)]", 'primary', (newVals) => setStaffAssignments(prev => ({...prev, activeOfficers: newVals})))}
             </div>
 
             {/* Hydrant Ops Officers Card */}
-            <div className="card-premium p-5 sm:p-8 space-y-4 sm:space-y-6 group max-w-md mx-auto md:max-w-none w-full">
+            <div className="card-premium p-5 sm:p-8 space-y-4 sm:space-y-6 group max-w-md mx-auto md:max-w-none w-full hover-glow-warning">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-amber-500/5 rounded-xl">
-                    <Droplet className="w-6 h-6 text-amber-500" />
+                  <div className="p-3 badge-custom-warning rounded-xl transition-all">
+                    <Droplet className="w-6 h-6" />
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Hydrant Ops Officers</h3>
                 </div>
                 <span className="bg-surface-dim border border-outline px-3 py-1 rounded-full text-[10px] font-black opacity-60 group-hover:opacity-100 transition-opacity">{staffAssignments.hydrantOpsOfficers.length} STAFF</span>
               </div>
-              {renderStaffSelectArray(staffAssignments.hydrantOpsOfficers, [UserRole.ITP_OFFICER, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OPERATOR], "Hydrant Officers", "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]", (newVals) => setStaffAssignments(prev => ({...prev, hydrantOpsOfficers: newVals})))}
+              {renderStaffSelectArray(staffAssignments.hydrantOpsOfficers, [UserRole.ITP_OFFICER, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OPERATOR], "Hydrant Officers", "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]", 'warning', (newVals) => setStaffAssignments(prev => ({...prev, hydrantOpsOfficers: newVals})))}
             </div>
 
             {/* Supervisors & Managers Card */}
-            <div className="card-premium p-5 sm:p-8 space-y-4 sm:space-y-6 group max-w-md mx-auto md:max-w-none w-full">
+            <div className="card-premium p-5 sm:p-8 space-y-4 sm:space-y-6 group max-w-md mx-auto md:max-w-none w-full hover-glow-primary">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-primary/5 rounded-xl">
-                    <UserCheck className="w-6 h-6 text-primary" />
+                  <div className="p-3 badge-custom-primary rounded-xl transition-all">
+                    <UserCheck className="w-6 h-6" />
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Staffing Management</h3>
                 </div>
@@ -643,15 +663,12 @@ export const ShiftBriefing: React.FC = () => {
             </div>
           </div>
 
-
-
-
           {/* Tactical Briefing Points */}
-          <div className="card-premium p-5 sm:p-10 space-y-6 sm:space-y-10 relative overflow-hidden group max-w-5xl mx-auto lg:mx-0 w-full">
+          <div className="card-premium p-5 sm:p-10 space-y-6 sm:space-y-10 relative overflow-hidden group max-w-5xl mx-auto lg:mx-0 w-full hover-glow-primary">
             <div className="flex items-center justify-between relative z-10 w-full">
               <div className="flex items-center space-x-5">
-                <div className="p-4 bg-primary/5 rounded-2xl">
-                  <ClipboardList className="w-7 h-7 text-primary" />
+                <div className="p-4 badge-custom-primary rounded-2xl transition-all">
+                  <ClipboardList className="w-7 h-7" />
                 </div>
                 <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Strategic Briefing Points</h3>
               </div>
@@ -732,10 +749,10 @@ export const ShiftBriefing: React.FC = () => {
         <div className="col-span-12 lg:col-span-4 space-y-6 sm:space-y-8">
           
           {/* Equipment Readiness (Fleet Status) */}
-          <div className="card-premium p-5 sm:p-10 space-y-6 sm:space-y-10 group max-w-md mx-auto lg:max-w-none w-full">
+          <div className="card-premium p-5 sm:p-10 space-y-6 sm:space-y-10 group max-w-md mx-auto lg:max-w-none w-full hover-glow-primary">
             <div className="flex items-center space-x-5">
-              <div className="p-4 bg-primary/5 rounded-2xl">
-                <Truck className="w-7 h-7 text-primary" />
+              <div className="p-4 badge-custom-primary rounded-2xl transition-all">
+                <Truck className="w-7 h-7" />
               </div>
               <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Fleet Status (RF/HD)</h3>
             </div>
@@ -743,7 +760,7 @@ export const ShiftBriefing: React.FC = () => {
               {rfHdEquipment.map((eq) => {
                 const needsDiesel = dieselNeeds.includes(eq.id);
                 return (
-                  <div key={eq.id} className="bg-surface-dim border border-outline rounded-2xl p-4 sm:p-5 flex flex-col space-y-4 group/eq hover:bg-surface-container hover:border-primary/20 transition-all cursor-default shadow-sm hover:shadow-md">
+                  <div key={eq.id} className="bg-surface-dim border border-outline rounded-2xl p-4 sm:p-5 flex flex-col space-y-4 group/eq hover:bg-surface-container hover:border-sky-400/30 transition-all cursor-default shadow-sm hover:shadow-md">
                     <div className="flex justify-between items-center">
                       <div className="flex flex-col">
                         <span className="text-[14px] font-[900] text-on-surface">{eq.id}</span>
@@ -826,10 +843,10 @@ export const ShiftBriefing: React.FC = () => {
           </div>
 
           {/* Ongoing Tasks & Remarks (Separated into its own space) */}
-          <div className="card-premium p-5 sm:p-10 space-y-6 sm:space-y-10 group max-w-md mx-auto lg:max-w-none w-full">
+          <div className="card-premium p-5 sm:p-10 space-y-6 sm:space-y-10 group max-w-md mx-auto lg:max-w-none w-full hover-glow-primary">
             <div className="flex items-center space-x-5">
-              <div className="p-4 bg-primary/5 rounded-2xl">
-                <MessageSquare className="w-7 h-7 text-primary" />
+              <div className="p-4 badge-custom-primary rounded-2xl transition-all">
+                <MessageSquare className="w-7 h-7" />
               </div>
               <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Task Remarks</h3>
             </div>
@@ -903,77 +920,63 @@ export const ShiftBriefing: React.FC = () => {
 
             {/* Modal Body */}
             <div className="flex-1 overflow-y-auto pr-1 space-y-6 custom-scrollbar">
-              {(() => {
-                const uniqueStaff = Array.from(new Set([
-                  ...staffAssignments.activeOperators,
-                  ...staffAssignments.activeOfficers,
-                  ...staffAssignments.hydrantOpsOfficers,
-                  staffAssignments.dutySupervisor,
-                  staffAssignments.shiftInCharge
-                ].filter(Boolean)));
-
-                if (uniqueStaff.length === 0) {
-                  return (
-                    <div className="text-[11px] font-bold opacity-40 uppercase italic text-center py-12 border border-dashed border-outline rounded-3xl">
-                      No staff assigned to this shift yet. Please make assignments above before logging attendance.
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="space-y-4">
-                    <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Assigned Shift Personnel</p>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {uniqueStaff.map((id) => {
-                        const user = activeStaff.find(u => u.id === id);
-                        if (!user) return null;
-                        const isPresent = attendees.includes(id);
-                        
-                        return (
-                          <div 
-                            key={id} 
-                            onClick={() => {
-                              if (isPresent) {
-                                setAttendees(prev => prev.filter(att => att !== id));
-                              } else {
-                                setAttendees(prev => [...prev, id]);
-                              }
-                            }}
-                            className={`flex items-center justify-between p-4 rounded-2xl border cursor-pointer transition-all shadow-sm ${
-                              isPresent 
-                                ? 'bg-success/5 border-success/30 hover:border-success/50 hover:bg-success/10' 
-                                : 'bg-surface-dim border-outline hover:border-outline-active hover:bg-surface-container'
-                            }`}
-                          >
-                            <div className="flex items-center space-x-3 min-w-0">
-                              {user.avatar ? (
-                                <img src={user.avatar} alt="" className="w-8 h-8 rounded-lg object-cover shrink-0" />
-                              ) : (
-                                <div className="w-8 h-8 rounded-lg bg-surface-lowest border border-outline flex items-center justify-center font-bold text-xs uppercase shrink-0">
-                                  {user.name.charAt(0)}
-                                </div>
-                              )}
-                              <div className="min-w-0">
-                                <p className="text-[12px] font-black text-on-surface truncate uppercase tracking-tight">{user.name}</p>
-                                <p className="text-[8px] font-bold text-on-surface-dim opacity-50 uppercase tracking-wider truncate">{user.role.replace('_', ' ')}</p>
+              {uniqueStaff.length === 0 ? (
+                <div className="text-[11px] font-bold opacity-40 uppercase italic text-center py-12 border border-dashed border-outline rounded-3xl">
+                  No staff assigned to this shift yet. Please make assignments above before logging attendance.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Assigned Shift Personnel</p>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {uniqueStaff.map((id) => {
+                      const user = activeStaff.find(u => u.id === id);
+                      if (!user) return null;
+                      const isPresent = attendees.includes(id);
+                      
+                      return (
+                        <div 
+                          key={id} 
+                          onClick={() => {
+                            if (isPresent) {
+                              setAttendees(prev => prev.filter(att => att !== id));
+                            } else {
+                              setAttendees(prev => [...prev, id]);
+                            }
+                          }}
+                          className={`flex items-center justify-between p-4 rounded-2xl border cursor-pointer transition-all shadow-sm ${
+                            isPresent 
+                              ? 'bg-success/5 border-success/30 hover:border-success/50 hover:bg-success/10' 
+                              : 'bg-surface-dim border-outline hover:border-outline-active hover:bg-surface-container'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-3 min-w-0">
+                            {user.avatar ? (
+                              <img src={user.avatar} alt="" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-lg bg-surface-lowest border border-outline flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                                {user.name.charAt(0)}
                               </div>
-                            </div>
-
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${
-                              isPresent 
-                                ? 'bg-success border-success text-white' 
-                                : 'border-outline text-transparent'
-                            }`}>
-                              <UserCheck className="w-3.5 h-3.5" />
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-[12px] font-black text-on-surface truncate uppercase tracking-tight">{user.name}</p>
+                              <p className="text-[8px] font-bold text-on-surface-dim opacity-50 uppercase tracking-wider truncate">{user.role.replace('_', ' ')}</p>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
+
+                          <div className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${
+                            isPresent 
+                              ? 'bg-success border-success text-white' 
+                              : 'border-outline text-transparent'
+                          }`}>
+                            <UserCheck className="w-3.5 h-3.5" />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })()}
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}

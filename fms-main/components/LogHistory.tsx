@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { MOCK_USERS } from '../constants';
-import { FileText, Search, Download, Filter, X, Calendar } from 'lucide-react';
+import { FileText, Search, Download, Filter, X, Calendar, Plane, Anchor, Droplet, Fuel, Truck } from 'lucide-react';
 import { Logo } from './Logo';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { supabaseService } from '../services/supabaseService';
-import { FlightLog, User, UserRole } from '../types';
+import { FlightLog, User, UserRole, EquipmentType } from '../types';
 
 const parseGroundLog = (log: FlightLog) => {
   const parts = (log.flightNumber || '').split('-');
@@ -43,13 +43,16 @@ interface LogHistoryProps {
 }
 
 export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
-  const { staff } = useOperationalData();
+  const { staff, equipment } = useOperationalData();
   const [logs, setLogs] = useState<FlightLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
   const [showFilters, setShowFilters] = useState(false);
-  const [filterDate, setFilterDate] = useState('');
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
+  const [filterFuelType, setFilterFuelType] = useState('ALL');
+  const [filterEquipment, setFilterEquipment] = useState('ALL');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [selectedLogType, setSelectedLogType] = useState<string>(() => {
     const defaultTab = localStorage.getItem('fms_log_history_default_tab');
@@ -57,7 +60,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
       localStorage.removeItem('fms_log_history_default_tab');
       return defaultTab;
     }
-    return 'ALL';
+    return 'FLIGHT';
   });
 
   const resolveLogType = (log: FlightLog): string => {
@@ -251,20 +254,52 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     if (!log) return false;
     
     const logType = resolveLogType(log);
-    const matchesType = selectedLogType === 'ALL' || logType === selectedLogType;
+    const matchesType = logType === selectedLogType;
 
     const matchesSearch = (
       log.flightNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.aircraftReg.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    let matchesDate = true;
-    if (filterDate && log.timestampStart) {
-      const logDate = new Date(log.timestampStart).toLocaleDateString('en-CA');
-      matchesDate = logDate === filterDate;
+    let logDateStr = '';
+    if (log.timestampStart) {
+      logDateStr = getLocalDatePart(log.timestampStart);
+    } else if (log.operationalDate) {
+      logDateStr = log.operationalDate.includes('T') ? getLocalDatePart(log.operationalDate) : log.operationalDate;
     }
 
-    return matchesType && matchesSearch && matchesDate;
+    let matchesDate = true;
+    if (logDateStr) {
+      if (filterStartDate && logDateStr < filterStartDate) {
+        matchesDate = false;
+      }
+      if (filterEndDate && logDateStr > filterEndDate) {
+        matchesDate = false;
+      }
+    } else if (filterStartDate || filterEndDate) {
+      matchesDate = false;
+    }
+
+    let matchesFuelType = true;
+    if (selectedLogType !== 'BRIDGING' && filterFuelType !== 'ALL') {
+      if (filterFuelType === 'JET_A1') {
+        matchesFuelType = ['FLIGHT', 'SEAPLANE', 'MARINE'].includes(logType);
+      } else if (filterFuelType === 'DIESEL' || filterFuelType === 'PETROL') {
+        if (logType === 'FILLING_STATION') {
+          const parsed = parseGroundLog(log);
+          matchesFuelType = parsed.fuelType === filterFuelType;
+        } else {
+          matchesFuelType = false;
+        }
+      }
+    }
+
+    let matchesEquipment = true;
+    if (selectedLogType === 'BRIDGING' && filterEquipment !== 'ALL') {
+      matchesEquipment = log.vehicleId === filterEquipment;
+    }
+
+    return matchesType && matchesSearch && matchesDate && matchesFuelType && matchesEquipment;
   });
 
   const sortedLogs = [...filteredLogs].sort((a, b) => {
@@ -323,75 +358,145 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
       <div className="bg-surface-dim p-1.5 rounded-[22px] border border-outline relative flex w-full overflow-x-auto no-scrollbar shadow-inner max-w-fit">
         {/* Mobile/tablet sliding indicator */}
         <div
-          className={`absolute top-1.5 bottom-1.5 rounded-[18px] kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium md:hidden will-change-transform
-            ${selectedLogType === 'ALL'             ? 'left-1.5 w-[140px] translate-x-0'      : ''}
-            ${selectedLogType === 'FLIGHT'          ? 'left-1.5 w-[150px] translate-x-[140px]' : ''}
-            ${selectedLogType === 'SEAPLANE'        ? 'left-1.5 w-[110px] translate-x-[290px]' : ''}
-            ${selectedLogType === 'MARINE'          ? 'left-1.5 w-[150px] translate-x-[400px]' : ''}
-            ${selectedLogType === 'FILLING_STATION' ? 'left-1.5 w-[150px] translate-x-[550px]' : ''}
-            ${selectedLogType === 'BRIDGING'        ? 'left-1.5 w-[160px] translate-x-[700px]' : ''}
+          className={`absolute top-1.5 bottom-1.5 rounded-[18px] kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium md:hidden will-change-transform w-[60px]
+            ${selectedLogType === 'FLIGHT'          ? 'left-1.5 translate-x-0' : ''}
+            ${selectedLogType === 'SEAPLANE'        ? 'left-1.5 translate-x-[60px]' : ''}
+            ${selectedLogType === 'MARINE'          ? 'left-1.5 translate-x-[120px]' : ''}
+            ${selectedLogType === 'FILLING_STATION' ? 'left-1.5 translate-x-[180px]' : ''}
+            ${selectedLogType === 'BRIDGING'        ? 'left-1.5 translate-x-[240px]' : ''}
           `}
         />
         {/* Desktop sliding indicator */}
         <div
-          className={`absolute top-1.5 bottom-1.5 rounded-[18px] kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium hidden md:block w-[calc(16.666%-2px)] will-change-transform
-            ${selectedLogType === 'ALL'             ? 'translate-x-0' : ''}
-            ${selectedLogType === 'FLIGHT'          ? 'translate-x-[100%]' : ''}
-            ${selectedLogType === 'SEAPLANE'        ? 'translate-x-[200%]' : ''}
-            ${selectedLogType === 'MARINE'          ? 'translate-x-[300%]' : ''}
-            ${selectedLogType === 'FILLING_STATION' ? 'translate-x-[400%]' : ''}
-            ${selectedLogType === 'BRIDGING'        ? 'translate-x-[500%]' : ''}
+          className={`absolute top-1.5 bottom-1.5 rounded-[18px] kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium hidden md:block w-[calc(20%-2.4px)] will-change-transform
+            ${selectedLogType === 'FLIGHT'          ? 'translate-x-0' : ''}
+            ${selectedLogType === 'SEAPLANE'        ? 'translate-x-[100%]' : ''}
+            ${selectedLogType === 'MARINE'          ? 'translate-x-[200%]' : ''}
+            ${selectedLogType === 'FILLING_STATION' ? 'translate-x-[300%]' : ''}
+            ${selectedLogType === 'BRIDGING'        ? 'translate-x-[400%]' : ''}
           `}
         />
         {[
-          { id: 'ALL', label: 'All Operations', w: 'w-[140px] md:w-[160px]' },
-          { id: 'FLIGHT', label: 'Into-Plane', w: 'w-[150px] md:w-[160px]' },
-          { id: 'SEAPLANE', label: 'Seaplane', w: 'w-[110px] md:w-[160px]' },
-          { id: 'MARINE', label: 'Marine Loading', w: 'w-[150px] md:w-[160px]' },
-          { id: 'FILLING_STATION', label: 'Filling Stations', w: 'w-[150px] md:w-[160px]' },
-          { id: 'BRIDGING', label: 'Refueller Loading', w: 'w-[160px] md:w-[160px]' },
+          { id: 'FLIGHT', label: 'Into-Plane', icon: Plane, w: 'w-[60px] md:w-[160px]' },
+          { id: 'SEAPLANE', label: 'Seaplane', icon: Droplet, w: 'w-[60px] md:w-[160px]' },
+          { id: 'MARINE', label: 'Marine Loading', icon: Anchor, w: 'w-[60px] md:w-[160px]' },
+          { id: 'FILLING_STATION', label: 'Filling Stations', icon: Fuel, w: 'w-[60px] md:w-[160px]' },
+          { id: 'BRIDGING', label: 'Refueller Loading', icon: Truck, w: 'w-[60px] md:w-[160px]' },
         ].map((tab) => {
           const isActive = selectedLogType === tab.id;
+          const Icon = tab.icon;
           return (
             <button
               key={tab.id}
-              onClick={() => setSelectedLogType(tab.id)}
+              onClick={() => {
+                setSelectedLogType(tab.id);
+                setFilterFuelType('ALL');
+                setFilterEquipment('ALL');
+              }}
               className={`${tab.w} flex-shrink-0 flex items-center justify-center py-3 rounded-[18px] text-[10px] font-black uppercase tracking-widest relative z-10 transition-colors duration-300 active:scale-95 ${
                 isActive
-                  ? 'text-white'
+                  ? 'text-white font-black'
                   : 'text-on-surface-dim opacity-75 hover:text-on-surface'
               }`}
             >
-              {tab.label}
+              <span className="md:hidden">
+                <Icon className="w-4 h-4" />
+              </span>
+              <span className="hidden md:inline">
+                {tab.label}
+              </span>
             </button>
           );
         })}
       </div>
 
       {showFilters && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-surface-dim border border-outline rounded-[24px] animate-in slide-in-from-top-2 duration-300">
-           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="flex flex-col gap-6 p-6 bg-surface-dim border border-outline rounded-[24px] animate-in slide-in-from-top-2 duration-300">
+           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-end">
+              {/* Start Date */}
               <div className="flex flex-col">
-                 <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2">Filter By Date</label>
+                 <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2">Start Date</label>
                  <div className="relative">
                     <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
                     <input 
                        type="date"
-                       value={filterDate}
-                       onChange={(e) => setFilterDate(e.target.value)}
+                       value={filterStartDate}
+                       onChange={(e) => setFilterStartDate(e.target.value)}
                        onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
                        className="w-full pl-10 pr-4 py-3 bg-surface-lowest border border-outline rounded-xl text-[12px] font-bold text-on-surface focus:border-primary outline-none cursor-pointer"
                     />
                  </div>
               </div>
-              {filterDate && (
-                 <button onClick={() => setFilterDate('')} className="mt-6 text-[10px] font-black text-error uppercase tracking-widest hover:underline">Clear Date</button>
+
+              {/* End Date */}
+              <div className="flex flex-col">
+                 <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2">End Date</label>
+                 <div className="relative">
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
+                    <input 
+                       type="date"
+                       value={filterEndDate}
+                       onChange={(e) => setFilterEndDate(e.target.value)}
+                       onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                       className="w-full pl-10 pr-4 py-3 bg-surface-lowest border border-outline rounded-xl text-[12px] font-bold text-on-surface focus:border-primary outline-none cursor-pointer"
+                    />
+                 </div>
+              </div>
+
+              {/* Fuel Type Dropdown (hidden on BRIDGING) */}
+              {selectedLogType !== 'BRIDGING' && (
+                 <div className="flex flex-col">
+                    <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2">Fuel Type</label>
+                    <select
+                       value={filterFuelType}
+                       onChange={(e) => setFilterFuelType(e.target.value)}
+                       className="w-full px-4 py-3 bg-surface-lowest border border-outline rounded-xl text-[12px] font-bold text-on-surface focus:border-primary outline-none cursor-pointer"
+                    >
+                       <option value="ALL">ALL FUEL TYPES</option>
+                       <option value="JET_A1">JET A-1</option>
+                       <option value="DIESEL">DIESEL</option>
+                       <option value="PETROL">PETROL</option>
+                    </select>
+                 </div>
               )}
-           </div>
-           
-           <div className="bg-surface-lowest p-4 rounded-xl border border-outline flex flex-col items-end min-w-[200px]">
-              <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-1">Total Volume (Filtered)</span>
-              <span className="text-2xl font-mono font-black text-primary">{totalVolume.toLocaleString()} <span className="text-sm opacity-50">L</span></span>
+
+              {/* Refueller Equipment Dropdown (only on BRIDGING) */}
+              {selectedLogType === 'BRIDGING' && (
+                 <div className="flex flex-col">
+                    <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2">Refueller Equipment</label>
+                    <select
+                       value={filterEquipment}
+                       onChange={(e) => setFilterEquipment(e.target.value)}
+                       className="w-full px-4 py-3 bg-surface-lowest border border-outline rounded-xl text-[12px] font-bold text-on-surface focus:border-primary outline-none cursor-pointer"
+                    >
+                       <option value="ALL">ALL REFUELLERS</option>
+                       {(equipment || []).filter(eq => eq.type === EquipmentType.REFUELLER).map(eq => (
+                          <option key={eq.id} value={eq.id}>{eq.id} - {eq.name}</option>
+                       ))}
+                    </select>
+                 </div>
+              )}
+
+              {/* Clear Filters / Volume Summary */}
+              <div className="flex items-center justify-between sm:col-span-2 lg:col-span-1 gap-4">
+                 {(filterStartDate || filterEndDate || (selectedLogType !== 'BRIDGING' && filterFuelType !== 'ALL') || (selectedLogType === 'BRIDGING' && filterEquipment !== 'ALL')) && (
+                    <button 
+                       onClick={() => {
+                          setFilterStartDate('');
+                          setFilterEndDate('');
+                          setFilterFuelType('ALL');
+                          setFilterEquipment('ALL');
+                       }} 
+                       className="text-[10px] font-black text-error uppercase tracking-widest hover:underline"
+                    >
+                       Clear Filters
+                    </button>
+                 )}
+                 <div className="bg-surface-lowest p-4 rounded-xl border border-outline flex flex-col items-end min-w-[150px] ml-auto">
+                    <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-1">Total Volume</span>
+                    <span className="text-xl font-mono font-black text-primary">{totalVolume.toLocaleString()} <span className="text-[10px] opacity-50">L</span></span>
+                 </div>
+              </div>
            </div>
         </div>
       )}
@@ -407,16 +512,6 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
             <table className="w-full">
               <thead>
                 <tr className="bg-surface-dim/50 border-b border-outline">
-                  {selectedLogType === 'ALL' && (
-                    <>
-                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Timestamp</th>
-                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Flight ID</th>
-                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Equipment Used</th>
-                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
-                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Delivery Ticket</th>
-                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
-                    </>
-                  )}
                   {selectedLogType === 'FLIGHT' && (
                     <>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Timestamp</th>
@@ -498,28 +593,6 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                           onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
                           className={`hover:bg-primary/[0.02] transition-colors group cursor-pointer ${isExpanded ? 'bg-primary/[0.03]' : ''}`}
                         >
-                          {/* ALL View */}
-                          {selectedLogType === 'ALL' && (
-                            <>
-                              <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
-                                  {log.timestampStart ? new Date(log.timestampStart).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: false }) : 'PENDING'}
-                              </td>
-                              <td className="px-10 py-6">
-                                  <div className="text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">{log.flightNumber}</div>
-                                  <div className="text-[9px] font-black text-on-surface-dim opacity-30 uppercase tracking-widest mt-1">{log.aircraftReg} ({log.aircraftType})</div>
-                              </td>
-                              <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest font-mono">
-                                  {log.vehicleId || 'N/A'}
-                              </td>
-                              <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
-                                  {log.volume.toLocaleString()}
-                              </td>
-                              <td className="px-10 py-6 text-left text-[11px] font-black text-error font-mono tracking-widest">
-                                  {log.deliveryNumber || 'N/A'}
-                              </td>
-                            </>
-                          )}
-
                           {/* FLIGHT View */}
                           {selectedLogType === 'FLIGHT' && (
                             <>
@@ -681,7 +754,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                            <tr className="bg-surface-dim/30 border-b border-outline">
                               <td colSpan={colSpanCount} className="px-10 py-6">
                                  {/* Into-Plane details */}
-                                 {(selectedLogType === 'ALL' || selectedLogType === 'FLIGHT') && (
+                                 {selectedLogType === 'FLIGHT' && (
                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-in fade-in duration-300">
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Arrived</span>
