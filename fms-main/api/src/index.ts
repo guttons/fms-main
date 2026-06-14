@@ -144,24 +144,12 @@ const allowedOrigins = [
   'http://localhost:5175',
   'https://macl-fms.web.app',
   'https://macl-fms.firebaseapp.com',
+  'https://macl-fms.netlify.app',
   ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()) : [])
 ];
 
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, or server-to-server)
-    if (!origin) return callback(null, true);
-
-    const isAllowed = allowedOrigins.includes(origin) || 
-                      origin.endsWith('.netlify.app') || 
-                      origin.endsWith('.netlify.live');
-
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: '*',
   allowedHeaders: ['Content-Type', 'Authorization'],
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
 }));
