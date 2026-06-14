@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { MOCK_USERS } from '../constants';
-import { FileText, Search, Download, Filter, X, Calendar, Plane, Anchor, Droplet, Fuel, Truck } from 'lucide-react';
+import { FileText, Search, Download, Filter, X, Calendar, Plane, Anchor, Droplet, Fuel, Truck, Sailboat } from 'lucide-react';
 import { Logo } from './Logo';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { supabaseService } from '../services/supabaseService';
@@ -53,6 +53,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   const [filterEndDate, setFilterEndDate] = useState('');
   const [filterFuelType, setFilterFuelType] = useState('ALL');
   const [filterEquipment, setFilterEquipment] = useState('ALL');
+  const [filterStation, setFilterStation] = useState('ALL');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [selectedLogType, setSelectedLogType] = useState<string>(() => {
     const defaultTab = localStorage.getItem('fms_log_history_default_tab');
@@ -62,6 +63,18 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     }
     return 'FLIGHT';
   });
+
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+
+  // Tooltip auto-clear effect
+  useEffect(() => {
+    if (activeTooltip) {
+      const timer = setTimeout(() => {
+        setActiveTooltip(null);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTooltip]);
 
   const resolveLogType = (log: FlightLog): string => {
     if (log.logType) return log.logType;
@@ -281,17 +294,16 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     }
 
     let matchesFuelType = true;
-    if (selectedLogType !== 'BRIDGING' && filterFuelType !== 'ALL') {
-      if (filterFuelType === 'JET_A1') {
-        matchesFuelType = ['FLIGHT', 'SEAPLANE', 'MARINE'].includes(logType);
-      } else if (filterFuelType === 'DIESEL' || filterFuelType === 'PETROL') {
-        if (logType === 'FILLING_STATION') {
-          const parsed = parseGroundLog(log);
-          matchesFuelType = parsed.fuelType === filterFuelType;
-        } else {
-          matchesFuelType = false;
-        }
-      }
+    if (selectedLogType === 'FILLING_STATION' && filterFuelType !== 'ALL') {
+      const parsed = parseGroundLog(log);
+      matchesFuelType = parsed.fuelType === filterFuelType;
+    }
+
+    let matchesStation = true;
+    if (selectedLogType === 'FILLING_STATION' && filterStation !== 'ALL') {
+      const parts = (log.flightNumber || '').split('-');
+      const stationCode = parts[1] || 'LFS';
+      matchesStation = stationCode === filterStation;
     }
 
     let matchesEquipment = true;
@@ -299,7 +311,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
       matchesEquipment = log.vehicleId === filterEquipment;
     }
 
-    return matchesType && matchesSearch && matchesDate && matchesFuelType && matchesEquipment;
+    return matchesType && matchesSearch && matchesDate && matchesFuelType && matchesStation && matchesEquipment;
   });
 
   const sortedLogs = [...filteredLogs].sort((a, b) => {
@@ -355,7 +367,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
       </div>
 
       {/* Log Type Filter Tabs */}
-      <div className="bg-surface-dim p-1.5 rounded-[22px] border border-outline relative flex w-full overflow-x-auto no-scrollbar shadow-inner max-w-fit">
+      <div className="bg-surface-dim p-1.5 rounded-[22px] border border-outline relative flex w-full overflow-x-visible md:overflow-x-auto no-scrollbar shadow-inner max-w-fit mx-auto md:mx-0">
         {/* Mobile/tablet sliding indicator */}
         <div
           className={`absolute top-1.5 bottom-1.5 rounded-[18px] kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium md:hidden will-change-transform w-[60px]
@@ -378,7 +390,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
         />
         {[
           { id: 'FLIGHT', label: 'Into-Plane', icon: Plane, w: 'w-[60px] md:w-[160px]' },
-          { id: 'SEAPLANE', label: 'Seaplane', icon: Droplet, w: 'w-[60px] md:w-[160px]' },
+          { id: 'SEAPLANE', label: 'Seaplane', icon: Sailboat, w: 'w-[60px] md:w-[160px]' },
           { id: 'MARINE', label: 'Marine Loading', icon: Anchor, w: 'w-[60px] md:w-[160px]' },
           { id: 'FILLING_STATION', label: 'Filling Stations', icon: Fuel, w: 'w-[60px] md:w-[160px]' },
           { id: 'BRIDGING', label: 'Refueller Loading', icon: Truck, w: 'w-[60px] md:w-[160px]' },
@@ -392,6 +404,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                 setSelectedLogType(tab.id);
                 setFilterFuelType('ALL');
                 setFilterEquipment('ALL');
+                setFilterStation('ALL');
+                setActiveTooltip(tab.label);
               }}
               className={`${tab.w} flex-shrink-0 flex items-center justify-center py-3 rounded-[18px] text-[10px] font-black uppercase tracking-widest relative z-10 transition-colors duration-300 active:scale-95 ${
                 isActive
@@ -399,9 +413,16 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                   : 'text-on-surface-dim opacity-75 hover:text-on-surface'
               }`}
             >
-              <span className="md:hidden">
-                <Icon className="w-4 h-4" />
-              </span>
+              {/* Tooltip */}
+              {activeTooltip === tab.label && (
+                <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[9px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-200 md:hidden">
+                  {tab.label}
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-outline -z-10 mt-[1px]" />
+                </div>
+              )}
+
+              <Icon className="w-4 h-4 md:hidden" />
               <span className="hidden md:inline">
                 {tab.label}
               </span>
@@ -412,7 +433,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
       {showFilters && (
         <div className="flex flex-col gap-6 p-6 bg-surface-dim border border-outline rounded-[24px] animate-in slide-in-from-top-2 duration-300">
-           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-end">
+           <div className={`grid grid-cols-1 sm:grid-cols-2 ${selectedLogType === 'FILLING_STATION' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-6 items-end`}>
               {/* Start Date */}
               <div className="flex flex-col">
                  <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2">Start Date</label>
@@ -443,8 +464,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                  </div>
               </div>
 
-              {/* Fuel Type Dropdown (hidden on BRIDGING) */}
-              {selectedLogType !== 'BRIDGING' && (
+              {/* Fuel Type Dropdown (only on FILLING_STATION) */}
+              {selectedLogType === 'FILLING_STATION' && (
                  <div className="flex flex-col">
                     <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2">Fuel Type</label>
                     <select
@@ -453,9 +474,24 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                        className="w-full px-4 py-3 bg-surface-lowest border border-outline rounded-xl text-[12px] font-bold text-on-surface focus:border-primary outline-none cursor-pointer"
                     >
                        <option value="ALL">ALL FUEL TYPES</option>
-                       <option value="JET_A1">JET A-1</option>
                        <option value="DIESEL">DIESEL</option>
                        <option value="PETROL">PETROL</option>
+                    </select>
+                 </div>
+              )}
+
+              {/* Station Dropdown (only on FILLING_STATION) */}
+              {selectedLogType === 'FILLING_STATION' && (
+                 <div className="flex flex-col">
+                    <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2">Station</label>
+                    <select
+                       value={filterStation}
+                       onChange={(e) => setFilterStation(e.target.value)}
+                       className="w-full px-4 py-3 bg-surface-lowest border border-outline rounded-xl text-[12px] font-bold text-on-surface focus:border-primary outline-none cursor-pointer"
+                    >
+                       <option value="ALL">ALL STATIONS</option>
+                       <option value="AFS">AIRSIDE (AFS)</option>
+                       <option value="LFS">LANDSIDE (LFS)</option>
                     </select>
                  </div>
               )}
@@ -471,25 +507,28 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                     >
                        <option value="ALL">ALL REFUELLERS</option>
                        {(equipment || []).filter(eq => eq.type === EquipmentType.REFUELLER).map(eq => (
-                          <option key={eq.id} value={eq.id}>{eq.id} - {eq.name}</option>
+                          <option key={eq.id} value={eq.id}>{eq.id}</option>
                        ))}
                     </select>
                  </div>
               )}
 
               {/* Clear Filters / Volume Summary */}
-              <div className="flex items-center justify-between sm:col-span-2 lg:col-span-1 gap-4">
-                 {(filterStartDate || filterEndDate || (selectedLogType !== 'BRIDGING' && filterFuelType !== 'ALL') || (selectedLogType === 'BRIDGING' && filterEquipment !== 'ALL')) && (
+              <div className={`flex items-end justify-between sm:col-span-2 lg:col-span-1 gap-4 ${selectedLogType === 'FILLING_STATION' ? 'lg:col-start-5' : 'lg:col-start-4'}`}>
+                 {(filterStartDate || filterEndDate || (selectedLogType === 'FILLING_STATION' && (filterFuelType !== 'ALL' || filterStation !== 'ALL')) || (selectedLogType === 'BRIDGING' && filterEquipment !== 'ALL')) && (
                     <button 
                        onClick={() => {
                           setFilterStartDate('');
                           setFilterEndDate('');
                           setFilterFuelType('ALL');
                           setFilterEquipment('ALL');
+                          setFilterStation('ALL');
                        }} 
-                       className="text-[10px] font-black text-error uppercase tracking-widest hover:underline"
+                       className="text-[10px] font-black text-error uppercase tracking-widest hover:underline flex items-center justify-center p-3 rounded-xl bg-error/10 hover:bg-error/20 md:bg-transparent md:p-0 md:h-[46px]"
+                       title="Clear Filters"
                     >
-                       Clear Filters
+                       <X className="w-4 h-4 md:mr-1.5" />
+                       <span className="hidden md:inline">Clear Filters</span>
                     </button>
                  )}
                  <div className="bg-surface-lowest p-4 rounded-xl border border-outline flex flex-col items-end min-w-[150px] ml-auto">

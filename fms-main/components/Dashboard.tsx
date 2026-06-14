@@ -819,16 +819,36 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
         {/* Available Equipment Section - categorised RF / HD for Managers */}
         {equipment && equipment.length > 0 && (() => {
-          const available = equipment.filter(eq => eq.status === EqStatus.AVAILABLE);
-          const rfUnits = available.filter(eq => eq.id.startsWith('RF'));
-          const hdUnits = available.filter(eq => eq.id.startsWith('HD'));
+          const getStatusLabel = (status: EqStatus) => {
+            if (status === EqStatus.AVAILABLE) return 'Standby';
+            if (status === EqStatus.IN_USE) return 'In Use';
+            if (status === EqStatus.REFUELLING) return 'Refuelling';
+            return status;
+          };
+
+          const getStatusColor = (status: EqStatus) => {
+            if (status === EqStatus.AVAILABLE) return 'text-success';
+            if (status === EqStatus.IN_USE) return 'text-primary';
+            if (status === EqStatus.REFUELLING) return 'text-warning';
+            return 'text-on-surface-dim';
+          };
+
+          const active = equipment.filter(eq => 
+            eq.status === EqStatus.AVAILABLE || 
+            eq.status === EqStatus.IN_USE || 
+            eq.status === EqStatus.REFUELLING
+          );
+          const rfUnits = active.filter(eq => eq.id.startsWith('RF')).sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
+          const hdUnits = active.filter(eq => eq.id.startsWith('HD')).sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
 
           return (
             <div className="space-y-5 px-1 animate-in fade-in slide-in-from-bottom-2 duration-500">
               <div className="flex items-center">
                 <h3 className="text-[12px] font-black text-on-surface-dim uppercase tracking-[0.3em]">Operational Assets</h3>
                 <span className="w-8 h-[1px] bg-outline flex-1 mx-4"></span>
-                <span className="text-[10px] font-black text-success uppercase tracking-widest">{available.length} Units Standby</span>
+                <span className="text-[10px] font-black text-success uppercase tracking-widest">
+                  {active.filter(eq => eq.status === EqStatus.AVAILABLE).length} Standby / {active.length} Operational
+                </span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -843,68 +863,84 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                       {rfUnits.map((eq) => {
                         const isRequested = alerts.some(a => !a.acknowledged && a.message.includes(`Replenishment requested for unit ${eq.id}`));
                         
+                        const replenishButton = (
+                          <button 
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (isRequested || pendingRequests.has(eq.id)) return;
+                              
+                              setPendingRequests(prev => new Set(prev).add(eq.id));
+                              try {
+                                const success = await createAlert({
+                                  severity: 'medium',
+                                  message: `Replenishment requested for unit ${eq.id}`,
+                                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                                  acknowledged: false,
+                                  targetRole: UserRole.DEPOT_MANAGER
+                                });
+                                if (success) {
+                                  await updateEquipmentStatus(eq.id, EqStatus.REFUELLING);
+                                  notify(`Refuel request sent for ${eq.id}`, 'success');
+                                }
+                              } catch (error) {
+                                console.error("Failed to send refuel request", error);
+                                notify(`Failed to send refuel request for ${eq.id}`, 'error');
+                              } finally {
+                                setPendingRequests(prev => {
+                                    const next = new Set(prev);
+                                    next.delete(eq.id);
+                                    return next;
+                                });
+                              }
+                            }}
+                            disabled={isRequested || pendingRequests.has(eq.id)}
+                            className={`w-8 h-8 rounded-full transition-all shadow-premium flex items-center justify-center active:scale-95 shrink-0 ${
+                              isRequested || pendingRequests.has(eq.id)
+                              ? 'bg-surface-lowest text-on-surface-dim opacity-30 cursor-not-allowed border border-outline' 
+                              : 'kinetic-gradient text-white border-none hover:scale-105'
+                            }`}
+                            title={isRequested ? 'Replenishment already requested' : pendingRequests.has(eq.id) ? 'Sending request...' : 'Request Replenishment'}
+                          >
+                            {isRequested || pendingRequests.has(eq.id) ? (
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Send className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        );
+
                         return (
-                          <div key={eq.id} className="bg-surface-dim/40 border border-outline p-4 rounded-2xl flex items-center justify-between group hover:border-primary/30 transition-all">
-                            <div className="flex items-center space-x-3">
-                              <div className="p-2 bg-primary/10 rounded-lg group-hover:scale-110 transition-transform">
-                                <Truck className="w-4 h-4 text-primary" />
+                          <div key={eq.id} className="bg-surface-dim/40 border border-outline p-4 rounded-2xl flex items-start md:items-center justify-between group hover:border-primary/30 transition-all">
+                            <div className="flex items-start space-x-3">
+                              <div className="flex flex-col items-center space-y-2 shrink-0">
+                                <div className="p-2 bg-primary/10 rounded-lg group-hover:scale-110 transition-transform">
+                                  <Truck className="w-4 h-4 text-primary" />
+                                </div>
+                                {isItpManager && (
+                                  <div className="block md:hidden">
+                                    {replenishButton}
+                                  </div>
+                                )}
                               </div>
                               <div>
                                 <p className="text-[11px] font-[900] text-on-surface tracking-tighter">{eq.name}</p>
-                                <p className="text-[8px] font-black text-success opacity-60 uppercase tracking-widest">Standby</p>
+                                <div className="flex flex-col mt-0.5">
+                                  <span className={`text-[8px] font-black uppercase tracking-widest ${getStatusColor(eq.status)} opacity-80`}>
+                                    {getStatusLabel(eq.status)}
+                                  </span>
+                                  {eq.currentVolume !== undefined && eq.maxCapacity !== undefined && (
+                                    <span className="text-[8px] font-black text-on-surface-dim opacity-60 font-mono mt-0.5">
+                                      {eq.currentVolume.toLocaleString()} / {eq.maxCapacity.toLocaleString()} L
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             
-                             {isItpManager && (
-                              <button 
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (isRequested || pendingRequests.has(eq.id)) return;
-                                  
-                                  setPendingRequests(prev => new Set(prev).add(eq.id));
-                                  try {
-                                    const success = await createAlert({
-                                      severity: 'medium',
-                                      message: `Replenishment requested for unit ${eq.id}`,
-                                      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-                                      acknowledged: false,
-                                      targetRole: UserRole.DEPOT_MANAGER
-                                    });
-                                    if (success) {
-                                      await updateEquipmentStatus(eq.id, EqStatus.REFUELLING);
-                                      notify(`Refuel request sent for ${eq.id}`, 'success');
-                                    }
-                                  } catch (error) {
-                                    console.error("Failed to send refuel request", error);
-                                    notify(`Failed to send refuel request for ${eq.id}`, 'error');
-                                  } finally {
-                                    setPendingRequests(prev => {
-                                        const next = new Set(prev);
-                                        next.delete(eq.id);
-                                        return next;
-                                    });
-                                  }
-                                }}
-                                disabled={isRequested || pendingRequests.has(eq.id)}
-                                className={`px-2.5 py-2 sm:px-4 sm:py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all shadow-premium flex items-center justify-center gap-1 active:scale-95 shrink-0 ${
-                                  isRequested || pendingRequests.has(eq.id)
-                                  ? 'bg-surface-lowest text-on-surface-dim opacity-30 cursor-not-allowed border border-outline' 
-                                  : 'kinetic-gradient text-white border-none hover:scale-105'
-                                }`}
-                                title={isRequested ? 'Replenishment already requested' : pendingRequests.has(eq.id) ? 'Sending request...' : 'Request Replenishment'}
-                              >
-                                {isRequested || pendingRequests.has(eq.id) ? (
-                                  <>
-                                    <RefreshCw className="w-3 h-3 animate-spin sm:hidden" />
-                                    <span className="hidden sm:inline">{isRequested ? 'REQUESTED' : 'SENDING...'}</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Send className="w-3 h-3 sm:hidden" />
-                                    <span className="hidden sm:inline">REPLENISH</span>
-                                  </>
-                                )}
-                              </button>
+                            {isItpManager && (
+                              <div className="hidden md:block">
+                                {replenishButton}
+                              </div>
                             )}
                           </div>
                         );
@@ -928,7 +964,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                           </div>
                           <div>
                             <p className="text-[11px] font-[900] text-on-surface tracking-tighter">{eq.name}</p>
-                            <p className="text-[8px] font-black text-success opacity-60 uppercase tracking-widest">Standby</p>
+                            <span className={`text-[8px] font-black uppercase tracking-widest ${getStatusColor(eq.status)} opacity-80 mt-0.5 block`}>
+                              {getStatusLabel(eq.status)}
+                            </span>
                           </div>
                         </div>
                       ))}
@@ -1027,15 +1065,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
     const dieselPct = maxDiesel > 0 ? (totalDiesel / maxDiesel) * 100 : 0;
     const petrolPct = maxPetrol > 0 ? (totalPetrol / maxPetrol) * 100 : 0;
 
-    // Filter unacknowledged refueling/replenishment alerts
-    const refuelingRequests = (alerts || []).filter(a => 
-      a && !a.acknowledged && (
-        a.message.toLowerCase().includes('request') && (
-          a.message.toLowerCase().includes('replenish') ||
-          a.message.toLowerCase().includes('refuel')
-        )
-      )
+    // Find refuelers currently in Refuelling status
+    const refuelingVehicles = (equipment || []).filter(
+      eq => eq.type === EquipmentType.REFUELLER && eq.status === EqStatus.REFUELLING
     );
+
+    const refuelingRequests = refuelingVehicles.map(rf => {
+      const matchingAlert = (alerts || [])
+        .filter(a => a && a.message.includes(rf.id))
+        .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
+
+      if (matchingAlert) {
+        return {
+          id: matchingAlert.id,
+          message: matchingAlert.message,
+          timestamp: matchingAlert.timestamp,
+          acknowledged: false
+        };
+      } else {
+        return {
+          id: `synth-${rf.id}`,
+          message: `Replenishment requested for unit ${rf.id} (Low fuel: ${rf.currentVolume?.toLocaleString() || 0}L)`,
+          timestamp: rf.lastUpdated ? new Date(rf.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--',
+          acknowledged: false
+        };
+      }
+    });
 
     return (
       <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500 ease-out">

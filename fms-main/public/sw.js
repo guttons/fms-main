@@ -65,6 +65,9 @@ self.addEventListener('fetch', (e) => {
   // Bypass Supabase API — always go to network
   if (url.hostname.includes('supabase.co') || url.hostname.includes('supabase.io')) return;
 
+  // Bypass BigQuery API — always go to network
+  if (url.pathname.includes('/operations-log') || url.hostname.includes('run.app')) return;
+
   // Bypass external CDN modules (esm.sh, tailwindcss CDN, etc.)
   if (
     url.hostname.includes('esm.sh') ||

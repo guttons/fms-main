@@ -27,7 +27,7 @@ import { FinanceModule } from './components/FinanceModule';
 import { CustomerPortal } from './components/CustomerPortal';
 import { ExecutiveModule } from './components/ExecutiveModule';
 import { MOCK_USERS } from './constants';
-import { User, UserRole, FlightJob, Alert } from './types';
+import { User, UserRole, FlightJob, Alert, EquipmentStatus as EqStatusEnum } from './types';
 import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, CheckCircle, Share2, Smartphone, Trash2, Download, Laptop, Globe } from 'lucide-react';
 import { updatePWAManifestAndTheme, requestNotificationPermission, sendNativeNotification } from './utils/pwa';
 
@@ -195,8 +195,24 @@ const AppContextContent: React.FC<any> = ({
   pendingVehicleId, setPendingVehicleId,
   showAlertsPanel, setShowAlertsPanel, isSettingsOpen, setIsSettingsOpen, handleLogout
 }) => {
-  const { alerts, acknowledgeAlert, acknowledgeAllAlerts, clearAllAlerts, equipment, flightJobs, refreshData, domesticFlights, domesticAssignments } = useOperationalData();
+  const { alerts, acknowledgeAlert, acknowledgeAllAlerts, clearAllAlerts, equipment, flightJobs, refreshData, domesticFlights, domesticAssignments, updateEquipmentStatus, updateFlightJob } = useOperationalData();
   const { notify, notifyWithAction, dismiss } = useNotification();
+
+  // Wrapped logout: release any IN_USE equipment and revert IN_PROGRESS jobs for this user before signing out
+  const wrappedLogout = () => {
+    // Revert any IN_PROGRESS flight jobs assigned to this user and release their associated equipment
+    if (flightJobs && currentUser) {
+      flightJobs.forEach((job: FlightJob) => {
+        if (job.status === 'IN_PROGRESS' && (job.assignedTo === currentUser.id || job.assignedOfficer === currentUser.id)) {
+          updateFlightJob(job.id, { status: 'PENDING', vehicleId: undefined });
+          if (job.vehicleId) {
+            updateEquipmentStatus(job.vehicleId, EqStatusEnum.AVAILABLE);
+          }
+        }
+      });
+    }
+    handleLogout();
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [mainElement, setMainElement] = useState<HTMLElement | null>(null);
@@ -748,7 +764,7 @@ const AppContextContent: React.FC<any> = ({
             setActiveView(view);
             setIsMobileMenuOpen(false);
           }}
-          onLogout={handleLogout}
+          onLogout={wrappedLogout}
           isMobileMenuOpen={isMobileMenuOpen}
           onSettingsClick={() => {
             if (currentUser?.role === UserRole.ADMIN) {
@@ -1194,7 +1210,7 @@ const AppContextContent: React.FC<any> = ({
                              <button 
                               onClick={() => {
                                 setIsSettingsOpen(false);
-                                handleLogout();
+                                wrappedLogout();
                               }}
                               className="w-full py-2.5 bg-surface-container border border-outline text-on-surface hover:text-error hover:border-error/30 text-[9px] font-black uppercase tracking-[0.2em] rounded-xl transition-all"
                              >

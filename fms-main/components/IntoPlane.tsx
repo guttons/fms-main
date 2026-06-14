@@ -248,12 +248,6 @@ const ScreenDashboard: React.FC<{
                                      }}
                                    />
                                  )}
-                                 {job.vehicleId && job.status !== 'PENDING' && (
-                                     <div className={`flex items-center space-x-1 px-2 py-1 rounded-md border shadow-sm animate-in fade-in zoom-in-95 duration-500 shrink-0 ml-2 sm:ml-3 ${equipmentBadgeClass(job.vehicleId)}`}>
-                                         <Truck className="w-3 h-3" />
-                                         <span className="text-[9px] font-black uppercase tracking-widest leading-none">{job.vehicleId}</span>
-                                     </div>
-                                 )}
                                </div>
 
                                {/* Desktop-only details: type and reg on the same row as flight number after logo */}
@@ -835,15 +829,28 @@ const ScreenMetering: React.FC<{
           <button 
               onClick={() => onTimestamp('timestampInitialEnd')}
               disabled={activeFlight?.meterOpen === undefined || user.role === UserRole.ITP_OPERATOR}
-              className={`w-full p-6 rounded-2xl border-2 font-black text-[11px] uppercase tracking-widest flex items-center justify-center transition-all
+              className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                   ${activeFlight?.timestampInitialEnd 
-                      ? 'bg-success/5 border-success text-success' 
+                      ? 'bg-success/5 border-success text-on-surface' 
                       : (activeFlight?.meterOpen === undefined || user.role === UserRole.ITP_OPERATOR)
-                          ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed text-on-surface-dim'
-                          : 'bg-surface-container-lowest-container border-outline text-on-surface hover:border-primary active:scale-95'}`}
+                          ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
+                          : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
+              `}
           >
-              <Pause className="w-5 h-5 mr-3" />
-              {activeFlight?.timestampInitialEnd ? `Initial End: ${new Date(activeFlight.timestampInitialEnd).toLocaleTimeString([], { hour12: false })}` : 'Log Initial End'}
+              <div className="relative z-10">
+                  <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Delta</span>
+                  <span className={`block text-3xl font-[900] tracking-tighter ${activeFlight?.timestampInitialEnd ? 'text-success' : 'text-on-surface'}`}>
+                      INITIAL END
+                  </span>
+                  {activeFlight?.timestampInitialEnd && (
+                      <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
+                           <Clock className="w-4 h-4 mr-2 opacity-60"/>
+                           {new Date(activeFlight.timestampInitialEnd).toLocaleTimeString([], { hour12: false })}
+                       </span>
+                  )}
+              </div>
+              {!activeFlight?.timestampInitialEnd && <Pause className="absolute right-6 bottom-6 w-16 h-16 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
+              {activeFlight?.timestampInitialEnd && <CheckCircle className="absolute right-6 bottom-6 w-16 h-16 text-success opacity-10" />}
           </button>
 
           <div className="mt-4 p-4 lg:p-8 bg-surface-dim/30 rounded-[32px] lg:rounded-[40px] border border-outline">
@@ -889,16 +896,54 @@ const ScreenMetering: React.FC<{
                        <button 
                            onClick={() => { if (user.role !== UserRole.ITP_OPERATOR) onTimestamp('timestampFinalStart'); }} 
                            disabled={user.role === UserRole.ITP_OPERATOR}
-                           className={`p-4 rounded-xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${activeFlight?.timestampFinalStart ? 'bg-success/5 border-success text-success' : 'bg-surface-container-low border-outline text-on-surface-dim hover:text-on-surface disabled:opacity-40 disabled:cursor-not-allowed'}`}
+                           className={`p-6 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
+                               ${activeFlight?.timestampFinalStart 
+                                   ? 'bg-success/5 border-success text-on-surface' 
+                                   : user.role === UserRole.ITP_OPERATOR
+                                       ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
+                                       : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
+                           `}
                        >
-                           {activeFlight?.timestampFinalStart ? 'Started' : 'Final Start'}
+                           <div className="relative z-10">
+                               <span className="block text-[8px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-1">Top-Up</span>
+                               <span className={`block text-xl sm:text-2xl font-[900] tracking-tighter ${activeFlight?.timestampFinalStart ? 'text-success' : 'text-on-surface'}`}>
+                                   FINAL START
+                               </span>
+                               {activeFlight?.timestampFinalStart && (
+                                   <span className="block mt-3 font-black text-[10px] uppercase tracking-widest text-success flex items-center">
+                                        <Clock className="w-3.5 h-3.5 mr-1.5 opacity-60"/>
+                                        {new Date(activeFlight.timestampFinalStart).toLocaleTimeString([], { hour12: false })}
+                                    </span>
+                               )}
+                           </div>
+                           {!activeFlight?.timestampFinalStart && <Play className="absolute right-4 bottom-4 w-12 h-12 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
+                           {activeFlight?.timestampFinalStart && <CheckCircle className="absolute right-4 bottom-4 w-12 h-12 text-success opacity-10" />}
                        </button>
                        <button 
                            onClick={() => { if (user.role !== UserRole.ITP_OPERATOR) onTimestamp('timestampFinalEnd'); }} 
                            disabled={user.role === UserRole.ITP_OPERATOR}
-                           className={`p-4 rounded-xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${activeFlight?.timestampFinalEnd ? 'bg-success/5 border-success text-success' : 'bg-surface-container-low border-outline text-on-surface-dim hover:text-on-surface disabled:opacity-40 disabled:cursor-not-allowed'}`}
+                           className={`p-6 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
+                               ${activeFlight?.timestampFinalEnd 
+                                   ? 'bg-success/5 border-success text-on-surface' 
+                                   : user.role === UserRole.ITP_OPERATOR
+                                       ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
+                                       : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
+                           `}
                        >
-                           {activeFlight?.timestampFinalEnd ? 'Ended' : 'Final End'}
+                           <div className="relative z-10">
+                               <span className="block text-[8px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-1">Top-Up</span>
+                               <span className={`block text-xl sm:text-2xl font-[900] tracking-tighter ${activeFlight?.timestampFinalEnd ? 'text-success' : 'text-on-surface'}`}>
+                                   FINAL END
+                               </span>
+                               {activeFlight?.timestampFinalEnd && (
+                                   <span className="block mt-3 font-black text-[10px] uppercase tracking-widest text-success flex items-center">
+                                        <Clock className="w-3.5 h-3.5 mr-1.5 opacity-60"/>
+                                        {new Date(activeFlight.timestampFinalEnd).toLocaleTimeString([], { hour12: false })}
+                                    </span>
+                               )}
+                           </div>
+                           {!activeFlight?.timestampFinalEnd && <Pause className="absolute right-4 bottom-4 w-12 h-12 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
+                           {activeFlight?.timestampFinalEnd && <CheckCircle className="absolute right-4 bottom-4 w-12 h-12 text-success opacity-10" />}
                        </button>
                    </div>
                )}
@@ -1000,6 +1045,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   const [voidForm, setVoidForm] = useState({ date: new Date().toISOString().split('T')[0], deliveryNumber: '' });
   const [voidSaving, setVoidSaving] = useState(false);
   const [voidSuccess, setVoidSuccess] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // Auto-show void modal when VOID selected
   useEffect(() => {
@@ -1111,8 +1157,12 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
   const startJob = (job: FlightJob) => {
     // Auto-update Equipment Status to IN_PROGRESS/IN_USE
-    if (user.role !== UserRole.ITP_OPERATOR) {
-      updateEquipmentStatus(selectedVehicleId, EquipmentStatus.IN_USE);
+    updateEquipmentStatus(selectedVehicleId, EquipmentStatus.IN_USE);
+
+    // Update flight job status to IN_PROGRESS so Operator Oversight reflects active tasks
+    const matchingJob = (flightJobs || []).find(j => j.flightNumber === job.flightNumber && j.status === 'PENDING');
+    if (matchingJob) {
+      updateFlightJob(matchingJob.id, { status: 'IN_PROGRESS', vehicleId: selectedVehicleId, assignedTo: user.id });
     }
 
     // Fetch last meterClose for this vehicle
@@ -1142,7 +1192,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       remarks: '',
       isAdhoc: job.isAdhoc,
     });
-    setCurrentScreen('timestamps');
+    navigateToScreen('timestamps');
   };
 
   const handleTimestamp = (field: keyof FlightLog) => {
@@ -1202,14 +1252,88 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     });
   };
 
+  const isSubmittingOrCompletingRef = React.useRef(false);
+
+  const navigateToScreen = (screen: 'dashboard' | 'timestamps' | 'metering' | 'qc') => {
+    setCurrentScreen(screen);
+    const state = window.history.state;
+    const currentItpScreen = state?.itpScreen || 'dashboard';
+    if (currentItpScreen !== screen) {
+      window.history.pushState({ fmsActive: true, itpScreen: screen }, '');
+    }
+  };
+
+  const completeOrCancelJobAndExit = (successMessage?: string) => {
+    if (successMessage) {
+      notify(successMessage, "success");
+    } else {
+      // It's a cancel: release equipment and revert flight job status
+      if (activeFlight && selectedVehicleId) {
+        updateEquipmentStatus(selectedVehicleId, EquipmentStatus.AVAILABLE);
+      }
+      // Revert flight job back to PENDING so it can be re-started
+      if (activeFlight) {
+        const cancelledJob = (flightJobs || []).find(j => j.flightNumber === activeFlight.flightNumber && j.status === 'IN_PROGRESS');
+        if (cancelledJob) {
+          updateFlightJob(cancelledJob.id, { status: 'PENDING', vehicleId: undefined });
+        }
+      }
+    }
+    
+    let stepsBack = 0;
+    if (currentScreen === 'timestamps') stepsBack = -1;
+    else if (currentScreen === 'metering') stepsBack = -2;
+    else if (currentScreen === 'qc') stepsBack = -3;
+
+    if (stepsBack < 0) {
+      isSubmittingOrCompletingRef.current = true;
+      window.history.go(stepsBack);
+    } else {
+      setActiveFlight(null);
+      setCurrentScreen('dashboard');
+    }
+  };
+
   const handleBackToDashboard = () => {
-    // If a job was started, release the equipment
-    if (activeFlight && selectedVehicleId && user.role !== UserRole.ITP_OPERATOR) {
+    // If a job was started, release the equipment and revert flight job status
+    if (activeFlight && selectedVehicleId) {
       updateEquipmentStatus(selectedVehicleId, EquipmentStatus.AVAILABLE);
+    }
+    if (activeFlight) {
+      const cancelledJob = (flightJobs || []).find(j => j.flightNumber === activeFlight.flightNumber && j.status === 'IN_PROGRESS');
+      if (cancelledJob) {
+        updateFlightJob(cancelledJob.id, { status: 'PENDING', vehicleId: undefined });
+      }
     }
     setActiveFlight(null);
     setCurrentScreen('dashboard');
   };
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (isSubmittingOrCompletingRef.current) {
+        if (!e.state?.itpScreen || e.state.itpScreen === 'dashboard') {
+          isSubmittingOrCompletingRef.current = false;
+          setActiveFlight(null);
+          setCurrentScreen('dashboard');
+        }
+        return;
+      }
+
+      if (e.state && e.state.fmsActive) {
+        const targetScreen = e.state.itpScreen || 'dashboard';
+        if (targetScreen !== currentScreen) {
+          if (targetScreen === 'dashboard') {
+            handleBackToDashboard();
+          } else {
+            setCurrentScreen(targetScreen);
+          }
+        }
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [currentScreen, activeFlight, selectedVehicleId]);
 
   const handleInputChange = (field: keyof FlightLog, value: any) => {
     setActiveFlight(prev => {
@@ -1314,9 +1438,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         await updateFlightJob(matchingJob.id, { status: 'COMPLETED' });
       }
 
-      notify("Job Completed & Synced to Database!", "success");
-      setActiveFlight(null);
-      setCurrentScreen('dashboard');
+      completeOrCancelJobAndExit("Job Completed & Synced to Database!");
     } catch (error) {
       console.error('Error saving flight log:', error);
       notify('Failed to sync. Please check your secure connection.', "error");
@@ -1338,6 +1460,191 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
           paymentType={paymentType}
           setPaymentType={(v) => setPaymentType(v as any)}
         />
+
+        {/* Detail Confirmation Modal */}
+        {showConfirmModal && activeFlight && createPortal(
+          <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-surface rounded-3xl border border-outline shadow-premium w-full max-w-2xl p-8 animate-in fade-in zoom-in duration-300 my-auto max-h-[90vh] flex flex-col">
+              <div className="flex items-center justify-between pb-4 border-b border-outline/30 shrink-0">
+                <div>
+                  <span className="block text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-1">Confirm Authorization</span>
+                  <h3 className="text-2xl font-[900] tracking-tighter text-on-surface">REVIEW OPERATIONS LOG</h3>
+                </div>
+                <button onClick={() => setShowConfirmModal(false)} className="p-2 rounded-xl hover:bg-surface-dim transition-colors">
+                  <X className="w-5 h-5 text-on-surface-dim" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto py-6 space-y-6 scrollbar-thin">
+                {/* Flight & Equipment Block */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-surface-dim/40 p-5 rounded-2xl border border-outline/20">
+                  <div>
+                    <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">Flight Number</span>
+                    <span className="text-[12px] font-black text-on-surface uppercase">{activeFlight.flightNumber || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">Reg / Type</span>
+                    <span className="text-[12px] font-black text-on-surface uppercase">
+                      {(activeFlight.aircraftReg || 'N/A')} / {(activeFlight.aircraftType || 'N/A')}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">Parking Stand</span>
+                    <span className="text-[12px] font-black text-on-surface uppercase">{activeFlight.stand || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">ITP Equipment</span>
+                    <span className="text-[12px] font-black text-primary uppercase">{selectedVehicleId || 'N/A'}</span>
+                  </div>
+                </div>
+
+                {/* Metering & Delivery Info */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <div className="card-premium p-5 border-outline/30">
+                    <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-2">Opening Meter</span>
+                    <span className="text-2xl font-mono font-black text-on-surface">
+                      {activeFlight.meterOpen?.toLocaleString() || '0'}
+                    </span>
+                  </div>
+                  <div className="card-premium p-5 border-outline/30">
+                    <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-2">Totalizer Volume</span>
+                    <span className="text-2xl font-mono font-black text-primary">
+                      {activeFlight.volume?.toLocaleString() || '0'} L
+                    </span>
+                  </div>
+                  <div className="card-premium p-5 border-outline/30">
+                    <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-2">Closing Meter</span>
+                    <span className="text-2xl font-mono font-black text-on-surface">
+                      {((activeFlight.meterOpen || 0) + (activeFlight.volume || 0)).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Timestamps Listing */}
+                <div className="space-y-3">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-on-surface-dim opacity-60">Operations Timeline</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[
+                      { label: 'Ramp Arrived', time: activeFlight.timestampArrived },
+                      { label: 'Positioned at AC', time: activeFlight.timestampPosition },
+                      { label: 'Commence Pumping', time: activeFlight.timestampStart },
+                      { label: 'Initial End', time: activeFlight.timestampInitialEnd },
+                      { label: 'Top-Up Start', time: activeFlight.timestampFinalStart },
+                      { label: 'Top-Up End', time: activeFlight.timestampFinalEnd },
+                    ].map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3.5 bg-surface-dim/30 rounded-xl border border-outline/20">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-on-surface">{item.label}</span>
+                        {item.time ? (
+                          <span className="text-[10px] font-black text-success font-mono flex items-center">
+                            <Clock className="w-3.5 h-3.5 mr-1.5 opacity-60" />
+                            {new Date(item.time).toLocaleTimeString([], { hour12: false })}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-on-surface-dim opacity-30 italic">Not Registered</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* QC Compliance & Ticket Details */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="p-5 bg-success/5 border border-success/20 rounded-2xl space-y-3">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-success">JIG QC Compliance</h4>
+                    <div className="grid grid-cols-2 gap-2 text-[10px] font-black uppercase text-on-surface">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle className="w-4 h-4 text-success" />
+                        <span>Panel Check</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle className="w-4 h-4 text-success" />
+                        <span>Walk Around</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle className="w-4 h-4 text-success" />
+                        <span>Appearance</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle className="w-4 h-4 text-success" />
+                        <span>Water Check</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="p-5 bg-surface-dim/40 border border-outline/20 rounded-2xl space-y-3">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-on-surface-dim opacity-55">Log Billing Details</h4>
+                    <div className="space-y-1.5 text-[10px] font-black uppercase">
+                      <div>
+                        <span className="opacity-40 tracking-wider">Ticket:</span>{' '}
+                        {(() => {
+                          const ticket = activeFlight.deliveryNumber || '';
+                          if (ticket.startsWith('MLE-')) {
+                            const num = ticket.substring(4);
+                            return (
+                              <span className="font-mono text-on-surface-dim font-black">
+                                MLE-<span className="text-sm sm:text-base font-black text-on-surface">{num}</span>
+                              </span>
+                            );
+                          }
+                          return <span className="text-on-surface font-black">{ticket || 'PENDING'}</span>;
+                        })()}
+                      </div>
+                      {activeFlight.co && (
+                        <div>
+                          <span className="opacity-40 tracking-wider">C/O (Account):</span>{' '}
+                          <span className="text-primary">{activeFlight.co}</span>
+                        </div>
+                      )}
+                      {activeFlight.pitNumber && (
+                        <div>
+                          <span className="opacity-40 tracking-wider">PIT Number:</span>{' '}
+                          <span className="text-on-surface">{activeFlight.pitNumber}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Remarks */}
+                {activeFlight.remarks && (
+                  <div className="p-4 bg-surface-dim/40 border border-outline/20 rounded-2xl">
+                    <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-2">Remarks</span>
+                    <p className="text-[11px] font-medium text-on-surface italic">{activeFlight.remarks}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-4 pt-4 border-t border-outline/30 shrink-0">
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="flex-1 py-4 bg-surface-dim border border-outline text-on-surface rounded-2xl font-[900] text-[11px] uppercase tracking-[0.2em] hover:bg-surface-container-low transition-colors flex items-center justify-center gap-2"
+                >
+                  <ChevronLeft className="w-5 h-5 shrink-0" />
+                  <span className="hidden sm:inline">Go Back & Edit</span>
+                </button>
+                <button
+                  onClick={async () => {
+                    setShowConfirmModal(false);
+                    await handleSubmit();
+                  }}
+                  disabled={loading}
+                  className="flex-1 py-4 kinetic-gradient text-white rounded-2xl font-[900] text-[11px] uppercase tracking-[0.2em] shadow-premium hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <span className="font-[900]">SYNCING...</span>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-5 h-5 shrink-0" />
+                      <span className="hidden sm:inline">Authorize & Submit</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
         {/* Void Ticket Modal */}
         {showVoidModal && createPortal(
@@ -1422,8 +1729,8 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 activeFlight={activeFlight} 
                 onTimestamp={handleTimestamp} 
                 onInputChange={handleInputChange}
-                onNext={() => setCurrentScreen('metering')}
-                onBack={handleBackToDashboard}
+                onNext={() => navigateToScreen('metering')}
+                onBack={() => window.history.back()}
                 user={user}
               />
             )}
@@ -1432,8 +1739,8 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 activeFlight={activeFlight} 
                 onTimestamp={handleTimestamp} 
                 onInputChange={handleInputChange}
-                onNext={() => setCurrentScreen('qc')}
-                onBack={() => setCurrentScreen('timestamps')}
+                onNext={() => navigateToScreen('qc')}
+                onBack={() => window.history.back()}
                 showTopUp={showTopUp}
                 setShowTopUp={setShowTopUp}
                 user={user}
@@ -1443,9 +1750,9 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
               <ScreenQC 
                 activeFlight={activeFlight} 
                 onInputChange={handleInputChange}
-                onSubmit={handleSubmit}
-                onBack={() => setCurrentScreen('metering')}
-                onClose={handleBackToDashboard}
+                onSubmit={() => setShowConfirmModal(true)}
+                onBack={() => window.history.back()}
+                onClose={() => completeOrCancelJobAndExit()}
                 loading={loading}
                 user={user}
               />

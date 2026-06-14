@@ -17,15 +17,32 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
 
   const isOperator = user?.role === UserRole.DEPOT_OPERATOR;
 
-  // Filter alerts for replenishment requests (unacknowledged) to highlight them in the active feed
-  const replenishmentRequests = (alerts || []).filter(a => 
-    a && !a.acknowledged && (
-      a.message.toLowerCase().includes('request') && (
-        a.message.toLowerCase().includes('replenish') || 
-        a.message.toLowerCase().includes('refuel')
-      )
-    )
+  // Filter alerts/equipment status for replenishment requests to highlight them in the active feed as long as loading hasn't been completed/initiated
+  const refuelingVehicles = (equipment || []).filter(
+    eq => eq.type === EquipmentType.REFUELLER && eq.status === EquipmentStatus.REFUELLING
   );
+
+  const replenishmentRequests = refuelingVehicles.map(rf => {
+    const matchingAlert = (alerts || [])
+      .filter(a => a && a.message.includes(rf.id))
+      .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
+
+    if (matchingAlert) {
+      return {
+        id: matchingAlert.id,
+        message: matchingAlert.message,
+        timestamp: matchingAlert.timestamp,
+        acknowledged: false
+      };
+    } else {
+      return {
+        id: `synth-${rf.id}`,
+        message: `Replenishment requested for unit ${rf.id} (Low fuel: ${rf.currentVolume?.toLocaleString() || 0}L)`,
+        timestamp: rf.lastUpdated ? new Date(rf.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--',
+        acknowledged: false
+      };
+    }
+  });
 
   // Extract staff roles for personnel dropdowns
   const activeOperators = (staff || []).filter(s => [UserRole.DEPOT_OPERATOR, UserRole.ITP_OPERATOR].includes(s.role));
@@ -69,27 +86,9 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // Extract pending replenishment vehicle IDs regardless of acknowledgment status
-  const replenishmentAlerts = (alerts || []).filter(a => 
-    a && (
-      a.message.toLowerCase().includes('replenish') || 
-      a.message.toLowerCase().includes('refuel')
-    )
-  );
-
-  const requestedRFs = Array.from(new Set(
-    (equipment || [])
-      .filter(eq => eq.type === EquipmentType.REFUELLER)
-      .map(eq => eq.id)
-  )).filter(vehicleId => {
-    const vehicleAlerts = replenishmentAlerts.filter(a => {
-      const match = a.message.match(/RF-\d+/i);
-      return match && match[0].toUpperCase() === vehicleId;
-    });
-    if (vehicleAlerts.length === 0) return false;
-    const latestAlert = vehicleAlerts[0];
-    return latestAlert.message.toLowerCase().includes('request');
-  });
+  const requestedRFs = (equipment || [])
+    .filter(eq => eq.type === EquipmentType.REFUELLER && eq.status === EquipmentStatus.REFUELLING)
+    .map(eq => eq.id);
 
   const availableRefuelers = (equipment || [])
     .filter(eq => eq.type === EquipmentType.REFUELLER && (
@@ -99,6 +98,20 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
       formData.vehicleId === eq.id // Always include currently selected vehicle to avoid blank dropdown selection
     ));
 
+  const sendInitiatedAlert = async (vehicleId: string) => {
+    try {
+      await createAlert({
+        severity: 'low',
+        message: `Replenishment Initiated: Refueller ${vehicleId} is being loaded at the depot`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+        acknowledged: false,
+        targetRole: UserRole.ITP_MANAGER
+      });
+    } catch (err) {
+      console.error("Failed to create replenishment initiated alert:", err);
+    }
+  };
+
   // Prefill vehicle from dashboard "Dispatch" action
   useEffect(() => {
     const prefilled = localStorage.getItem('fms_initiate_loading_vehicle');
@@ -106,6 +119,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
       setFormData(prev => ({ ...prev, vehicleId: prefilled }));
       localStorage.removeItem('fms_initiate_loading_vehicle');
       notify(`Initiated loading for unit ${prefilled} based on ITP request.`, 'info');
+      sendInitiatedAlert(prefilled);
     }
   }, [notify]);
 
@@ -138,6 +152,11 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+
+    if (name === 'vehicleId' && value && requestedRFs.includes(value)) {
+      notify(`Initiated loading for unit ${value}`, 'success');
+      sendInitiatedAlert(value);
+    }
   };
 
   const setNow = (field: 'startTime' | 'endTime') => {
@@ -357,6 +376,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
                             if (vehicleId) {
                               setFormData(prev => ({ ...prev, vehicleId }));
                               notify(`Initiated loading for unit ${vehicleId}`, 'success');
+                              sendInitiatedAlert(vehicleId);
                             }
                           }}
                           className="px-4 py-1.5 kinetic-gradient text-white hover:scale-105 active:scale-95 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all shadow-sm"
@@ -422,15 +442,19 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
                         </div>
                         {(() => {
                           const req = (alerts || []).find(a => 
-                            a && !a.acknowledged && 
+                            a && 
                             (a.message.toLowerCase().includes('replenish') || a.message.toLowerCase().includes('refuel')) &&
                             a.message.includes(`unit ${formData.vehicleId}`)
                           );
-                          if (req) {
+                          const isRefuelling = (equipment || []).some(
+                            eq => eq.id === formData.vehicleId && eq.status === EquipmentStatus.REFUELLING
+                          );
+                          if (isRefuelling) {
+                            const timeStr = req ? req.timestamp : '--:--';
                             return (
                               <div className="mt-2 text-[9px] font-black text-primary uppercase tracking-widest flex items-center bg-primary/5 px-3 py-1.5 rounded-lg border border-primary/10 animate-pulse">
                                 <Clock className="w-3.5 h-3.5 mr-1.5" />
-                                ITP Replenishment Request Sent At: {req.timestamp}
+                                ITP Replenishment Request Sent At: {timeStr}
                               </div>
                             );
                           }
