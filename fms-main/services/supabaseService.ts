@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import { User, Tank, FlightLog, BridgingLog, Alert, FlightJob, Equipment, StaffMember, UserRole, EquipmentStatus } from '../types';
 import { CustomerAccount, UpcomingPayment, Invoice, Receipt, ProformaRecord, FuelRequest, MonthEndVariance, ProcurementPR, SurchargeRecord, MpdSale, CustomsShipment } from '../context/FinanceDataContext';
-import { TANKS, MOCK_USERS, MOCK_JOBS, EQUIPMENT } from '../constants';
+import { TANKS, MOCK_USERS, EQUIPMENT } from '../constants';
 
 const localBridgingLogs: BridgingLog[] = [
   {
@@ -230,10 +230,10 @@ export const supabaseService = {
   async getFlightJobs(): Promise<FlightJob[]> {
     const { data, error } = await supabase.from('flight_jobs').select('*');
     if (error) {
-      console.warn('[Supabase] getFlightJobs failed, falling back to mocks:', error);
-      return MOCK_JOBS;
+      console.warn('[Supabase] getFlightJobs failed:', error);
+      return [];
     }
-    if (!data || data.length === 0) return MOCK_JOBS;
+    if (!data || data.length === 0) return [];
     return data.map(row => ({
       id: row.id,
       flightNumber: row.flight_number,

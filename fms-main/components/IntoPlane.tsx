@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FlightLog, User, FlightJob, Equipment, EquipmentStatus, UserRole } from '../types';
-import { MOCK_JOBS, MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, MOCK_ADHOC_FLIGHTS, PIT_MAPPING } from '../constants';
+import { MOCK_USERS, MOCK_ADHOC_FLIGHTS, PIT_MAPPING } from '../constants';
 import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Users, Lock, Calendar, X, CreditCard, Ban, Eye, Zap, Bell, Droplet } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { equipmentBadgeClass, equipmentDotClass, getEquipmentHexColor } from '../utils/equipmentColors';
@@ -133,13 +133,26 @@ const ScreenDashboard: React.FC<{
     activeFlight: Partial<FlightLog> | null
 }> = ({ user, onStartJob, selectedVehicleId, setSelectedVehicleId, flightLogs, activeFlight }) => {
   const { notify } = useNotification();
-  const { flightJobs, domesticFlights, staff, alerts, createAlert, deleteAlerts } = useOperationalData();
+  const { 
+    flightJobs, 
+    domesticFlights, 
+    staff, 
+    alerts, 
+    createAlert, 
+    deleteAlerts,
+    briefingInfo,
+    selectedBriefingShift,
+    selectedBriefingDate
+  } = useOperationalData();
   const [viewMode, setViewMode] = useState<'INT' | 'DOM' | 'ADHOC'>('INT');
   const [filterMyTasks, setFilterMyTasks] = useState(false);
   const [activeMenuJobId, setActiveMenuJobId] = useState<string | null>(null);
   
-  const intlJobs = flightJobs || [];
-  const domesticJobs = (domesticFlights || []).map((df: any) => ({
+  const frozenFlights = briefingInfo?.staffAssignments?.frozenFlights;
+
+  const intlJobs = frozenFlights?.intl ? frozenFlights.intl : (flightJobs || []);
+  
+  const domesticJobs = (frozenFlights?.domestic ? frozenFlights.domestic : (domesticFlights || [])).map((df: any) => ({
       id: df.id,
       flightNumber: df.flightNumber,
       aircraftReg: df.aircraftReg,
@@ -153,9 +166,10 @@ const ScreenDashboard: React.FC<{
       status: df.status as any,
       assignedTeam: df.assignedTeam,
       vehicleId: df.vehicleId,
+      route: df.route,
   }));
 
-  const adhocJobs = MOCK_ADHOC_FLIGHTS.map((f: any) => ({
+  const adhocJobs = (frozenFlights?.adhoc ? frozenFlights.adhoc : MOCK_ADHOC_FLIGHTS).map((f: any) => ({
       id: f.id,
       flightNumber: f.flightNumber,
       aircraftReg: f.aircraftReg,
@@ -186,6 +200,25 @@ const ScreenDashboard: React.FC<{
       return eta > sta;
   };
 
+  const renderRoute = (route?: string, customClass = "") => {
+    if (!route) return null;
+    const parts = route.split(/\s+/);
+    return (
+      <span className={`inline-flex items-center font-black uppercase tracking-wide ${customClass} select-none`}>
+        {parts.map((part, idx) => {
+          if (part === 'MLE' || part === '➔' || part === '->') {
+            return (
+              <span key={idx} className="opacity-30 mx-[2px] font-bold">
+                {part}
+              </span>
+            );
+          }
+          return <span key={idx}>{part}</span>;
+        })}
+      </span>
+    );
+  };
+
   const renderJobCard = (job: FlightJob) => {
       const isAssignedToMe = job.assignedTo === user.id || job.assignedOfficer === user.id;
       const usersList = staff && staff.length > 0 ? staff : MOCK_USERS;
@@ -197,9 +230,8 @@ const ScreenDashboard: React.FC<{
       
       const displayStatus = (delayed && job.status === 'PENDING') ? 'DELAYED' : job.status;
 
-      // Take the first 2 characters of the flight number as the airline code (e.g. EK659→ek, Q2102→q2)
-      const airlineCode = (job.flightNumber || '').slice(0, 2).toLowerCase();
-      const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/webfids/images/${airlineCode}.gif` : null;
+      const airlineCode = (job.flightNumber || '').replace(/\s+/g, '').slice(0, 2).toLowerCase();
+      const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/tail/${airlineCode.toUpperCase()}.png` : null;
       const activeAlert = (alerts || []).find(a => 
           !a.acknowledged && 
           (a.message.toLowerCase().includes('requested') || a.message.toLowerCase().includes('no fuel')) &&
@@ -221,6 +253,8 @@ const ScreenDashboard: React.FC<{
           }
       }
 
+      const activeEquipmentUsage = job.equipmentUsage || 'HYDRANT';
+
       return (
           <div key={job.id} className={`bg-surface-container-lowest p-6 rounded-2xl relative overflow-hidden transition-all shrink-0 border ${isAssignedToMe ? 'border-primary border-l-[6px] shadow-sm' : 'border-outline opacity-80'}`}>
               <div className="relative z-10">
@@ -235,31 +269,32 @@ const ScreenDashboard: React.FC<{
                                {/* Logo + Equipment badge — grouped so they never split on mobile */}
                                <div className="flex items-center flex-shrink-0">
                                  {logoUrl && (
-                                   <img
-                                     src={logoUrl}
-                                     alt=""
-                                     aria-hidden="true"
-                                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                     className="h-4 w-auto object-contain select-none flex-shrink-0 -ml-1"
-                                     style={{
-                                       opacity: 0.5,
-                                       WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                       maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                     }}
-                                   />
+                                   <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                                     <img
+                                       src={logoUrl}
+                                       alt=""
+                                       aria-hidden="true"
+                                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                       className="w-full h-full object-contain select-none flex-shrink-0"
+                                     />
+                                   </div>
                                  )}
-                               </div>
-
-                               {/* Desktop-only details: type and reg on the same row as flight number after logo */}
+                               {/* Desktop-only details: type, reg, and route on the same row as flight number after logo */}
                                <div className="hidden md:flex items-center gap-2.5 text-[11px] sm:text-[12px] font-bold text-on-surface-dim">
                                    <span className="opacity-20">|</span>
                                    <span className="opacity-60">{job.aircraftType}</span>
                                    <span className="opacity-20">|</span>
                                    <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black text-on-surface-dim border-transparent uppercase tracking-wider">{job.aircraftReg}</span>
+                                   {job.route && (
+                                     <>
+                                       <span className="opacity-20">|</span>
+                                       {renderRoute(job.route, "text-primary text-[10px]")}
+                                     </>
+                                   )}
                                </div>
                           </div>
 
-                          {/* Mobile-only details: Stand, type, and reg grouped together on the same row */}
+                          {/* Mobile-only details: Stand, type, reg, and route grouped together on the same row */}
                           <div className="flex flex-wrap items-center mt-2 text-on-surface-dim text-[11px] sm:text-[12px] font-bold gap-x-2 gap-y-1.5 md:hidden">
                                <div className="flex items-center whitespace-nowrap">
                                    <MapPin className="w-3.5 h-3.5 mr-1 text-primary opacity-60 shrink-0" />
@@ -269,7 +304,13 @@ const ScreenDashboard: React.FC<{
                                <span className="opacity-60 whitespace-nowrap">{job.aircraftType}</span>
                                <span className="opacity-20 shrink-0">|</span>
                                <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black text-on-surface-dim border-transparent uppercase tracking-wider whitespace-nowrap">{job.aircraftReg}</span>
-                          </div>
+                               {job.route && (
+                                 <>
+                                   <span className="opacity-20 shrink-0">|</span>
+                                   {renderRoute(job.route, "text-primary text-[9px] sm:text-[10px] tracking-wide whitespace-nowrap")}
+                                 </>
+                               )}
+                          </div>      </div>
                       </div>
 
                       {/* Desktop Center-Aligned Timings (Larger Font) */}

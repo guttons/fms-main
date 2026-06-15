@@ -4,7 +4,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend, BarChart, Bar, ComposedChart
 } from 'recharts';
-import { MOCK_ALERTS, MOCK_USERS, MOCK_JOBS, MOCK_DOMESTIC_FLIGHTS } from '../constants';
+import { MOCK_ALERTS, MOCK_USERS } from '../constants';
 import { FuelType, Tank, User, UserRole, FlightJob, Equipment, EquipmentStatus as EqStatus, EquipmentType } from '../types';
 import { AlertTriangle, AlertOctagon, TrendingDown, TrendingUp, Activity, Droplet, Users, Clock, Plane, LayoutDashboard, MapPin, CheckCircle, Truck, Play, Thermometer, CloudSun, Wind, RefreshCw, Send, Globe, Anchor, ShoppingBag, Database, Eye, ChevronRight, ChevronDown } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';

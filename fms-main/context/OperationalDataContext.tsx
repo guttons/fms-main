@@ -1,7 +1,7 @@
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightLog, StaffMember, UserRole } from '../types';
-import { EQUIPMENT, TANKS, MOCK_JOBS, MOCK_DOMESTIC_FLIGHTS, MOCK_ALERTS } from '../constants';
+import { EQUIPMENT, TANKS, MOCK_ALERTS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
 import { supabase } from '../supabase';
 import { sendNativeNotification } from '../utils/pwa';
@@ -98,24 +98,121 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   const [flightJobs, setFlightJobs] = useState<FlightJob[]>(() => {
     try {
       const saved = localStorage.getItem('fms_flight_jobs');
-      return saved ? JSON.parse(saved) : MOCK_JOBS;
+      return saved ? JSON.parse(saved) : [];
     } catch (e) {
       console.error("Local storage parse failed for jobs", e);
-      return MOCK_JOBS;
+      return [];
     }
   });
 
   const [domesticFlights, setDomesticFlights] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem('fms_domestic_flights');
-      return saved ? JSON.parse(saved) : MOCK_DOMESTIC_FLIGHTS;
+      return saved ? JSON.parse(saved) : [];
     } catch (e) {
-      return MOCK_DOMESTIC_FLIGHTS;
+      return [];
     }
   });
 
   const [externalFlights, setExternalFlights] = useState<any[]>([]);
   const [isExternalFlightsLoading, setIsExternalFlightsLoading] = useState(false);
+
+  const mergedFlightJobs = useMemo(() => {
+    if (!externalFlights || externalFlights.length === 0) {
+      return flightJobs;
+    }
+    const dbJobs = flightJobs.filter(job => !['j1', 'j2', 'j3', 'j4'].includes(job.id));
+    const merged = [...dbJobs];
+    const liveIntl = externalFlights.filter((f: any) => f.category === 'international');
+
+    liveIntl.forEach((lf: any) => {
+      const lfNumNorm = (lf.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      const existingJobIdx = merged.findIndex(
+        (job) => (job.flightNumber || '').replace(/\s+/g, '').toLowerCase() === lfNumNorm
+      );
+
+      const staVal = lf.type === 'arrival' ? lf.scheduledTime : '';
+      const stdVal = lf.type === 'departure' ? lf.scheduledTime : '';
+      const etaVal = lf.type === 'arrival' ? (lf.estimatedTime || lf.scheduledTime) : '';
+
+      const routeStr = lf.type === 'arrival' 
+        ? `${lf.originCode || lf.origin || ''} ➔ MLE`
+        : `MLE ➔ ${lf.destinationCode || lf.destination || ''}`;
+
+      if (existingJobIdx !== -1) {
+        merged[existingJobIdx] = {
+          ...merged[existingJobIdx],
+          sta: staVal || merged[existingJobIdx].sta,
+          eta: etaVal || merged[existingJobIdx].eta,
+          std: stdVal || merged[existingJobIdx].std,
+          stand: lf.gate || merged[existingJobIdx].stand,
+          route: routeStr || merged[existingJobIdx].route,
+          date: lf.date || merged[existingJobIdx].date
+        };
+      } else {
+        merged.push({
+          id: lf.id || `fj-live-${lf.flightNumber}-${lf.scheduledTime}`,
+          flightNumber: lf.flightNumber,
+          aircraftReg: '8Q-TBA',
+          aircraftType: 'A320',
+          stand: lf.gate || '---',
+          sta: staVal,
+          eta: etaVal,
+          std: stdVal,
+          assignedTo: '',
+          assignedOfficer: '',
+          equipmentUsage: 'HYDRANT',
+          status: 'PENDING',
+          route: routeStr,
+          isVirtual: true,
+          date: lf.date
+        });
+      }
+    });
+    return merged;
+  }, [flightJobs, externalFlights]);
+
+  const mergedDomesticFlights = useMemo(() => {
+    if (!externalFlights || externalFlights.length === 0) {
+      return domesticFlights;
+    }
+    const liveDom = externalFlights.filter((f: any) => f.category === 'domestic');
+    return liveDom.map((f: any, idx: number) => {
+      const staVal = f.type === 'arrival' ? f.scheduledTime : '';
+      const stdVal = f.type === 'departure' ? f.scheduledTime : '';
+      const etaVal = f.type === 'arrival' ? (f.estimatedTime || f.scheduledTime) : '';
+
+      const routeStr = f.type === 'arrival' 
+        ? `${f.originCode || f.origin || ''} ➔ MLE`
+        : `MLE ➔ ${f.destinationCode || f.destination || ''}`;
+
+      let status = 'PENDING';
+      if (f.status) {
+        const s = f.status.toLowerCase();
+        if (s.includes('landed') || s.includes('arrive') || s.includes('departed')) {
+          status = 'COMPLETED';
+        } else if (s.includes('active') || s.includes('boarding') || s.includes('gate') || s.includes('final call')) {
+          status = 'IN_PROGRESS';
+        }
+      }
+
+      return {
+        id: f.id || `dom-${f.flightNumber}-${f.scheduledTime}-${idx}`,
+        flightNumber: f.flightNumber,
+        aircraftReg: f.aircraftReg || `8Q-DOM${idx}`,
+        aircraftType: f.aircraftType || 'Dash 8',
+        stand: f.gate || 'D01',
+        assignedTeam: `Team ${(idx % 3) + 1}`,
+        status,
+        sta: staVal,
+        eta: etaVal,
+        std: stdVal,
+        route: routeStr,
+        date: f.date,
+        type: f.type
+      };
+    });
+  }, [domesticFlights, externalFlights]);
 
   const refreshExternalFlights = useCallback(async () => {
     try {
@@ -490,6 +587,28 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   };
 
   const updateFlightJob = async (id: string, updates: Partial<FlightJob>) => {
+    const isDbJob = flightJobs.some(j => j.id === id);
+
+    if (!isDbJob) {
+      const virtualJob = mergedFlightJobs.find(j => j.id === id);
+      if (virtualJob) {
+        const fullJob: FlightJob = {
+          ...virtualJob,
+          ...updates,
+          isVirtual: undefined
+        };
+        setFlightJobs(prev => [...prev, fullJob]);
+        if (appUser) {
+          try {
+            await supabaseService.addFlightJob(fullJob);
+          } catch (error) {
+            console.error('Failed to create flight job in Supabase from virtual:', error);
+          }
+        }
+        return;
+      }
+    }
+
     setFlightJobs(prev => prev.map(job => 
       job.id === id ? { ...job, ...updates } : job
     ));
@@ -689,8 +808,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     <OperationalDataContext.Provider value={{
       equipment: equipment || [],
       tanks: tanks || [],
-      flightJobs: flightJobs || [],
-      domesticFlights: domesticFlights || [],
+      flightJobs: mergedFlightJobs || [],
+      domesticFlights: mergedDomesticFlights || [],
       externalFlights: externalFlights || [],
       isExternalFlightsLoading,
       refreshExternalFlights,

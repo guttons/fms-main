@@ -22,7 +22,7 @@ import {
   X
 } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
-import { MOCK_USERS, MOCK_JOBS, MOCK_DOMESTIC_FLIGHTS, MOCK_ADHOC_FLIGHTS, EQUIPMENT } from '../constants';
+import { MOCK_USERS, MOCK_ADHOC_FLIGHTS, EQUIPMENT } from '../constants';
 import { User, UserRole, EquipmentType, EquipmentStatus } from '../types';
 import { useNotification } from '../context/NotificationContext';
 import { useOperationalData, BriefingShift } from '../context/OperationalDataContext';
@@ -38,7 +38,8 @@ export const ShiftBriefing: React.FC = () => {
     staff,
     selectedBriefingDate,
     setSelectedBriefingDate,
-    flightJobs
+    flightJobs,
+    domesticFlights
   } = useOperationalData();
   const activeStaff = staff && staff.length > 0 ? staff : MOCK_USERS;
 
@@ -115,9 +116,40 @@ export const ShiftBriefing: React.FC = () => {
     return sta >= range.start && sta <= range.end;
   };
 
-  const intlFlightsToRender = (flightJobs || []).filter(f => isFlightInShift(f.sta));
-  const domesticFlightsToRender = MOCK_DOMESTIC_FLIGHTS.filter(f => isFlightInShift(f.sta));
-  const adhocFlightsToRender = MOCK_ADHOC_FLIGHTS.filter(f => isFlightInShift(f.sta));
+  const getShiftFlightTimeLabel = (flight: any) => {
+    const hasSta = !!(flight.sta || flight.eta);
+    const hasStd = !!flight.std;
+
+    const staInShift = hasSta && isFlightInShift(flight.sta || flight.eta);
+    const stdInShift = hasStd && isFlightInShift(flight.std);
+
+    if (stdInShift && !staInShift) {
+      return `DEP: ${flight.std}`;
+    } else if (staInShift && !stdInShift) {
+      return flight.eta ? `ETA: ${flight.eta}` : `STA: ${flight.sta}`;
+    } else {
+      if (hasSta && hasStd) {
+        return `${flight.eta ? `ETA: ${flight.eta}` : `STA: ${flight.sta}`} • DEP: ${flight.std}`;
+      }
+      if (hasSta) return flight.eta ? `ETA: ${flight.eta}` : `STA: ${flight.sta}`;
+      if (hasStd) return `DEP: ${flight.std}`;
+      return '';
+    }
+  };
+
+  const frozenFlights = briefingInfo?.staffAssignments?.frozenFlights;
+
+  const intlFlightsToRender = frozenFlights?.intl 
+    ? frozenFlights.intl 
+    : (flightJobs || []).filter(f => isFlightInShift(f.sta || f.std) && (!f.date || f.date === selectedBriefingDate));
+
+  const domesticFlightsToRender = frozenFlights?.domestic 
+    ? frozenFlights.domestic 
+    : (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate));
+
+  const adhocFlightsToRender = frozenFlights?.adhoc 
+    ? frozenFlights.adhoc 
+    : MOCK_ADHOC_FLIGHTS.filter(f => isFlightInShift(f.sta || f.std) && (!f.date || f.date === selectedBriefingDate));
 
   const formatDateShort = (dateStr: string) => {
     if (!dateStr) return '';
@@ -156,6 +188,11 @@ export const ShiftBriefing: React.FC = () => {
     shiftInCharge: string;
     attendees?: string[];
     dailyCompleted?: string[];
+    frozenFlights?: {
+      intl: any[];
+      domestic: any[];
+      adhoc: any[];
+    };
   }
 
   const [staffAssignments, setStaffAssignments] = useState<StaffAssignments>(briefingInfo?.staffAssignments || {
@@ -204,7 +241,12 @@ export const ShiftBriefing: React.FC = () => {
       await updateBriefingInfo(additionalInfo, dieselNeeds, {
         ...staffAssignments,
         attendees,
-        dailyCompleted
+        dailyCompleted,
+        frozenFlights: briefingInfo?.staffAssignments?.frozenFlights || {
+          intl: intlFlightsToRender,
+          domestic: domesticFlightsToRender,
+          adhoc: adhocFlightsToRender
+        }
       });
       notify('Shift briefing saved successfully!', 'success');
     } catch (error) {
@@ -528,7 +570,7 @@ export const ShiftBriefing: React.FC = () => {
                       </div>
                     </div>
                     <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
-                      {job.eta ? `ETA: ${job.eta}` : job.sta ? `STA: ${job.sta}` : `DEP: ${job.std || '-'}`}
+                      {getShiftFlightTimeLabel(job)}
                     </div>
                   </div>
                 ))}
@@ -560,7 +602,7 @@ export const ShiftBriefing: React.FC = () => {
                       </div>
                     </div>
                     <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
-                      DEP: {flight.std}
+                      {getShiftFlightTimeLabel(flight)}
                     </div>
                   </div>
                 ))}
@@ -793,7 +835,12 @@ export const ShiftBriefing: React.FC = () => {
                           updateBriefingInfo(additionalInfo, newDieselNeeds, {
                             ...staffAssignments,
                             attendees,
-                            dailyCompleted
+                            dailyCompleted,
+                            frozenFlights: briefingInfo?.staffAssignments?.frozenFlights || {
+                              intl: intlFlightsToRender,
+                              domestic: domesticFlightsToRender,
+                              adhoc: adhocFlightsToRender
+                            }
                           });
                         }}
                         className={`flex items-center justify-center space-x-2 py-2 rounded-xl border transition-all ${
@@ -819,7 +866,12 @@ export const ShiftBriefing: React.FC = () => {
                               updateBriefingInfo(additionalInfo, dieselNeeds, {
                                 ...staffAssignments,
                                 attendees,
-                                dailyCompleted: newDailyCompleted
+                                dailyCompleted: newDailyCompleted,
+                                frozenFlights: briefingInfo?.staffAssignments?.frozenFlights || {
+                                  intl: intlFlightsToRender,
+                                  domestic: domesticFlightsToRender,
+                                  adhoc: adhocFlightsToRender
+                                }
                               });
                             }}
                             className={`flex items-center justify-center space-x-2 py-2 rounded-xl border transition-all ${
@@ -992,7 +1044,12 @@ export const ShiftBriefing: React.FC = () => {
                   await updateBriefingInfo(additionalInfo, dieselNeeds, {
                     ...staffAssignments,
                     attendees,
-                    dailyCompleted
+                    dailyCompleted,
+                    frozenFlights: briefingInfo?.staffAssignments?.frozenFlights || {
+                      intl: intlFlightsToRender,
+                      domestic: domesticFlightsToRender,
+                      adhoc: adhocFlightsToRender
+                    }
                   });
                   notify('Attendance log updated successfully!', 'success');
                   setIsAttendanceModalOpen(false);

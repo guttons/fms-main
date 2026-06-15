@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, MOCK_ADHOC_FLIGHTS, EQUIPMENT } from '../constants';
+import { MOCK_USERS, MOCK_ADHOC_FLIGHTS, EQUIPMENT } from '../constants';
 import { UserRole, EquipmentType, FlightJob } from '../types';
 import { Calendar, Zap, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home, Radio, RefreshCw } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
@@ -21,8 +21,10 @@ export const Schedule: React.FC = () => {
     updateDomesticAssignment,
     externalFlights,
     isExternalFlightsLoading,
-    refreshExternalFlights
+    refreshExternalFlights,
+    domesticFlights
   } = useOperationalData();
+  const todayDate = new Date().toISOString().split('T')[0];
   const [activeTab, setActiveTab] = useState<'international' | 'domestic' | 'adhoc' | 'equipment' | 'status' | 'live'>('international');
   const [configuringFlightId, setConfiguringFlightId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -40,6 +42,12 @@ export const Schedule: React.FC = () => {
   const isFlightImported = (flightNo: string) => {
     const cleanNo = (flightNo || '').replace(/\s+/g, '').toLowerCase();
     return flightJobs.some(job => (job.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+  };
+
+  const getLogoUrl = (flightNumber?: string) => {
+    if (!flightNumber) return null;
+    const airlineCode = flightNumber.replace(/\s+/g, '').slice(0, 2).toUpperCase();
+    return airlineCode.length === 2 ? `https://fis.com.mv/tail/${airlineCode}.png` : null;
   };
 
   const getFidsStatusColor = (status?: string) => {
@@ -142,11 +150,11 @@ export const Schedule: React.FC = () => {
     return (etaH * 60 + etaM) > (staH * 60 + staM);
   };
 
-  const renderRoute = (route?: string) => {
-    if (!route) return <span className="text-sm font-black tracking-tight text-on-surface-dim opacity-30">---</span>;
+  const renderRoute = (route?: string, textSize = "text-sm") => {
+    if (!route) return <span className={`${textSize} font-black tracking-tight text-on-surface-dim opacity-30`}>---</span>;
     const parts = route.split(/\s+/);
     return (
-      <div className="flex items-center text-sm font-black tracking-tight select-none">
+      <div className={`flex items-center ${textSize} font-black tracking-tight select-none`}>
         {parts.map((part, idx) => {
           if (part === 'MLE' || part === '➔' || part === '->') {
             return (
@@ -179,13 +187,22 @@ export const Schedule: React.FC = () => {
 
   const [scheduledFlights, setScheduledFlights] = useState(flightJobs);
 
-  useEffect(() => {
-    const filtered = flightJobs.filter(f => isFlightInShift(f.sta));
-    setScheduledFlights(filtered);
-  }, [flightJobs, selectedBriefingShift]);
+  const frozenFlights = briefingInfo?.staffAssignments?.frozenFlights;
 
-  const domesticFlightsToRender = MOCK_DOMESTIC_FLIGHTS.filter(f => isFlightInShift(f.sta));
-  const adhocFlightsToRender = MOCK_ADHOC_FLIGHTS.filter(f => isFlightInShift(f.sta));
+  useEffect(() => {
+    const filtered = frozenFlights?.intl 
+      ? frozenFlights.intl 
+      : flightJobs.filter(f => isFlightInShift(f.sta || f.std) && (!f.date || f.date === todayDate));
+    setScheduledFlights(filtered);
+  }, [flightJobs, selectedBriefingShift, todayDate, frozenFlights]);
+
+  const domesticFlightsToRender = frozenFlights?.domestic 
+    ? frozenFlights.domestic 
+    : (domesticFlights || []).filter(f => isFlightInShift(f.sta || f.std) && (!f.date || f.date === todayDate));
+
+  const adhocFlightsToRender = frozenFlights?.adhoc 
+    ? frozenFlights.adhoc 
+    : MOCK_ADHOC_FLIGHTS.filter(f => isFlightInShift(f.sta));
 
   const domesticTeams = [
     { id: 't1', name: 'Team 1', op1: '', op2: '' },
@@ -209,7 +226,6 @@ export const Schedule: React.FC = () => {
 
   // Modal removed — replaced by shift selector
   const operators = (staff && staff.length > 0 ? staff : MOCK_USERS).filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(u.role));
-  const todayDate = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
     if (briefingInfo?.dieselNeeds) {
@@ -421,8 +437,7 @@ export const Schedule: React.FC = () => {
                 </thead>
                 <tbody className="bg-surface divide-y divide-outline text-on-surface">
                   {scheduledFlights.map((item, idx) => {
-                    const airlineCode = (item.flightNumber || '').slice(0, 2).toLowerCase();
-                    const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/webfids/images/${airlineCode}.gif` : null;
+                    const logoUrl = getLogoUrl(item.flightNumber);
                     const delayed = isDelayed(item.sta, item.eta);
                     const activeEquipmentUsage = item.equipmentUsage || 'HYDRANT';
                     return (
@@ -436,18 +451,15 @@ export const Schedule: React.FC = () => {
                                 <div className="flex items-center gap-1.5">
                                     <span className="text-xl font-[900] tracking-tighter italic">{item.flightNumber}</span>
                                     {logoUrl && (
-                                      <img
-                                        src={logoUrl}
-                                        alt=""
-                                        aria-hidden="true"
-                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                        className="h-4 w-auto object-contain select-none flex-shrink-0"
-                                        style={{
-                                          opacity: 0.5,
-                                          WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                          maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                        }}
-                                      />
+                                      <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                                        <img
+                                          src={logoUrl}
+                                          alt=""
+                                          aria-hidden="true"
+                                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                          className="w-full h-full object-contain select-none flex-shrink-0"
+                                        />
+                                      </div>
                                     )}
                                 </div>
                             </div>
@@ -515,8 +527,7 @@ export const Schedule: React.FC = () => {
             {/* Mobile View */}
             <div className="block md:hidden p-4 space-y-4">
               {scheduledFlights.map((item) => {
-                const airlineCode = (item.flightNumber || '').slice(0, 2).toLowerCase();
-                const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/webfids/images/${airlineCode}.gif` : null;
+                const logoUrl = getLogoUrl(item.flightNumber);
                 const delayed = isDelayed(item.sta, item.eta);
                 const activeEquipmentUsage = item.equipmentUsage || 'HYDRANT';
                 return (
@@ -532,18 +543,15 @@ export const Schedule: React.FC = () => {
                             <div className="flex items-center gap-1.5">
                               <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">{item.flightNumber}</h3>
                               {logoUrl && (
-                                <img
-                                  src={logoUrl}
-                                  alt=""
-                                  aria-hidden="true"
-                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                  className="h-4 w-auto object-contain select-none flex-shrink-0"
-                                  style={{
-                                    opacity: 0.5,
-                                    WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                    maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                  }}
-                                />
+                                <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                                  <img
+                                    src={logoUrl}
+                                    alt=""
+                                    aria-hidden="true"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    className="w-full h-full object-contain select-none flex-shrink-0"
+                                  />
+                                </div>
                               )}
                             </div>
                             <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">
@@ -646,8 +654,7 @@ export const Schedule: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-outline text-on-surface">
                     {domesticFlightsToRender.map((flight, idx) => {
-                      const airlineCode = (flight.flightNumber || '').slice(0, 2).toLowerCase();
-                      const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/webfids/images/${airlineCode}.gif` : null;
+                      const logoUrl = getLogoUrl(flight.flightNumber);
                       return (
                         <tr key={flight.id} className={`hover:bg-primary/[0.01] transition-colors group animate-in fade-in slide-in-from-left-4 duration-300 stagger-${Math.min(idx + 1, 5)}`}>
                           <td className="px-4 py-6 whitespace-nowrap">
@@ -659,26 +666,29 @@ export const Schedule: React.FC = () => {
                               <div className="flex items-center gap-1.5">
                                 <span className="text-lg font-[900] italic tracking-tighter">{flight.flightNumber}</span>
                                 {logoUrl && (
-                                  <img
-                                    src={logoUrl}
-                                    alt=""
-                                    aria-hidden="true"
-                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                    className="h-4 w-auto object-contain select-none flex-shrink-0"
-                                    style={{
-                                      opacity: 0.5,
-                                      WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                      maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                    }}
-                                  />
+                                  <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                                    <img
+                                      src={logoUrl}
+                                      alt=""
+                                      aria-hidden="true"
+                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                      className="w-full h-full object-contain select-none flex-shrink-0"
+                                    />
+                                  </div>
                                 )}
                               </div>
                             </div>
                           </td>
                           <td className="px-4 py-6 whitespace-nowrap">
                             <div className="text-sm font-black tracking-tight">{flight.aircraftType}</div>
-                            <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1">
-                              {flight.aircraftReg}
+                            <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1 flex items-center gap-1.5">
+                              <span>{flight.aircraftReg}</span>
+                              {flight.route && (
+                                <>
+                                  <span>•</span>
+                                  {renderRoute(flight.route, "text-[10px]")}
+                                </>
+                              )}
                             </div>
                           </td>
                           <td className="px-4 py-6 whitespace-nowrap">
@@ -707,8 +717,7 @@ export const Schedule: React.FC = () => {
             {/* Mobile View */}
             <div className="block md:hidden space-y-4">
               {domesticFlightsToRender.map((flight) => {
-                const airlineCode = (flight.flightNumber || '').slice(0, 2).toLowerCase();
-                const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/webfids/images/${airlineCode}.gif` : null;
+                const logoUrl = getLogoUrl(flight.flightNumber);
                 const delayed = isDelayed(flight.sta, flight.eta);
                 return (
                   <div key={flight.id} className="card-premium p-4 sm:p-6 border-outline group transition-all active:scale-[0.98] max-w-md mx-auto w-full">
@@ -722,23 +731,28 @@ export const Schedule: React.FC = () => {
                             <div className="flex items-center gap-1.5">
                               <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">{flight.flightNumber}</h3>
                               {logoUrl && (
-                                <img
-                                  src={logoUrl}
-                                  alt=""
-                                  aria-hidden="true"
-                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                  className="h-4 w-auto object-contain select-none flex-shrink-0"
-                                  style={{
-                                    opacity: 0.5,
-                                    WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                    maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                  }}
-                                />
+                                <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                                  <img
+                                    src={logoUrl}
+                                    alt=""
+                                    aria-hidden="true"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    className="w-full h-full object-contain select-none flex-shrink-0"
+                                  />
+                                </div>
                               )}
                             </div>
-                            <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">
-                              {flight.aircraftReg} • {flight.aircraftType}
-                            </p>
+                            <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest flex items-center gap-1.5 flex-wrap">
+                              <span>{flight.aircraftReg}</span>
+                              <span>•</span>
+                              <span>{flight.aircraftType}</span>
+                              {flight.route && (
+                                <>
+                                  <span>•</span>
+                                  {renderRoute(flight.route, "text-[10px]")}
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -792,8 +806,7 @@ export const Schedule: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-outline text-on-surface">
                     {adhocFlightsToRender.map((flight, idx) => {
-                      const airlineCode = (flight.flightNumber || '').slice(0, 2).toLowerCase();
-                      const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/webfids/images/${airlineCode}.gif` : null;
+                      const logoUrl = getLogoUrl(flight.flightNumber);
                       return (
                         <tr key={flight.id} className={`hover:bg-primary/[0.01] transition-colors group animate-in fade-in slide-in-from-left-4 duration-300 stagger-${Math.min(idx + 1, 5)}`}>
                           <td className="px-4 py-6 whitespace-nowrap">
@@ -805,18 +818,15 @@ export const Schedule: React.FC = () => {
                               <div className="flex items-center gap-1.5">
                                 <span className="text-lg font-[900] italic tracking-tighter">{flight.flightNumber}</span>
                                 {logoUrl && (
-                                  <img
-                                    src={logoUrl}
-                                    alt=""
-                                    aria-hidden="true"
-                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                    className="h-4 w-auto object-contain select-none flex-shrink-0"
-                                    style={{
-                                      opacity: 0.5,
-                                      WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                      maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                    }}
-                                  />
+                                  <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                                    <img
+                                      src={logoUrl}
+                                      alt=""
+                                      aria-hidden="true"
+                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                      className="w-full h-full object-contain select-none flex-shrink-0"
+                                    />
+                                  </div>
                                 )}
                                 <span className="ml-2 bg-amber-500/10 text-amber-500 text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider border border-amber-500/20">
                                   Ad-Hoc
@@ -826,8 +836,14 @@ export const Schedule: React.FC = () => {
                           </td>
                           <td className="px-4 py-6 whitespace-nowrap">
                             <div className="text-sm font-black tracking-tight">{flight.aircraftType}</div>
-                            <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1">
-                              {flight.aircraftReg} {flight.route ? `• ${flight.route}` : ''}
+                            <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1 flex items-center gap-1.5">
+                              <span>{flight.aircraftReg}</span>
+                              {flight.route && (
+                                <>
+                                  <span>•</span>
+                                  {renderRoute(flight.route, "text-[10px]")}
+                                </>
+                              )}
                             </div>
                           </td>
                           <td className="px-4 py-6 whitespace-nowrap">
@@ -856,8 +872,7 @@ export const Schedule: React.FC = () => {
             {/* Mobile View */}
             <div className="block md:hidden space-y-4">
               {adhocFlightsToRender.map((flight) => {
-                const airlineCode = (flight.flightNumber || '').slice(0, 2).toLowerCase();
-                const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/webfids/images/${airlineCode}.gif` : null;
+                const logoUrl = getLogoUrl(flight.flightNumber);
                 const delayed = isDelayed(flight.sta, flight.eta);
                 return (
                   <div key={flight.id} className="card-premium p-4 sm:p-6 border-outline group transition-all active:scale-[0.98] max-w-md mx-auto w-full">
@@ -871,26 +886,31 @@ export const Schedule: React.FC = () => {
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">{flight.flightNumber}</h3>
                               {logoUrl && (
-                                <img
-                                  src={logoUrl}
-                                  alt=""
-                                  aria-hidden="true"
-                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                  className="h-4 w-auto object-contain select-none flex-shrink-0"
-                                  style={{
-                                    opacity: 0.5,
-                                    WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                    maskImage: 'linear-gradient(to right, transparent 0%, black 40%)',
-                                  }}
-                                />
+                                <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                                  <img
+                                    src={logoUrl}
+                                    alt=""
+                                    aria-hidden="true"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    className="w-full h-full object-contain select-none flex-shrink-0"
+                                  />
+                                </div>
                               )}
                               <span className="bg-amber-500/10 text-amber-500 text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider border border-amber-500/20">
                                 Ad-Hoc
                               </span>
                             </div>
-                            <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1">
-                              {flight.aircraftReg} • {flight.aircraftType} {flight.route ? `• ${flight.route}` : ''}
-                            </p>
+                            <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1 flex items-center gap-1.5 flex-wrap">
+                              <span>{flight.aircraftReg}</span>
+                              <span>•</span>
+                              <span>{flight.aircraftType}</span>
+                              {flight.route && (
+                                <>
+                                  <span>•</span>
+                                  {renderRoute(flight.route, "text-[10px]")}
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
