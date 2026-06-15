@@ -305,6 +305,22 @@ app.get('/', (_req: Request, res: Response) => {
   res.json({ service: 'MACL FMS BigQuery API', status: 'OK', version: '1.0.0' });
 });
 
+// ─── External flights proxy (auth required) ───────────────────────────────────
+app.get('/external-flights', requireAuth, async (_req: Request, res: Response) => {
+  try {
+    console.log('[Proxy] Fetching external flights from www.fis.com.mv...');
+    const response = await fetch('https://www.fis.com.mv/api/flights');
+    if (!response.ok) {
+      throw new Error(`Failed to fetch from www.fis.com.mv: ${response.status} ${response.statusText}`);
+    }
+    const data = await response.json();
+    res.json(data);
+  } catch (err: any) {
+    console.error('[Proxy] Error fetching external flights:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // GET /operations-log   — list all (non-deleted) entries
 // ═══════════════════════════════════════════════════════════════════════════

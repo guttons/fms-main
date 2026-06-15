@@ -27,6 +27,9 @@ interface OperationalDataContextType {
   tanks: Tank[];
   flightJobs: FlightJob[];
   domesticFlights: any[];
+  externalFlights: any[];
+  isExternalFlightsLoading: boolean;
+  refreshExternalFlights: () => Promise<void>;
   briefingInfo: ShiftBriefingInfo;
   selectedBriefingShift: BriefingShift;
   setSelectedBriefingShift: (shift: BriefingShift) => void;
@@ -110,6 +113,21 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       return MOCK_DOMESTIC_FLIGHTS;
     }
   });
+
+  const [externalFlights, setExternalFlights] = useState<any[]>([]);
+  const [isExternalFlightsLoading, setIsExternalFlightsLoading] = useState(false);
+
+  const refreshExternalFlights = useCallback(async () => {
+    try {
+      setIsExternalFlightsLoading(true);
+      const flights = await supabaseService.getExternalFlights();
+      setExternalFlights(flights);
+    } catch (error) {
+      console.error('Error fetching external flights:', error);
+    } finally {
+      setIsExternalFlightsLoading(false);
+    }
+  }, []);
 
   const [selectedBriefingShift, setSelectedBriefingShift] = useState<BriefingShift>(() => {
     try {
@@ -239,6 +257,10 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     try {
       setIsLoading(true);
       setIsAlertsLoading(true);
+      
+      // Fetch external flights in parallel without blocking
+      refreshExternalFlights();
+
       const [fetchedTanks, fetchedJobs, fetchedBriefing, fetchedAlerts, fetchedEq, fetchedLogs, fetchedStaff, fetchedDomAssign] = await Promise.all([
         supabaseService.getTanks(),
         supabaseService.getFlightJobs(),
@@ -295,7 +317,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       setIsLoading(false);
       setIsAlertsLoading(false);
     }
-  }, [selectedBriefingDate, selectedBriefingShift]);
+  }, [selectedBriefingDate, selectedBriefingShift, refreshExternalFlights]);
 
   // Sync with Supabase when user logs in, selected shift or date changes
   useEffect(() => {
@@ -669,6 +691,9 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       tanks: tanks || [],
       flightJobs: flightJobs || [],
       domesticFlights: domesticFlights || [],
+      externalFlights: externalFlights || [],
+      isExternalFlightsLoading,
+      refreshExternalFlights,
       briefingInfo: briefingInfo || { info: [], dieselNeeds: [], staffAssignments: undefined },
       selectedBriefingShift,
       setSelectedBriefingShift,

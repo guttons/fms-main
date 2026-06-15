@@ -1,17 +1,105 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { MOCK_USERS, MOCK_DOMESTIC_FLIGHTS, MOCK_ADHOC_FLIGHTS, EQUIPMENT } from '../constants';
 import { UserRole, EquipmentType, FlightJob } from '../types';
-import { Calendar, Zap, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home } from 'lucide-react';
+import { Calendar, Zap, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home, Radio, RefreshCw } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { BriefingShift } from '../context/OperationalDataContext';
 
 export const Schedule: React.FC = () => {
-  const { equipment, flightJobs, briefingInfo, updateFlightJob, addFlightJob, staff, selectedBriefingShift, setSelectedBriefingShift, domesticAssignments, updateDomesticAssignment } = useOperationalData();
-  const [activeTab, setActiveTab] = useState<'international' | 'domestic' | 'adhoc' | 'equipment' | 'status'>('international');
+  const { 
+    equipment, 
+    flightJobs, 
+    briefingInfo, 
+    updateFlightJob, 
+    addFlightJob, 
+    staff, 
+    selectedBriefingShift, 
+    setSelectedBriefingShift, 
+    domesticAssignments, 
+    updateDomesticAssignment,
+    externalFlights,
+    isExternalFlightsLoading,
+    refreshExternalFlights
+  } = useOperationalData();
+  const [activeTab, setActiveTab] = useState<'international' | 'domestic' | 'adhoc' | 'equipment' | 'status' | 'live'>('international');
   const [configuringFlightId, setConfiguringFlightId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [prefillData, setPrefillData] = useState<any>(null);
+
+  const [fidsType, setFidsType] = useState<'arrival' | 'departure'>('arrival');
+  const [fidsCategory, setFidsCategory] = useState<'all' | 'international' | 'domestic'>('all');
+  const [fidsSearchQuery, setFidsSearchQuery] = useState('');
+
+  // Fetch live flights on load
+  useEffect(() => {
+    refreshExternalFlights();
+  }, [refreshExternalFlights]);
+
+  const isFlightImported = (flightNo: string) => {
+    const cleanNo = (flightNo || '').replace(/\s+/g, '').toLowerCase();
+    return flightJobs.some(job => (job.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+  };
+
+  const getFidsStatusColor = (status?: string) => {
+    const s = (status || '').toLowerCase();
+    if (s.includes('landed') || s.includes('departed')) {
+      return 'bg-success/10 text-success border-success/20';
+    }
+    if (s.includes('cancel')) {
+      return 'bg-error/10 text-error border-error/20';
+    }
+    if (s.includes('delay') || s.includes('final') || s.includes('closed')) {
+      return 'bg-warning/10 text-warning border-warning/20';
+    }
+    return 'bg-surface-dim text-on-surface-dim border-outline opacity-60';
+  };
+
+  const handleImportClick = (flight: any) => {
+    // Calculate route: Origin -> Male (MLE) or Male (MLE) -> Destination
+    const routeStr = flight.type === 'arrival' 
+      ? `${flight.originCode || flight.origin || ''} ➔ MLE`
+      : `MLE ➔ ${flight.destinationCode || flight.destination || ''}`;
+
+    const staVal = flight.type === 'arrival' ? flight.scheduledTime : '';
+    const stdVal = flight.type === 'departure' ? flight.scheduledTime : '';
+    const etaVal = flight.type === 'arrival' ? flight.estimatedTime || flight.scheduledTime : '';
+
+    setPrefillData({
+      flightNumber: flight.flightNumber || '',
+      route: routeStr,
+      stand: flight.gate || '', // Pull only gate as a stand as requested by user
+      sta: staVal,
+      eta: etaVal,
+      std: stdVal
+    });
+    
+    setIsModalOpen(true);
+  };
+
+  const filteredFidsFlights = useMemo(() => {
+    return (externalFlights || [])
+      .filter((f: any) => {
+        // Type filter (arrival / departure)
+        if (f.type !== fidsType) return false;
+
+        // Category filter (all / international / domestic)
+        if (fidsCategory !== 'all' && f.category !== fidsCategory) return false;
+
+        // Search query
+        if (fidsSearchQuery) {
+          const q = fidsSearchQuery.toLowerCase();
+          const matchFlight = (f.flightNumber || '').toLowerCase().includes(q);
+          const matchAirline = (f.airline || '').toLowerCase().includes(q);
+          const matchOrigin = (f.origin || '').toLowerCase().includes(q);
+          const matchDest = (f.destination || '').toLowerCase().includes(q);
+          return matchFlight || matchAirline || matchOrigin || matchDest;
+        }
+
+        return true;
+      });
+  }, [externalFlights, fidsType, fidsCategory, fidsSearchQuery]);
 
   const handleAddFlight = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -242,14 +330,15 @@ export const Schedule: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner relative flex w-full md:w-fit overflow-hidden">
+      <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner relative flex w-full md:w-fit overflow-x-auto scrollbar-none">
         <div 
           className={`absolute top-1.5 bottom-1.5 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
-            ${activeTab === 'international' ? 'w-[calc(20%-3px)] left-1.5 md:w-[140px] md:translate-x-0' : ''}
-            ${activeTab === 'domestic' ? 'w-[calc(20%-3px)] left-[calc(20%+1.5px)] md:w-[110px] md:left-1.5 md:translate-x-[140px]' : ''}
-            ${activeTab === 'adhoc' ? 'w-[calc(20%-3px)] left-[calc(40%+1.5px)] md:w-[110px] md:left-1.5 md:translate-x-[250px]' : ''}
-            ${activeTab === 'equipment' ? 'w-[calc(20%-3px)] left-[calc(60%+1.5px)] md:w-[110px] md:left-1.5 md:translate-x-[360px]' : ''}
-            ${activeTab === 'status' ? 'w-[calc(20%-3px)] left-[calc(80%+1.5px)] md:w-[150px] md:left-1.5 md:translate-x-[470px]' : ''}
+            ${activeTab === 'international' ? 'w-[calc(16.6%-3px)] left-1.5 md:w-[140px] md:translate-x-0' : ''}
+            ${activeTab === 'domestic' ? 'w-[calc(16.6%-3px)] left-[calc(16.6%+1.5px)] md:w-[110px] md:left-1.5 md:translate-x-[140px]' : ''}
+            ${activeTab === 'adhoc' ? 'w-[calc(16.6%-3px)] left-[calc(33.3%+1.5px)] md:w-[110px] md:left-1.5 md:translate-x-[250px]' : ''}
+            ${activeTab === 'equipment' ? 'w-[calc(16.6%-3px)] left-[calc(50%+1.5px)] md:w-[110px] md:left-1.5 md:translate-x-[360px]' : ''}
+            ${activeTab === 'status' ? 'w-[calc(16.6%-3px)] left-[calc(66.6%+1.5px)] md:w-[150px] md:left-1.5 md:translate-x-[470px]' : ''}
+            ${activeTab === 'live' ? 'w-[calc(16.6%-3px)] left-[calc(83.3%+1.5px)] md:w-[150px] md:left-1.5 md:translate-x-[620px]' : ''}
           `}
         />
         <button
@@ -300,6 +389,15 @@ export const Schedule: React.FC = () => {
         >
           <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
           <span className="hidden md:block whitespace-nowrap">Status Board</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('live')}
+          className={`flex-1 md:w-[150px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+            activeTab === 'live' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+          }`}
+        >
+          <Radio className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+          <span className="hidden md:block whitespace-nowrap">Live Feed</span>
         </button>
       </div>
 
@@ -1016,25 +1114,223 @@ export const Schedule: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Live Airport Feed */}
+        {activeTab === 'live' && (
+          <div className="animate-in fade-in slide-in-from-left-4 duration-500 p-4 md:p-8 space-y-6">
+            {/* Header controls */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-surface-dim p-4 rounded-2xl border border-outline">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setFidsType('arrival')}
+                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border ${
+                    fidsType === 'arrival' 
+                      ? 'bg-primary text-white border-transparent' 
+                      : 'bg-surface text-on-surface-dim border-outline hover:text-on-surface'
+                  }`}
+                >
+                  Arrivals
+                </button>
+                <button
+                  onClick={() => setFidsType('departure')}
+                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border ${
+                    fidsType === 'departure' 
+                      ? 'bg-primary text-white border-transparent' 
+                      : 'bg-surface text-on-surface-dim border-outline hover:text-on-surface'
+                  }`}
+                >
+                  Departures
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4">
+                {/* Category filters */}
+                <div className="flex items-center gap-1.5 bg-surface p-1 rounded-xl border border-outline">
+                  {['all', 'international', 'domestic'].map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setFidsCategory(cat as any)}
+                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
+                        fidsCategory === cat 
+                          ? 'bg-primary text-white' 
+                          : 'text-on-surface-dim hover:text-on-surface'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={fidsSearchQuery}
+                    onChange={(e) => setFidsSearchQuery(e.target.value)}
+                    placeholder="SEARCH FLIGHT..."
+                    className="w-48 pl-4 pr-10 py-2.5 bg-surface border border-outline rounded-xl text-[10px] font-black uppercase tracking-wider outline-none focus:border-primary transition-all"
+                  />
+                  {fidsSearchQuery && (
+                    <button 
+                      onClick={() => setFidsSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-dim hover:text-on-surface text-xs font-bold"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                {/* Refresh button */}
+                <button
+                  onClick={() => refreshExternalFlights()}
+                  disabled={isExternalFlightsLoading}
+                  className="p-2.5 bg-surface border border-outline rounded-xl text-on-surface-dim hover:text-on-surface hover:border-primary disabled:opacity-50 transition-all flex items-center justify-center shrink-0"
+                  title="Refresh Live Data"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isExternalFlightsLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            </div>
+
+            {/* FIDS Table / Feed */}
+            {isExternalFlightsLoading && externalFlights.length === 0 ? (
+              <div className="px-6 py-20 flex flex-col items-center justify-center space-y-4">
+                <RefreshCw className="w-8 h-8 text-primary animate-spin opacity-60" />
+                <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">Fetching live airport data...</p>
+              </div>
+            ) : filteredFidsFlights.length === 0 ? (
+              <div className="px-6 py-20 border border-dashed border-outline rounded-[32px] flex flex-col items-center justify-center text-center opacity-50">
+                <Plane className="w-10 h-10 text-on-surface-dim opacity-30 mb-4" />
+                <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.3em]">No flights found</p>
+                <p className="text-[9px] font-medium text-on-surface-dim opacity-60 uppercase tracking-wider mt-1">Try adjusting your filters or search query</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-outline shadow-sm">
+                <table className="min-w-full divide-y divide-outline">
+                  <thead className="bg-surface-dim">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Airline</th>
+                      <th className="px-6 py-4 text-left text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Flight</th>
+                      <th className="px-6 py-4 text-left text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">{fidsType === 'arrival' ? 'Origin' : 'Destination'}</th>
+                      <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Scheduled</th>
+                      <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Estimated</th>
+                      <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Gate</th>
+                      <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Terminal</th>
+                      <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Live Status</th>
+                      <th className="px-6 py-4 text-right text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-surface divide-y divide-outline">
+                    {filteredFidsFlights.map((flight, idx) => {
+                      const isImported = isFlightImported(flight.flightNumber);
+                      const statusColor = getFidsStatusColor(flight.status);
+                      const airlineCode = (flight.airlineCode || flight.flightNumber || '').replace(/\s+/g, '').slice(0, 2).toLowerCase();
+
+                      return (
+                        <tr key={flight.id || idx} className="hover:bg-primary/[0.01] transition-colors group">
+                          {/* Airline */}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-8 h-8 rounded-lg bg-surface-dim border border-outline flex items-center justify-center font-black text-[10px] text-on-surface-dim uppercase overflow-hidden">
+                                {airlineCode ? (
+                                  <img 
+                                    src={`https://images.cocoon.co/airlines/${airlineCode}.png`} 
+                                    alt={flight.airlineCode}
+                                    onError={(e) => { (e.target as any).style.display = 'none'; }}
+                                    className="w-full h-full object-contain p-1"
+                                  />
+                                ) : null}
+                                <span className="group-hover:scale-110 transition-transform">{flight.airlineCode || flight.airline?.slice(0, 2)}</span>
+                              </div>
+                              <div>
+                                <p className="text-[11px] font-black text-on-surface uppercase tracking-tight">{flight.airline}</p>
+                                <p className="text-[8px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">{flight.category}</p>
+                              </div>
+                            </div>
+                          </td>
+                          {/* Flight Number */}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-[14px] font-[900] text-on-surface italic tracking-tight uppercase">{flight.flightNumber}</span>
+                          </td>
+                          {/* Route */}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center space-x-2">
+                              <MapPin className="w-3.5 h-3.5 text-on-surface-dim opacity-30 shrink-0" />
+                              <span className="text-[12px] font-black text-on-surface uppercase tracking-wide">
+                                {fidsType === 'arrival' 
+                                  ? `${flight.origin} (${flight.originCode || '---'})` 
+                                  : `${flight.destination} (${flight.destinationCode || '---'})`
+                                }
+                              </span>
+                            </div>
+                          </td>
+                          {/* Scheduled */}
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <span className="text-xs font-mono font-bold text-on-surface">{flight.scheduledTime}</span>
+                          </td>
+                          {/* Estimated */}
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <span className={`text-xs font-mono font-bold ${flight.estimatedTime && flight.estimatedTime !== flight.scheduledTime ? 'text-warning' : 'text-on-surface-dim opacity-50'}`}>
+                              {flight.estimatedTime || flight.scheduledTime}
+                            </span>
+                          </td>
+                          {/* Gate */}
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <span className="text-xs font-black text-on-surface-dim uppercase">{flight.gate || '---'}</span>
+                          </td>
+                          {/* Terminal */}
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <span className="text-xs font-black text-on-surface-dim opacity-60 uppercase">{flight.terminal || '---'}</span>
+                          </td>
+                          {/* Status */}
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border ${statusColor}`}>
+                              {flight.status || 'Scheduled'}
+                            </span>
+                          </td>
+                          {/* Action */}
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            {isImported ? (
+                              <span className="inline-flex items-center px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-success/10 text-success border border-success/20">
+                                Imported
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => handleImportClick(flight)}
+                                className="px-4 py-2 bg-gradient-to-r from-primary to-primary-container text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:scale-105 active:scale-95 transition-all shadow-sm"
+                              >
+                                Import to FMS
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
         </div>
       </div>
 
       {/* Add Flight Modal */}
       {isModalOpen && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" onClick={() => setIsModalOpen(false)}>
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" onClick={() => { setIsModalOpen(false); setPrefillData(null); }}>
             <div className="bg-surface-lowest rounded-[40px] shadow-2xl w-full max-w-lg p-10 border border-outline relative overflow-hidden my-auto" onClick={(e) => e.stopPropagation()}>
                 <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
                 
                 <h3 className="text-3xl font-[900] text-on-surface mb-8 tracking-tighter uppercase italic relative z-10">INITIATE TASK</h3>
-                <form onSubmit={handleAddFlight} className="space-y-8 relative z-10">
+                <form key={prefillData ? `${prefillData.flightNumber}-${prefillData.sta}-${prefillData.std}` : 'empty'} onSubmit={handleAddFlight} className="space-y-8 relative z-10">
                     <div className="grid grid-cols-2 gap-6">
                         <div>
                             <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Flight Identity</label>
-                            <input name="flight" required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="E.G. EK405" />
+                            <input name="flight" defaultValue={prefillData?.flightNumber || ''} required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="E.G. EK405" />
                         </div>
                         <div>
                             <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Route</label>
-                            <input name="route" required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="E.G. DXB-MLE-DXB" />
+                            <input name="route" defaultValue={prefillData?.route || ''} required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="E.G. DXB-MLE-DXB" />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-6">
@@ -1044,27 +1340,27 @@ export const Schedule: React.FC = () => {
                         </div>
                         <div>
                             <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Tactical Stand</label>
-                            <input name="stand" required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="E.G. D12" />
+                            <input name="stand" defaultValue={prefillData?.stand || ''} required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" placeholder="E.G. D12" />
                         </div>
                     </div>
                     <div className="grid grid-cols-3 gap-6">
                         <div>
                             <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">STA</label>
-                            <input name="sta" type="time" required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" />
+                            <input name="sta" type="time" defaultValue={prefillData?.sta || ''} required={!prefillData?.std} className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" />
                         </div>
                         <div>
                             <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">ETA</label>
-                            <input name="eta" type="time" required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" />
+                            <input name="eta" type="time" defaultValue={prefillData?.eta || ''} required={!prefillData?.std} className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" />
                         </div>
                         <div>
                             <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">STD</label>
-                            <input name="std" type="time" required className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" />
+                            <input name="std" type="time" defaultValue={prefillData?.std || ''} required={!prefillData?.sta} className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" />
                         </div>
                     </div>
                     <div className="flex justify-end space-x-5 mt-10">
                         <button 
                             type="button" 
-                            onClick={() => setIsModalOpen(false)}
+                            onClick={() => { setIsModalOpen(false); setPrefillData(null); }}
                             className="px-8 py-4 text-[10px] font-black text-on-surface-dim hover:text-on-surface uppercase tracking-[0.2em] transition-all"
                         >
                             ABORT

@@ -1521,5 +1521,29 @@ export const supabaseService = {
       console.error('[Supabase] createFinCustomsShipment failed:', error);
       throw error;
     }
+  },
+
+  async getExternalFlights(): Promise<any[]> {
+    try {
+      const headers = await this._bqAuthHeaders();
+      const res = await fetch(`${this._bqBase()}/external-flights`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        return data.flights || [];
+      }
+      throw new Error(`BigQuery API proxy returned status ${res.status}`);
+    } catch (error) {
+      console.warn('[BigQuery] getExternalFlights via proxy failed, trying direct fetch:', error);
+      try {
+        const res = await fetch('https://www.fis.com.mv/api/flights');
+        if (res.ok) {
+          const data = await res.json();
+          return data.flights || [];
+        }
+      } catch (directError) {
+        console.error('[BigQuery] getExternalFlights direct fetch also failed:', directError);
+      }
+      return [];
+    }
   }
 };
