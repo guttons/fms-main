@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fms-v4';
+const CACHE_NAME = 'fms-v5';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -66,7 +66,10 @@ self.addEventListener('fetch', (e) => {
   if (url.hostname.includes('supabase.co') || url.hostname.includes('supabase.io')) return;
 
   // Bypass BigQuery API — always go to network
-  if (url.pathname.includes('/operations-log') || url.hostname.includes('run.app')) return;
+  if (url.pathname.includes('/operations-log') || url.pathname.includes('/external-flights') || url.hostname.includes('run.app')) return;
+
+  // Bypass Flights API — always go to network
+  if (url.hostname.includes('fis.com.mv')) return;
 
   // Bypass external CDN modules (esm.sh, tailwindcss CDN, etc.)
   if (
