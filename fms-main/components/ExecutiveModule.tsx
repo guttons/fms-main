@@ -697,13 +697,16 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                 {/* Current Date Control */}
                 <div className="flex flex-col items-center space-y-1.5 text-center w-full sm:w-auto">
                   <label className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Forecast Base Date</label>
-                  <input 
-                    type="date" 
-                    value={currentDate}
-                    onChange={(e) => setCurrentDate(e.target.value)}
-                    onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
-                    className="bg-surface-lowest border border-outline px-3.5 py-2 rounded-xl text-[11px] font-black uppercase text-on-surface focus:ring-1 focus:ring-primary outline-none cursor-pointer text-center w-full max-w-[180px]"
-                  />
+                  <div className="relative flex items-center bg-surface-lowest border border-outline rounded-xl focus-within:ring-1 focus-within:ring-primary transition-all w-full max-w-[180px]">
+                    <input 
+                      type="date" 
+                      value={currentDate}
+                      onChange={(e) => setCurrentDate(e.target.value)}
+                      onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                      className="bg-transparent text-[11px] font-black uppercase text-on-surface outline-none cursor-pointer w-full pl-9 pr-3 py-2 text-center"
+                    />
+                    <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-primary opacity-50 pointer-events-none" />
+                  </div>
                 </div>
                 
                 {/* Initial Stock Control */}

@@ -30,7 +30,7 @@ export const MOCK_DOMESTIC_FLIGHTS = [
   { id: 'df4', flightNumber: 'VP 601', aircraftReg: '8Q-VAA', aircraftType: 'ATR 72', stand: 'D04', assignedTeam: 'Team 1', status: 'PENDING', sta: '11:15', eta: '11:45', std: '12:30' },
 ];
 
-export const MOCK_ADHOC_FLIGHTS = [
+export const MOCK_ADHOC_FLIGHTS: FlightJob[] = [
   { id: 'ah1', flightNumber: 'AH 001', aircraftReg: '8Q-ADH', aircraftType: 'B737', stand: 'F10', status: 'PENDING', sta: '14:00', eta: '14:30', std: '15:30', route: 'MLE', isAdhoc: true },
   { id: 'ah2', flightNumber: 'AH 002', aircraftReg: 'A6-VIP', aircraftType: 'A320', stand: 'F12', status: 'PENDING', sta: '16:00', eta: '16:15', std: '17:00', route: 'DXB ➔ MLE', isAdhoc: true },
 ];

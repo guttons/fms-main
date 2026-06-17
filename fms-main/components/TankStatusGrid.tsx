@@ -71,6 +71,22 @@ export const TankStatusGrid: React.FC<TankStatusGridProps> = ({ tanks }) => {
         const categoryTanks = groups[category];
         if (!categoryTanks || categoryTanks.length === 0) return null;
 
+        // Sort to show JET A1 tanks first, placing Recovery tanks at the end of the JET A1 list
+        const sortedTanks = [...categoryTanks].sort((a, b) => {
+          if (a.type === FuelType.JET_A1 && b.type !== FuelType.JET_A1) return -1;
+          if (a.type !== FuelType.JET_A1 && b.type === FuelType.JET_A1) return 1;
+          
+          if (a.type === FuelType.JET_A1 && b.type === FuelType.JET_A1) {
+            const aIsRecovery = a.name.toUpperCase().includes('RECOVERY');
+            const bIsRecovery = b.name.toUpperCase().includes('RECOVERY');
+            if (aIsRecovery && !bIsRecovery) return 1;
+            if (!aIsRecovery && bIsRecovery) return -1;
+            return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+          }
+          
+          return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+        });
+
         return (
           <div key={category} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center mb-6">
@@ -85,7 +101,7 @@ export const TankStatusGrid: React.FC<TankStatusGridProps> = ({ tanks }) => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-              {categoryTanks.map(tank => {
+              {sortedTanks.map(tank => {
                 const style = getFuelStyle(tank.type);
                 const Icon = style.icon;
                 const fillPct = (tank.currentLevel / tank.capacity) * 100;

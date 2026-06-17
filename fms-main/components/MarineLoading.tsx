@@ -427,7 +427,6 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
                                 name="meterOpen"
                                 required
                                 inputMode="numeric"
-                                pattern="[0-9]*"
                                 value={formData.meterOpen ? parseInt(formData.meterOpen.toString().replace(/,/g, '')).toLocaleString() : ''}
                                 onChange={(e) => {
                                     const val = e.target.value.replace(/,/g, '');
@@ -453,7 +452,6 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
                                 name="meterClose"
                                 readOnly
                                 inputMode="numeric"
-                                pattern="[0-9]*"
                                 value={formData.meterClose ? parseInt(formData.meterClose.toString().replace(/,/g, '')).toLocaleString() : '0'}
                                 className="w-full text-2xl lg:text-4xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline/30 text-on-surface-dim opacity-70 cursor-not-allowed"
                                 placeholder="000,000"
@@ -469,7 +467,6 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
                                 name="volume"
                                 required
                                 inputMode="numeric"
-                                pattern="[0-9]*"
                                 placeholder="0"
                                 value={formData.volume && formData.volume !== '0' ? parseInt(formData.volume.toString().replace(/,/g, '')).toLocaleString() : ''}
                                 onChange={(e) => {
@@ -542,7 +539,6 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Operational Date</label>
                                 <div className="relative">
-                                    <Calendar className="absolute left-6 top-1/2 transform -translate-y-1/2 w-4 h-4 text-primary opacity-40 pointer-events-none" />
                                     <input 
                                         required 
                                         type="date" 
@@ -555,6 +551,7 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
                                           isOperator ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
                                         }`}
                                     />
+                                    <Calendar className="absolute left-6 top-1/2 transform -translate-y-1/2 w-4 h-4 text-primary opacity-40 pointer-events-none" />
                                 </div>
                             </div>
                             <div>

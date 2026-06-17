@@ -29,8 +29,10 @@ const MobileHeader: React.FC<{
     setSelectedVehicleId: (id: string) => void,
     equipment: Equipment[],
     paymentType: string,
-    setPaymentType: (v: string) => void
-}> = ({ user, isOnline, activeFlight, selectedVehicleId, setSelectedVehicleId, equipment, paymentType, setPaymentType }) => (
+    setPaymentType: (v: string) => void,
+    cashRate: string,
+    setCashRate: (rate: string) => void
+}> = ({ user, isOnline, activeFlight, selectedVehicleId, setSelectedVehicleId, equipment, paymentType, setPaymentType, cashRate, setCashRate }) => (
   <div className="bg-surface text-on-surface p-4 border-b border-outline sticky top-0 z-30 transition-colors shadow-sm flex items-center justify-between gap-3 overflow-hidden">
       <div className="flex items-center flex-1 min-w-0">
           <Truck className="w-5 h-5 mr-3 text-primary animate-pulse flex-shrink-0" />
@@ -75,24 +77,43 @@ const MobileHeader: React.FC<{
 
               {/* Payment Type Dropdown — hidden once job is active */}
               {!activeFlight && (
-                  <div className="relative">
-                      <select
-                          value={paymentType}
-                          onChange={(e) => setPaymentType(e.target.value)}
-                          className={`rounded-lg py-2 pl-3 pr-7 text-[11px] font-black shadow-sm appearance-none focus:border-primary transition-all cursor-pointer uppercase tracking-widest border
-                              ${ paymentType === 'VOID'
-                                  ? 'bg-error/10 border-error/40 text-error'
-                                  : paymentType === 'CASH'
-                                  ? 'border-[#22c55e]/50 text-[#22c55e]'
-                                  : 'bg-surface-container-highest border-outline text-on-surface-dim'}
-                          `}
-                          style={paymentType === 'CASH' ? { backgroundColor: 'rgba(34,197,94,0.1)' } : undefined}
-                      >
-                          <option value="CREDIT" className="bg-surface-dim text-on-surface">CREDIT</option>
-                          <option value="CASH" className="bg-surface-dim text-on-surface">CASH</option>
-                          <option value="VOID" className="bg-surface-dim text-on-surface">VOID</option>
-                      </select>
-                      <ChevronRight className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-on-surface-dim rotate-90 pointer-events-none" />
+                  <div className="flex items-center gap-2">
+                      <div className="relative">
+                          <select
+                              value={paymentType}
+                              onChange={(e) => setPaymentType(e.target.value)}
+                              className={`rounded-lg py-2 pl-3 pr-7 text-[11px] font-black shadow-sm appearance-none focus:border-primary transition-all cursor-pointer uppercase tracking-widest border
+                                  ${ paymentType === 'VOID'
+                                      ? 'bg-error/10 border-error/40 text-error'
+                                      : paymentType === 'CASH'
+                                      ? 'border-[#22c55e]/50 text-[#22c55e]'
+                                      : 'bg-surface-container-highest border-outline text-on-surface-dim'}
+                              `}
+                              style={paymentType === 'CASH' ? { backgroundColor: 'rgba(34,197,94,0.1)' } : undefined}
+                          >
+                              <option value="CREDIT" className="bg-surface-dim text-on-surface">CREDIT</option>
+                              <option value="CASH" className="bg-surface-dim text-on-surface">CASH</option>
+                              <option value="VOID" className="bg-surface-dim text-on-surface">VOID</option>
+                          </select>
+                          <ChevronRight className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-on-surface-dim rotate-90 pointer-events-none" />
+                      </div>
+
+                      {paymentType === 'CASH' && (
+                          <div className="flex items-center space-x-1.5 bg-surface-container-highest border border-outline rounded-lg py-1.5 px-3 shadow-sm">
+                              <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Rate: $</span>
+                              {user.role === UserRole.ITP_MANAGER ? (
+                                  <input 
+                                      type="text" 
+                                      value={cashRate}
+                                      onChange={(e) => setCashRate(e.target.value)}
+                                      className="bg-transparent border-none outline-none text-[11px] font-black text-[#22c55e] w-12 p-0 focus:ring-0"
+                                      placeholder="0.00"
+                                  />
+                              ) : (
+                                  <span className="text-[11px] font-black text-[#22c55e]">{cashRate}</span>
+                              )}
+                          </div>
+                      )}
                   </div>
               )}
           </div>
@@ -114,11 +135,18 @@ const MobileHeader: React.FC<{
       <div className="flex flex-col items-center flex-shrink-0 ml-1 gap-1">
           <div className={`w-2.5 h-2.5 rounded-full ${equipmentDotClass(activeFlight?.vehicleId || selectedVehicleId)} shadow-premium`} title={isOnline ? 'Synced' : 'Offline'}></div>
           {activeFlight && paymentType !== 'VOID' && (
-              <span className={`text-[8px] font-black uppercase tracking-widest leading-none
-                  ${paymentType === 'CASH' ? 'text-success' : 'text-on-surface-dim opacity-50'}
-              `}>
-                  {paymentType}
-              </span>
+              <div className="flex flex-col items-center">
+                  <span className={`text-[8px] font-black uppercase tracking-widest leading-none
+                      ${paymentType === 'CASH' ? 'text-success' : 'text-on-surface-dim opacity-50'}
+                  `}>
+                      {paymentType}
+                  </span>
+                  {paymentType === 'CASH' && (
+                      <span className="text-[9px] font-black text-primary font-mono mt-0.5">
+                          ${cashRate}
+                      </span>
+                  )}
+              </div>
           )}
       </div>
   </div>
@@ -148,11 +176,37 @@ const ScreenDashboard: React.FC<{
   const [filterMyTasks, setFilterMyTasks] = useState(false);
   const [activeMenuJobId, setActiveMenuJobId] = useState<string | null>(null);
   
+  const shiftRanges: Record<string, { start: string; end: string; crossesMidnight: boolean }> = {
+    'Morning': { start: '07:30', end: '16:00', crossesMidnight: false },
+    'Evening': { start: '15:00', end: '23:30', crossesMidnight: false },
+    'Night': { start: '22:30', end: '08:30', crossesMidnight: true },
+  };
+
+  const isFlightInShift = (dep?: string) => {
+    if (!dep) return true; // Show flights without DEP always
+    const range = shiftRanges[selectedBriefingShift];
+    if (!range) return true;
+    if (range.crossesMidnight) {
+      return dep >= range.start || dep <= range.end;
+    }
+    return dep >= range.start && dep <= range.end;
+  };
+
   const frozenFlights = briefingInfo?.staffAssignments?.frozenFlights;
 
-  const intlJobs = frozenFlights?.intl ? frozenFlights.intl : (flightJobs || []);
+  const intlJobs = (frozenFlights?.intl 
+    ? frozenFlights.intl 
+    : (flightJobs || []).filter(f => {
+        const isDep = f.type ? f.type === 'departure' : !!f.std;
+        return isDep && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate);
+      })
+  ).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
   
-  const domesticJobs = (frozenFlights?.domestic ? frozenFlights.domestic : (domesticFlights || [])).map((df: any) => ({
+  const domesticJobsRaw = frozenFlights?.domestic 
+    ? frozenFlights.domestic 
+    : (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate));
+
+  const domesticJobs = domesticJobsRaw.map((df: any) => ({
       id: df.id,
       flightNumber: df.flightNumber,
       aircraftReg: df.aircraftReg,
@@ -167,9 +221,14 @@ const ScreenDashboard: React.FC<{
       assignedTeam: df.assignedTeam,
       vehicleId: df.vehicleId,
       route: df.route,
-  }));
+      isDomestic: true,
+  })).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
 
-  const adhocJobs = (frozenFlights?.adhoc ? frozenFlights.adhoc : MOCK_ADHOC_FLIGHTS).map((f: any) => ({
+  const adhocJobsRaw = frozenFlights?.adhoc 
+    ? frozenFlights.adhoc 
+    : MOCK_ADHOC_FLIGHTS.filter(f => isFlightInShift(f.sta) && (!f.date || f.date === selectedBriefingDate));
+
+  const adhocJobs = adhocJobsRaw.map((f: any) => ({
       id: f.id,
       flightNumber: f.flightNumber,
       aircraftReg: f.aircraftReg,
@@ -184,7 +243,7 @@ const ScreenDashboard: React.FC<{
       route: f.route,
       isAdhoc: true,
       vehicleId: f.vehicleId,
-  }));
+  })).sort((a: any, b: any) => (a.std || a.sta || '').localeCompare(b.std || b.sta || ''));
 
   const filteredIntlJobs = filterMyTasks ? intlJobs.filter(j => j.assignedTo === user.id || j.assignedOfficer === user.id) : intlJobs;
   const filteredDomesticJobs = filterMyTasks ? domesticJobs.filter(j => j.assignedTo === user.id || j.assignedOfficer === user.id) : domesticJobs;
@@ -200,20 +259,32 @@ const ScreenDashboard: React.FC<{
       return eta > sta;
   };
 
-  const renderRoute = (route?: string, customClass = "") => {
+  const renderRoute = (route?: string, customClass = "", isDomestic = false) => {
     if (!route) return null;
+    if (isDomestic) {
+      const parts = route.split(/\s+/);
+      const dest = parts[parts.length - 1];
+      return <span className={customClass}>{dest}</span>;
+    }
     const parts = route.split(/\s+/);
     return (
       <span className={`inline-flex items-center font-black uppercase tracking-wide ${customClass} select-none`}>
         {parts.map((part, idx) => {
-          if (part === 'MLE' || part === '➔' || part === '->') {
+          if (part === 'MLE') {
             return (
-              <span key={idx} className="opacity-30 mx-[2px] font-bold">
+              <span key={idx} className="text-[0.75em] text-white opacity-100 mx-[1px] font-bold leading-none relative top-[1px]">
                 {part}
               </span>
             );
           }
-          return <span key={idx}>{part}</span>;
+          if (part === '➔' || part === '->') {
+            return (
+              <span key={idx} className="opacity-25 mx-[0.5px] font-bold text-[0.8em] leading-none relative top-[0.5px]">
+                {part}
+              </span>
+            );
+          }
+          return <span key={idx} className="mx-[1px] leading-none">{part}</span>;
         })}
       </span>
     );
@@ -288,7 +359,7 @@ const ScreenDashboard: React.FC<{
                                    {job.route && (
                                      <>
                                        <span className="opacity-20">|</span>
-                                       {renderRoute(job.route, "text-primary text-[10px]")}
+                                       {renderRoute(job.route, "text-primary text-[10px]", job.isDomestic)}
                                      </>
                                    )}
                                </div>
@@ -307,7 +378,7 @@ const ScreenDashboard: React.FC<{
                                {job.route && (
                                  <>
                                    <span className="opacity-20 shrink-0">|</span>
-                                   {renderRoute(job.route, "text-primary text-[9px] sm:text-[10px] tracking-wide whitespace-nowrap")}
+                                   {renderRoute(job.route, "text-primary text-[9px] sm:text-[10px] tracking-wide whitespace-nowrap", job.isDomestic)}
                                  </>
                                )}
                           </div>      </div>
@@ -617,7 +688,6 @@ const ScreenTimestamps: React.FC<{
           <div className="card-premium p-6 border-outline overflow-hidden">
               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Operational Date</label>
               <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
                   <input
                       type="date"
                       required
@@ -627,6 +697,7 @@ const ScreenTimestamps: React.FC<{
                       onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
                       className="w-full pl-10 pr-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:left-0 [&::-webkit-calendar-picker-indicator]:top-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                   />
+                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
               </div>
           </div>
 
@@ -780,7 +851,7 @@ const ScreenTimestamps: React.FC<{
                   type="text" 
                   disabled={!activeFlight?.timestampPosition || !!activeFlight?.timestampStart || user.role === UserRole.ITP_OPERATOR}
                   inputMode="numeric"
-                  pattern="[0-9]*"
+                  pattern="[0-9,]*"
                   className="w-full text-4xl sm:text-6xl font-mono font-black py-4 bg-transparent outline-none border-b-4 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-10 disabled:opacity-20"
                   placeholder="000,000"
                   value={activeFlight?.meterOpen !== undefined ? activeFlight.meterOpen.toLocaleString() : ''}
@@ -853,7 +924,7 @@ const ScreenMetering: React.FC<{
               <input 
                   type="text" 
                   inputMode="numeric"
-                  pattern="[0-9]*"
+                  pattern="[0-9,]*"
                   disabled={user.role === UserRole.ITP_OPERATOR}
                   className="w-full text-4xl sm:text-6xl font-mono font-black py-4 bg-transparent outline-none border-b-4 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-10 disabled:opacity-50"
                   placeholder="000,000"
@@ -900,7 +971,7 @@ const ScreenMetering: React.FC<{
                    <input 
                        type="text" 
                        inputMode="numeric"
-                       pattern="[0-9]*"
+                       pattern="[0-9,]*"
                        disabled={user.role === UserRole.ITP_OPERATOR}
                        className="w-full px-6 lg:px-10 py-4 lg:py-6 bg-surface-lowest border border-outline/50 rounded-[24px] lg:rounded-[32px] text-4xl sm:text-6xl font-[900] text-primary tracking-tighter text-center outline-none focus:border-primary transition-all font-mono disabled:opacity-50"
                        placeholder="0,000"
@@ -1010,71 +1081,114 @@ const ScreenQC: React.FC<{
   onClose: () => void,
   loading: boolean,
   user: User
-}> = ({ activeFlight, onInputChange, onSubmit, onBack, onClose, loading, user }) => (
-  <div className="p-5 flex flex-col h-full min-h-[calc(100vh-140px)] pb-32">
-       <button onClick={onBack} className="flex items-center text-on-surface-dim hover:text-primary mb-6 font-black text-[11px] uppercase tracking-widest transition-colors">
-          <ChevronLeft className="w-4 h-4 mr-2" /> Back to Metering
-       </button>
-       <h2 className="text-on-surface text-xl sm:text-2xl font-black mb-8 tracking-tighter uppercase">JIG <span className="text-primary italic">Compliance Protocol</span></h2>
+}> = ({ activeFlight, onInputChange, onSubmit, onBack, onClose, loading, user }) => {
+  const qcCheckDetails: Record<string, { title: string, subtitle: string }> = {
+    panelCheck: {
+      title: 'Panel Check',
+      subtitle: 'Panel Closed & Secured'
+    },
+    walkAroundCheck: {
+      title: 'Walk Around Check',
+      subtitle: 'Apron walkaround complete'
+    },
+    appearanceCheck: {
+      title: 'Appearance Check',
+      subtitle: 'Clear & bright, no particulates'
+    },
+    waterCheck: {
+      title: 'Water Check',
+      subtitle: 'Chemical water detector negative'
+    }
+  };
 
-       <div className="space-y-4 card-premium p-8 border-outline shadow-inner">
-          {['panelCheck', 'walkAroundCheck', 'appearanceCheck', 'waterCheck'].map((check) => (
-              <label key={check} className="flex items-center justify-between p-5 bg-surface-container-low border-transparent rounded-2xl hover:bg-surface-container-lowest-container transition-all cursor-pointer group">
-                  <span className="font-black text-[13px] text-on-surface uppercase tracking-tight group-hover:text-primary transition-colors">
-                      {check.replace(/([A-Z])/g, ' $1').trim()}
-                  </span>
-                  <input 
-                      type="checkbox" 
-                      checked={!!activeFlight?.[check as keyof FlightLog]} 
-                      onChange={(e) => onInputChange(check as keyof FlightLog, e.target.checked)}
-                      disabled={user.role === UserRole.ITP_OPERATOR}
-                      className="!w-5 !h-5 text-primary rounded-lg focus:ring-0 border-outline bg-surface-container-lowest transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-              </label>
-          ))}
-          
-          <div className="pt-6">
-              <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Task Remarks & Feedback</label>
-              <textarea 
-                  className="w-full bg-surface-container-low border-2 border-outline rounded-2xl p-5 text-sm font-bold text-on-surface outline-none focus:border-primary transition-all min-h-[120px] placeholder:opacity-20 disabled:opacity-50"
-                  placeholder={user.role === UserRole.ITP_OPERATOR ? 'No remarks' : 'Enter any operational remarks, delays, or equipment issues...'}
-                  value={activeFlight?.remarks || ''}
-                  onChange={(e) => onInputChange('remarks', e.target.value)}
-                  disabled={user.role === UserRole.ITP_OPERATOR}
-              />
-          </div>
-       </div>
+  return (
+    <div className="p-5 flex flex-col h-full min-h-[calc(100vh-140px)] pb-32">
+        <button onClick={onBack} className="flex items-center text-on-surface-dim hover:text-primary mb-6 font-black text-[11px] uppercase tracking-widest transition-colors">
+           <ChevronLeft className="w-4 h-4 mr-2" /> Back to Metering
+        </button>
+        <h2 className="text-on-surface text-xl sm:text-2xl font-black mb-8 tracking-tighter uppercase">JIG <span className="text-primary italic">Compliance Protocol</span></h2>
 
-       <div className="mt-auto pt-10 space-y-6">
-           <div className="bg-warning/5 border border-warning/20 p-6 rounded-3xl flex items-start">
-               <AlertTriangle className="w-6 h-6 text-warning mr-4 flex-shrink-0" />
-               <p className="text-[11px] font-bold text-on-surface opacity-60 leading-relaxed uppercase tracking-widest">Digital certification required. By committing, you verify JIG compliance and manual safety checks are complete.</p>
-           </div>
+        <div className="space-y-4 card-premium p-8 border-outline shadow-inner">
+           {['panelCheck', 'walkAroundCheck', 'appearanceCheck', 'waterCheck'].map((check) => {
+               const isChecked = !!activeFlight?.[check as keyof FlightLog];
+               const isDisabled = user.role === UserRole.ITP_OPERATOR;
+               const details = qcCheckDetails[check];
+
+               return (
+                   <label 
+                       key={check} 
+                       className={`flex items-center p-5 rounded-2xl border-2 transition-all 
+                           ${isChecked ? 'border-success/40 bg-success/5' : 'border-outline bg-surface-dim'} 
+                           ${isDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-primary/30'}
+                       `}
+                   >
+                       <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 
+                           ${isChecked ? 'bg-success border-success' : 'border-outline bg-surface'}
+                       `}>
+                           {isChecked && <CheckCircle className="w-4 h-4 text-white" />}
+                       </div>
+                       <input 
+                           type="checkbox" 
+                           checked={isChecked} 
+                           onChange={(e) => onInputChange(check as keyof FlightLog, e.target.checked)}
+                           disabled={isDisabled}
+                           className="hidden"
+                       />
+                       <div className="ml-5">
+                           <span className="block text-[10px] font-[900] text-on-surface uppercase tracking-widest">
+                               {details.title}
+                           </span>
+                           <span className="block text-[9px] text-on-surface-dim opacity-40 uppercase tracking-widest mt-1">
+                               {details.subtitle}
+                           </span>
+                       </div>
+                   </label>
+               );
+           })}
            
-           {user.role === UserRole.ITP_OPERATOR ? (
-              <button 
-                 onClick={onClose}
-                 className="w-full bg-surface-lowest text-on-surface-dim border border-outline font-[900] text-[14px] lg:text-[15px] uppercase tracking-[0.3em] flex items-center justify-center p-5 lg:p-7 rounded-3xl shadow-premium hover:bg-surface-container hover:text-primary transition-all active:scale-95"
-              >
-                 CLOSE VIEW
-              </button>
+           <div className="pt-6">
+               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Task Remarks & Feedback</label>
+               <textarea 
+                   className="w-full bg-surface-container-low border-2 border-outline rounded-2xl p-5 text-sm font-bold text-on-surface outline-none focus:border-primary transition-all min-h-[120px] placeholder:opacity-20 disabled:opacity-50"
+                   placeholder={user.role === UserRole.ITP_OPERATOR ? 'No remarks' : 'Enter any operational remarks, delays, or equipment issues...'}
+                   value={activeFlight?.remarks || ''}
+                   onChange={(e) => onInputChange('remarks', e.target.value)}
+                   disabled={user.role === UserRole.ITP_OPERATOR}
+               />
+           </div>
+        </div>
+
+        <div className="mt-auto pt-10 space-y-6">
+            <div className="bg-warning/5 border border-warning/20 p-6 rounded-3xl flex items-start">
+                <AlertTriangle className="w-6 h-6 text-warning mr-4 flex-shrink-0" />
+                <p className="text-[11px] font-bold text-on-surface opacity-60 leading-relaxed uppercase tracking-widest">Digital certification required. By committing, you verify JIG compliance and manual safety checks are complete.</p>
+            </div>
+            
+            {user.role === UserRole.ITP_OPERATOR ? (
+               <button 
+                  onClick={onClose}
+                  className="w-full bg-surface-lowest text-on-surface-dim border border-outline font-[900] text-[14px] lg:text-[15px] uppercase tracking-[0.3em] flex items-center justify-center p-5 lg:p-7 rounded-3xl shadow-premium hover:bg-surface-container hover:text-primary transition-all active:scale-95"
+               >
+                  Return to Dashboard
+               </button>
             ) : (
-              <button 
-                 onClick={onSubmit}
-                 disabled={loading || !activeFlight?.panelCheck || !activeFlight?.walkAroundCheck || !activeFlight?.appearanceCheck || !activeFlight?.waterCheck}
-                 className="w-full kinetic-gradient p-5 lg:p-7 rounded-3xl font-[900] text-[14px] lg:text-[15px] uppercase tracking-[0.3em] flex items-center justify-center shadow-premium hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 disabled:grayscale"
-              >
-                 {loading ? 'ENCRYPTING & SYNCING...' : (
-                     <>
-                         <Save className="w-5 h-5 lg:w-6 lg:h-6 mr-4" />
-                         AUTHORIZE TASK COMPLETE
-                     </>
-                 )}
-              </button>
+               <button 
+                  onClick={onSubmit}
+                  disabled={loading || !activeFlight?.panelCheck || !activeFlight?.walkAroundCheck || !activeFlight?.appearanceCheck || !activeFlight?.waterCheck}
+                  className="w-full kinetic-gradient p-5 lg:p-7 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-40 disabled:grayscale shadow-premium active:scale-95 transition-all text-white"
+               >
+                  {loading ? 'ENCRYPTING & SYNCING...' : (
+                      <>
+                          <Save className="w-5 h-5 lg:w-6 lg:h-6 mr-4" />
+                          AUTHORIZE TASK COMPLETE
+                      </>
+                  )}
+               </button>
             )}
-       </div>
-  </div>
-);
+        </div>
+   </div>
+  );
+};
 
 export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob, initialVehicleId, onClearInitialVehicleId }) => {
   const { notify } = useNotification();
@@ -1082,6 +1196,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(null);
   const [paymentType, setPaymentType] = useState<'CREDIT' | 'CASH' | 'VOID'>('CREDIT');
+  const [cashRate, setCashRate] = useState<string>('1.85');
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [voidForm, setVoidForm] = useState({ date: new Date().toISOString().split('T')[0], deliveryNumber: '' });
   const [voidSaving, setVoidSaving] = useState(false);
@@ -1232,6 +1347,8 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       waterCheck: false,
       remarks: '',
       isAdhoc: job.isAdhoc,
+      route: job.route,
+      isDomestic: job.isDomestic,
     });
     navigateToScreen('timestamps');
   };
@@ -1405,6 +1522,12 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     
     setLoading(true);
     try {
+      let savedRoute = activeFlight.route || '';
+      if (activeFlight.isDomestic && savedRoute) {
+        const parts = savedRoute.split(/\s+/);
+        savedRoute = parts[parts.length - 1];
+      }
+
       const logToSave: Omit<FlightLog, 'id'> = {
         flightNumber: activeFlight.flightNumber || '',
         aircraftReg: activeFlight.aircraftReg || '',
@@ -1432,7 +1555,9 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         deliveryNumber: activeFlight.deliveryNumber,
         pitNumber: activeFlight.pitNumber,
         co: activeFlight.co,
-        isAdhoc: activeFlight.isAdhoc
+        isAdhoc: activeFlight.isAdhoc,
+        route: savedRoute,
+        isDomestic: activeFlight.isDomestic,
       };
 
       await supabaseService.createFlightLog(logToSave);
@@ -1500,6 +1625,8 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
           equipment={equipment}
           paymentType={paymentType}
           setPaymentType={(v) => setPaymentType(v as any)}
+          cashRate={cashRate}
+          setCashRate={setCashRate}
         />
 
         {/* Detail Confirmation Modal */}
@@ -1623,7 +1750,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                             const num = ticket.substring(4);
                             return (
                               <span className="font-mono text-on-surface-dim font-black">
-                                MLE-<span className="text-sm sm:text-base font-black text-on-surface">{num}</span>
+                                MLE-<span className="text-sm sm:text-base font-black text-error">{num}</span>
                               </span>
                             );
                           }
@@ -1711,7 +1838,6 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                   <div>
                     <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-3 opacity-60">Operational Date</label>
                     <div className="relative">
-                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-error opacity-50 pointer-events-none" />
                       <input
                         type="date"
                         value={voidForm.date}
@@ -1719,6 +1845,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                         onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
                         className="w-full pl-10 pr-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black focus:ring-4 focus:ring-error/10 focus:border-error outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:left-0 [&::-webkit-calendar-picker-indicator]:top-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                       />
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-error opacity-50 pointer-events-none" />
                     </div>
                   </div>
 

@@ -641,7 +641,6 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                 <div>
                   <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-2 tracking-[0.2em]">Breakdown Date</label>
                   <div className="relative">
-                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
                     <input 
                       type="date"
                       className="w-full pl-10 pr-4 py-3 bg-surface-lowest border border-outline rounded-xl text-sm text-on-surface focus:border-primary outline-none cursor-pointer"
@@ -649,12 +648,12 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                       onChange={e => setMaintForm({...maintForm, breakdownDate: e.target.value})}
                       onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
                     />
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
                   </div>
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-2 tracking-[0.2em]">Expected Return</label>
                   <div className="relative">
-                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
                     <input 
                       type="date"
                       className="w-full pl-10 pr-4 py-3 bg-surface-lowest border border-outline rounded-xl text-sm text-on-surface focus:border-primary outline-none cursor-pointer"
@@ -662,6 +661,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                       onChange={e => setMaintForm({...maintForm, expectedReturnDate: e.target.value})}
                       onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
                     />
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
                   </div>
                 </div>
               </div>

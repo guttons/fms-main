@@ -17,6 +17,11 @@ interface ShiftBriefingInfo {
     shiftInCharge: string;
     attendees?: string[];
     dailyCompleted?: string[];
+    frozenFlights?: {
+      intl?: any[];
+      domestic?: any[];
+      adhoc?: any[];
+    };
   };
 }
 
@@ -117,27 +122,108 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   const [externalFlights, setExternalFlights] = useState<any[]>([]);
   const [isExternalFlightsLoading, setIsExternalFlightsLoading] = useState(false);
 
+  const findRelatedArrival = (depFlight: any, allFlights: any[]) => {
+    if (!depFlight.flightNumber) return null;
+    const depCode = depFlight.airlineCode || depFlight.flightNumber.split(' ')[0];
+    const depNumStr = depFlight.flightNumber.replace(/[^\d]/g, '');
+    const depNum = depNumStr ? parseInt(depNumStr, 10) : null;
+    
+    const arrivals = allFlights.filter((f: any) => {
+      if (f.type !== 'arrival') return false;
+      if (f.date !== depFlight.date) return false;
+      const arrCode = f.airlineCode || f.flightNumber.split(' ')[0];
+      return arrCode && depCode && arrCode.toUpperCase() === depCode.toUpperCase();
+    });
+    
+    if (arrivals.length === 0) return null;
+    
+    let bestMatch: any = null;
+    let bestScore = -1;
+    
+    arrivals.forEach((arr: any) => {
+      let score = 0;
+      const arrNumStr = arr.flightNumber.replace(/[^\d]/g, '');
+      const arrNum = arrNumStr ? parseInt(arrNumStr, 10) : null;
+      
+      if (depNum !== null && arrNum !== null) {
+        const diff = depNum - arrNum;
+        if (diff === 1) {
+          score += 100; // e.g. UL 102 matched to UL 101 arrival
+        } else if (diff === 0) {
+          score += 50;  // same flight number
+        } else if (Math.abs(diff) < 5) {
+          score += 20;
+        }
+      }
+      
+      const sta = arr.scheduledTime;
+      const std = depFlight.scheduledTime;
+      if (sta && std) {
+        const [staH, staM] = sta.split(':').map(Number);
+        const [stdH, stdM] = std.split(':').map(Number);
+        const staMin = staH * 60 + staM;
+        const stdMin = stdH * 60 + stdM;
+        const timeDiff = stdMin - staMin;
+        
+        if (timeDiff > 0 && timeDiff <= 240) {
+          score += (240 - timeDiff) / 10; // prefer closer time
+        } else if (timeDiff > 0) {
+          score += 5;
+        } else {
+          score -= 50;
+        }
+      }
+      
+      if (arr.gate && depFlight.gate && arr.gate === depFlight.gate) {
+        score += 30;
+      }
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = arr;
+      }
+    });
+    
+    return bestMatch;
+  };
+
   const mergedFlightJobs = useMemo(() => {
     if (!externalFlights || externalFlights.length === 0) {
       return flightJobs;
     }
     const dbJobs = flightJobs.filter(job => !['j1', 'j2', 'j3', 'j4'].includes(job.id));
     const merged = [...dbJobs];
-    const liveIntl = externalFlights.filter((f: any) => f.category === 'international');
+    const liveIntl = externalFlights.filter((f: any) => f.category?.toLowerCase() === 'international');
 
     liveIntl.forEach((lf: any) => {
       const lfNumNorm = (lf.flightNumber || '').replace(/\s+/g, '').toLowerCase();
       const existingJobIdx = merged.findIndex(
-        (job) => (job.flightNumber || '').replace(/\s+/g, '').toLowerCase() === lfNumNorm
+        (job) => 
+          (job.flightNumber || '').replace(/\s+/g, '').toLowerCase() === lfNumNorm &&
+          (!job.date || job.date === lf.date)
       );
 
-      const staVal = lf.type === 'arrival' ? lf.scheduledTime : '';
-      const stdVal = lf.type === 'departure' ? lf.scheduledTime : '';
-      const etaVal = lf.type === 'arrival' ? (lf.estimatedTime || lf.scheduledTime) : '';
-
-      const routeStr = lf.type === 'arrival' 
+      let staVal = lf.type === 'arrival' ? lf.scheduledTime : '';
+      let stdVal = lf.type === 'departure' ? lf.scheduledTime : '';
+      let etaVal = lf.type === 'arrival' ? (lf.estimatedTime || lf.scheduledTime) : '';
+      let standVal = lf.gate || '';
+      
+      let routeStr = lf.type === 'arrival' 
         ? `${lf.originCode || lf.origin || ''} ➔ MLE`
         : `MLE ➔ ${lf.destinationCode || lf.destination || ''}`;
+
+      if (lf.type === 'departure') {
+        const related = findRelatedArrival(lf, liveIntl);
+        if (related) {
+          staVal = related.scheduledTime;
+          etaVal = related.estimatedTime || related.scheduledTime;
+          const originStr = related.originCode || related.origin || '';
+          routeStr = `${originStr} ➔ MLE ➔ ${lf.destinationCode || lf.destination || ''}`;
+          if (!standVal && related.gate) {
+            standVal = related.gate;
+          }
+        }
+      }
 
       if (existingJobIdx !== -1) {
         merged[existingJobIdx] = {
@@ -145,9 +231,10 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           sta: staVal || merged[existingJobIdx].sta,
           eta: etaVal || merged[existingJobIdx].eta,
           std: stdVal || merged[existingJobIdx].std,
-          stand: lf.gate || merged[existingJobIdx].stand,
+          stand: standVal || merged[existingJobIdx].stand,
           route: routeStr || merged[existingJobIdx].route,
-          date: lf.date || merged[existingJobIdx].date
+          date: lf.date || merged[existingJobIdx].date,
+          type: lf.type || merged[existingJobIdx].type
         };
       } else {
         merged.push({
@@ -155,7 +242,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           flightNumber: lf.flightNumber,
           aircraftReg: '8Q-TBA',
           aircraftType: 'A320',
-          stand: lf.gate || '---',
+          stand: standVal || '---',
           sta: staVal,
           eta: etaVal,
           std: stdVal,
@@ -165,7 +252,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           status: 'PENDING',
           route: routeStr,
           isVirtual: true,
-          date: lf.date
+          date: lf.date,
+          type: lf.type
         });
       }
     });
@@ -176,15 +264,25 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     if (!externalFlights || externalFlights.length === 0) {
       return domesticFlights;
     }
-    const liveDom = externalFlights.filter((f: any) => f.category === 'domestic');
+    const liveDom = externalFlights.filter((f: any) => f.category?.toLowerCase() === 'domestic');
     return liveDom.map((f: any, idx: number) => {
-      const staVal = f.type === 'arrival' ? f.scheduledTime : '';
-      const stdVal = f.type === 'departure' ? f.scheduledTime : '';
-      const etaVal = f.type === 'arrival' ? (f.estimatedTime || f.scheduledTime) : '';
+      let staVal = f.type === 'arrival' ? f.scheduledTime : '';
+      let stdVal = f.type === 'departure' ? f.scheduledTime : '';
+      let etaVal = f.type === 'arrival' ? (f.estimatedTime || f.scheduledTime) : '';
 
-      const routeStr = f.type === 'arrival' 
+      let routeStr = f.type === 'arrival' 
         ? `${f.originCode || f.origin || ''} ➔ MLE`
         : `MLE ➔ ${f.destinationCode || f.destination || ''}`;
+
+      if (f.type === 'departure') {
+        const related = findRelatedArrival(f, liveDom);
+        if (related) {
+          staVal = related.scheduledTime;
+          etaVal = related.estimatedTime || related.scheduledTime;
+          const originStr = related.originCode || related.origin || '';
+          routeStr = `${originStr} ➔ MLE ➔ ${f.destinationCode || f.destination || ''}`;
+        }
+      }
 
       let status = 'PENDING';
       if (f.status) {
@@ -422,6 +520,18 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       refreshData();
     }
   }, [appUser, selectedBriefingShift, selectedBriefingDate, refreshData]);
+
+  // Listen to Supabase auth changes to trigger a refresh of external flights when session is loaded
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        refreshExternalFlights();
+      }
+    });
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [refreshExternalFlights]);
 
   // Dedicated Real-time Listeners Effect
   useEffect(() => {

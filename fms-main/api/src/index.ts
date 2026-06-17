@@ -40,6 +40,7 @@ const OPERATIONS_LOG_SCHEMA: TableSchema = {
     { name: 'timestamp_clearance',  type: 'TIMESTAMP', mode: 'NULLABLE'  },
     { name: 'remarks',              type: 'STRING',    mode: 'NULLABLE'  },
     { name: 'tactical_operator',    type: 'STRING',    mode: 'NULLABLE'  },
+    { name: 'route',                type: 'STRING',    mode: 'NULLABLE'  },
     { name: 'is_deleted',           type: 'BOOL',      mode: 'NULLABLE'  },
     { name: 'created_at',           type: 'TIMESTAMP', mode: 'NULLABLE'  },
     { name: 'updated_at',           type: 'TIMESTAMP', mode: 'NULLABLE'  },
@@ -62,6 +63,14 @@ async function ensureSchema(): Promise<void> {
   if (!tableExists) {
     await dataset.createTable(TABLE_ID, { schema: OPERATIONS_LOG_SCHEMA });
     console.log(`[BigQuery] Created table: ${DATASET_ID}.${TABLE_ID}`);
+  } else {
+    try {
+      const alterSql = `ALTER TABLE ${TABLE_REF} ADD COLUMN IF NOT EXISTS route STRING`;
+      console.log(`[BigQuery] Schema migration: ${alterSql}`);
+      await bigquery.query({ query: alterSql, location: 'US' });
+    } catch (e: any) {
+      console.error('[BigQuery] Migration failed:', e.message);
+    }
   }
 }
 
@@ -94,6 +103,7 @@ function rowToLog(row: Record<string, any>) {
     timestampClearance:  ts(row.timestamp_clearance),
     remarks:             row.remarks,
     tacticalOperator:    row.tactical_operator,
+    route:               row.route,
   };
 }
 
@@ -126,6 +136,7 @@ function logToRow(log: Record<string, any>, id: string): Record<string, any> {
     timestamp_clearance:   log.timestampClearance ?? null,
     remarks:               log.remarks             ?? null,
     tactical_operator:     log.tacticalOperator    ?? null,
+    route:                 log.route               ?? null,
     is_deleted:            false,
     created_at:            now,
     updated_at:            now,
@@ -305,8 +316,8 @@ app.get('/', (_req: Request, res: Response) => {
   res.json({ service: 'MACL FMS BigQuery API', status: 'OK', version: '1.0.0' });
 });
 
-// ─── External flights proxy (auth required) ───────────────────────────────────
-app.get('/external-flights', requireAuth, async (_req: Request, res: Response) => {
+// ─── External flights proxy (public endpoint) ─────────────────────────────────
+app.get('/external-flights', async (_req: Request, res: Response) => {
   try {
     console.log('[Proxy] Fetching external flights from www.fis.com.mv...');
     const response = await fetch('https://www.fis.com.mv/api/flights');
@@ -392,6 +403,7 @@ app.patch('/operations-log/:id', requireAuth, async (req: Request, res: Response
     remarks:             'remarks',
     tacticalOperator:    'tactical_operator',
     logType:             'log_type',
+    route:               'route',
   };
 
   const setClauses: string[] = ['updated_at = CURRENT_TIMESTAMP()'];

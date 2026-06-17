@@ -105,7 +105,8 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
         } catch (error) {
             console.error('Error logging ground refueling volume:', error);
             setLoading(false);
-            alert('Failed to log daily volume. Please try again.');
+            const errMsg = error instanceof Error ? error.message : String(error);
+            alert(`Failed to log daily volume. Please try again.\n\nDetails: ${errMsg}`);
         }
     };
 
@@ -232,7 +233,6 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                          <div>
                             <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-4 tracking-widest opacity-40">Operational Date</label>
                             <div className="relative">
-                                <Calendar className="absolute left-6 top-1/2 transform -translate-y-1/2 w-4 h-4 text-primary opacity-40 pointer-events-none" />
                                 <input 
                                     required 
                                     type="date" 
@@ -249,6 +249,7 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                                     }}
                                     className={`w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all ${user?.role === UserRole.DEPOT_OPERATOR ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`} 
                                 />
+                                <Calendar className="absolute left-6 top-1/2 transform -translate-y-1/2 w-4 h-4 text-primary opacity-40 pointer-events-none" />
                             </div>
                          </div>
 
@@ -356,7 +357,6 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                             type="text" 
                             name="volume"
                             inputMode="numeric"
-                            pattern="[0-9]*"
                             className="w-full text-4xl lg:text-6xl font-[900] p-6 lg:p-10 bg-surface-lowest border border-outline rounded-[32px] lg:rounded-[40px] focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none text-primary tracking-tighter text-center transition-all font-mono shadow-premium"
                             placeholder="0" 
                             value={formData.volume ? parseInt(formData.volume.toString().replace(/,/g, '')).toLocaleString() : ''}

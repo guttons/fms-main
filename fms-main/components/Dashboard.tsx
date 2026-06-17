@@ -911,7 +911,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
                         return (
                           <div key={eq.id} className="bg-surface-dim/40 border border-outline p-4 rounded-2xl flex items-start md:items-center justify-between group hover:border-primary/30 transition-all">
-                            <div className="flex items-start space-x-3">
+                            <div className="flex items-start space-x-3 flex-1 mr-4">
                               <div className="flex flex-col items-center space-y-2 shrink-0">
                                 <div className="p-2 bg-primary/10 rounded-lg group-hover:scale-110 transition-transform">
                                   <Truck className="w-4 h-4 text-primary" />
@@ -922,18 +922,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                   </div>
                                 )}
                               </div>
-                              <div>
-                                <p className="text-[11px] font-[900] text-on-surface tracking-tighter">{eq.name}</p>
-                                <div className="flex flex-col mt-0.5">
-                                  <span className={`text-[8px] font-black uppercase tracking-widest ${getStatusColor(eq.status)} opacity-80`}>
-                                    {getStatusLabel(eq.status)}
-                                  </span>
-                                  {eq.currentVolume !== undefined && eq.maxCapacity !== undefined && (
-                                    <span className="text-[8px] font-black text-on-surface-dim opacity-60 font-mono mt-0.5">
-                                      {eq.currentVolume.toLocaleString()} / {eq.maxCapacity.toLocaleString()} L
+                              <div className="flex-1 flex justify-between items-start">
+                                <div>
+                                  <p className="text-[11px] font-[900] text-on-surface tracking-tighter">{eq.name}</p>
+                                  <div className="flex flex-col mt-0.5">
+                                    <span className={`text-[8px] font-black uppercase tracking-widest ${getStatusColor(eq.status)} opacity-80`}>
+                                      {getStatusLabel(eq.status)}
                                     </span>
-                                  )}
+                                    {eq.currentVolume !== undefined && (
+                                      <span className="block md:hidden text-[11px] font-black text-primary font-mono mt-0.5">
+                                        {eq.currentVolume.toLocaleString()} L
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
+                                {eq.currentVolume !== undefined && (
+                                  <span className="hidden md:block text-[11px] font-black text-primary font-mono pt-0.5">
+                                    {eq.currentVolume.toLocaleString()} L
+                                  </span>
+                                )}
                               </div>
                             </div>
                             

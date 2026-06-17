@@ -17,7 +17,6 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
   const [sgReadings, setSgReadings] = useState<Record<string, string>>({});
   
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [searchQuery, setSearchQuery] = useState('');
   const [layoutMode, setLayoutMode] = useState<'cards' | 'table'>('table'); // Default to Table mode!
 
   const isOperator = user?.role === UserRole.DEPOT_OPERATOR;
@@ -133,15 +132,7 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
   };
 
   // Filter and search tanks
-  const filteredTanks = (tanks || []).filter(tank => {
-    if (!tank) return false;
-    const lowerQuery = searchQuery.toLowerCase();
-    return (
-      tank.name.toLowerCase().includes(lowerQuery) ||
-      tank.id.toLowerCase().includes(lowerQuery) ||
-      tank.type.toLowerCase().includes(lowerQuery)
-    );
-  });
+  const filteredTanks = (tanks || []).filter(tank => !!tank);
 
   // Group tanks
   const groups = filteredTanks.reduce((acc: Record<string, Tank[]>, tank) => {
@@ -172,14 +163,14 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
           <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline flex items-center shadow-inner">
             <button 
               onClick={() => setLayoutMode('table')}
-              className={`p-2.5 rounded-xl transition-all ${layoutMode === 'table' ? 'bg-primary text-white shadow-md' : 'text-on-surface-dim hover:text-on-surface'}`}
+              className={`p-2.5 rounded-xl transition-all ${layoutMode === 'table' ? 'kinetic-gradient text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface'}`}
               title="Table View"
             >
               <List className="w-4 h-4" />
             </button>
             <button 
               onClick={() => setLayoutMode('cards')}
-              className={`p-2.5 rounded-xl transition-all ${layoutMode === 'cards' ? 'bg-primary text-white shadow-md' : 'text-on-surface-dim hover:text-on-surface'}`}
+              className={`p-2.5 rounded-xl transition-all ${layoutMode === 'cards' ? 'kinetic-gradient text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface'}`}
               title="Card Grid View"
             >
               <LayoutGrid className="w-4 h-4" />
@@ -213,23 +204,29 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Global Tank Search & Active Filters Bar */}
-      <div className="card-premium py-3.5 px-5 border border-outline flex items-center bg-surface-dim/40 max-w-xl">
-        <Search className="w-4 h-4 text-on-surface-dim opacity-40 mr-4" />
-        <input 
-          type="text" 
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search tank by registration ID, name, or product..." 
-          className="bg-transparent border-none outline-none text-sm w-full font-bold placeholder:opacity-30 text-on-surface"
-        />
-      </div>
+
 
       {/* Render Main Lists */}
       <div className="space-y-16">
         {order.map(category => {
           const categoryTanks = groups[category];
           if (!categoryTanks || categoryTanks.length === 0) return null;
+
+          // Sort to show JET A1 tanks first, placing Recovery tanks at the end of the JET A1 list
+          const sortedTanks = [...categoryTanks].sort((a, b) => {
+            if (a.type === FuelType.JET_A1 && b.type !== FuelType.JET_A1) return -1;
+            if (a.type !== FuelType.JET_A1 && b.type === FuelType.JET_A1) return 1;
+            
+            if (a.type === FuelType.JET_A1 && b.type === FuelType.JET_A1) {
+              const aIsRecovery = a.name.toUpperCase().includes('RECOVERY');
+              const bIsRecovery = b.name.toUpperCase().includes('RECOVERY');
+              if (aIsRecovery && !bIsRecovery) return 1;
+              if (!aIsRecovery && bIsRecovery) return -1;
+              return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+            }
+            
+            return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+          });
 
           return (
             <div key={category} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -264,7 +261,7 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-outline">
-                        {categoryTanks.map(tank => {
+                        {sortedTanks.map(tank => {
                           const style = getFuelStyle(tank.type);
                           const Icon = style.icon;
                           const fillPct = (tank.currentLevel / tank.capacity) * 100;
@@ -369,7 +366,7 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
               ) : (
                 /* CARD GRID LAYOUT */
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {categoryTanks.map(tank => {
+                  {sortedTanks.map(tank => {
                     const style = getFuelStyle(tank.type);
                     const Icon = style.icon;
                     const fillPct = (tank.currentLevel / tank.capacity) * 100;

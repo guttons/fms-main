@@ -331,20 +331,29 @@ export const supabaseService = {
   _bqBase(): string {
     return (
       import.meta.env.VITE_BIGQUERY_API_URL ||
-      'http://localhost:8080'
+      'https://fms-bigquery-api-808402455416.us-central1.run.app'
     );
   },
 
   async _bqAuthHeaders(): Promise<Record<string, string>> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.log('[BigQuery] No active session found. Attempting on-the-fly anonymous sign-in...');
+        const { data, error } = await supabase.auth.signInAnonymously();
+        if (!error && data?.session) {
+          session = data.session;
+          console.log('[BigQuery] Anonymous session established successfully.');
+        } else if (error) {
+          console.warn('[BigQuery] On-the-fly anonymous sign-in failed:', error.message);
+        }
+      }
       if (session) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       } else {
         console.warn(
-          '[BigQuery] No active Supabase session found. The Authorization header is empty. ' +
-          'Please ensure that "Anonymous Sign-ins" are enabled in your Supabase Dashboard (Authentication > Providers > Anonymous).'
+          '[BigQuery] No active Supabase session found and anonymous fallback failed. The Authorization header is empty.'
         );
       }
     } catch (e) {
@@ -416,53 +425,97 @@ export const supabaseService = {
 
   // ── Bridging Logs ──────────────────────────────────────────────────────────
   async getBridgingLogs(): Promise<BridgingLog[]> {
-    const { data, error } = await supabase
-      .from('bridging_logs')
-      .select('*')
-      .order('created_at', { ascending: false });
+    console.log('[BigQuery API] GET /operations-log (filtering for BRIDGING)');
+    try {
+      const flightLogs = await this.getFlightLogs();
+      const bridgingFlightLogs = (flightLogs || []).filter(log => log && log.logType === 'BRIDGING');
+      
+      if (bridgingFlightLogs.length === 0) {
+        return localBridgingLogs;
+      }
+      
+      return bridgingFlightLogs.map(log => {
+        const remarks = log.remarks || '';
+        const densityMatch = remarks.match(/Density:\s*([0-9.]+)/);
+        const tempMatch = remarks.match(/Temp:\s*([0-9.]+)/);
+        const visualMatch = remarks.match(/QC Visual:\s*(PASS|FAIL)/);
+        const cwdMatch = remarks.match(/CWD:\s*(PASS|FAIL)/);
 
-    if (error) {
-      console.warn('[Supabase] getBridgingLogs failed, falling back to localBridgingLogs:', error);
+        const getLocalTime = (isoString?: string) => {
+          if (!isoString) return '';
+          try {
+            const d = new Date(isoString);
+            const pad = (n: number) => n.toString().padStart(2, '0');
+            return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+          } catch {
+            return '';
+          }
+        };
+
+        const getLocalDate = (isoString?: string) => {
+          if (!isoString) return '';
+          try {
+            const d = new Date(isoString);
+            return d.toLocaleDateString('en-CA'); // YYYY-MM-DD
+          } catch {
+            return '';
+          }
+        };
+
+        return {
+          id: log.id,
+          sourceTankId: log.aircraftReg,
+          vehicleId: log.vehicleId,
+          volume: log.volume,
+          startTime: getLocalTime(log.timestampStart),
+          endTime: getLocalTime(log.timestampFinalEnd),
+          visualCheckPassed: visualMatch ? visualMatch[1] === 'PASS' : (log.panelCheck ?? true),
+          cwdCheckPassed: cwdMatch ? cwdMatch[1] === 'PASS' : (log.waterCheck ?? true),
+          density: densityMatch ? parseFloat(densityMatch[1]) : undefined,
+          temperature: tempMatch ? parseFloat(tempMatch[1]) : undefined,
+          operatorId: log.operatorId,
+          date: getLocalDate(log.timestampStart || log.timestampClearance)
+        } as BridgingLog;
+      });
+    } catch (error) {
+      console.warn('[BigQuery] getBridgingLogs failed, falling back to localBridgingLogs:', error);
       return localBridgingLogs;
     }
-    if (!data || data.length === 0) return localBridgingLogs;
-    return data.map(row => ({
-      id: row.id,
-      sourceTankId: row.source_tank_id,
-      vehicleId: row.vehicle_id,
-      volume: Number(row.volume),
-      startTime: row.start_time,
-      endTime: row.end_time,
-      visualCheckPassed: row.visual_check_passed,
-      cwdCheckPassed: row.cwd_check_passed,
-      density: row.density ? Number(row.density) : undefined,
-      temperature: row.temperature ? Number(row.temperature) : undefined,
-      operatorId: row.operator_id,
-      date: row.date
-    } as BridgingLog));
   },
 
   async createBridgingLog(log: Omit<BridgingLog, 'id'>): Promise<void> {
-    const row = {
-      source_tank_id: log.sourceTankId,
-      vehicle_id: log.vehicleId,
+    const remarksStr = `QC Visual: ${log.visualCheckPassed ? 'PASS' : 'FAIL'}, CWD: ${log.cwdCheckPassed ? 'PASS' : 'FAIL'}` + 
+      (log.density ? `, Density: ${log.density}` : '') + 
+      (log.temperature ? `, Temp: ${log.temperature}` : '');
+
+    const logToSave = {
+      flightNumber: `LOAD-${log.vehicleId}`,
+      aircraftReg: log.sourceTankId,
+      aircraftType: 'REFUELLER LOADING',
+      stand: 'DEPOT',
+      operatorId: log.operatorId,
+      vehicleId: log.vehicleId,
+      status: 'COMPLETED' as const,
+      logType: 'BRIDGING' as const,
+      deliveryNumber: `BRG-${Date.now()}`,
+      timestampStart: log.startTime ? `${log.date}T${log.startTime}:00.000Z` : undefined,
+      timestampFinalEnd: log.endTime ? `${log.date}T${log.endTime}:00.000Z` : undefined,
+      timestampClearance: new Date().toISOString(),
       volume: log.volume,
-      start_time: log.startTime,
-      end_time: log.endTime,
-      visual_check_passed: log.visualCheckPassed,
-      cwd_check_passed: log.cwdCheckPassed,
-      density: log.density ?? null,
-      temperature: log.temperature ?? null,
-      operator_id: log.operatorId,
-      date: log.date || new Date().toISOString().split('T')[0]
+      panelCheck: log.visualCheckPassed,
+      waterCheck: log.cwdCheckPassed,
+      remarks: remarksStr
     };
 
     const id = `bl-${Date.now()}`;
     localBridgingLogs.unshift({ id, ...log });
 
-    const { error } = await supabase.from('bridging_logs').insert([row]);
-    if (error) {
-      console.error('[Supabase] createBridgingLog failed:', error);
+    try {
+      await this.createFlightLog(logToSave);
+      console.log('[BigQuery] createBridgingLog saved successfully.');
+    } catch (error) {
+      console.error('[BigQuery] createBridgingLog failed:', error);
+      throw error;
     }
   },
 

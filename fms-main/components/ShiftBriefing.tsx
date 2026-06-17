@@ -107,45 +107,49 @@ export const ShiftBriefing: React.FC = () => {
     'Night': { start: '22:30', end: '08:30', crossesMidnight: true },
   };
 
-  const isFlightInShift = (sta?: string) => {
-    if (!sta) return true; // Show flights without STA always
+  const isFlightInShift = (dep?: string) => {
+    if (!dep) return true; // Show flights without DEP always
     const range = shiftRanges[selectedBriefingShift];
     if (range.crossesMidnight) {
-      return sta >= range.start || sta <= range.end;
+      return dep >= range.start || dep <= range.end;
     }
-    return sta >= range.start && sta <= range.end;
+    return dep >= range.start && dep <= range.end;
   };
 
-  const getShiftFlightTimeLabel = (flight: any) => {
-    const hasSta = !!(flight.sta || flight.eta);
-    const hasStd = !!flight.std;
-
-    const staInShift = hasSta && isFlightInShift(flight.sta || flight.eta);
-    const stdInShift = hasStd && isFlightInShift(flight.std);
-
-    if (stdInShift && !staInShift) {
-      return `DEP: ${flight.std}`;
-    } else if (staInShift && !stdInShift) {
-      return flight.eta ? `ETA: ${flight.eta}` : `STA: ${flight.sta}`;
-    } else {
-      if (hasSta && hasStd) {
-        return `${flight.eta ? `ETA: ${flight.eta}` : `STA: ${flight.sta}`} • DEP: ${flight.std}`;
+  const getIntlFlightTimeLabel = (flight: any) => {
+    const parts: string[] = [];
+    // Show STA, but if ETA differs from STA then show ETA only
+    if (flight.sta || flight.eta) {
+      if (flight.eta && flight.sta && flight.eta !== flight.sta) {
+        parts.push(`ETA: ${flight.eta}`);
+      } else if (flight.sta) {
+        parts.push(`STA: ${flight.sta}`);
       }
-      if (hasSta) return flight.eta ? `ETA: ${flight.eta}` : `STA: ${flight.sta}`;
-      if (hasStd) return `DEP: ${flight.std}`;
-      return '';
     }
+    if (flight.std) {
+      parts.push(`STD: ${flight.std}`);
+    }
+    return parts.join(' • ');
+  };
+
+  const getDomesticFlightTimeLabel = (flight: any) => {
+    if (flight.std) return `DEP: ${flight.std}`;
+    return '';
   };
 
   const frozenFlights = briefingInfo?.staffAssignments?.frozenFlights;
 
   const intlFlightsToRender = frozenFlights?.intl 
     ? frozenFlights.intl 
-    : (flightJobs || []).filter(f => isFlightInShift(f.sta || f.std) && (!f.date || f.date === selectedBriefingDate));
+    : (flightJobs || []).filter(f => {
+        const isDep = f.type ? f.type === 'departure' : !!f.std;
+        return isDep && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate);
+      }).sort((a, b) => (a.std || '').localeCompare(b.std || ''));
 
   const domesticFlightsToRender = frozenFlights?.domestic 
     ? frozenFlights.domestic 
-    : (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate));
+    : (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate))
+      .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
 
   const adhocFlightsToRender = frozenFlights?.adhoc 
     ? frozenFlights.adhoc 
@@ -164,6 +168,7 @@ export const ShiftBriefing: React.FC = () => {
 
   const [isSaving, setIsSaving] = useState(false);
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
+  const [isUnfreezeConfirmOpen, setIsUnfreezeConfirmOpen] = useState(false);
 
   const todayStr = new Date().toISOString().split('T')[0];
   const isHistoricalView = selectedBriefingDate < todayStr;
@@ -189,9 +194,9 @@ export const ShiftBriefing: React.FC = () => {
     attendees?: string[];
     dailyCompleted?: string[];
     frozenFlights?: {
-      intl: any[];
-      domestic: any[];
-      adhoc: any[];
+      intl?: any[];
+      domestic?: any[];
+      adhoc?: any[];
     };
   }
 
@@ -252,6 +257,29 @@ export const ShiftBriefing: React.FC = () => {
     } catch (error) {
       console.error("Failed to save shift briefing:", error);
       notify('Failed to save shift briefing.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleResetFlights = () => {
+    setIsUnfreezeConfirmOpen(true);
+  };
+
+  const confirmResetFlights = async () => {
+    setIsUnfreezeConfirmOpen(false);
+    setIsSaving(true);
+    try {
+      await updateBriefingInfo(additionalInfo, dieselNeeds, {
+        ...staffAssignments,
+        attendees,
+        dailyCompleted,
+        frozenFlights: null
+      });
+      notify('Flights successfully reset to live feed!', 'success');
+    } catch (error) {
+      console.error("Failed to reset flights:", error);
+      notify('Failed to reset flights.', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -554,7 +582,18 @@ export const ShiftBriefing: React.FC = () => {
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">International Ops</h3>
                 </div>
-                <span className="bg-surface-dim px-4 py-1.5 rounded-full text-[10px] font-black opacity-40 group-hover:opacity-100 transition-opacity">{intlFlightsToRender.length}</span>
+                <div className="flex items-center space-x-2">
+                  {frozenFlights && (
+                    <button
+                      onClick={handleResetFlights}
+                      className="px-2.5 py-1 text-[8px] font-black uppercase tracking-widest bg-error/10 text-error border border-error/20 rounded-lg hover:bg-error hover:text-white transition-all shrink-0"
+                      title="Reset frozen flights to live feed"
+                    >
+                      Unfreeze
+                    </button>
+                  )}
+                  <span className="bg-surface-dim px-4 py-1.5 rounded-full text-[10px] font-black opacity-40 group-hover:opacity-100 transition-opacity">{intlFlightsToRender.length}</span>
+                </div>
               </div>
               <div className="space-y-4">
                 {intlFlightsToRender.map((job) => (
@@ -570,7 +609,7 @@ export const ShiftBriefing: React.FC = () => {
                       </div>
                     </div>
                     <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
-                      {getShiftFlightTimeLabel(job)}
+                      {getIntlFlightTimeLabel(job)}
                     </div>
                   </div>
                 ))}
@@ -586,7 +625,18 @@ export const ShiftBriefing: React.FC = () => {
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Domestic Ops</h3>
                 </div>
-                <span className="bg-surface-dim px-4 py-1.5 rounded-full text-[10px] font-black opacity-40">{domesticFlightsToRender.length}</span>
+                <div className="flex items-center space-x-2">
+                  {frozenFlights && (
+                    <button
+                      onClick={handleResetFlights}
+                      className="px-2.5 py-1 text-[8px] font-black uppercase tracking-widest bg-error/10 text-error border border-error/20 rounded-lg hover:bg-error hover:text-white transition-all shrink-0"
+                      title="Reset frozen flights to live feed"
+                    >
+                      Unfreeze
+                    </button>
+                  )}
+                  <span className="bg-surface-dim px-4 py-1.5 rounded-full text-[10px] font-black opacity-40">{domesticFlightsToRender.length}</span>
+                </div>
               </div>
               <div className="space-y-4">
                 {domesticFlightsToRender.map((flight) => (
@@ -602,7 +652,7 @@ export const ShiftBriefing: React.FC = () => {
                       </div>
                     </div>
                     <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
-                      {getShiftFlightTimeLabel(flight)}
+                      {getDomesticFlightTimeLabel(flight)}
                     </div>
                   </div>
                 ))}
@@ -1058,6 +1108,52 @@ export const ShiftBriefing: React.FC = () => {
               >
                 <Save className="w-3.5 h-3.5" />
                 <span>Save Attendance Log</span>
+              </button>
+            </div>
+
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Unfreeze Confirmation Modal */}
+      {isUnfreezeConfirmOpen && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          {/* Backdrop overlay */}
+          <div 
+            className="absolute inset-0 bg-surface-lowest/70 backdrop-blur-md transition-opacity" 
+            onClick={() => setIsUnfreezeConfirmOpen(false)}
+          ></div>
+          
+          {/* Modal content */}
+          <div className="card-premium p-6 sm:p-8 max-w-md w-full relative z-10 shadow-2xl border border-outline scale-in-center animate-in fade-in zoom-in duration-200 flex flex-col space-y-6">
+            
+            {/* Modal Header */}
+            <div className="flex items-center space-x-3 text-sky-400">
+              <div className="p-2 bg-sky-400/10 rounded-lg">
+                <AlertTriangle className="w-5 h-5 text-sky-400" />
+              </div>
+              <h2 className="text-sm font-black uppercase tracking-widest text-on-surface">Unfreeze Live Feed?</h2>
+            </div>
+
+            {/* Modal Body */}
+            <div className="text-[11px] text-on-surface-dim uppercase tracking-wider leading-relaxed">
+              Are you sure you want to unfreeze/reset flights to the live FIDS feed? This will load any newly updated departures.
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex justify-end items-center space-x-3 pt-2">
+              <button
+                onClick={() => setIsUnfreezeConfirmOpen(false)}
+                className="px-4 py-2.5 bg-surface-dim hover:bg-surface-container text-on-surface-dim hover:text-on-surface border border-outline rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmResetFlights}
+                className="px-4 py-2.5 bg-sky-400 hover:bg-sky-500 text-surface-lowest rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-md shadow-sky-400/20"
+              >
+                Yes, Unfreeze
               </button>
             </div>
 

@@ -91,7 +91,7 @@ export interface FlightJob {
   sta?: string;
   eta?: string;
   std?: string;
-  assignedTo: string; // User ID
+  assignedTo?: string; // User ID
   assignedOfficer?: string; // Officer User ID for Refueller
   equipmentUsage?: 'HYDRANT' | 'REFUELLER';
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
@@ -101,6 +101,10 @@ export interface FlightJob {
   pitNumber?: string;
   route?: string;
   isAdhoc?: boolean;
+  isDomestic?: boolean;
+  date?: string;
+  isVirtual?: boolean;
+  type?: 'arrival' | 'departure';
 }
 
 export interface FlightLog {
@@ -115,7 +119,7 @@ export interface FlightLog {
   deliveryNumber?: string;
   pitNumber?: string;
   operationalDate?: string;
-  logType?: 'FLIGHT' | 'SEAPLANE' | 'FILLING_STATION' | 'MARINE';
+  logType?: 'FLIGHT' | 'SEAPLANE' | 'FILLING_STATION' | 'MARINE' | 'BRIDGING';
   
   // Granular Timestamps
   timestampArrived?: string;      // Arrived at Stand
@@ -139,6 +143,8 @@ export interface FlightLog {
   remarks?: string;
   co?: string;
   isAdhoc?: boolean;
+  route?: string;
+  isDomestic?: boolean;
 }
 
 export interface BridgingLog {

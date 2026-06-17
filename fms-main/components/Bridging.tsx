@@ -476,7 +476,6 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
                                 required
                                 placeholder="0,000"
                                 inputMode="numeric"
-                                pattern="[0-9]*"
                                 value={formData.volume ? parseInt(formData.volume.toString().replace(/,/g, '')).toLocaleString() : ''}
                                 onChange={(e) => {
                                     const val = e.target.value.replace(/,/g, '');
@@ -542,7 +541,6 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Operational Date</label>
                                 <div className="relative">
-                                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
                                     <input 
                                         type="date" 
                                         name="date"
@@ -555,6 +553,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
                                           isOperator ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
                                         }`}
                                     />
+                                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
                                 </div>
                             </div>
                             <div>

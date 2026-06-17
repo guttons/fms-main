@@ -185,7 +185,6 @@ export const CustomerPortal: React.FC<{ user: any }> = ({ user }) => {
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black uppercase text-on-surface-dim tracking-wider">Delivery Date</label>
                     <div className="relative">
-                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
                       <input
                         type="date"
                         value={reqDate}
@@ -193,6 +192,7 @@ export const CustomerPortal: React.FC<{ user: any }> = ({ user }) => {
                         onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
                         className="w-full pl-10 pr-4 py-3 bg-surface-dim border border-outline rounded-xl text-xs font-bold text-on-surface outline-none cursor-pointer"
                       />
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
                     </div>
                   </div>
                 </div>

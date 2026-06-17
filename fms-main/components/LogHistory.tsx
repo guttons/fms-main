@@ -84,7 +84,33 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     if (num.startsWith('VESSEL-')) return 'MARINE';
     return 'FLIGHT';
   };
-  
+
+  const renderTicketCell = (deliveryNumber?: string) => {
+    if (!deliveryNumber) return 'N/A';
+    if (deliveryNumber.startsWith('MLE-')) {
+      return (
+        <span className="font-mono text-error">
+          <span className="text-[11px] font-black opacity-60 tracking-widest">MLE-</span>
+          <span className="text-sm font-black tracking-normal">{deliveryNumber.substring(4)}</span>
+        </span>
+      );
+    }
+    const match = deliveryNumber.match(/^([A-Za-z]+-)?(\d+)(.*)$/);
+    if (match) {
+      const prefix = match[1] || '';
+      const numbers = match[2];
+      const suffix = match[3] || '';
+      return (
+        <span className="font-mono text-error">
+          {prefix && <span className="text-[11px] font-black opacity-60 tracking-widest">{prefix}</span>}
+          <span className="text-sm font-black tracking-normal">{numbers}</span>
+          {suffix && <span className="text-[11px] font-black opacity-60 tracking-widest">{suffix}</span>}
+        </span>
+      );
+    }
+    return <span className="text-sm font-black font-mono text-error tracking-normal">{deliveryNumber}</span>;
+  };
+
   const [editingLog, setEditingLog] = useState<FlightLog | null>(null);
   const [editForm, setEditForm] = useState({
     flightNumber: '',
@@ -191,7 +217,11 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
         temperature: blog.temperature
       } as any));
 
-      setLogs([...(fetchedFlightLogs || []), ...mappedBridgingLogs]);
+      const filteredFlightLogs = (fetchedFlightLogs || []).filter(
+        log => log && log.logType !== 'BRIDGING' && !(log.flightNumber || '').startsWith('LOAD-')
+      );
+
+      setLogs([...filteredFlightLogs, ...mappedBridgingLogs]);
     } catch (error) {
       console.error('Error fetching logs from Firebase:', error);
     } finally {
@@ -438,7 +468,6 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
               <div className="flex flex-col">
                  <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2">Start Date</label>
                  <div className="relative">
-                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
                     <input 
                        type="date"
                        value={filterStartDate}
@@ -446,6 +475,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                        onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
                        className="w-full pl-10 pr-4 py-3 bg-surface-lowest border border-outline rounded-xl text-[12px] font-bold text-on-surface focus:border-primary outline-none cursor-pointer"
                     />
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
                  </div>
               </div>
 
@@ -453,7 +483,6 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
               <div className="flex flex-col">
                  <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2">End Date</label>
                  <div className="relative">
-                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
                     <input 
                        type="date"
                        value={filterEndDate}
@@ -461,6 +490,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                        onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
                        className="w-full pl-10 pr-4 py-3 bg-surface-lowest border border-outline rounded-xl text-[12px] font-bold text-on-surface focus:border-primary outline-none cursor-pointer"
                     />
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
                  </div>
               </div>
 
@@ -638,8 +668,13 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                               <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
                                   {log.timestampStart ? new Date(log.timestampStart).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: false }) : 'PENDING'}
                               </td>
-                              <td className="px-10 py-6 text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">
-                                  {log.flightNumber}
+                              <td className="px-10 py-6">
+                                  <div className="text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">
+                                      {log.flightNumber}
+                                  </div>
+                                  {log.route && (
+                                      <div className="text-[9px] font-black text-on-surface-dim opacity-50 uppercase tracking-widest mt-0.5">{log.route}</div>
+                                  )}
                               </td>
                               <td className="px-10 py-6">
                                   <div className="text-xs font-black text-on-surface uppercase tracking-widest">{log.aircraftReg}</div>
@@ -654,8 +689,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                               <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
                                   {log.volume.toLocaleString()}
                               </td>
-                              <td className="px-10 py-6 text-left text-[11px] font-black text-error font-mono tracking-widest">
-                                  {log.deliveryNumber || 'N/A'}
+                              <td className="px-10 py-6 text-left font-mono">
+                                  {renderTicketCell(log.deliveryNumber)}
                               </td>
                             </>
                           )}
@@ -675,8 +710,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                               <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
                                   {log.volume.toLocaleString()}
                               </td>
-                              <td className="px-10 py-6 text-left text-[11px] font-black text-error font-mono tracking-widest">
-                                  {log.deliveryNumber || 'N/A'}
+                              <td className="px-10 py-6 text-left font-mono">
+                                  {renderTicketCell(log.deliveryNumber)}
                               </td>
                             </>
                           )}
@@ -699,8 +734,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                               <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
                                   {log.volume.toLocaleString()}
                               </td>
-                              <td className="px-10 py-6 text-left text-[11px] font-black text-error font-mono tracking-widest">
-                                  {log.deliveryNumber || 'N/A'}
+                              <td className="px-10 py-6 text-left font-mono">
+                                  {renderTicketCell(log.deliveryNumber)}
                               </td>
                             </>
                           )}
@@ -726,8 +761,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                               <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
                                   {log.volume.toLocaleString()}
                               </td>
-                              <td className="px-10 py-6 text-left text-[11px] font-black text-error font-mono tracking-widest">
-                                  {log.deliveryNumber || 'N/A'}
+                              <td className="px-10 py-6 text-left font-mono">
+                                  {renderTicketCell(log.deliveryNumber)}
                               </td>
                             </>
                           )}
@@ -1112,14 +1147,14 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                   <div>
                     <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Operation Date</label>
                     <div className="relative">
-                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
-                      <input 
-                        type="date"
-                        value={editForm.date}
-                        onChange={e => setEditForm({...editForm, date: e.target.value})}
-                        onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
-                        className="w-full pl-10 pr-4 py-2 bg-surface-lowest border border-outline rounded-xl text-on-surface text-[12px] font-bold focus:border-primary outline-none cursor-pointer"
-                      />
+                       <input 
+                         type="date"
+                         value={editForm.date}
+                         onChange={e => setEditForm({...editForm, date: e.target.value})}
+                         onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                         className="w-full pl-10 pr-4 py-2 bg-surface-lowest border border-outline rounded-xl text-on-surface text-[12px] font-bold focus:border-primary outline-none cursor-pointer"
+                       />
+                       <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
                     </div>
                   </div>
                   
