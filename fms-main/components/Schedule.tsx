@@ -7,13 +7,18 @@ import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { BriefingShift } from '../context/OperationalDataContext';
 
-export const Schedule: React.FC = () => {
+interface ScheduleProps {
+  user?: any;
+}
+
+export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
   const {
     equipment,
     flightJobs,
     briefingInfo,
     updateFlightJob,
     addFlightJob,
+    deleteFlightJob,
     staff,
     selectedBriefingShift,
     setSelectedBriefingShift,
@@ -27,6 +32,27 @@ export const Schedule: React.FC = () => {
   } = useOperationalData();
   const todayDate = selectedBriefingDate;
   const [activeTab, setActiveTab] = useState<'international' | 'domestic' | 'adhoc' | 'equipment' | 'status' | 'live'>('international');
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+  const tooltipTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const triggerTooltip = (tabKey: string) => {
+    setActiveTooltip(tabKey);
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+    }
+    tooltipTimeoutRef.current = setTimeout(() => {
+      setActiveTooltip(null);
+    }, 1500);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (tooltipTimeoutRef.current) {
+        clearTimeout(tooltipTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const [configuringFlightId, setConfiguringFlightId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [prefillData, setPrefillData] = useState<any>(null);
@@ -81,10 +107,24 @@ export const Schedule: React.FC = () => {
       stand: flight.gate || '', // Pull only gate as a stand as requested by user
       sta: staVal,
       eta: etaVal,
-      std: stdVal
+      std: stdVal,
+      isDomestic: flight.category === 'domestic',
+      type: flight.type
     });
 
     setIsModalOpen(true);
+  };
+
+  const handleUnimportClick = async (flightNo: string) => {
+    const cleanNo = (flightNo || '').replace(/\s+/g, '').toLowerCase();
+    const job = flightJobs.find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+    if (job) {
+      try {
+        await deleteFlightJob(job.id);
+      } catch (error) {
+        console.error("Failed to unimport flight job:", error);
+      }
+    }
   };
 
   const filteredFidsFlights = useMemo(() => {
@@ -135,9 +175,15 @@ export const Schedule: React.FC = () => {
         eta,
         std,
         assignedTo: '',
-        status: 'PENDING'
+        status: 'PENDING',
+        date: todayDate,
+        route,
+        isDomestic: prefillData?.isDomestic ?? false,
+        isAdhoc: false,
+        type: prefillData?.type || (sta ? 'arrival' : 'departure')
       });
       setIsModalOpen(false);
+      setPrefillData(null);
       target.reset();
     } catch (error) {
       console.error("Failed to add flight job:", error);
@@ -164,7 +210,7 @@ export const Schedule: React.FC = () => {
         {parts.map((part, idx) => {
           if (part === 'MLE') {
             return (
-              <span key={idx} className="text-[0.75em] text-white opacity-100 mx-[1px] font-bold leading-none relative top-[1px]">
+              <span key={idx} className="text-[0.75em] opacity-100 mx-[1px] font-bold leading-none relative top-[1px]">
                 {part}
               </span>
             );
@@ -227,7 +273,7 @@ export const Schedule: React.FC = () => {
     { id: 't3', name: 'Team 3', op1: '', op2: '' },
   ].map(team => {
     const dbTeam = (domesticAssignments || []).find(d => d.team_name === team.name);
-    return dbTeam ? { ...team, op1: dbTeam.operator1_id || '', op2: dbTeam.operator2_id || '' } : team;
+    return dbTeam ? { ...team, op1: dbTeam.operator1_id || dbTeam.op1 || '', op2: dbTeam.operator2_id || dbTeam.op2 || '' } : team;
   });
 
   const currentShiftLabel = selectedBriefingShift === 'Evening' ? 'DIESEL' : 'DAILY';
@@ -329,6 +375,24 @@ export const Schedule: React.FC = () => {
     </div>
   );
 
+  const tabLabels: Record<string, string> = {
+    international: 'International',
+    domestic: 'Domestic',
+    adhoc: 'Ad-Hoc',
+    equipment: currentShiftLabel,
+    status: 'Status Board',
+    live: 'Live Feed'
+  };
+
+  const tooltipPositions: Record<string, string> = {
+    international: 'calc(8.333% + 5px)',
+    domestic: 'calc(25% + 3px)',
+    adhoc: 'calc(41.666% + 1px)',
+    equipment: 'calc(58.333% - 1px)',
+    status: 'calc(75% - 3px)',
+    live: 'calc(91.666% - 5px)'
+  };
+
   return (
     <div className="p-6 lg:p-10 space-y-10">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-outline pb-10">
@@ -362,69 +426,100 @@ export const Schedule: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner relative flex w-full md:w-fit overflow-x-auto scrollbar-none">
-        <div
-          className={`absolute top-1.5 bottom-1.5 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
-            ${activeTab === 'international' ? 'w-[calc(16.6%-3px)] left-1.5 md:w-[140px] md:translate-x-0' : ''}
-            ${activeTab === 'domestic' ? 'w-[calc(16.6%-3px)] left-[calc(16.6%+1.5px)] md:w-[110px] md:left-1.5 md:translate-x-[140px]' : ''}
-            ${activeTab === 'adhoc' ? 'w-[calc(16.6%-3px)] left-[calc(33.3%+1.5px)] md:w-[110px] md:left-1.5 md:translate-x-[250px]' : ''}
-            ${activeTab === 'equipment' ? 'w-[calc(16.6%-3px)] left-[calc(50%+1.5px)] md:w-[110px] md:left-1.5 md:translate-x-[360px]' : ''}
-            ${activeTab === 'status' ? 'w-[calc(16.6%-3px)] left-[calc(66.6%+1.5px)] md:w-[150px] md:left-1.5 md:translate-x-[470px]' : ''}
-            ${activeTab === 'live' ? 'w-[calc(16.6%-3px)] left-[calc(83.3%+1.5px)] md:w-[150px] md:left-1.5 md:translate-x-[620px]' : ''}
-          `}
-        />
-        <button
-          onClick={() => setActiveTab('international')}
-          className={`flex-1 md:w-[140px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'international' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
-            }`}
-        >
-          <Plane className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-          <span className="hidden md:block whitespace-nowrap">International</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('domestic')}
-          className={`flex-1 md:w-[110px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'domestic' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
-            }`}
-        >
-          <Home className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-          <span className="hidden md:block whitespace-nowrap">Domestic</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('adhoc')}
-          className={`flex-1 md:w-[110px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'adhoc' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
-            }`}
-        >
-          <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-          <span className="hidden md:block whitespace-nowrap">Ad-Hoc</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('equipment')}
-          className={`flex-1 md:w-[110px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'equipment' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
-            }`}
-        >
-          {currentShiftLabel === 'DIESEL' ? (
-            <Droplet className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-          ) : (
-            <Truck className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-          )}
-          <span className="hidden md:block whitespace-nowrap">{currentShiftLabel}</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('status')}
-          className={`flex-1 md:w-[150px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'status' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
-            }`}
-        >
-          <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-          <span className="hidden md:block whitespace-nowrap">Status Board</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('live')}
-          className={`flex-1 md:w-[150px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'live' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
-            }`}
-        >
-          <Radio className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-          <span className="hidden md:block whitespace-nowrap">Live Feed</span>
-        </button>
+      <div className="relative">
+        {activeTooltip && (
+          <div 
+            className="absolute bottom-full mb-3 bg-slate-950 text-white text-[8px] font-black uppercase tracking-[0.2em] px-2.5 py-1.5 rounded-lg border border-outline/30 shadow-premium pointer-events-none md:hidden z-[99] whitespace-nowrap animate-in fade-in zoom-in-95 duration-200"
+            style={{ 
+              left: tooltipPositions[activeTooltip] || '50%',
+              transform: 'translateX(-50%)'
+            }}
+          >
+            {tabLabels[activeTooltip]}
+          </div>
+        )}
+        <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner relative flex w-full md:w-fit overflow-x-auto scrollbar-none">
+          <div
+            className={`absolute top-1.5 bottom-1.5 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
+              ${activeTab === 'international' ? 'w-[calc(16.666%-2px)] left-1.5 md:w-[140px] md:translate-x-0' : ''}
+              ${activeTab === 'domestic' ? 'w-[calc(16.666%-2px)] left-[calc(16.666%+4px)] md:w-[110px] md:left-1.5 md:translate-x-[140px]' : ''}
+              ${activeTab === 'adhoc' ? 'w-[calc(16.666%-2px)] left-[calc(33.333%+2px)] md:w-[110px] md:left-1.5 md:translate-x-[250px]' : ''}
+              ${activeTab === 'equipment' ? 'w-[calc(16.666%-2px)] left-[50%] md:w-[110px] md:left-1.5 md:translate-x-[360px]' : ''}
+              ${activeTab === 'status' ? 'w-[calc(16.666%-2px)] left-[calc(66.666%-2px)] md:w-[150px] md:left-1.5 md:translate-x-[470px]' : ''}
+              ${activeTab === 'live' ? 'w-[calc(16.666%-2px)] left-[calc(83.333%-4px)] md:w-[150px] md:left-1.5 md:translate-x-[620px]' : ''}
+            `}
+          />
+          <button
+            onClick={() => {
+              setActiveTab('international');
+              triggerTooltip('international');
+            }}
+            className={`flex-1 md:w-[140px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'international' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+              }`}
+          >
+            <Plane className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="hidden md:block whitespace-nowrap">International</span>
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('domestic');
+              triggerTooltip('domestic');
+            }}
+            className={`flex-1 md:w-[110px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'domestic' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+              }`}
+          >
+            <Home className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="hidden md:block whitespace-nowrap">Domestic</span>
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('adhoc');
+              triggerTooltip('adhoc');
+            }}
+            className={`flex-1 md:w-[110px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'adhoc' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+              }`}
+          >
+            <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="hidden md:block whitespace-nowrap">Ad-Hoc</span>
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('equipment');
+              triggerTooltip('equipment');
+            }}
+            className={`flex-1 md:w-[110px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'equipment' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+              }`}
+          >
+            {currentShiftLabel === 'DIESEL' ? (
+              <Droplet className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            ) : (
+              <Truck className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            )}
+            <span className="hidden md:block whitespace-nowrap">{currentShiftLabel}</span>
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('status');
+              triggerTooltip('status');
+            }}
+            className={`flex-1 md:w-[150px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'status' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+              }`}
+          >
+            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="hidden md:block whitespace-nowrap">Status Board</span>
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('live');
+              triggerTooltip('live');
+            }}
+            className={`flex-1 md:w-[150px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'live' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+              }`}
+          >
+            <Radio className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="hidden md:block whitespace-nowrap">Live Feed</span>
+          </button>
+        </div>
       </div>
 
       {/* Content */}
@@ -1150,21 +1245,28 @@ export const Schedule: React.FC = () => {
             <div className="animate-in fade-in slide-in-from-left-4 duration-500 p-4 md:p-8 space-y-6">
               {/* Header controls */}
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-surface-dim p-4 rounded-2xl border border-outline">
-                <div className="flex items-center gap-2">
+                <div className="relative flex items-center bg-surface p-1 rounded-xl border border-outline w-[200px] h-[38px] select-none overflow-hidden">
+                  <div
+                    className="absolute top-1 bottom-1 rounded-lg kinetic-gradient transition-all duration-300 ease-out"
+                    style={{
+                      left: fidsType === 'arrival' ? '4px' : 'calc(50% + 2px)',
+                      width: 'calc(50% - 6px)',
+                    }}
+                  />
                   <button
                     onClick={() => setFidsType('arrival')}
-                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border ${fidsType === 'arrival'
-                      ? 'bg-primary text-white border-transparent'
-                      : 'bg-surface text-on-surface-dim border-outline hover:text-on-surface'
+                    className={`relative z-10 w-1/2 h-full text-center text-[10px] font-black uppercase tracking-wider transition-colors duration-300 ${fidsType === 'arrival'
+                      ? 'text-white'
+                      : 'text-on-surface-dim hover:text-on-surface'
                       }`}
                   >
                     Arrivals
                   </button>
                   <button
                     onClick={() => setFidsType('departure')}
-                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border ${fidsType === 'departure'
-                      ? 'bg-primary text-white border-transparent'
-                      : 'bg-surface text-on-surface-dim border-outline hover:text-on-surface'
+                    className={`relative z-10 w-1/2 h-full text-center text-[10px] font-black uppercase tracking-wider transition-colors duration-300 ${fidsType === 'departure'
+                      ? 'text-white'
+                      : 'text-on-surface-dim hover:text-on-surface'
                       }`}
                   >
                     Departures
@@ -1173,13 +1275,24 @@ export const Schedule: React.FC = () => {
 
                 <div className="flex flex-wrap items-center gap-4">
                   {/* Category filters */}
-                  <div className="flex items-center gap-1.5 bg-surface p-1 rounded-xl border border-outline">
+                  <div className="relative flex items-center bg-surface p-1 rounded-xl border border-outline w-[280px] h-[38px] select-none overflow-hidden">
+                    <div
+                      className="absolute top-1 bottom-1 rounded-lg kinetic-gradient transition-all duration-300 ease-out"
+                      style={{
+                        left: fidsCategory === 'all'
+                          ? '4px'
+                          : fidsCategory === 'international'
+                            ? 'calc(33.33% + 2px)'
+                            : 'calc(66.66% + 2px)',
+                        width: 'calc(33.33% - 6px)',
+                      }}
+                    />
                     {['all', 'international', 'domestic'].map((cat) => (
                       <button
                         key={cat}
                         onClick={() => setFidsCategory(cat as any)}
-                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${fidsCategory === cat
-                          ? 'bg-primary text-white'
+                        className={`relative z-10 w-1/3 h-full text-center text-[9px] font-black uppercase tracking-widest transition-colors duration-300 ${fidsCategory === cat
+                          ? 'text-white'
                           : 'text-on-surface-dim hover:text-on-surface'
                           }`}
                       >
@@ -1250,24 +1363,29 @@ export const Schedule: React.FC = () => {
                     <tbody className="bg-surface divide-y divide-outline">
                       {filteredFidsFlights.map((flight, idx) => {
                         const isImported = isFlightImported(flight.flightNumber);
+                        const importedJob = flightJobs.find(job => (job.flightNumber || '').replace(/\s+/g, '').toLowerCase() === (flight.flightNumber || '').replace(/\s+/g, '').toLowerCase());
                         const statusColor = getFidsStatusColor(flight.status);
-                        const airlineCode = (flight.airlineCode || flight.flightNumber || '').replace(/\s+/g, '').slice(0, 2).toLowerCase();
+                        const airlineCode = (flight.airlineCode || flight.flightNumber || '').replace(/\s+/g, '').slice(0, 2).toUpperCase();
 
                         return (
                           <tr key={flight.id || idx} className="hover:bg-primary/[0.01] transition-colors group">
                             {/* Airline */}
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center space-x-3">
-                                <div className="w-8 h-8 rounded-lg bg-surface-dim border border-outline flex items-center justify-center font-black text-[10px] text-on-surface-dim uppercase overflow-hidden">
+                                <div className="w-8 h-8 rounded-lg bg-surface-dim border border-outline flex items-center justify-center font-black text-[10px] text-on-surface-dim uppercase overflow-hidden relative">
                                   {airlineCode ? (
-                                    <img
-                                      src={`https://fis.com.mv/tail/${airlineCode}.png`}
-                                      alt={flight.airlineCode}
-                                      onError={(e) => { (e.target as any).style.display = 'none'; }}
-                                      className="w-full h-full object-contain p-1"
-                                    />
-                                  ) : null}
-                                  <span className="group-hover:scale-110 transition-transform">{flight.airlineCode || flight.airline?.slice(0, 2)}</span>
+                                    <>
+                                      <img
+                                        src={`https://fis.com.mv/tail/${airlineCode}.png`}
+                                        alt={flight.airlineCode}
+                                        onError={(e) => { (e.target as any).style.display = 'none'; }}
+                                        className="w-full h-full object-contain p-1 absolute inset-0 bg-surface-dim z-10"
+                                      />
+                                      <span className="group-hover:scale-110 transition-transform relative z-0">{flight.airlineCode || flight.airline?.slice(0, 2)}</span>
+                                    </>
+                                  ) : (
+                                    <span className="group-hover:scale-110 transition-transform">{flight.airlineCode || flight.airline?.slice(0, 2)}</span>
+                                  )}
                                 </div>
                                 <div>
                                   <p className="text-[11px] font-black text-on-surface uppercase tracking-tight">{flight.airline}</p>
@@ -1303,7 +1421,9 @@ export const Schedule: React.FC = () => {
                             </td>
                             {/* Gate */}
                             <td className="px-6 py-4 whitespace-nowrap text-center">
-                              <span className="text-xs font-black text-on-surface-dim uppercase">{flight.gate || '---'}</span>
+                              <span className="text-xs font-black text-on-surface-dim uppercase">
+                                {importedJob?.stand || flight.gate || '---'}
+                              </span>
                             </td>
                             {/* Terminal */}
                             <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -1318,9 +1438,19 @@ export const Schedule: React.FC = () => {
                             {/* Action */}
                             <td className="px-6 py-4 whitespace-nowrap text-right">
                               {isImported ? (
-                                <span className="inline-flex items-center px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-success/10 text-success border border-success/20">
-                                  Imported
-                                </span>
+                                <div className="flex items-center justify-end gap-2">
+                                  <span className="inline-flex items-center px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-success/10 text-success border border-success/20">
+                                    Imported
+                                  </span>
+                                  {[UserRole.ITP_MANAGER, UserRole.ADMIN].includes(user?.role) && (
+                                    <button
+                                      onClick={() => handleUnimportClick(flight.flightNumber)}
+                                      className="px-3 py-1.5 bg-error/10 hover:bg-error/20 text-error text-[9px] font-black uppercase tracking-widest rounded-lg border border-error/20 hover:scale-105 active:scale-95 transition-all"
+                                    >
+                                      Unimport
+                                    </button>
+                                  )}
+                                </div>
                               ) : (
                                 <button
                                   onClick={() => handleImportClick(flight)}

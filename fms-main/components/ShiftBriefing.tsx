@@ -27,7 +27,11 @@ import { User, UserRole, EquipmentType, EquipmentStatus } from '../types';
 import { useNotification } from '../context/NotificationContext';
 import { useOperationalData, BriefingShift } from '../context/OperationalDataContext';
 
-export const ShiftBriefing: React.FC = () => {
+interface ShiftBriefingProps {
+  user?: any;
+}
+
+export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
   const { notify } = useNotification();
   const { 
     equipment, 
@@ -42,6 +46,7 @@ export const ShiftBriefing: React.FC = () => {
     domesticFlights
   } = useOperationalData();
   const activeStaff = staff && staff.length > 0 ? staff : MOCK_USERS;
+  const canDelete = user?.role && [UserRole.ITP_MANAGER, UserRole.ADMIN].includes(user.role);
 
   const staffHistory = [
     { staffId: 'u3', lastDomestic: { date: '2026-06-09', shift: 'Morning', team: 'Team 1' }, lastDaily: { date: '2026-06-09', shift: 'Morning' }},
@@ -280,6 +285,36 @@ export const ShiftBriefing: React.FC = () => {
     } catch (error) {
       console.error("Failed to reset flights:", error);
       notify('Failed to reset flights.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteFlightFromBriefing = async (category: 'intl' | 'domestic' | 'adhoc', jobId: string) => {
+    const currentIntl = intlFlightsToRender;
+    const currentDomestic = domesticFlightsToRender;
+    const currentAdhoc = adhocFlightsToRender;
+
+    const updatedIntl = category === 'intl' ? currentIntl.filter((f: any) => f.id !== jobId) : currentIntl;
+    const updatedDomestic = category === 'domestic' ? currentDomestic.filter((f: any) => f.id !== jobId) : currentDomestic;
+    const updatedAdhoc = category === 'adhoc' ? currentAdhoc.filter((f: any) => f.id !== jobId) : currentAdhoc;
+
+    setIsSaving(true);
+    try {
+      await updateBriefingInfo(additionalInfo, dieselNeeds, {
+        ...staffAssignments,
+        attendees,
+        dailyCompleted,
+        frozenFlights: {
+          intl: updatedIntl,
+          domestic: updatedDomestic,
+          adhoc: updatedAdhoc
+        }
+      });
+      notify('Flight removed from briefing.', 'success');
+    } catch (error) {
+      console.error("Failed to delete flight from briefing:", error);
+      notify('Failed to delete flight from briefing.', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -599,7 +634,18 @@ export const ShiftBriefing: React.FC = () => {
                 {intlFlightsToRender.map((job) => (
                   <div key={job.id} className="flex flex-col p-5 bg-surface-dim border border-outline rounded-3xl group/item hover:bg-surface-container hover:border-sky-400/30 transition-all cursor-default shadow-sm hover:shadow-md w-full">
                     <div className="flex justify-between items-center w-full mb-1">
-                      <div className="text-base font-black tracking-tight text-on-surface">{job.flightNumber}</div>
+                      <div className="flex items-center space-x-2">
+                        <div className="text-base font-black tracking-tight text-on-surface">{job.flightNumber}</div>
+                        {canDelete && (
+                          <button
+                            onClick={() => handleDeleteFlightFromBriefing('intl', job.id)}
+                            className="p-1 text-error hover:bg-error/10 rounded-lg transition-all"
+                            title="Remove flight from briefing"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                       <div className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${
                         job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/10' : 
                         job.status === 'IN_PROGRESS' ? 'bg-amber-500/10 text-amber-500 animate-pulse-subtle border border-amber-500/10' : 
@@ -642,7 +688,18 @@ export const ShiftBriefing: React.FC = () => {
                 {domesticFlightsToRender.map((flight) => (
                   <div key={flight.id} className="flex flex-col p-5 bg-surface-dim border border-outline rounded-3xl group/item hover:bg-surface-container hover:border-sky-400/30 transition-all cursor-default shadow-sm hover:shadow-md w-full">
                     <div className="flex justify-between items-center w-full mb-1">
-                      <div className="text-base font-black tracking-tight text-on-surface">{flight.flightNumber}</div>
+                      <div className="flex items-center space-x-2">
+                        <div className="text-base font-black tracking-tight text-on-surface">{flight.flightNumber}</div>
+                        {canDelete && (
+                          <button
+                            onClick={() => handleDeleteFlightFromBriefing('domestic', flight.id)}
+                            className="p-1 text-error hover:bg-error/10 rounded-lg transition-all"
+                            title="Remove flight from briefing"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                       <div className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${
                         flight.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/10' : 
                         flight.status === 'IN_PROGRESS' ? 'bg-amber-500/10 text-amber-500 animate-pulse-subtle border border-amber-500/10' : 
@@ -674,7 +731,18 @@ export const ShiftBriefing: React.FC = () => {
                 {adhocFlightsToRender.map((flight) => (
                   <div key={flight.id} className="flex flex-col p-5 bg-surface-dim border border-outline rounded-3xl group/item hover:bg-surface-container hover:border-amber-500/30 transition-all cursor-default shadow-sm hover:shadow-md w-full">
                     <div className="flex justify-between items-center w-full mb-1">
-                      <div className="text-base font-black tracking-tight text-on-surface">{flight.flightNumber}</div>
+                      <div className="flex items-center space-x-2">
+                        <div className="text-base font-black tracking-tight text-on-surface">{flight.flightNumber}</div>
+                        {canDelete && (
+                          <button
+                            onClick={() => handleDeleteFlightFromBriefing('adhoc', flight.id)}
+                            className="p-1 text-error hover:bg-error/10 rounded-lg transition-all"
+                            title="Remove flight from briefing"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                       <div className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${
                         flight.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/10' : 
                         flight.status === 'IN_PROGRESS' ? 'bg-amber-500/10 text-amber-500 animate-pulse-subtle border border-amber-500/10' : 
@@ -703,7 +771,7 @@ export const ShiftBriefing: React.FC = () => {
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Active Operators</h3>
                 </div>
-                <span className="bg-surface-dim border border-outline px-3 py-1 rounded-full text-[10px] font-black opacity-60 group-hover:opacity-100 transition-opacity">{staffAssignments.activeOperators.length} STAFF</span>
+                <span className="bg-success/10 text-success border border-success/20 px-3 py-1 rounded-full text-[10px] font-black">{staffAssignments.activeOperators.length} STAFF</span>
               </div>
               {renderStaffSelectArray(staffAssignments.activeOperators, [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.DEPOT_OPERATOR], "Operators", "bg-success shadow-[0_0_10px_rgba(34,197,94,0.4)]", 'success', (newVals) => setStaffAssignments(prev => ({...prev, activeOperators: newVals})))}
             </div>
@@ -717,7 +785,7 @@ export const ShiftBriefing: React.FC = () => {
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Active Officers</h3>
                 </div>
-                <span className="bg-surface-dim border border-outline px-3 py-1 rounded-full text-[10px] font-black opacity-60 group-hover:opacity-100 transition-opacity">{staffAssignments.activeOfficers.length} STAFF</span>
+                <span className="bg-primary/10 text-primary border border-primary/20 px-3 py-1 rounded-full text-[10px] font-black">{staffAssignments.activeOfficers.length} STAFF</span>
               </div>
               {renderStaffSelectArray(staffAssignments.activeOfficers, [UserRole.ITP_OFFICER, UserRole.ADMIN], "Officers", "bg-primary shadow-[0_0_10px_rgba(14,165,233,0.4)]", 'primary', (newVals) => setStaffAssignments(prev => ({...prev, activeOfficers: newVals})))}
             </div>
@@ -731,7 +799,7 @@ export const ShiftBriefing: React.FC = () => {
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Hydrant Ops Officers</h3>
                 </div>
-                <span className="bg-surface-dim border border-outline px-3 py-1 rounded-full text-[10px] font-black opacity-60 group-hover:opacity-100 transition-opacity">{staffAssignments.hydrantOpsOfficers.length} STAFF</span>
+                <span className="bg-warning/10 text-warning border border-warning/20 px-3 py-1 rounded-full text-[10px] font-black">{staffAssignments.hydrantOpsOfficers.length} STAFF</span>
               </div>
               {renderStaffSelectArray(staffAssignments.hydrantOpsOfficers, [UserRole.ITP_OFFICER, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OPERATOR], "Hydrant Officers", "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]", 'warning', (newVals) => setStaffAssignments(prev => ({...prev, hydrantOpsOfficers: newVals})))}
             </div>
@@ -745,7 +813,7 @@ export const ShiftBriefing: React.FC = () => {
                   </div>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Staffing Management</h3>
                 </div>
-                <span className="bg-surface-dim border border-outline px-3 py-1 rounded-full text-[10px] font-black opacity-60 group-hover:opacity-100 transition-opacity">2 STAFF</span>
+                <span className="bg-primary/10 text-primary border border-primary/20 px-3 py-1 rounded-full text-[10px] font-black">2 STAFF</span>
               </div>
               <div className="space-y-6">
                 {renderStaffSelect(staffAssignments.dutySupervisor, [UserRole.ITP_MANAGER], "Duty Supervisor", (id) => setStaffAssignments(prev => ({ ...prev, dutySupervisor: id })))}

@@ -253,48 +253,209 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
         <title>Fuel Services</title>
         <style>
           @page { size: A4 landscape; margin: 0; }
-          body { font-family: 'Arial', sans-serif; font-size: 11px; margin: 0; padding: 15mm; color: #000; }
-          .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }
-          .title-area { display: flex; flex-direction: column; gap: 5px; }
-          .title { font-size: 18px; font-weight: bold; text-transform: uppercase; }
-          .date { font-size: 13px; font-weight: bold; }
+          body { font-family: 'Arial', sans-serif; font-size: 11px; margin: 0; padding: 10mm; color: #000; background-color: #fff; }
           
-          .tables-container { display: flex; gap: 30px; align-items: flex-start; }
+          .receipt-box {
+            border: 3px solid #000;
+            padding: 20px;
+            min-height: 170mm;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+          }
+
+          .brand-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #000;
+            padding-bottom: 12px;
+            margin-bottom: 15px;
+          }
+
+          .brand-left h2 {
+            font-size: 13px;
+            font-weight: 900;
+            margin: 0;
+            line-height: 1.2;
+            text-transform: uppercase;
+            letter-spacing: -0.02em;
+          }
+
+          .brand-left h3.sub-1 {
+            font-size: 11px;
+            font-weight: 700;
+            color: #4b5563;
+            margin: 2px 0 0 0;
+            line-height: 1.2;
+            text-transform: uppercase;
+          }
+
+          .brand-left h3.sub-2 {
+            font-size: 10px;
+            font-weight: 500;
+            color: #6b7280;
+            margin: 2px 0 0 0;
+            line-height: 1.2;
+            text-transform: uppercase;
+          }
+
+          .logo img {
+            height: 45px;
+          }
+
+          .title-container {
+            text-align: center;
+            margin-bottom: 20px;
+          }
+
+          .title {
+            font-size: 18px;
+            font-weight: 900;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border-bottom: 2px solid #000;
+            display: inline-block;
+            padding: 4px 40px;
+            margin: 0 0 10px 0;
+          }
+
+          .date {
+            font-size: 11px;
+            font-weight: bold;
+          }
           
-          .section-title { font-size: 18px; font-weight: bold; text-transform: uppercase; margin-bottom: 10px; }
-          .text-success { color: #22c55e; font-weight: bold; }
-          .text-error { color: #ef4444; font-weight: bold; }
+          .tables-container {
+            display: flex;
+            gap: 25px;
+            align-items: flex-start;
+            flex: 1;
+          }
           
-          .data-table { border-collapse: collapse; width: 100%; }
-          .data-table th, .data-table td { border: 1px solid #000; padding: 6px; text-align: center; }
-          .data-table th { background-color: #e2e8f0; font-weight: bold; }
+          .left-col {
+            width: 230px;
+            flex-shrink: 0;
+          }
+
+          .right-col {
+            flex-grow: 1;
+          }
           
-          .left-col { width: 250px; flex-shrink: 0; }
-          .right-col { flex-grow: 1; }
+          .section-title {
+            font-size: 13px;
+            font-weight: 900;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            border-bottom: 1.5px solid #000;
+            padding-bottom: 3px;
+          }
+
+          .text-success {
+            color: #16a34a;
+            font-weight: bold;
+          }
+
+          .text-error {
+            color: #dc2626;
+            font-weight: bold;
+          }
           
-          .logo { height: 40px; font-size: 24px; font-weight: bold; color: #0284c7; }
+          .data-table {
+            border-collapse: collapse;
+            width: 100%;
+            border: 1.5px solid #000;
+          }
+
+          .data-table th, .data-table td {
+            border: 1px solid #000;
+            padding: 5px;
+            text-align: center;
+            font-size: 10px;
+          }
+
+          .data-table th {
+            background-color: #f8fafc;
+            font-weight: 900;
+            color: #000;
+            text-transform: uppercase;
+            border-bottom: 1.5px solid #000;
+          }
+
+          .footer {
+            display: flex;
+            align-items: flex-end;
+            border-top: 2px solid #000;
+            padding-top: 15px;
+            margin-top: 25px;
+          }
+
+          .prepared-by {
+            display: flex;
+            flex-direction: column;
+            width: 250px;
+          }
+
+          .prepared-by .label {
+            font-size: 8px;
+            font-weight: 900;
+            color: #6b7280;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+          }
+
+          .prepared-by .val {
+            font-size: 12px;
+            font-weight: bold;
+            color: #1e3a8a;
+            font-style: italic;
+          }
+
+          .prepared-by .role {
+            font-size: 9px;
+            font-weight: bold;
+            color: #4b5563;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+          }
         </style>
       </head>
       <body>
-        <div class="header">
-          <div class="title-area">
-            <div class="title">REFUELLING EQUIPMENT STATUS</div>
+        <div class="receipt-box">
+          <div class="brand-header">
+            <div class="brand-left">
+              <h2>FUEL SERVICES SECTION</h2>
+              <h3 class="sub-1">VELANA INTERNATIONAL AIRPORT</h3>
+              <h3 class="sub-2">MALDIVES AIRPORTS COMPANY LTD</h3>
+            </div>
+            <div class="logo">
+              <img src="https://static.routesonline.com/images/cached/organisation-14252-scaled-300x130.png" alt="MACL Logo" />
+            </div>
+          </div>
+
+          <div class="title-container">
+            <h1 class="title">REFUELLING EQUIPMENT STATUS</h1>
             <div class="date">DATE & TIME: &nbsp;&nbsp;&nbsp;${formattedDate}</div>
           </div>
-          <div class="logo">
-            <img src="https://static.routesonline.com/images/cached/organisation-14252-scaled-300x130.png" alt="MACL Logo" style="height: 50px;" />
-          </div>
-        </div>
 
-        <div class="tables-container">
-          <div class="left-col">
-            <div class="section-title text-success">IN SERVICE</div>
-            ${inServiceHTML}
+          <div class="tables-container">
+            <div class="left-col">
+              <div class="section-title text-success">IN SERVICE</div>
+              ${inServiceHTML}
+            </div>
+            
+            <div class="right-col">
+              <div class="section-title text-error">OUT OF SERVICE</div>
+              ${outOfServiceHTML}
+            </div>
           </div>
-          
-          <div class="right-col">
-            <div class="section-title text-error">OUT OF SERVICE</div>
-            ${outOfServiceHTML}
+
+          <div class="footer">
+            <div class="prepared-by">
+              <span class="label">PREPARED BY:</span>
+              <span class="val">${user.name}</span>
+              <span class="role">${user.role.replace(/_/g, ' ')}</span>
+            </div>
           </div>
         </div>
 
@@ -343,7 +504,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
             {user && ![UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(user.role) && (
               <button
                 onClick={exportToPDF}
-                className="flex items-center justify-center p-2 lg:px-4 lg:py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl hover:bg-primary hover:text-white transition-all shadow-sm active:scale-95 flex-shrink-0"
+                className="flex items-center justify-center p-2 lg:px-4 lg:py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl hover-kinetic-gradient transition-all active:scale-95 flex-shrink-0"
                 title="Export Status (PDF)"
               >
                 <FileText className="w-5 h-5 lg:w-4 lg:h-4 lg:mr-2" />

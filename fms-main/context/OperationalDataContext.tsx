@@ -55,6 +55,7 @@ interface OperationalDataContextType {
   updateBriefingInfo: (info: any[], dieselNeeds: string[], staffAssignments?: any) => Promise<void>;
   updateFlightJob: (id: string, updates: Partial<FlightJob>) => Promise<void>;
   addFlightJob: (job: FlightJob) => Promise<void>;
+  deleteFlightJob: (id: string) => Promise<void>;
   createAlert: (alert: Omit<Alert, 'id'>) => Promise<boolean>;
   acknowledgeAlert: (id: string) => Promise<void>;
   acknowledgeAllAlerts: (ids: string[]) => Promise<void>;
@@ -70,6 +71,16 @@ interface OperationalDataContextType {
 }
 
 const OperationalDataContext = createContext<OperationalDataContextType | undefined>(undefined);
+
+const mapDomesticAssignments = (data: any[]) => {
+  return data.map(da => ({
+    ...da,
+    op1: da.operator1_id || da.op1 || '',
+    op2: da.operator2_id || da.op2 || '',
+    operator1_id: da.operator1_id || da.op1 || '',
+    operator2_id: da.operator2_id || da.op2 || ''
+  }));
+};
 
 export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user: any }> = ({ children, user: appUser }) => {
   const [equipment, setEquipment] = useState<Equipment[]>(() => {
@@ -504,7 +515,9 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       if (fetchedAlerts && Array.isArray(fetchedAlerts)) setAlerts(fetchedAlerts);
       if (fetchedLogs && Array.isArray(fetchedLogs)) setFlightLogs(fetchedLogs);
       if (fetchedStaff && fetchedStaff.length > 0) setStaff(fetchedStaff);
-      if (fetchedDomAssign && Array.isArray(fetchedDomAssign)) setDomesticAssignments(fetchedDomAssign);
+      if (fetchedDomAssign && Array.isArray(fetchedDomAssign)) {
+        setDomesticAssignments(mapDomesticAssignments(fetchedDomAssign));
+      }
       
     } catch (error) {
       console.error('Error refreshing operational data:', error);
@@ -610,7 +623,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
     const unsubscribeFlightJobs = supabaseService.subscribeToFlightJobs((updatedJobs) => {
       console.log("SYNC: Flight jobs received from Supabase. Count:", updatedJobs.length);
-      if (updatedJobs && updatedJobs.length > 0) {
+      if (updatedJobs) {
         setFlightJobs(updatedJobs);
       }
     });
@@ -620,7 +633,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       .on('postgres_changes', { event: '*', schema: 'public', table: 'domestic_assignments' }, () => {
         console.log("SYNC: postgres change on domestic_assignments for date:", selectedBriefingDate);
         supabaseService.getDomesticAssignments(selectedBriefingDate).then(data => {
-          if (data) setDomesticAssignments(data);
+          if (data) setDomesticAssignments(mapDomesticAssignments(data));
         });
       })
       .subscribe();
@@ -743,6 +756,17 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         await supabaseService.addFlightJob(job);
       } catch (error) {
         console.error('Failed to add flight job to Supabase:', error);
+      }
+    }
+  };
+
+  const deleteFlightJob = async (id: string) => {
+    setFlightJobs(prev => prev.filter(j => j.id !== id));
+    if (appUser) {
+      try {
+        await supabaseService.deleteFlightJob(id);
+      } catch (error) {
+        console.error('Failed to sync delete flight job to Supabase:', error);
       }
     }
   };
@@ -878,10 +902,24 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       const existingIdx = prev.findIndex(da => da.team_name === teamName);
       if (existingIdx >= 0) {
         const copy = [...prev];
-        copy[existingIdx] = { ...copy[existingIdx], op1, op2 };
+        copy[existingIdx] = { 
+          ...copy[existingIdx], 
+          op1, 
+          op2, 
+          operator1_id: op1, 
+          operator2_id: op2 
+        };
         return copy;
       } else {
-        return [...prev, { date: selectedBriefingDate, team_name: teamName, op1, op2 }];
+        return [...prev, { 
+          date: selectedBriefingDate, 
+          assignment_date: selectedBriefingDate,
+          team_name: teamName, 
+          op1, 
+          op2, 
+          operator1_id: op1, 
+          operator2_id: op2 
+        }];
       }
     });
 
@@ -934,6 +972,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       updateBriefingInfo,
       updateFlightJob,
       addFlightJob,
+      deleteFlightJob,
       createAlert,
       acknowledgeAlert,
       acknowledgeAllAlerts,

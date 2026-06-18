@@ -683,9 +683,9 @@ const AppContextContent: React.FC<any> = ({
       case 'history':
         return <LogHistory user={currentUser} />;
       case 'schedule':
-        return <Schedule />;
+        return <Schedule user={currentUser} />;
       case 'briefing':
-        return <ShiftBriefing />;
+        return <ShiftBriefing user={currentUser} />;
       case 'admin':
         return currentUser.role === UserRole.ADMIN ? <SystemAdmin currentUser={currentUser} /> : <Dashboard user={currentUser} setActiveView={setActiveView} onStartJob={() => {}} onSelectEquipment={(eqId: string) => { setPendingVehicleId(eqId); setActiveView('intoplane'); }} />;
       case 'depot-reports':
@@ -1230,6 +1230,15 @@ const AppContextContent: React.FC<any> = ({
               {renderContent()}
             </div>
           </main>
+
+          {/* Bottom Navigation */}
+          <BottomNav 
+            user={currentUser!} 
+            activeView={activeView} 
+            setActiveView={setActiveView}
+            onMenuClick={() => setIsMobileMenuOpen(true)}
+            isVisible={showHeader}
+          />
         </div>
         
         {/* Mobile Overlay */}
@@ -1239,15 +1248,6 @@ const AppContextContent: React.FC<any> = ({
             onClick={() => setIsMobileMenuOpen(false)}
           />
         )}
-
-        {/* Bottom Navigation */}
-        <BottomNav 
-          user={currentUser} 
-          activeView={activeView} 
-          setActiveView={setActiveView}
-          onMenuClick={() => setIsMobileMenuOpen(true)}
-          isVisible={showHeader}
-        />
 
         {/* Install toast is now handled by NotificationContext.notifyWithAction() */}
 

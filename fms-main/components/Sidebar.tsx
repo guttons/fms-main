@@ -19,7 +19,8 @@ import {
   Moon,
   ToggleRight,
   ToggleLeft,
-  Fuel
+  Fuel,
+  PanelLeft
 } from 'lucide-react';
 import { Logo } from './Logo';
 
@@ -40,6 +41,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isMobileMenuOpen,
   onSettingsClick
 }) => {
+  const [isCollapsed, setIsCollapsed] = React.useState(() => {
+    try {
+      return localStorage.getItem('sidebar-collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleCollapse = () => {
+    setIsCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('sidebar-collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   const getMenuItems = () => {
     if (!user || !user.role) return [];
     switch (user.role) {
@@ -157,71 +176,141 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside className={`
-      fixed inset-y-0 left-0 z-[60] w-[var(--sidebar-width)] bg-surface border-r border-outline transform transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
-      ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-0 shadow-sm transition-colors duration-500
+      fixed inset-y-0 left-0 z-[60] bg-surface border-r border-outline transform transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
+      ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl w-[var(--sidebar-width)]' : '-translate-x-full w-[var(--sidebar-width)]'} 
+      lg:translate-x-0 lg:static lg:inset-0 shadow-sm transition-colors duration-500
+      ${isCollapsed ? 'lg:w-[78px]' : 'lg:w-[var(--sidebar-width)]'}
     `}>
       <div className="h-full flex flex-col">
         {/* Brand */}
-        <div className="h-[72px] flex items-center justify-between px-8 bg-surface-dim/20 border-b border-outline">
-          <h1 className="text-5xl font-[1000] text-primary uppercase tracking-[-0.05em] leading-none italic drop-shadow-[0_0_12px_rgba(var(--color-primary),0.2)]">FMS</h1>
-          <div className="hidden lg:flex items-center space-x-3">
-            <Logo className="h-14 w-auto object-contain text-primary" />
+        <div className={`h-[72px] flex items-center bg-surface-dim/20 border-b border-outline relative transition-all duration-300 ${
+          isCollapsed ? 'lg:px-0 lg:justify-center px-8 justify-between' : 'px-8 justify-between'
+        }`}>
+          <h1 className={`text-5xl font-[1000] text-primary uppercase tracking-[-0.05em] leading-none italic drop-shadow-[0_0_12px_rgba(var(--color-primary),0.2)] transition-all duration-300 whitespace-nowrap inline-block ${
+            isCollapsed ? 'lg:opacity-0 lg:max-w-0 lg:overflow-hidden lg:pointer-events-none' : 'lg:opacity-100 lg:max-w-[150px]'
+          }`}>
+            FMS
+          </h1>
+          <div className={`transition-all duration-300 ${
+            isCollapsed ? 'hidden lg:flex lg:scale-75 lg:justify-center lg:w-full' : 'hidden lg:flex items-center space-x-3'
+          }`}>
+            <Logo className="h-14 w-auto object-contain text-primary transition-all duration-300" />
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto custom-scrollbar">
+        <nav className={`flex-1 px-4 py-8 space-y-1 overflow-y-auto custom-scrollbar transition-all duration-300 ${isCollapsed ? 'lg:px-0 lg:flex lg:flex-col lg:items-center' : ''}`}>
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeView === item.id;
             return (
-              <button
-                key={item.id}
-                onClick={() => setActiveView(item.id)}
-                className={`w-full flex items-center px-4 py-3.5 rounded-xl transition-all group
-                  ${isActive 
-                    ? 'bg-primary/10 text-primary' 
-                    : 'text-on-surface-dim hover:bg-surface-dim hover:text-on-surface'
-                  }`}
-              >
-                <Icon className={`w-5 h-5 mr-4 transition-colors ${isActive ? 'text-primary' : 'opacity-40 group-hover:opacity-100'}`} />
-                <span className={`text-[13.5px] font-bold tracking-tight ${isActive ? 'font-black' : ''}`}>
-                  {item.label}
-                </span>
-                {isActive && (
-                  <div className="ml-auto w-1.5 h-1.5 bg-primary rounded-full shadow-[0_0_12px_rgba(56,189,248,0.6)]"></div>
+              <div key={item.id} className="relative group w-full flex justify-center">
+                <button
+                  onClick={() => setActiveView(item.id)}
+                  className={`w-full flex items-center rounded-xl transition-all duration-300 px-4 py-3
+                    ${isCollapsed ? 'lg:w-11 lg:h-11 lg:p-0 lg:justify-center' : 'lg:px-4'}
+                    ${isActive 
+                      ? 'bg-primary/10 text-primary' 
+                      : 'text-on-surface-dim hover:bg-surface-dim hover:text-on-surface'
+                    }`}
+                >
+                  <Icon className={`w-5 h-5 ${isCollapsed ? 'lg:mr-0' : 'lg:mr-4'} mr-4 transition-all duration-300 shrink-0 ${isActive ? 'text-primary' : 'opacity-40 group-hover:opacity-100'}`} />
+                  <span className={`text-[13.5px] font-bold tracking-tight whitespace-nowrap transition-all duration-300 inline-block ${isActive ? 'font-black' : ''} ${isCollapsed ? 'lg:opacity-0 lg:max-w-0 lg:overflow-hidden lg:pointer-events-none' : 'lg:opacity-100 lg:max-w-[200px]'}`}>
+                    {item.label}
+                  </span>
+                  {isActive && (
+                    <div className={`ml-auto w-1.5 h-1.5 bg-primary rounded-full shadow-[0_0_12px_rgba(56,189,248,0.6)] ${isCollapsed ? 'lg:hidden' : ''}`}></div>
+                  )}
+                </button>
+                
+                {/* Sliding Hover Tooltip - visible only on desktop when collapsed */}
+                {isCollapsed && (
+                  <div className="hidden lg:block fixed left-[86px] -mt-9 px-3 py-1.5 bg-surface-lowest border border-outline text-[11px] font-black uppercase tracking-wider text-on-surface rounded-xl shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 transition-all duration-200 transform translate-x-2 group-hover:translate-x-0 z-50 whitespace-nowrap">
+                    {item.label}
+                  </div>
                 )}
-              </button>
+              </div>
             );
           })}
         </nav>
 
         {/* Footer Controls */}
-        <div className="p-6 space-y-6">
+        <div className={`p-6 transition-all duration-300 ${isCollapsed ? 'lg:p-4' : 'p-6'}`}>
+          <div className={`border-t border-outline transition-all duration-300 ${
+            isCollapsed 
+              ? 'lg:flex lg:flex-col lg:items-center w-full lg:space-y-2 lg:pt-2 space-y-4 pt-4' 
+              : 'space-y-4 pt-4'
+          }`}>
+            {/* Help Center */}
+            <div className="relative group w-full flex justify-center">
+              <button className={`w-full flex items-center text-on-surface-dim hover:text-primary transition-colors text-[13.5px] font-bold transition-all duration-300 rounded-xl px-2 py-2 ${isCollapsed ? 'lg:w-11 lg:h-11 lg:p-0 lg:justify-center' : ''}`}>
+                <ClipboardList className={`w-4 h-4 ${isCollapsed ? 'lg:mr-0' : 'lg:mr-3'} mr-3 opacity-40 hover:opacity-100 transition-all duration-300 shrink-0`} />
+                <span className={`whitespace-nowrap transition-all duration-300 inline-block ${isCollapsed ? 'lg:opacity-0 lg:max-w-0 lg:overflow-hidden lg:pointer-events-none' : 'lg:opacity-100 lg:max-w-[150px]'}`}>
+                  Help Center
+                </span>
+              </button>
+              {isCollapsed && (
+                <div className="hidden lg:block fixed left-[86px] -mt-9 px-3 py-1.5 bg-surface-lowest border border-outline text-[11px] font-black uppercase tracking-wider text-on-surface rounded-xl shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 transition-all duration-200 transform translate-x-2 group-hover:translate-x-0 z-50 whitespace-nowrap">
+                  Help Center
+                </div>
+              )}
+            </div>
 
-          <div className="space-y-4 pt-4 border-t border-outline">
-            <button className="flex items-center text-on-surface-dim hover:text-primary transition-colors text-[13px] font-bold px-2 group">
-              <ClipboardList className="w-4 h-4 mr-3 opacity-40 group-hover:opacity-100" />
-              Help Center
-            </button>
-            <button 
-              onClick={onSettingsClick}
-              className={`w-full flex items-center px-2 py-2 text-[13px] font-bold rounded-xl transition-all group
-                ${activeView === 'admin' 
-                  ? 'bg-primary/10 text-primary font-black' 
-                  : 'text-on-surface-dim hover:bg-surface-dim hover:text-on-surface'
-                }`}
-            >
-              <Settings className={`w-4 h-4 mr-3 transition-colors ${activeView === 'admin' ? 'text-primary' : 'opacity-40 group-hover:opacity-100'}`} />
-              System Settings
-            </button>
-            <button 
-              onClick={onLogout}
-              className="flex items-center text-error font-black px-2 mt-4 hover:brightness-110 transition-all text-[13px] group"
-            >
-              <LogOut className="w-4 h-4 mr-3 opacity-60 group-hover:translate-x-1 transition-transform" />
-              Sign Out
-            </button>
+            {/* System Settings */}
+            <div className="relative group w-full flex justify-center">
+              <button 
+                onClick={onSettingsClick}
+                className={`w-full flex items-center rounded-xl transition-all duration-300 px-2 py-2 text-[13.5px] font-bold
+                  ${isCollapsed ? 'lg:w-11 lg:h-11 lg:p-0 lg:justify-center' : ''}
+                  ${activeView === 'admin' 
+                    ? 'bg-primary/10 text-primary font-black' 
+                    : 'text-on-surface-dim hover:bg-surface-dim hover:text-on-surface'
+                  }`}
+              >
+                <Settings className={`w-4 h-4 ${isCollapsed ? 'lg:mr-0' : 'lg:mr-3'} mr-3 transition-all duration-300 shrink-0 ${activeView === 'admin' ? 'text-primary' : 'opacity-40 hover:opacity-100'}`} />
+                <span className={`whitespace-nowrap transition-all duration-300 inline-block ${activeView === 'admin' ? 'font-black' : ''} ${isCollapsed ? 'lg:opacity-0 lg:max-w-0 lg:overflow-hidden lg:pointer-events-none' : 'lg:opacity-100 lg:max-w-[150px]'}`}>
+                  System Settings
+                </span>
+              </button>
+              {isCollapsed && (
+                <div className="hidden lg:block fixed left-[86px] -mt-9 px-3 py-1.5 bg-surface-lowest border border-outline text-[11px] font-black uppercase tracking-wider text-on-surface rounded-xl shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 transition-all duration-200 transform translate-x-2 group-hover:translate-x-0 z-50 whitespace-nowrap">
+                  System Settings
+                </div>
+              )}
+            </div>
+
+            {/* Sign Out */}
+            <div className="relative group w-full flex justify-center">
+              <button 
+                onClick={onLogout}
+                className={`w-full flex items-center text-error font-black hover:brightness-110 rounded-xl transition-all duration-300 text-[13.5px] px-2 py-2 ${isCollapsed ? 'lg:w-11 lg:h-11 lg:p-0 lg:justify-center' : ''}`}
+              >
+                <LogOut className={`w-4 h-4 ${isCollapsed ? 'lg:mr-0' : 'lg:mr-3'} mr-3 opacity-60 hover:translate-x-1 transition-all duration-300 shrink-0`} />
+                <span className={`whitespace-nowrap transition-all duration-300 inline-block ${isCollapsed ? 'lg:opacity-0 lg:max-w-0 lg:overflow-hidden lg:pointer-events-none' : 'lg:opacity-100 lg:max-w-[150px]'}`}>
+                  Sign Out
+                </span>
+              </button>
+              {isCollapsed && (
+                <div className="hidden lg:block fixed left-[86px] -mt-9 px-3 py-1.5 bg-surface-lowest border border-outline text-[11px] font-black uppercase tracking-wider text-error rounded-xl shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 transition-all duration-200 transform translate-x-2 group-hover:translate-x-0 z-50 whitespace-nowrap">
+                  Sign Out
+                </div>
+              )}
+            </div>
+
+            {/* Collapse Toggle */}
+            <div className={`hidden lg:flex relative group w-full border-t border-outline/50 transition-all duration-300 ${
+              isCollapsed ? 'lg:justify-center lg:pt-2' : 'lg:justify-end lg:pt-4'
+            }`}>
+              <button 
+                onClick={toggleCollapse}
+                className="w-11 h-11 flex items-center justify-center rounded-xl transition-all duration-300 text-on-surface-dim hover:bg-surface-dim hover:text-on-surface cursor-pointer"
+              >
+                <PanelLeft className={`w-4 h-4 opacity-60 hover:opacity-100 transition-all duration-300 shrink-0 ${isCollapsed ? 'rotate-180' : ''}`} />
+              </button>
+              <div className={`hidden lg:block fixed ${isCollapsed ? 'left-[86px]' : 'left-[288px]'} -mt-9 px-3 py-1.5 bg-surface-lowest border border-outline text-[11px] font-black uppercase tracking-wider text-on-surface rounded-xl shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 transition-all duration-200 transform translate-x-2 group-hover:translate-x-0 z-50 whitespace-nowrap`}>
+                {isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+              </div>
+            </div>
           </div>
         </div>
       </div>

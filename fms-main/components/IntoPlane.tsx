@@ -272,7 +272,7 @@ const ScreenDashboard: React.FC<{
         {parts.map((part, idx) => {
           if (part === 'MLE') {
             return (
-              <span key={idx} className="text-[0.75em] text-white opacity-100 mx-[1px] font-bold leading-none relative top-[1px]">
+              <span key={idx} className="text-[0.75em] opacity-100 mx-[1px] font-bold leading-none relative top-[1px]">
                 {part}
               </span>
             );
@@ -571,7 +571,7 @@ const ScreenDashboard: React.FC<{
                                        )}
                                    </>
                                )}
-                               {viewMode === 'DOM' && (job as any).assignedTeam && (
+                               {viewMode === 'DOM' && (job as any).assignedTeam && job.status !== 'PENDING' && (
                                    <div className="flex items-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest">
                                        <Users className="w-3.5 h-3.5 mr-1.5 text-primary opacity-70" />
                                        <span>{(job as any).assignedTeam}</span>

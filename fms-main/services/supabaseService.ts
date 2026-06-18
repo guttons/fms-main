@@ -234,27 +234,65 @@ export const supabaseService = {
       return [];
     }
     if (!data || data.length === 0) return [];
-    return data.map(row => ({
-      id: row.id,
-      flightNumber: row.flight_number,
-      aircraftReg: row.aircraft_reg,
-      aircraftType: row.aircraft_type,
-      stand: row.stand,
-      sta: row.sta,
-      eta: row.eta,
-      std: row.std,
-      assignedTo: row.assigned_to,
-      assignedOfficer: row.assigned_officer,
-      equipmentUsage: row.equipment_usage,
-      status: row.status,
-      vehicleId: row.vehicle_id,
-      remarks: row.remarks,
-      deliveryNumber: row.delivery_number,
-      pitNumber: row.pit_number
-    } as FlightJob));
+    return data.map(row => {
+      let dateVal: string | undefined = undefined;
+      let routeVal: string | undefined = undefined;
+      let isDomesticVal: boolean | undefined = undefined;
+      let isAdhocVal: boolean | undefined = undefined;
+      let typeVal: 'arrival' | 'departure' | undefined = undefined;
+      let remarksVal = row.remarks || '';
+
+      if (row.remarks && row.remarks.startsWith('{"_fms_meta":')) {
+        try {
+          const meta = JSON.parse(row.remarks);
+          dateVal = meta.date;
+          routeVal = meta.route;
+          isDomesticVal = meta.isDomestic;
+          isAdhocVal = meta.isAdhoc;
+          typeVal = meta.type;
+          remarksVal = meta.remarks || '';
+        } catch (e) {
+          // fallback
+        }
+      }
+
+      return {
+        id: row.id,
+        flightNumber: row.flight_number,
+        aircraftReg: row.aircraft_reg,
+        aircraftType: row.aircraft_type,
+        stand: row.stand,
+        sta: row.sta,
+        eta: row.eta,
+        std: row.std,
+        assignedTo: row.assigned_to,
+        assignedOfficer: row.assigned_officer,
+        equipmentUsage: row.equipment_usage,
+        status: row.status,
+        vehicleId: row.vehicle_id,
+        remarks: remarksVal,
+        deliveryNumber: row.delivery_number,
+        pitNumber: row.pit_number,
+        date: dateVal,
+        route: routeVal,
+        isDomestic: isDomesticVal,
+        isAdhoc: isAdhocVal,
+        type: typeVal
+      } as FlightJob;
+    });
   },
 
   async addFlightJob(job: FlightJob): Promise<void> {
+    const metaString = JSON.stringify({
+      _fms_meta: true,
+      date: job.date,
+      route: job.route,
+      isDomestic: job.isDomestic,
+      isAdhoc: job.isAdhoc,
+      type: job.type,
+      remarks: job.remarks || ''
+    });
+
     const row = {
       id: job.id,
       flight_number: job.flightNumber,
@@ -269,7 +307,7 @@ export const supabaseService = {
       equipment_usage: job.equipmentUsage || null,
       status: job.status,
       vehicle_id: job.vehicleId || null,
-      remarks: job.remarks || null,
+      remarks: metaString,
       delivery_number: job.deliveryNumber || null,
       pit_number: job.pitNumber || null
     };
@@ -295,13 +333,32 @@ export const supabaseService = {
     if ('equipmentUsage' in updates) row.equipment_usage = updates.equipmentUsage;
     if ('status' in updates) row.status = updates.status;
     if ('vehicleId' in updates) row.vehicle_id = updates.vehicleId;
-    if ('remarks' in updates) row.remarks = updates.remarks;
+    if ('remarks' in updates || 'date' in updates || 'route' in updates || 'isDomestic' in updates || 'isAdhoc' in updates || 'type' in updates) {
+      const metaString = JSON.stringify({
+        _fms_meta: true,
+        date: updates.date,
+        route: updates.route,
+        isDomestic: updates.isDomestic,
+        isAdhoc: updates.isAdhoc,
+        type: updates.type,
+        remarks: updates.remarks || ''
+      });
+      row.remarks = metaString;
+    }
     if ('deliveryNumber' in updates) row.delivery_number = updates.deliveryNumber;
     if ('pitNumber' in updates) row.pit_number = updates.pitNumber;
 
     const { error } = await supabase.from('flight_jobs').update(row).eq('id', id);
     if (error) {
       console.error('[Supabase] updateFlightJob failed:', error);
+      throw error;
+    }
+  },
+
+  async deleteFlightJob(id: string): Promise<void> {
+    const { error } = await supabase.from('flight_jobs').delete().eq('id', id);
+    if (error) {
+      console.error('[Supabase] deleteFlightJob failed:', error);
       throw error;
     }
   },
