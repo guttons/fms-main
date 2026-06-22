@@ -363,6 +363,22 @@ export const supabaseService = {
     }
   },
 
+  async clearAllFlightJobs(): Promise<void> {
+    const { error } = await supabase.from('flight_jobs').delete().neq('id', '');
+    if (error) {
+      console.error('[Supabase] clearAllFlightJobs failed:', error);
+      throw error;
+    }
+  },
+
+  async clearAllBriefingInfo(): Promise<void> {
+    const { error } = await supabase.from('shift_briefing_info').delete().neq('id', '');
+    if (error) {
+      console.error('[Supabase] clearAllBriefingInfo failed:', error);
+      throw error;
+    }
+  },
+
   subscribeToFlightJobs(callback: (jobs: FlightJob[]) => void) {
     const channel = supabase
       .channel('flight_jobs-changes-' + Date.now() + '-' + Math.floor(Math.random() * 1000))
@@ -1643,17 +1659,58 @@ export const supabaseService = {
       }
       throw new Error(`BigQuery API proxy returned status ${res.status}`);
     } catch (error) {
-      console.warn('[BigQuery] getExternalFlights via proxy failed, trying direct fetch:', error);
-      try {
-        const res = await fetch('https://www.fis.com.mv/api/flights');
-        if (res.ok) {
-          const data = await res.json();
-          return data.flights || [];
-        }
-      } catch (directError) {
-        console.error('[BigQuery] getExternalFlights direct fetch also failed:', directError);
-      }
+      console.warn('[BigQuery] getExternalFlights failed:', error);
       return [];
     }
+  },
+
+  // ── App Settings (Service Tank) ─────────────────────────────────────────────
+  async getServiceTank(): Promise<string | null> {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'service_tank')
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[Supabase] getServiceTank failed:', error);
+      return null;
+    }
+    if (data && data.value && typeof data.value === 'object' && 'tankId' in data.value) {
+      return (data.value as any).tankId;
+    }
+    return null;
+  },
+
+  async setServiceTank(tankId: string): Promise<void> {
+    const { error } = await supabase.from('app_settings').upsert({
+      key: 'service_tank',
+      value: { tankId },
+      updated_at: new Date().toISOString()
+    });
+    if (error) {
+      console.error('[Supabase] setServiceTank failed:', error);
+      throw error;
+    }
+  },
+
+  subscribeToAppSettings(callback: (key: string, value: any) => void) {
+    const channel = supabase
+      .channel('app_settings-changes-' + Date.now())
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'app_settings' },
+        (payload: any) => {
+          const row = payload.new;
+          if (row && row.key) {
+            callback(row.key, row.value);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }
 };

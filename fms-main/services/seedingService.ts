@@ -1,16 +1,23 @@
 import { supabase } from '../supabase';
 import { MOCK_USERS, TANKS, EQUIPMENT } from '../constants';
+import { supabaseService } from './supabaseService';
 
 export const seedingService = {
   /**
    * Seeds the Supabase database with initial mock data.
-   * This is useful for first-time setup or testing.
+   * Also clears flight_jobs and shift_briefing_info for a fresh FIDS pull.
    */
   async seedDatabase() {
     console.log('Starting Supabase database seeding...');
 
     try {
-      // 1. Seed Profiles
+      // 0. Clear flight jobs and briefing data for a fresh start
+      console.log('Clearing flight jobs...');
+      await supabaseService.clearAllFlightJobs();
+      console.log('Clearing shift briefing data...');
+      await supabaseService.clearAllBriefingInfo();
+      // 1. Seed Profiles (Skipped to preserve existing staff/profiles)
+      /*
       console.log('Seeding profiles...');
       const profilesData = MOCK_USERS.map(user => ({
         id: user.id,
@@ -20,8 +27,10 @@ export const seedingService = {
       }));
       const { error: profileError } = await supabase.from('profiles').upsert(profilesData);
       if (profileError) throw profileError;
+      */
 
-      // 2. Seed Staff
+      // 2. Seed Staff (Skipped to preserve existing staff details)
+      /*
       console.log('Seeding staff...');
       const staffData = MOCK_USERS.map(user => ({
         id: user.id,
@@ -33,8 +42,10 @@ export const seedingService = {
       }));
       const { error: staffError } = await supabase.from('staff').upsert(staffData);
       if (staffError) throw staffError;
+      */
 
-      // 3. Seed Tanks
+      // 3. Seed Tanks (Skipped to preserve existing tank levels)
+      /*
       console.log('Seeding tanks...');
       const tanksData = TANKS.map(tank => ({
         id: tank.id,
@@ -47,6 +58,7 @@ export const seedingService = {
       }));
       const { error: tanksError } = await supabase.from('tanks').upsert(tanksData);
       if (tanksError) throw tanksError;
+      */
 
       // 4. Seed Equipment
       console.log('Seeding equipment...');

@@ -90,7 +90,6 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     if (deliveryNumber.startsWith('MLE-')) {
       return (
         <span className="font-mono text-error">
-          <span className="text-[11px] font-black opacity-60 tracking-widest">MLE-</span>
           <span className="text-sm font-black tracking-normal">{deliveryNumber.substring(4)}</span>
         </span>
       );
@@ -102,7 +101,9 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
       const suffix = match[3] || '';
       return (
         <span className="font-mono text-error">
-          {prefix && <span className="text-[11px] font-black opacity-60 tracking-widest">{prefix}</span>}
+          {prefix && prefix.replace('-', '') !== 'MLE' && (
+            <span className="text-[11px] font-black opacity-60 tracking-widest">{prefix}</span>
+          )}
           <span className="text-sm font-black tracking-normal">{numbers}</span>
           {suffix && <span className="text-[11px] font-black opacity-60 tracking-widest">{suffix}</span>}
         </span>
@@ -383,7 +384,11 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
              </div>
              <button 
                  onClick={() => setShowFilters(!showFilters)}
-                 className={`p-4 rounded-2xl transition-all border ${showFilters ? 'bg-primary text-white border-primary' : 'bg-surface-dim text-on-surface-dim border-outline hover:bg-primary/5'}`}
+                 className={`p-4 rounded-2xl transition-all border hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center shrink-0 ${
+                   showFilters 
+                     ? 'kinetic-gradient text-white border-transparent shadow-premium' 
+                     : 'bg-surface-dim text-on-surface-dim border-outline hover:border-primary/50 hover:bg-primary/5'
+                 }`}
              >
                 <Filter className="w-5 h-5" />
              </button>
@@ -1041,7 +1046,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                 <X className="w-5 h-5" />
               </button>
               <h3 className="headline-sm text-on-surface mb-1 tracking-tighter">Edit Operational Log</h3>
-              <p className="text-[11px] font-black text-primary uppercase tracking-[0.2em]">Modify details for Ticket: {editingLog.deliveryNumber || 'MLE-XXXXXX'}</p>
+              <p className="text-[11px] font-black text-primary uppercase tracking-[0.2em]">Modify details for Ticket: {editingLog.deliveryNumber ? editingLog.deliveryNumber.replace('MLE-', '') : 'XXXXXX'}</p>
             </div>
 
             {/* Content: Scrollable */}
@@ -1096,7 +1101,6 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                   <div>
                     <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Ticket Number</label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[12px] font-black text-on-surface-dim font-mono">MLE-</span>
                       <input 
                         type="text"
                         maxLength={6}
@@ -1105,7 +1109,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                           const val = e.target.value.replace(/\D/g, '');
                           setEditForm({...editForm, deliveryNumber: val});
                         }}
-                        className="w-full bg-surface-lowest border border-outline rounded-xl pl-12 pr-3 py-2 text-error font-mono text-[12px] font-black focus:border-primary outline-none"
+                        className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-error font-mono text-[12px] font-black focus:border-primary outline-none"
                         placeholder="000000"
                       />
                     </div>

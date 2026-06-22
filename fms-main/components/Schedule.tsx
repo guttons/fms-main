@@ -244,28 +244,22 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
     return dep >= range.start && dep <= range.end;
   };
 
-  const frozenFlights = briefingInfo?.staffAssignments?.frozenFlights;
-
   const scheduledFlights = useMemo(() => {
-    const filtered = frozenFlights?.intl
-      ? frozenFlights.intl
-      : flightJobs.filter(f => {
-          const isDep = f.type ? f.type === 'departure' : !!f.std;
-          return isDep && isFlightInShift(f.std) && (!f.date || f.date === todayDate);
-        });
+    const filtered = flightJobs.filter(f => {
+      const isDep = f.type ? f.type === 'departure' : !!f.std;
+      return isDep && isFlightInShift(f.std) && f.date === todayDate;
+    });
     return [...filtered].sort((a, b) => (a.std || '').localeCompare(b.std || ''));
-  }, [flightJobs, selectedBriefingShift, todayDate, frozenFlights]);
+  }, [flightJobs, selectedBriefingShift, todayDate]);
 
   const domesticFlightsToRender = useMemo(() => {
-    const filtered = frozenFlights?.domestic
-      ? frozenFlights.domestic
-      : (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && (!f.date || f.date === todayDate));
+    const filtered = (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && f.date === todayDate);
     return [...filtered].sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
-  }, [domesticFlights, selectedBriefingShift, todayDate, frozenFlights]);
+  }, [domesticFlights, selectedBriefingShift, todayDate]);
 
-  const adhocFlightsToRender = frozenFlights?.adhoc
-    ? frozenFlights.adhoc
-    : MOCK_ADHOC_FLIGHTS.filter(f => isFlightInShift(f.sta) && (!f.date || f.date === todayDate));
+  const adhocFlightsToRender = briefingInfo?.staffAssignments?.adhocFlights !== undefined
+    ? briefingInfo.staffAssignments.adhocFlights
+    : MOCK_ADHOC_FLIGHTS.filter(f => isFlightInShift(f.sta || f.std) && (!f.date || f.date === todayDate));
 
   const domesticTeams = [
     { id: 't1', name: 'Team 1', op1: '', op2: '' },
@@ -361,9 +355,9 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
   const renderOperatorSelect = (value: string, onChange: (val: string) => void) => (
     <div className="relative group/select">
       <select
-        value={value}
+        value={value || ""}
         onChange={(e) => onChange(e.target.value)}
-        className={`block w-full text-[10px] font-bold rounded-xl focus:border-primary px-3 py-2 border uppercase tracking-wider appearance-none transition-colors ${value ? 'bg-surface-dim text-on-surface border-outline' : 'bg-surface-dim text-error border-error/30'
+        className={`block w-full text-[10px] font-bold rounded-xl focus:border-primary px-3 py-2 border uppercase tracking-wider appearance-none transition-colors ${(value || "") ? 'bg-surface-dim text-on-surface border-outline' : 'bg-surface-dim text-error border-error/30'
           }`}
       >
         <option value="" className="bg-surface-dim text-on-surface">-- UNASSIGNED --</option>
@@ -411,7 +405,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
           {/* Shift Selector */}
           <div className="relative">
             <select
-              value={selectedBriefingShift}
+              value={selectedBriefingShift || ""}
               onChange={(e) => setSelectedBriefingShift(e.target.value as BriefingShift)}
               className="appearance-none px-6 py-3 pr-10 kinetic-gradient text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-premium cursor-pointer outline-none"
               style={{ colorScheme: 'dark' }}
@@ -427,18 +421,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
       {/* Tabs */}
       <div className="relative">
-        {activeTooltip && (
-          <div 
-            className="absolute bottom-full mb-3 bg-slate-950 text-white text-[8px] font-black uppercase tracking-[0.2em] px-2.5 py-1.5 rounded-lg border border-outline/30 shadow-premium pointer-events-none md:hidden z-[99] whitespace-nowrap animate-in fade-in zoom-in-95 duration-200"
-            style={{ 
-              left: tooltipPositions[activeTooltip] || '50%',
-              transform: 'translateX(-50%)'
-            }}
-          >
-            {tabLabels[activeTooltip]}
-          </div>
-        )}
-        <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner relative flex w-full md:w-fit overflow-x-auto scrollbar-none">
+        <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner relative flex w-full md:w-fit overflow-x-visible md:overflow-x-auto scrollbar-none">
           <div
             className={`absolute top-1.5 bottom-1.5 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
               ${activeTab === 'international' ? 'w-[calc(16.666%-2px)] left-1.5 md:w-[140px] md:translate-x-0' : ''}
@@ -457,6 +440,13 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
             className={`flex-1 md:w-[140px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'international' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
               }`}
           >
+            {activeTooltip === 'international' && (
+              <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[9px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-200 md:hidden">
+                International
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-outline -z-10 mt-[1px]" />
+              </div>
+            )}
             <Plane className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             <span className="hidden md:block whitespace-nowrap">International</span>
           </button>
@@ -468,6 +458,13 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
             className={`flex-1 md:w-[110px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'domestic' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
               }`}
           >
+            {activeTooltip === 'domestic' && (
+              <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[9px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-200 md:hidden">
+                Domestic
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-outline -z-10 mt-[1px]" />
+              </div>
+            )}
             <Home className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             <span className="hidden md:block whitespace-nowrap">Domestic</span>
           </button>
@@ -479,6 +476,13 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
             className={`flex-1 md:w-[110px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'adhoc' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
               }`}
           >
+            {activeTooltip === 'adhoc' && (
+              <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[9px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-200 md:hidden">
+                Ad-Hoc
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-outline -z-10 mt-[1px]" />
+              </div>
+            )}
             <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             <span className="hidden md:block whitespace-nowrap">Ad-Hoc</span>
           </button>
@@ -490,6 +494,13 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
             className={`flex-1 md:w-[110px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'equipment' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
               }`}
           >
+            {activeTooltip === 'equipment' && (
+              <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[9px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-200 md:hidden">
+                {currentShiftLabel}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-outline -z-10 mt-[1px]" />
+              </div>
+            )}
             {currentShiftLabel === 'DIESEL' ? (
               <Droplet className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             ) : (
@@ -505,6 +516,13 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
             className={`flex-1 md:w-[150px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'status' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
               }`}
           >
+            {activeTooltip === 'status' && (
+              <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[9px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-200 md:hidden">
+                Status Board
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-outline -z-10 mt-[1px]" />
+              </div>
+            )}
             <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             <span className="hidden md:block whitespace-nowrap">Status Board</span>
           </button>
@@ -516,6 +534,13 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
             className={`flex-1 md:w-[150px] flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 md:px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${activeTab === 'live' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
               }`}
           >
+            {activeTooltip === 'live' && (
+              <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[9px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-200 md:hidden">
+                Live Feed
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-outline -z-10 mt-[1px]" />
+              </div>
+            )}
             <Radio className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             <span className="hidden md:block whitespace-nowrap">Live Feed</span>
           </button>
@@ -617,9 +642,17 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                             )}
                           </td>
                           <td className="px-4 py-6 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex justify-end items-center space-x-2">
-                              <button onClick={() => handleAssignFlight(item.id, 'equipmentUsage', 'HYDRANT')} className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all ${activeEquipmentUsage === 'HYDRANT' ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white border-transparent' : 'bg-surface-dim text-on-surface-dim border-outline hover:text-cyan-500 hover:border-cyan-500/50'}`}>HD</button>
-                              <button onClick={() => handleAssignFlight(item.id, 'equipmentUsage', 'REFUELLER')} className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all ${activeEquipmentUsage === 'REFUELLER' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white border-transparent' : 'bg-surface-dim text-on-surface-dim border-outline hover:text-amber-500 hover:border-amber-500/50'}`}>RF</button>
+                            <div className="flex justify-end items-center">
+                              <button 
+                                onClick={() => handleAssignFlight(item.id, 'equipmentUsage', activeEquipmentUsage === 'HYDRANT' ? 'REFUELLER' : 'HYDRANT')} 
+                                className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all shrink-0 cursor-pointer ${
+                                  activeEquipmentUsage === 'HYDRANT' 
+                                    ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white border-transparent' 
+                                    : 'bg-gradient-to-r from-amber-500 to-amber-600 text-white border-transparent'
+                                }`}
+                              >
+                                {activeEquipmentUsage === 'HYDRANT' ? 'HD' : 'RF'}
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -636,7 +669,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                   const delayed = isDelayed(item.sta, item.eta);
                   const activeEquipmentUsage = item.equipmentUsage || 'HYDRANT';
                   return (
-                    <div key={item.id} className="card-premium p-4 sm:p-6 border-outline group transition-all active:scale-[0.98] max-w-md mx-auto w-full">
+                    <div key={item.id} className="card-premium p-4 sm:p-6 border-outline group transition-all max-w-md mx-auto w-full">
                       <div className="flex justify-between items-start mb-6">
                         <div className="flex items-center min-w-0">
                           <div className="flex items-center gap-3">
@@ -691,10 +724,16 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
                           <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Assigned Crew</label>
-                          <div className="flex space-x-2">
-                            <button onClick={() => handleAssignFlight(item.id, 'equipmentUsage', 'HYDRANT')} className={`px-2 py-1 text-[8px] font-black uppercase rounded transition-all ${activeEquipmentUsage === 'HYDRANT' ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white border-transparent' : 'bg-surface-dim text-on-surface-dim hover:text-cyan-500'}`}>HD</button>
-                            <button onClick={() => handleAssignFlight(item.id, 'equipmentUsage', 'REFUELLER')} className={`px-2 py-1 text-[8px] font-black uppercase rounded transition-all ${activeEquipmentUsage === 'REFUELLER' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white border-transparent' : 'bg-surface-dim text-on-surface-dim hover:text-amber-500'}`}>RF</button>
-                          </div>
+                          <button 
+                            onClick={() => handleAssignFlight(item.id, 'equipmentUsage', activeEquipmentUsage === 'HYDRANT' ? 'REFUELLER' : 'HYDRANT')} 
+                            className={`px-3 py-1 text-[8px] font-black uppercase rounded transition-all cursor-pointer ${
+                              activeEquipmentUsage === 'HYDRANT' 
+                                ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white border-transparent' 
+                                : 'bg-gradient-to-r from-amber-500 to-amber-600 text-white border-transparent'
+                            }`}
+                          >
+                            {activeEquipmentUsage === 'HYDRANT' ? 'HD' : 'RF'}
+                          </button>
                         </div>
                         {activeEquipmentUsage === 'REFUELLER' ? (
                           <div className="grid grid-cols-2 gap-2">
@@ -830,7 +869,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                   const logoUrl = getLogoUrl(flight.flightNumber);
                   const delayed = isDelayed(flight.sta, flight.eta);
                   return (
-                    <div key={flight.id} className="card-premium p-4 sm:p-6 border-outline group transition-all active:scale-[0.98] max-w-md mx-auto w-full">
+                    <div key={flight.id} className="card-premium p-4 sm:p-6 border-outline group transition-all max-w-md mx-auto w-full">
                       <div className="flex justify-between items-start mb-6">
                         <div className="flex items-center min-w-0">
                           <div className="flex items-center gap-3">
@@ -983,7 +1022,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                   const logoUrl = getLogoUrl(flight.flightNumber);
                   const delayed = isDelayed(flight.sta, flight.eta);
                   return (
-                    <div key={flight.id} className="card-premium p-4 sm:p-6 border-outline group transition-all active:scale-[0.98] max-w-md mx-auto w-full">
+                    <div key={flight.id} className="card-premium p-4 sm:p-6 border-outline group transition-all max-w-md mx-auto w-full">
                       <div className="flex justify-between items-start mb-6">
                         <div className="flex items-center min-w-0">
                           <div className="flex items-center gap-3">

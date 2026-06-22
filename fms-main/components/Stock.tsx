@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Tank, FuelType, User, UserRole } from '../types';
-import { RefreshCw, AlertTriangle, Save, Droplet, Plane, Fuel, Database, Search, LayoutGrid, List, AlertCircle, Calendar } from 'lucide-react';
+import { RefreshCw, AlertTriangle, Save, Droplet, Plane, Fuel, Database, Search, LayoutGrid, List, AlertCircle, Calendar, ChevronDown } from 'lucide-react';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { useNotification } from '../context/NotificationContext';
+import { CALIBRATED_TANK_IDS, lookupVolumeSync, preloadCalibrationData } from '../services/calibrationService';
 
 interface StockProps {
   user?: User | null;
@@ -10,7 +11,7 @@ interface StockProps {
 
 export const Stock: React.FC<StockProps> = ({ user }) => {
   const { notify } = useNotification();
-  const { tanks, updateTankLevel } = useOperationalData();
+  const { tanks, updateTankLevel, serviceTankId, setServiceTankId } = useOperationalData();
   const [readings, setReadings] = useState<Record<string, number>>({});
   const [dipReadings, setDipReadings] = useState<Record<string, string>>({});
   const [tempReadings, setTempReadings] = useState<Record<string, string>>({});
@@ -18,6 +19,12 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
   
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [layoutMode, setLayoutMode] = useState<'cards' | 'table'>('table'); // Default to Table mode!
+  const [serviceTankDropdownOpen, setServiceTankDropdownOpen] = useState(false);
+
+  // Preload calibration data on mount
+  React.useEffect(() => {
+    preloadCalibrationData();
+  }, []);
 
   const isOperator = user?.role === UserRole.DEPOT_OPERATOR;
 
@@ -68,13 +75,13 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
     }
   };
 
-  // Convert DIP Height (cm) to Liters based on tank geometry rules
+  // Convert DIP Height (mm) to Liters using calibration table lookup
   const handleDipChange = (id: string, heightStr: string, capacity: number) => {
     // Keep raw string in local state for fluid typing
     setDipReadings(prev => ({ ...prev, [id]: heightStr }));
 
-    const height = (parseFloat(heightStr) || 0) / 10; // Convert MM input to CM for geometry formulas
-    if (height <= 0) {
+    const dipMm = parseFloat(heightStr) || 0;
+    if (dipMm <= 0) {
       setReadings(prev => {
         const next = { ...prev };
         delete next[id];
@@ -83,31 +90,23 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
       return;
     }
 
-    let factor = 100; // default conversion scale
-    const lowerId = id.toLowerCase();
-
-    // JIG / airport standard dynamic calibration factors:
-    if (lowerId.includes('101') || lowerId.includes('102') || lowerId.includes('103')) {
-      factor = 5000; // 5,000,000L / 1000cm max height
-    } else if (lowerId.includes('tk4') || lowerId.includes('tk6') || lowerId.includes('tk7') || lowerId.includes('tk8') || lowerId.includes('tk9')) {
-      factor = 1250; // 1,000,000L / 800cm max height
-    } else if (lowerId.includes('spf') || lowerId.includes('201') || lowerId.includes('202')) {
-      factor = 200;  // 100,000L / 500cm max height
-    } else if (lowerId.includes('301') || lowerId.includes('302')) {
-      factor = 125;  // 50,000L / 400cm max height
-    } else if (lowerId.includes('lfs-diesel') || lowerId.includes('afs-diesel')) {
-      factor = 100;  // 30,000L / 300cm max height
-    } else if (lowerId.includes('lfs-petrol') || lowerId.includes('afs-petrol')) {
-      factor = 66.67; // 20,000L / 300cm max height
+    // Use calibration table lookup (synchronous - data is preloaded)
+    const calibratedVolume = lookupVolumeSync(id, dipMm);
+    if (calibratedVolume !== null) {
+      setReadings(prev => ({
+        ...prev,
+        [id]: calibratedVolume
+      }));
     } else {
-      factor = capacity / 400; // Fallback
+      // Fallback for tanks without calibration data
+      const height = dipMm / 10; // Convert MM to CM for legacy formula
+      const factor = capacity / 400;
+      const calculatedLiters = Math.min(capacity, Math.round(height * factor));
+      setReadings(prev => ({
+        ...prev,
+        [id]: calculatedLiters
+      }));
     }
-
-    const calculatedLiters = Math.min(capacity, Math.round(height * factor));
-    setReadings(prev => ({
-      ...prev,
-      [id]: calculatedLiters
-    }));
   };
 
   const handleSave = () => {
@@ -127,7 +126,7 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
       setTempReadings({});
       setSgReadings({});
     } else {
-      notify(`Please enter physical dip height values first.`, 'warning');
+      notify(`Please enter physical dip height or manual volume values first.`, 'warning');
     }
   };
 
@@ -193,7 +192,7 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
           </div>
           
           {/* Sync Container */}
-          <div className="flex items-center bg-surface-dim p-1.5 rounded-2xl border border-outline shadow-inner">
+          <div className="flex items-center sm:bg-surface-dim sm:p-1.5 sm:rounded-2xl sm:border sm:border-outline sm:shadow-inner">
             <span className="hidden sm:block text-[10px] font-black text-on-surface-dim px-4 uppercase tracking-widest opacity-60">
               Sync: {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false})}
             </span>
@@ -205,6 +204,63 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
       </div>
 
 
+
+      {/* Service Tank Selector - Depot Manager & Admin only */}
+      {user && (user.role === UserRole.DEPOT_MANAGER || user.role === UserRole.ADMIN) && (
+        <div className="card-premium p-4 border border-outline flex flex-row items-center justify-between gap-4 mb-8">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20">
+              <Droplet className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-[11px] font-black text-on-surface uppercase tracking-wide leading-none">Active Service Tank</p>
+            </div>
+          </div>
+          <div className="relative">
+            <button
+              onClick={() => setServiceTankDropdownOpen(!serviceTankDropdownOpen)}
+              className="flex items-center space-x-3 px-5 py-3 bg-surface-dim border border-outline rounded-2xl hover:border-primary/40 transition-all"
+            >
+              <Droplet className="w-4 h-4 text-primary" />
+              <span className="text-xs font-black text-on-surface uppercase tracking-tight">
+                {tanks.find(t => t.id === serviceTankId)?.name?.replace(/\s\((NFF|OFF)\)/i, '') || 'TK-101'}
+              </span>
+              <ChevronDown className={`w-3.5 h-3.5 text-on-surface-dim transition-transform ${serviceTankDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {serviceTankDropdownOpen && (
+              <div className="absolute right-0 top-full mt-2 w-56 bg-surface border border-outline rounded-2xl shadow-premium z-50 overflow-hidden">
+                <div className="p-2 space-y-0.5">
+                  {tanks
+                    .filter(t => t.type === FuelType.JET_A1 && !t.name.toUpperCase().includes('RECOVERY') && !t.name.toUpperCase().includes('SPF'))
+                    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+                    .map(t => (
+                      <button
+                        key={t.id}
+                        onClick={() => {
+                          setServiceTankId(t.id);
+                          setServiceTankDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl transition-all text-left ${
+                          serviceTankId === t.id
+                            ? 'bg-primary/10 text-primary'
+                            : 'hover:bg-surface-dim text-on-surface'
+                        }`}
+                      >
+                        <Droplet className={`w-3.5 h-3.5 ${serviceTankId === t.id ? 'text-primary' : 'text-on-surface-dim opacity-40'}`} />
+                        <span className="text-[11px] font-black uppercase tracking-tight">
+                          {t.name.replace(/\s\((NFF|OFF)\)/i, '')}
+                        </span>
+                        {serviceTankId === t.id && (
+                          <span className="ml-auto text-[8px] font-black text-primary uppercase tracking-widest">Active</span>
+                        )}
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Render Main Lists */}
       <div className="space-y-16">
@@ -250,14 +306,21 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
                         <tr className="bg-surface-dim border-b border-outline">
                           <th className="px-6 py-4 text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Tank Name</th>
                           <th className="px-6 py-4 text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Product</th>
-                          <th className="px-6 py-4 text-right text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Live Volume</th>
-                          <th className="px-6 py-4 text-right text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Capacity</th>
+                          <th className="px-6 py-4 text-right text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Live Volume (L)</th>
+                          <th className="px-6 py-4 text-right text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Capacity (L)</th>
                           <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Fill Ratio</th>
-                          <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Last Record Date</th>
-                          <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60" style={{ width: '130px' }}>Dip Height (mm)</th>
-                          <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60" style={{ width: '150px' }}>Calc Volume (L)</th>
-                          <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60" style={{ width: '90px' }}>Temp (°C)</th>
-                          <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60" style={{ width: '90px' }}>SG 15°C</th>
+                          {category !== 'SEAPLANE FUEL' && category !== 'FILLING STATIONS' && (
+                            <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60" style={{ width: '130px' }}>Dip Height (mm)</th>
+                          )}
+                          <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60" style={{ width: '150px' }}>
+                            {category === 'FILLING STATIONS' || category === 'SEAPLANE FUEL' ? 'Volume (L)' : 'Calc Volume (L)'}
+                          </th>
+                          {category !== 'FILLING STATIONS' && (
+                            <>
+                              <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60" style={{ width: '90px' }}>Temp (°C)</th>
+                              <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60" style={{ width: '90px' }}>SG 15°C</th>
+                            </>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-outline">
@@ -266,7 +329,6 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
                           const Icon = style.icon;
                           const fillPct = (tank.currentLevel / tank.capacity) * 100;
                           const isLow = tank.currentLevel < tank.safeMinLevel;
-                          const lastRecTime = new Date(tank.lastUpdated).toLocaleDateString([], { month: 'short', day: '2-digit', year: 'numeric' }) + ' ' + new Date(tank.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
                           return (
                             <tr key={tank.id} className={`hover:bg-primary/[0.02] transition-colors ${isLow ? 'bg-error/5' : ''}`}>
@@ -287,10 +349,10 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
                                 </span>
                               </td>
                               <td className="px-6 py-4 text-right font-mono text-xs font-bold">
-                                {tank.currentLevel.toLocaleString()} L
+                                {tank.currentLevel.toLocaleString()}
                               </td>
                               <td className="px-6 py-4 text-right font-mono text-xs opacity-50">
-                                {tank.capacity.toLocaleString()} L
+                                {tank.capacity.toLocaleString()}
                               </td>
                               <td className="px-6 py-4">
                                 <div className="flex items-center justify-center space-x-2">
@@ -303,59 +365,81 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-6 py-4 text-center text-[10px] font-bold opacity-60">
-                                {lastRecTime}
-                              </td>
                               {/* DIP mm Input */}
+                              {category !== 'SEAPLANE FUEL' && category !== 'FILLING STATIONS' && (
+                                <td className="px-6 py-4 text-center">
+                                  {CALIBRATED_TANK_IDS.has(tank.id) ? (
+                                    <input 
+                                      type="number"
+                                      step="1"
+                                      min="0"
+                                      className="w-24 text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-black uppercase focus:ring-2 focus:ring-primary outline-none"
+                                      placeholder="0"
+                                      value={dipReadings[tank.id] ?? ''}
+                                      onChange={(e) => handleDipChange(tank.id, e.target.value, tank.capacity)}
+                                    />
+                                  ) : (
+                                    <span className="text-on-surface-dim opacity-30">—</span>
+                                  )}
+                                </td>
+                              )}
+                              {/* Liters Input (Read-Only if Calibrated, Manual if Uncalibrated) */}
                               <td className="px-6 py-4 text-center">
-                                <input 
-                                  type="number"
-                                  step="1"
-                                  min="0"
-                                  className="w-24 text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-black uppercase focus:ring-2 focus:ring-primary outline-none"
-                                  placeholder="0"
-                                  value={dipReadings[tank.id] ?? ''}
-                                  onChange={(e) => handleDipChange(tank.id, e.target.value, tank.capacity)}
-                                />
-                              </td>
-                              {/* Liters Calc display (Read-Only) */}
-                              <td className="px-6 py-4 text-center">
-                                <input 
-                                  type="text"
-                                  readOnly
-                                  className="w-28 text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-mono font-bold text-on-surface-dim opacity-70 cursor-not-allowed"
-                                  placeholder=""
-                                  value={readings[tank.id] ? `${readings[tank.id].toLocaleString()} L` : ''}
-                                />
-                              </td>
-                              <td className="px-6 py-4 text-center">
-                                {tank.type === FuelType.DIESEL || tank.type === FuelType.PETROL ? (
-                                  <span className="text-on-surface-dim opacity-30">—</span>
+                                {CALIBRATED_TANK_IDS.has(tank.id) ? (
+                                  <input 
+                                    type="text"
+                                    readOnly
+                                    className="w-28 text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-mono font-bold text-on-surface-dim opacity-70 cursor-not-allowed"
+                                    placeholder=""
+                                    value={readings[tank.id] ? readings[tank.id].toLocaleString() : ''}
+                                  />
                                 ) : (
                                   <input 
                                     type="number"
-                                    step="0.1"
-                                    placeholder="15.0"
-                                    className="w-16 text-center px-1.5 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-mono text-on-surface"
-                                    value={tempReadings[tank.id] ?? ''}
-                                    onChange={(e) => setTempReadings(prev => ({ ...prev, [tank.id]: e.target.value }))}
+                                    step="1"
+                                    min="0"
+                                    className="w-28 text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-mono font-bold text-on-surface focus:ring-2 focus:ring-primary outline-none"
+                                    placeholder="0"
+                                    value={readings[tank.id] ?? ''}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value) || 0;
+                                      setReadings(prev => ({ ...prev, [tank.id]: val }));
+                                    }}
                                   />
                                 )}
                               </td>
-                              <td className="px-6 py-4 text-center">
-                                {tank.type === FuelType.DIESEL || tank.type === FuelType.PETROL ? (
-                                  <span className="text-on-surface-dim opacity-30">—</span>
-                                ) : (
-                                  <input 
-                                    type="number"
-                                    step="0.0001"
-                                    placeholder="0.8000"
-                                    className="w-18 text-center px-1.5 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-mono text-on-surface"
-                                    value={sgReadings[tank.id] ?? ''}
-                                    onChange={(e) => setSgReadings(prev => ({ ...prev, [tank.id]: e.target.value }))}
-                                  />
-                                )}
-                              </td>
+                              {category !== 'FILLING STATIONS' && (
+                                <>
+                                  <td className="px-6 py-4 text-center">
+                                    {tank.type === FuelType.DIESEL || tank.type === FuelType.PETROL ? (
+                                      <span className="text-on-surface-dim opacity-30">—</span>
+                                    ) : (
+                                      <input 
+                                        type="number"
+                                        step="0.1"
+                                        placeholder="15.0"
+                                        className="w-16 text-center px-1.5 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-mono text-on-surface"
+                                        value={tempReadings[tank.id] ?? ''}
+                                        onChange={(e) => setTempReadings(prev => ({ ...prev, [tank.id]: e.target.value }))}
+                                      />
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-4 text-center">
+                                    {tank.type === FuelType.DIESEL || tank.type === FuelType.PETROL ? (
+                                      <span className="text-on-surface-dim opacity-30">—</span>
+                                    ) : (
+                                      <input 
+                                        type="number"
+                                        step="0.0001"
+                                        placeholder="0.8000"
+                                        className="w-18 text-center px-1.5 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-mono text-on-surface"
+                                        value={sgReadings[tank.id] ?? ''}
+                                        onChange={(e) => setSgReadings(prev => ({ ...prev, [tank.id]: e.target.value }))}
+                                      />
+                                    )}
+                                  </td>
+                                </>
+                              )}
                             </tr>
                           );
                         })}
@@ -371,10 +455,9 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
                     const Icon = style.icon;
                     const fillPct = (tank.currentLevel / tank.capacity) * 100;
                     const isLow = tank.currentLevel < tank.safeMinLevel;
-                    const lastRecTime = new Date(tank.lastUpdated).toLocaleDateString([], { month: 'short', day: '2-digit' }) + ' ' + new Date(tank.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
                     return (
-                      <div key={tank.id} className={`card-premium group hover:scale-[1.02] transition-all relative overflow-hidden flex flex-col ${isLow ? 'border-error/40 bg-error/5' : ''}`}>
+                       <div key={tank.id} className={`card-premium group hover:scale-[1.02] transition-all relative overflow-hidden flex flex-col ${isLow ? 'border-error/40 bg-error/5' : ''}`}>
                         <div className={`absolute top-0 left-0 w-full h-1 ${style.accent} opacity-40 group-hover:opacity-100 transition-opacity`}></div>
                         
                         <div className="p-5 flex-grow flex flex-col justify-between">
@@ -398,21 +481,17 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
                               </div>
                             )}
                           </div>
-
-                          <div className="space-y-4 mb-4">
-                            <div className="flex justify-between items-end">
-                              <div>
-                                <p className="text-[8px] font-black text-on-surface-dim uppercase tracking-widest opacity-35">Current Volume</p>
-                                <p className="text-lg font-black text-on-surface tracking-tighter mt-0.5">
-                                  {tank.currentLevel.toLocaleString()} <span className="text-[10px] opacity-30 font-bold">L</span>
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <span className={`text-[12px] font-black tracking-tight ${isLow ? 'text-error' : style.color}`}>
-                                  {fillPct.toFixed(1)}%
-                                </span>
-                              </div>
+                          <div className="flex-grow space-y-3 mb-4">
+                            <div className="flex justify-between items-baseline">
+                              <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Live Volume</span>
+                              <span className={`text-[12px] font-black tracking-tight ${isLow ? 'text-error' : style.color}`}>
+                                {fillPct.toFixed(1)}%
+                              </span>
                             </div>
+                            
+                            <p className="text-xl font-black text-on-surface tracking-tighter">
+                              {tank.currentLevel.toLocaleString()} <span className="text-xs font-bold opacity-30">L</span>
+                            </p>
 
                             <div className="relative h-2 bg-surface-lowest border border-outline rounded-full overflow-hidden shadow-inner">
                               <div 
@@ -421,37 +500,54 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
                               />
                             </div>
 
-                            <div className="flex justify-between text-[8px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">
-                              <span>Cap: {tank.capacity.toLocaleString()}L</span>
-                              <span>Date: {lastRecTime}</span>
+                            <div className="text-[8px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">
+                              Cap: {tank.capacity.toLocaleString()}L
                             </div>
                           </div>
 
                           <div className="space-y-4 pt-4 border-t border-outline/50 mt-4">
-                            <div className="grid grid-cols-2 gap-3">
+                            {CALIBRATED_TANK_IDS.has(tank.id) ? (
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-50">Dip Height (mm)</label>
+                                  <input 
+                                    type="number" 
+                                    step="1"
+                                    className="w-full px-2 py-2 bg-surface-dim text-on-surface border border-outline rounded-xl text-[10px] font-black text-center"
+                                    placeholder="0"
+                                    value={dipReadings[tank.id] ?? ''}
+                                    onChange={(e) => handleDipChange(tank.id, e.target.value, tank.capacity)}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-50">Calculated (L)</label>
+                                  <input 
+                                    type="text" 
+                                    readOnly
+                                    className="w-full px-2 py-2 bg-surface-dim text-on-surface-dim border border-outline/30 rounded-xl text-[10px] font-mono font-bold text-center opacity-70 cursor-not-allowed"
+                                    placeholder=""
+                                    value={readings[tank.id] ? readings[tank.id].toLocaleString() : ''}
+                                  />
+                                </div>
+                              </div>
+                            ) : (
                               <div>
-                                <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-50">Dip Height (mm)</label>
+                                <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-50">Manual Volume (L)</label>
                                 <input 
                                   type="number" 
                                   step="1"
-                                  className="w-full px-2 py-2 bg-surface-dim text-on-surface border border-outline rounded-xl text-[10px] font-black text-center"
+                                  min="0"
+                                  className="w-full px-2 py-2 bg-surface-dim text-on-surface border border-outline rounded-xl text-[10px] font-mono font-bold text-center focus:ring-2 focus:ring-primary outline-none"
                                   placeholder="0"
-                                  value={dipReadings[tank.id] ?? ''}
-                                  onChange={(e) => handleDipChange(tank.id, e.target.value, tank.capacity)}
+                                  value={readings[tank.id] ?? ''}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value) || 0;
+                                    setReadings(prev => ({ ...prev, [tank.id]: val }));
+                                  }}
                                 />
                               </div>
-                              <div>
-                                <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-50">Calculated (L)</label>
-                                <input 
-                                  type="text" 
-                                  readOnly
-                                  className="w-full px-2 py-2 bg-surface-dim text-on-surface-dim border border-outline/30 rounded-xl text-[10px] font-mono font-bold text-center opacity-70 cursor-not-allowed"
-                                  placeholder=""
-                                  value={readings[tank.id] ? readings[tank.id].toLocaleString() : ''}
-                                />
-                              </div>
-                            </div>
-                            {tank.type !== FuelType.DIESEL && tank.type !== FuelType.PETROL && (
+                            )}
+                            {tank.type !== FuelType.DIESEL && tank.type !== FuelType.PETROL && category !== 'FILLING STATIONS' && (
                               <div className="grid grid-cols-2 gap-3">
                                 <div>
                                   <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-50">Temp (°C)</label>

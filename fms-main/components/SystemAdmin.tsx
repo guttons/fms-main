@@ -901,7 +901,7 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
   const [isSeeding, setIsSeeding] = useState(false);
 
   const handleSeedData = async () => {
-    confirmAction('This will overwrite current users, tanks, and equipment with mock data. Continue?', async () => {
+    confirmAction('This will clear all scheduled flights and briefing data for a fresh FIDS pull, and re-seed equipment and finance data (staff and tanks are preserved). Continue?', async () => {
       setIsSeeding(true);
       try {
         await seedingService.seedDatabase();

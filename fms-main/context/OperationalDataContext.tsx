@@ -21,7 +21,8 @@ interface ShiftBriefingInfo {
       intl?: any[];
       domestic?: any[];
       adhoc?: any[];
-    };
+    } | null;
+    adhocFlights?: any[];
   };
 }
 
@@ -68,6 +69,8 @@ interface OperationalDataContextType {
   addStaff: (member: Omit<StaffMember, 'id'>) => Promise<void>;
   updateStaff: (id: string, updates: Partial<Omit<StaffMember, 'id'>>) => Promise<void>;
   deleteStaff: (id: string) => Promise<void>;
+  serviceTankId: string;
+  setServiceTankId: (tankId: string) => Promise<void>;
 }
 
 const OperationalDataContext = createContext<OperationalDataContextType | undefined>(undefined);
@@ -335,7 +338,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
   }, []);
 
-  const [selectedBriefingShift, setSelectedBriefingShift] = useState<BriefingShift>(() => {
+  const [selectedBriefingShift, setSelectedBriefingShiftState] = useState<BriefingShift>(() => {
     try {
       const saved = localStorage.getItem('fms_selected_shift');
       if (saved) return saved as BriefingShift;
@@ -354,7 +357,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     return 'Night';
   });
 
-  const [selectedBriefingDate, setSelectedBriefingDate] = useState<string>(() => {
+  const [selectedBriefingDate, setSelectedBriefingDateState] = useState<string>(() => {
     try {
       const saved = localStorage.getItem('fms_selected_briefing_date');
       if (saved) return saved;
@@ -362,9 +365,60 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     return new Date().toISOString().split('T')[0];
   });
 
+  const setSelectedBriefingShift = (shift: BriefingShift) => {
+    setBriefingInfo(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        staffAssignments: prev.staffAssignments ? {
+          ...prev.staffAssignments,
+          adhocFlights: []
+        } : {
+          activeOperators: [],
+          activeOfficers: [],
+          hydrantOpsOfficers: [],
+          dutySupervisor: '',
+          shiftInCharge: '',
+          adhocFlights: []
+        }
+      };
+    });
+    setSelectedBriefingShiftState(shift);
+  };
+
+  const setSelectedBriefingDate = (date: string) => {
+    setBriefingInfo(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        staffAssignments: prev.staffAssignments ? {
+          ...prev.staffAssignments,
+          adhocFlights: []
+        } : {
+          activeOperators: [],
+          activeOfficers: [],
+          hydrantOpsOfficers: [],
+          dutySupervisor: '',
+          shiftInCharge: '',
+          adhocFlights: []
+        }
+      };
+    });
+    setSelectedBriefingDateState(date);
+  };
+
   const [briefingInfo, setBriefingInfo] = useState<ShiftBriefingInfo>(() => {
     const saved = localStorage.getItem(`fms_briefing_info_${selectedBriefingDate}_${selectedBriefingShift}`);
-    return saved ? JSON.parse(saved) : {
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.staffAssignments && parsed.staffAssignments.adhocFlights === undefined) {
+          parsed.staffAssignments.adhocFlights = [];
+        }
+        return parsed;
+      } catch (e) {}
+    }
+    return {
       info: [
         { text: 'Ready before 15 mins/PPE/360 Walkaround check/Following speed limits/Marshaling when required', type: 'critical', isHighAlert: true },
         { text: 'Officers should NOT stay inside the Bowser while refuelling is in progress', type: 'standard' },
@@ -378,7 +432,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         activeOfficers: ['u1'],
         hydrantOpsOfficers: ['u7'],
         dutySupervisor: 'u2',
-        shiftInCharge: 'u2b'
+        shiftInCharge: 'u2b',
+        adhocFlights: []
       }
     };
   });
@@ -395,6 +450,26 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   const [domesticAssignments, setDomesticAssignments] = useState<any[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [isAlertsLoading, setIsAlertsLoading] = useState(false);
+
+  const [serviceTankId, setServiceTankIdState] = useState<string>(() => {
+    try {
+      return localStorage.getItem('fms_service_tank') || 'tk101';
+    } catch (e) {
+      return 'tk101';
+    }
+  });
+
+  const setServiceTankId = async (tankId: string) => {
+    setServiceTankIdState(tankId);
+    localStorage.setItem('fms_service_tank', tankId);
+    if (appUser) {
+      try {
+        await supabaseService.setServiceTank(tankId);
+      } catch (error) {
+        console.error('Failed to sync service tank to Supabase:', error);
+      }
+    }
+  };
 
   const [isLoading, setIsLoading] = useState(true);
   const pendingAlertHashes = React.useRef<Set<string>>(new Set());
@@ -432,9 +507,21 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   }, [selectedBriefingDate]);
 
   useEffect(() => {
+    localStorage.setItem('fms_service_tank', serviceTankId);
+  }, [serviceTankId]);
+
+  useEffect(() => {
     const saved = localStorage.getItem(`fms_briefing_info_${selectedBriefingDate}_${selectedBriefingShift}`);
     if (saved) {
-      setBriefingInfo(JSON.parse(saved));
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.staffAssignments && parsed.staffAssignments.adhocFlights === undefined) {
+          parsed.staffAssignments.adhocFlights = [];
+        }
+        setBriefingInfo(parsed);
+      } catch (e) {
+        // fallback
+      }
     } else {
       setBriefingInfo({
         info: [
@@ -450,7 +537,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           activeOfficers: ['u1'],
           hydrantOpsOfficers: ['u7'],
           dutySupervisor: 'u2',
-          shiftInCharge: 'u2b'
+          shiftInCharge: 'u2b',
+          adhocFlights: []
         }
       });
     }
@@ -499,6 +587,9 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
             dutySupervisor: 'u2',
             shiftInCharge: 'u2b'
          };
+         if (staff.adhocFlights === undefined) {
+           staff.adhocFlights = [];
+         }
          setBriefingInfo({ ...(fetchedBriefing as any), staffAssignments: staff });
       }
       if (fetchedEq && fetchedEq.length > 0) {
@@ -515,6 +606,16 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       if (fetchedAlerts && Array.isArray(fetchedAlerts)) setAlerts(fetchedAlerts);
       if (fetchedLogs && Array.isArray(fetchedLogs)) setFlightLogs(fetchedLogs);
       if (fetchedStaff && fetchedStaff.length > 0) setStaff(fetchedStaff);
+      // Fetch service tank setting
+      try {
+        const savedServiceTank = await supabaseService.getServiceTank();
+        if (savedServiceTank) {
+          setServiceTankIdState(savedServiceTank);
+          localStorage.setItem('fms_service_tank', savedServiceTank);
+        }
+      } catch (e) {
+        console.warn('Failed to fetch service tank setting:', e);
+      }
       if (fetchedDomAssign && Array.isArray(fetchedDomAssign)) {
         setDomesticAssignments(mapDomesticAssignments(fetchedDomAssign));
       }
@@ -559,6 +660,12 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
     console.log("PROVIDER: Initializing live listeners for user:", appUser.id, appUser.role);
     setIsAlertsLoading(true);
+
+    const unsubscribeAppSettings = supabaseService.subscribeToAppSettings((key, value) => {
+      if (key === 'service_tank' && value?.tankId) {
+        setServiceTankIdState(value.tankId);
+      }
+    });
 
     const unsubscribeAlerts = supabaseService.subscribeToAlerts((updatedAlerts) => {
       console.log("SYNC: Alerts received from Supabase. Count:", updatedAlerts.length);
@@ -640,6 +747,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
     return () => {
       console.log("PROVIDER: Tearing down listeners for user:", appUser.id);
+      if (unsubscribeAppSettings) unsubscribeAppSettings();
       if (unsubscribeAlerts) unsubscribeAlerts();
       if (unsubscribeEquipment) unsubscribeEquipment();
       if (unsubscribeTanks) unsubscribeTanks();
@@ -736,9 +844,58 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       job.id === id ? { ...job, ...updates } : job
     ));
 
+    // Also update frozenFlights in briefingInfo state if it exists
+    let updatedBriefing = false;
+    let newBriefingInfo = briefingInfo;
+
+    if (briefingInfo?.staffAssignments?.frozenFlights) {
+      const frozen = briefingInfo.staffAssignments.frozenFlights;
+      let updatedIntl = frozen.intl;
+      let updatedDomestic = frozen.domestic;
+      let updatedAdhoc = frozen.adhoc;
+
+      if (frozen.intl && frozen.intl.some((f: any) => f.id === id)) {
+        updatedIntl = frozen.intl.map((f: any) => f.id === id ? { ...f, ...updates } : f);
+        updatedBriefing = true;
+      }
+      if (frozen.domestic && frozen.domestic.some((f: any) => f.id === id)) {
+        updatedDomestic = frozen.domestic.map((f: any) => f.id === id ? { ...f, ...updates } : f);
+        updatedBriefing = true;
+      }
+      if (frozen.adhoc && frozen.adhoc.some((f: any) => f.id === id)) {
+        updatedAdhoc = frozen.adhoc.map((f: any) => f.id === id ? { ...f, ...updates } : f);
+        updatedBriefing = true;
+      }
+
+      if (updatedBriefing) {
+        newBriefingInfo = {
+          ...briefingInfo,
+          staffAssignments: {
+            ...briefingInfo.staffAssignments,
+            frozenFlights: {
+              ...frozen,
+              intl: updatedIntl,
+              domestic: updatedDomestic,
+              adhoc: updatedAdhoc
+            }
+          }
+        };
+        setBriefingInfo(newBriefingInfo);
+      }
+    }
+
     if (appUser) {
       try {
         await supabaseService.updateFlightJob(id, updates);
+        if (updatedBriefing && newBriefingInfo && newBriefingInfo.staffAssignments) {
+          await supabaseService.upsertShiftBriefingInfo(
+            selectedBriefingDate,
+            selectedBriefingShift,
+            newBriefingInfo.info,
+            newBriefingInfo.dieselNeeds,
+            newBriefingInfo.staffAssignments
+          );
+        }
       } catch (error) {
         console.error('Failed to sync flight job update to Supabase:', error);
       }
@@ -993,7 +1150,9 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       deleteEquipment,
       addTank,
       updateTank,
-      deleteTank
+      deleteTank,
+      serviceTankId,
+      setServiceTankId
     }}>
       {children}
     </OperationalDataContext.Provider>

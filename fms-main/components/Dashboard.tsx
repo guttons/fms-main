@@ -58,7 +58,7 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onStartJob, onSelectEquipment }) => {
-  const { tanks = [], equipment = [], briefingInfo, flightJobs = [], domesticFlights = [], alerts = [], createAlert, acknowledgeAlert, staff = [], updateEquipmentStatus, domesticAssignments } = useOperationalData();
+  const { tanks = [], equipment = [], briefingInfo, flightJobs = [], domesticFlights = [], alerts = [], createAlert, acknowledgeAlert, staff = [], updateEquipmentStatus, domesticAssignments, selectedBriefingShift, serviceTankId } = useOperationalData();
   const { notify } = useNotification();
   // Logic to determine initial view and if switching is allowed
 
@@ -270,7 +270,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">Service Tank</span>
                   <div className="flex items-center space-x-2">
                       <Droplet className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-black text-on-surface uppercase tracking-tight">TK-101 (NFF)</span>
+                      <span className="text-sm font-black text-on-surface uppercase tracking-tight">
+                        {tanks.find(t => t.id === serviceTankId)?.name?.replace(/\s\((NFF|OFF)\)/i, '') || 'TK-101'}
+                      </span>
                   </div>
                 </div>
                 <div className={`transition-all duration-500 transform ${rotationIndex % 2 === 1 ? 'translate-y-0 opacity-100' : '-translate-y-12 opacity-0 absolute'}`}>
@@ -685,9 +687,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
               <h2 className="headline-lg text-on-surface">Into-Plane Operations Center</h2>
               <p className="text-on-surface-dim font-medium">Real-time tactical flight refueling oversight</p>
            </div>
-           <div className="px-5 py-2.5 kinetic-gradient text-white rounded-2xl text-[10px] font-black border border-outline shadow-xl uppercase tracking-[0.2em] w-fit">
-              Shift: Morning (06:00 - 14:00)
-           </div>
+            <div className="px-5 py-2.5 badge-custom-primary rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] w-fit">
+               Shift: {selectedBriefingShift || 'Morning'} ({selectedBriefingShift === 'Evening' ? '15:00 - 23:30' : selectedBriefingShift === 'Night' ? '22:30 - 08:30' : '07:30 - 16:00'})
+            </div>
         </div>
 
         {/* ITP Stats */}
@@ -910,42 +912,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                         );
 
                         return (
-                          <div key={eq.id} className="bg-surface-dim/40 border border-outline p-4 rounded-2xl flex items-start md:items-center justify-between group hover:border-primary/30 transition-all">
-                            <div className="flex items-start space-x-3 flex-1 mr-4">
-                              <div className="flex flex-col items-center space-y-2 shrink-0">
-                                <div className="p-2 bg-primary/10 rounded-lg group-hover:scale-110 transition-transform">
-                                  <Truck className="w-4 h-4 text-primary" />
-                                </div>
-                                {isItpManager && (
-                                  <div className="block md:hidden">
-                                    {replenishButton}
-                                  </div>
-                                )}
+                          <div key={eq.id} className="bg-surface-dim/40 border border-outline p-3 sm:p-4 rounded-2xl flex items-center justify-between group hover:border-primary/30 transition-all">
+                            <div className="flex items-center space-x-2.5 flex-1 min-w-0 mr-2">
+                              {/* Truck Badge */}
+                              <div className="flex flex-col items-center bg-primary/10 rounded-lg pt-1.5 pb-1 px-1.5 transition-transform group-hover:scale-110 min-w-[32px] shrink-0">
+                                <Truck className="w-3.5 h-3.5 text-primary mb-0.5" />
+                                <span className="text-[7.5px] font-black text-primary font-mono leading-none">
+                                  {Math.round(eq.maxCapacity / 1000)}K
+                                </span>
                               </div>
-                              <div className="flex-1 flex justify-between items-start">
-                                <div>
-                                  <p className="text-[11px] font-[900] text-on-surface tracking-tighter">{eq.name}</p>
-                                  <div className="flex flex-col mt-0.5">
-                                    <span className={`text-[8px] font-black uppercase tracking-widest ${getStatusColor(eq.status)} opacity-80`}>
-                                      {getStatusLabel(eq.status)}
-                                    </span>
-                                    {eq.currentVolume !== undefined && (
-                                      <span className="block md:hidden text-[11px] font-black text-primary font-mono mt-0.5">
-                                        {eq.currentVolume.toLocaleString()} L
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                {eq.currentVolume !== undefined && (
-                                  <span className="hidden md:block text-[11px] font-black text-primary font-mono pt-0.5">
-                                    {eq.currentVolume.toLocaleString()} L
+                              {/* Text Info */}
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[11px] font-[900] text-on-surface tracking-tighter truncate">{eq.name}</p>
+                                <div className="flex flex-col mt-0.5">
+                                  <span className={`text-[8px] font-black uppercase tracking-widest ${getStatusColor(eq.status)} opacity-80`}>
+                                    {getStatusLabel(eq.status)}
                                   </span>
-                                )}
+                                  {eq.currentVolume !== undefined && (
+                                    <span className="text-[13px] font-black text-primary font-mono mt-0.5">
+                                      {eq.currentVolume.toLocaleString()}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             
                             {isItpManager && (
-                              <div className="hidden md:block">
+                              <div className="shrink-0">
                                 {replenishButton}
                               </div>
                             )}
@@ -1104,7 +1097,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
         {/* Metric Row: Jet A-1, Diesel, Petrol Stocks */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Jet A-1 Stock */}
-          <div className="card-premium p-8 group hover:border-primary/30 transition-all relative overflow-hidden">
+          <div className="card-premium p-4 sm:p-8 group hover:border-primary/30 transition-all relative overflow-hidden">
             <p className="label-sm text-on-surface-dim opacity-40 mb-6 font-bold tracking-[0.2em]">Total Jet A-1 Stock</p>
             <div className="flex items-baseline space-x-3 mb-4">
               <h3 className="text-4xl font-[900] text-on-surface tracking-tighter">{(totalJetA1 / 1000000).toFixed(2)}M <span className="text-lg font-bold opacity-30">L</span></h3>
@@ -1120,7 +1113,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
           </div>
 
           {/* Diesel Stock */}
-          <div className="card-premium p-8 group hover:border-amber-500/30 transition-all relative overflow-hidden">
+          <div className="card-premium p-4 sm:p-8 group hover:border-amber-500/30 transition-all relative overflow-hidden">
             <p className="label-sm text-on-surface-dim opacity-40 mb-6 font-bold tracking-[0.2em]">Total Diesel Stock</p>
             <div className="flex items-baseline space-x-3 mb-4">
               <h3 className="text-4xl font-[900] text-amber-600 tracking-tighter">{(totalDiesel / 1000).toFixed(1)}K <span className="text-lg font-bold opacity-30">L</span></h3>
@@ -1136,7 +1129,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
           </div>
 
           {/* Petrol Stock */}
-          <div className="card-premium p-8 group hover:border-emerald-500/30 transition-all relative overflow-hidden">
+          <div className="card-premium p-4 sm:p-8 group hover:border-emerald-500/30 transition-all relative overflow-hidden">
             <p className="label-sm text-on-surface-dim opacity-40 mb-6 font-bold tracking-[0.2em]">Total Petrol Stock</p>
             <div className="flex items-baseline space-x-3 mb-4">
               <h3 className="text-4xl font-[900] text-emerald-600 tracking-tighter">{(totalPetrol / 1000).toFixed(1)}K <span className="text-lg font-bold opacity-30">L</span></h3>
@@ -1153,8 +1146,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
         </div>
 
         {/* Refueling Requests Widget */}
-        <div className="card-premium p-8 border border-outline relative overflow-hidden flex flex-col group">
-          <div className="flex items-center justify-between mb-6">
+        <div className="card-premium p-4 sm:p-8 border border-outline relative overflow-hidden flex flex-col group">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
               <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
                 <Droplet className="w-4 h-4 mr-3 text-primary animate-pulse" />
@@ -1162,7 +1155,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
               </h3>
               <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest mt-1 opacity-50">Pending vehicle replenishments from Into-Plane duty managers</p>
             </div>
-            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap w-fit ${
               refuelingRequests.length > 0 ? 'bg-primary/10 text-primary border border-primary/20 animate-pulse' : 'bg-success/10 text-success border border-success/20'
             }`}>
               {refuelingRequests.length} Pending
@@ -1208,15 +1201,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
         </div>
 
         {/* Centerpiece: Infrastructure Asset Grid */}
-        <div className="card-premium p-10">
-          <div className="flex items-center justify-between mb-10">
+        <div className="card-premium p-4 sm:p-10">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10">
             <div>
               <h3 className="headline-lg text-on-surface tracking-tighter uppercase italic">Infrastructure Asset Grid</h3>
               <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.4em] mt-2 opacity-40">Live Tank Farm Telemetry</p>
             </div>
-            <div className="px-4 py-2 bg-surface-dim border border-outline rounded-xl flex items-center space-x-3">
-              <Database className="w-4 h-4 text-primary" />
-              <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest">{(tanks || []).length} Units Online</span>
+            <div className="px-4 py-2 bg-surface-dim border border-outline rounded-xl flex items-center space-x-3 w-fit">
+              <Database className="w-4 h-4 text-primary animate-pulse" />
+              <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest whitespace-nowrap">{(tanks || []).length} Units Online</span>
             </div>
           </div>
           
@@ -1227,7 +1220,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
   };
 
   return (
-    <div className="p-6 lg:p-12 max-w-[1600px] mx-auto pb-24">
+    <div className="p-4 sm:p-6 lg:p-12 max-w-[1600px] mx-auto pb-24">
       {/* ITP Manager: full ops center + all operator task boards */}
       {isItpManager ? (
         <div className="space-y-10">

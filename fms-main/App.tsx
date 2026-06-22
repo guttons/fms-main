@@ -450,6 +450,11 @@ const AppContextContent: React.FC<any> = ({
     pullStateRef.current = { pullDistance, isRefreshing, refreshData };
   }, [pullDistance, isRefreshing, refreshData]);
 
+  // Calculate dynamic blur amount based on pull distance (max 8px)
+  const blurAmount = (pullDistance > 0 || isRefreshing)
+    ? Math.min(8, (pullDistance / 60) * 8)
+    : 0;
+
   useEffect(() => {
     const mainEl = mainElement;
     if (!mainEl) return;
@@ -830,7 +835,15 @@ const AppContextContent: React.FC<any> = ({
             )}
 
             {/* Animated Combined Header Container */}
-            <div className={`transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] sticky top-0 z-50 ${showHeader ? 'translate-y-0' : '-translate-y-full'}`}>
+            <div 
+              className={`transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] sticky top-0 z-50 ${showHeader ? 'translate-y-0' : '-translate-y-full'}`}
+              style={{
+                filter: blurAmount > 0 ? `blur(${blurAmount}px)` : 'none',
+                transition: pullingRef.current 
+                  ? 'transform 0.5s ease' 
+                  : 'transform 0.5s ease, filter 0.3s ease'
+              }}
+            >
             {/* Phase 1: Critical Alert Bar */}
             <div className={`transition-all duration-700 ease-in-out overflow-hidden shadow-lg ${activeCriticalAlerts.length > 0 ? 'h-10 opacity-100' : 'h-0 opacity-0 pointer-events-none'}`}>
               <div className="h-10 bg-error text-white flex items-center justify-between px-6 relative">
@@ -1226,7 +1239,14 @@ const AppContextContent: React.FC<any> = ({
             </header>
             </div>
 
-            <div key={activeView} className="animate-in fade-in duration-300 ease-out">
+            <div 
+              key={activeView} 
+              className="animate-in fade-in duration-300 ease-out"
+              style={{
+                filter: blurAmount > 0 ? `blur(${blurAmount}px)` : 'none',
+                transition: pullingRef.current ? 'none' : 'filter 0.3s ease'
+              }}
+            >
               {renderContent()}
             </div>
           </main>

@@ -33,34 +33,46 @@ export const TankStatusGrid: React.FC<TankStatusGridProps> = ({ tanks }) => {
       case FuelType.JET_A1:
         return {
           icon: Plane,
-          color: 'text-primary',
-          bg: 'bg-primary/5',
-          border: 'border-primary/20',
-          accent: 'bg-primary'
+          color: 'text-sky-400',
+          bg: 'bg-sky-500/10',
+          border: 'border-sky-500/30',
+          accent: 'bg-gradient-to-t from-sky-600 to-sky-400',
+          cardBg: 'from-sky-500/[0.05] to-transparent',
+          cardBorder: 'border-sky-500/25 hover:border-sky-500/55 hover:shadow-[0_0_20px_rgba(14,165,233,0.12)]',
+          hoverColor: 'group-hover:text-sky-400'
         };
       case FuelType.DIESEL:
         return {
           icon: Fuel,
-          color: 'text-amber-600',
-          bg: 'bg-amber-500/5',
-          border: 'border-amber-500/20',
-          accent: 'bg-amber-500'
+          color: 'text-amber-500',
+          bg: 'bg-amber-500/10',
+          border: 'border-amber-500/30',
+          accent: 'bg-gradient-to-t from-amber-600 to-amber-400',
+          cardBg: 'from-amber-500/[0.05] to-transparent',
+          cardBorder: 'border-amber-500/25 hover:border-amber-500/55 hover:shadow-[0_0_20px_rgba(245,158,11,0.12)]',
+          hoverColor: 'group-hover:text-amber-500'
         };
       case FuelType.PETROL:
         return {
           icon: Fuel,
-          color: 'text-emerald-600',
-          bg: 'bg-emerald-500/5',
-          border: 'border-emerald-500/20',
-          accent: 'bg-emerald-500'
+          color: 'text-emerald-500',
+          bg: 'bg-emerald-500/10',
+          border: 'border-emerald-500/30',
+          accent: 'bg-gradient-to-t from-emerald-600 to-emerald-400',
+          cardBg: 'from-emerald-500/[0.05] to-transparent',
+          cardBorder: 'border-emerald-500/25 hover:border-emerald-500/55 hover:shadow-[0_0_20px_rgba(16,185,129,0.12)]',
+          hoverColor: 'group-hover:text-emerald-500'
         };
       default:
         return {
           icon: Droplet,
           color: 'text-on-surface-dim',
-          bg: 'bg-surface-dim',
-          border: 'border-outline',
-          accent: 'bg-on-surface-dim'
+          bg: 'bg-surface-dim/10',
+          border: 'border-outline/30',
+          accent: 'bg-gradient-to-t from-surface-dim to-on-surface-dim',
+          cardBg: 'from-surface-dim/5 to-transparent',
+          cardBorder: 'border-outline/20 hover:border-outline/40',
+          hoverColor: 'group-hover:text-on-surface'
         };
     }
   };
@@ -108,9 +120,12 @@ export const TankStatusGrid: React.FC<TankStatusGridProps> = ({ tanks }) => {
                 const isLow = tank.currentLevel < tank.safeMinLevel;
 
                 return (
-                  <div key={tank.id} className={`card-premium p-6 group hover:scale-[1.02] transition-all relative overflow-hidden ${isLow ? 'border-error/40 bg-error/5' : ''}`}>
+                  <div 
+                    key={tank.id} 
+                    className={`card-premium p-6 group hover:scale-[1.02] transition-all relative overflow-hidden bg-gradient-to-b ${style.cardBg} ${isLow ? 'border-error/40 bg-error/5 hover:border-error/60' : style.cardBorder}`}
+                  >
                     {/* Fuel Type Accent Line */}
-                    <div className={`absolute top-0 left-0 w-full h-1 ${style.accent} opacity-40 group-hover:opacity-100 transition-opacity`}></div>
+                    <div className={`absolute top-0 left-0 w-full h-1.5 ${style.accent} opacity-60 group-hover:opacity-100 transition-opacity`}></div>
                     
                     <div className="flex justify-between items-start mb-6">
                       <div className="flex items-center space-x-3">
@@ -118,7 +133,7 @@ export const TankStatusGrid: React.FC<TankStatusGridProps> = ({ tanks }) => {
                           <Icon className={`w-5 h-5 ${style.color}`} />
                         </div>
                         <div>
-                          <h4 className="text-[14px] font-[900] text-on-surface tracking-tighter uppercase leading-none group-hover:text-primary transition-colors">
+                          <h4 className={`text-[14px] font-[900] text-on-surface tracking-tighter uppercase leading-none ${style.hoverColor} transition-colors`}>
                             {tank.name.replace(/\s\((NFF|OFF)\)/i, '')}
                           </h4>
                           <p className={`text-[9px] font-black ${style.color} uppercase tracking-widest mt-1 opacity-70`}>
@@ -133,55 +148,60 @@ export const TankStatusGrid: React.FC<TankStatusGridProps> = ({ tanks }) => {
                       )}
                     </div>
 
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-end">
+                    <div className="flex justify-between items-stretch gap-4">
+                      {/* Left Info side */}
+                      <div className="flex-grow flex flex-col justify-between space-y-2">
                         <div>
-                          <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 mb-1">Current Level</p>
-                          <p className="text-xl font-black text-on-surface tracking-tighter">
-                            {(tank.currentLevel / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}
-                            <span className="text-xs font-bold opacity-30 ml-1">kL</span>
+                          <p className="text-[8px] font-black text-on-surface-dim uppercase tracking-widest opacity-35">Live Volume</p>
+                          <p className="text-base font-black text-on-surface tracking-tighter mt-0.5">
+                            {tank.currentLevel.toLocaleString()} <span className="text-[9px] opacity-35 font-bold">L</span>
                           </p>
                         </div>
-                        <div className="text-right">
-                          <span className={`text-[12px] font-black tracking-tight ${isLow ? 'text-error' : style.color}`}>
-                            {fillPct.toFixed(1)}%
-                          </span>
+                        <div>
+                          <p className="text-[8px] font-black text-on-surface-dim uppercase tracking-widest opacity-35">Ullage</p>
+                          <p className="text-base font-black text-on-surface-dim tracking-tighter mt-0.5 opacity-80">
+                            {Math.max(0, tank.capacity - tank.currentLevel).toLocaleString()} <span className="text-[9px] opacity-35 font-bold">L</span>
+                          </p>
+                        </div>
+                        <div className="text-[8px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 space-y-0.5">
+                          <div>Cap: {tank.capacity.toLocaleString()} L</div>
+                          <div className={isLow ? 'text-error font-bold' : ''}>Min: {tank.safeMinLevel.toLocaleString()} L</div>
                         </div>
                       </div>
 
-                      {/* Progress Bar Container */}
-                      <div className="relative h-2.5 bg-surface-lowest border border-outline rounded-full overflow-hidden shadow-inner">
-                        <div 
-                          className={`absolute top-0 left-0 h-full transition-all duration-[1500ms] cubic-bezier(0.16, 1, 0.3, 1) ${isLow ? 'bg-error shadow-[0_0_12px_rgba(239,68,68,0.4)]' : style.accent + ' shadow-glow'}`}
-                          style={{ width: `${Math.max(2, fillPct)}%` }}
-                        />
-                        {/* Safe Min Marker */}
-                        <div 
-                          className="absolute h-full w-[2px] bg-error opacity-40 top-0"
-                          style={{ left: `${(tank.safeMinLevel / tank.capacity) * 100}%` }}
-                          title="Safe Minimum Level"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 pt-1">
-                        <div>
-                          <p className="text-[8px] font-black text-on-surface-dim uppercase tracking-widest opacity-30 mb-0.5">Capacity</p>
-                          <p className="text-[10px] font-black text-on-surface opacity-60 uppercase">
-                            {(tank.capacity / 1000).toLocaleString()} kL
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[8px] font-black text-on-surface-dim uppercase tracking-widest opacity-30 mb-0.5">Safe Min</p>
-                          <p className={`text-[10px] font-black uppercase ${isLow ? 'text-error' : 'text-on-surface opacity-60'}`}>
-                            {(tank.safeMinLevel / 1000).toLocaleString()} kL
-                          </p>
+                      {/* Right Tank graphic side */}
+                      <div className="flex flex-col items-center justify-center shrink-0 w-24">
+                        <div className="relative w-20 h-24 bg-surface-lowest border border-outline rounded-2xl overflow-hidden shadow-inner flex flex-col justify-end">
+                          {/* Liquid level */}
+                          <div 
+                            className={`w-full transition-all duration-[1000ms] ${isLow ? 'bg-gradient-to-t from-red-700 to-red-400 shadow-[0_-2px_8px_rgba(239,68,68,0.4)]' : style.accent + ' shadow-glow'}`}
+                            style={{ height: `${Math.min(100, Math.max(0, fillPct))}%` }}
+                          >
+                            {/* Wave highlight */}
+                            <div className="absolute top-0 left-0 w-full h-1 bg-white/20 animate-pulse"></div>
+                          </div>
+                          {/* Safe Min Marker */}
+                          <div 
+                            className="absolute w-full h-[1.5px] bg-error opacity-60 z-10"
+                            style={{ bottom: `${(tank.safeMinLevel / tank.capacity) * 100}%` }}
+                            title={`Safe Minimum Level: ${tank.safeMinLevel.toLocaleString()} L`}
+                          />
+                          {/* Percentage text overlay */}
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                            <span className="text-[10px] font-black text-on-surface select-none drop-shadow-md bg-surface/50 px-1 py-0.5 rounded-md border border-outline/10">
+                              {fillPct.toFixed(0)}%
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Decorative Watermark for Farm */}
-                    <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity pointer-events-none">
-                       {categorizeTank(tank) === 'NEW FUEL FARM' ? <LayoutGrid size={80} /> : <Database size={80} />}
+                    {/* Decorative Watermark for Fuel Type */}
+                    <div className="absolute -right-4 -bottom-4 opacity-[0.04] group-hover:opacity-[0.08] transition-opacity pointer-events-none text-on-surface-dim">
+                      {tank.type === FuelType.JET_A1 ? <Plane size={96} className={style.color} /> :
+                       tank.type === FuelType.DIESEL ? <Truck size={96} className={style.color} /> :
+                       tank.type === FuelType.PETROL ? <Fuel size={96} className={style.color} /> :
+                       <Droplet size={96} className={style.color} />}
                     </div>
                   </div>
                 );

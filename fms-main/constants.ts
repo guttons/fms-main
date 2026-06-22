@@ -37,21 +37,21 @@ export const MOCK_ADHOC_FLIGHTS: FlightJob[] = [
 
 export const TANKS: Tank[] = [
   // OLD FUEL FARM
-  { id: 'tk4', name: 'TK-4 (OFF)', type: FuelType.JET_A1, capacity: 1000000, currentLevel: 450000, safeMinLevel: 100000, lastUpdated: new Date().toISOString() },
-  { id: 'tk6', name: 'TK-6 (OFF)', type: FuelType.JET_A1, capacity: 1000000, currentLevel: 620000, safeMinLevel: 100000, lastUpdated: new Date().toISOString() },
-  { id: 'tk7', name: 'TK-7 (OFF)', type: FuelType.JET_A1, capacity: 1000000, currentLevel: 380000, safeMinLevel: 100000, lastUpdated: new Date().toISOString() },
-  { id: 'tk8', name: 'TK-8 (OFF)', type: FuelType.JET_A1, capacity: 1000000, currentLevel: 710000, safeMinLevel: 100000, lastUpdated: new Date().toISOString() },
-  { id: 'tk9', name: 'TK-9 (OFF)', type: FuelType.JET_A1, capacity: 1000000, currentLevel: 540000, safeMinLevel: 100000, lastUpdated: new Date().toISOString() },
+  { id: 'tk4', name: 'TK-4 (OFF)', type: FuelType.JET_A1, capacity: 2200000, currentLevel: 450000, safeMinLevel: 100000, lastUpdated: new Date().toISOString() },
+  { id: 'tk6', name: 'TK-6 (OFF)', type: FuelType.JET_A1, capacity: 2200000, currentLevel: 620000, safeMinLevel: 100000, lastUpdated: new Date().toISOString() },
+  { id: 'tk7', name: 'TK-7 (OFF)', type: FuelType.JET_A1, capacity: 3300000, currentLevel: 380000, safeMinLevel: 100000, lastUpdated: new Date().toISOString() },
+  { id: 'tk8', name: 'TK-8 (OFF)', type: FuelType.JET_A1, capacity: 3300000, currentLevel: 710000, safeMinLevel: 100000, lastUpdated: new Date().toISOString() },
+  { id: 'tk9', name: 'TK-9 (OFF)', type: FuelType.JET_A1, capacity: 3300000, currentLevel: 540000, safeMinLevel: 100000, lastUpdated: new Date().toISOString() },
   { id: 'off-diesel', name: 'Diesel Tank (OFF)', type: FuelType.DIESEL, capacity: 50000, currentLevel: 32000, safeMinLevel: 5000, lastUpdated: new Date().toISOString() },
   { id: 'off-petrol', name: 'Petrol Tank (OFF)', type: FuelType.PETROL, capacity: 20000, currentLevel: 15000, safeMinLevel: 2000, lastUpdated: new Date().toISOString() },
   
   // NEW FUEL FARM
-  { id: 'tk101', name: 'TK-101 (NFF)', type: FuelType.JET_A1, capacity: 5000000, currentLevel: 3200000, safeMinLevel: 500000, lastUpdated: new Date().toISOString() },
-  { id: 'tk102', name: 'TK-102 (NFF)', type: FuelType.JET_A1, capacity: 5000000, currentLevel: 4100000, safeMinLevel: 500000, lastUpdated: new Date().toISOString() },
-  { id: 'tk103', name: 'TK-103 (NFF)', type: FuelType.JET_A1, capacity: 5000000, currentLevel: 2800000, safeMinLevel: 500000, lastUpdated: new Date().toISOString() },
+  { id: 'tk101', name: 'TK-101 (NFF)', type: FuelType.JET_A1, capacity: 14500000, currentLevel: 3200000, safeMinLevel: 500000, lastUpdated: new Date().toISOString() },
+  { id: 'tk102', name: 'TK-102 (NFF)', type: FuelType.JET_A1, capacity: 14500000, currentLevel: 4100000, safeMinLevel: 500000, lastUpdated: new Date().toISOString() },
+  { id: 'tk103', name: 'TK-103 (NFF)', type: FuelType.JET_A1, capacity: 14500000, currentLevel: 2800000, safeMinLevel: 500000, lastUpdated: new Date().toISOString() },
   { id: 'tk106', name: 'Recovery Tank TK-106 (NFF)', type: FuelType.JET_A1, capacity: 100000, currentLevel: 12000, safeMinLevel: 5000, lastUpdated: new Date().toISOString() },
-  { id: 'tk201', name: 'Diesel TK-201 (NFF)', type: FuelType.DIESEL, capacity: 100000, currentLevel: 75000, safeMinLevel: 10000, lastUpdated: new Date().toISOString() },
-  { id: 'tk202', name: 'Diesel TK-202 (NFF)', type: FuelType.DIESEL, capacity: 100000, currentLevel: 68000, safeMinLevel: 10000, lastUpdated: new Date().toISOString() },
+  { id: 'tk201', name: 'Diesel TK-201 (NFF)', type: FuelType.DIESEL, capacity: 500000, currentLevel: 75000, safeMinLevel: 10000, lastUpdated: new Date().toISOString() },
+  { id: 'tk202', name: 'Diesel TK-202 (NFF)', type: FuelType.DIESEL, capacity: 500000, currentLevel: 68000, safeMinLevel: 10000, lastUpdated: new Date().toISOString() },
   { id: 'tk301', name: 'Petrol TK-301 (NFF)', type: FuelType.PETROL, capacity: 50000, currentLevel: 42000, safeMinLevel: 5000, lastUpdated: new Date().toISOString() },
   { id: 'tk302', name: 'Petrol TK-302 (NFF)', type: FuelType.PETROL, capacity: 50000, currentLevel: 38000, safeMinLevel: 5000, lastUpdated: new Date().toISOString() },
 

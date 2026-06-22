@@ -135,12 +135,12 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
 
   const getStatusGradient = (status: EqStatus) => {
     switch (status) {
-      case EqStatus.AVAILABLE: return 'gradient-success';
-      case EqStatus.IN_USE: return 'kinetic-gradient';
-      case EqStatus.MAINTENANCE: return 'gradient-warning';
-      case EqStatus.OUT_OF_SERVICE: return 'gradient-error';
-      case EqStatus.REFUELLING: return 'gradient-warning';
-      default: return 'kinetic-gradient';
+      case EqStatus.AVAILABLE: return 'gradient-success-no-glow';
+      case EqStatus.IN_USE: return 'kinetic-gradient-no-glow';
+      case EqStatus.MAINTENANCE: return 'gradient-warning-no-glow';
+      case EqStatus.OUT_OF_SERVICE: return 'gradient-error-no-glow';
+      case EqStatus.REFUELLING: return 'gradient-warning-no-glow';
+      default: return 'kinetic-gradient-no-glow';
     }
   };
 
@@ -515,7 +515,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
           
           <div className="bg-surface-dim p-1 rounded-2xl border border-outline relative flex w-full sm:w-auto overflow-x-auto no-scrollbar shadow-inner">
             <div 
-              className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
+              className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient-no-glow transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
                 ${filterType === 'All' ? 'left-1 w-[70px] translate-x-0' : ''}
                 ${filterType === EquipmentType.REFUELLER ? 'left-1 w-[100px] translate-x-[70px]' : ''}
                 ${filterType === EquipmentType.HYDRANT_DISPENSER ? 'left-1 w-[150px] translate-x-[170px]' : ''}
@@ -703,7 +703,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                                       onClick={() => handleStatusChange(eq.id, status)}
                                       className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all border uppercase tracking-tight ${
                                         eq.status === status 
-                                          ? 'bg-error text-white border-error shadow-sm' 
+                                          ? `${getStatusGradient(status)} text-white border-transparent shadow-sm scale-[1.02]` 
                                           : 'bg-surface-lowest text-on-surface-dim border-outline hover:border-error/30 hover:text-error'
                                       }`}
                                     >
@@ -840,7 +840,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                   notify('Maintenance details updated', 'success');
                   setEditingMaintEq(null);
                 }}
-                className="px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest kinetic-gradient text-white hover:opacity-90 transition-opacity shadow-premium"
+                className="px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest kinetic-gradient-no-glow text-white hover:opacity-90 transition-opacity shadow-premium"
               >
                 Save Details
               </button>

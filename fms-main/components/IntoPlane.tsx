@@ -198,13 +198,13 @@ const ScreenDashboard: React.FC<{
     ? frozenFlights.intl 
     : (flightJobs || []).filter(f => {
         const isDep = f.type ? f.type === 'departure' : !!f.std;
-        return isDep && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate);
+        return isDep && isFlightInShift(f.std) && f.date === selectedBriefingDate;
       })
   ).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
   
   const domesticJobsRaw = frozenFlights?.domestic 
     ? frozenFlights.domestic 
-    : (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate));
+    : (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && f.date === selectedBriefingDate);
 
   const domesticJobs = domesticJobsRaw.map((df: any) => ({
       id: df.id,
@@ -224,9 +224,9 @@ const ScreenDashboard: React.FC<{
       isDomestic: true,
   })).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
 
-  const adhocJobsRaw = frozenFlights?.adhoc 
-    ? frozenFlights.adhoc 
-    : MOCK_ADHOC_FLIGHTS.filter(f => isFlightInShift(f.sta) && (!f.date || f.date === selectedBriefingDate));
+  const adhocJobsRaw = briefingInfo?.staffAssignments?.adhocFlights !== undefined
+    ? briefingInfo.staffAssignments.adhocFlights
+    : MOCK_ADHOC_FLIGHTS.filter(f => isFlightInShift(f.sta || f.std) && (!f.date || f.date === selectedBriefingDate));
 
   const adhocJobs = adhocJobsRaw.map((f: any) => ({
       id: f.id,
