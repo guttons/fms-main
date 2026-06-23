@@ -143,24 +143,50 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
     return '';
   };
 
+  const getBriefingStatusStyle = (status?: string) => {
+    if (!status) return 'bg-surface border border-white/10 text-on-surface-dim';
+    const s = status.toUpperCase();
+    if (s === 'COMPLETED') {
+      return 'bg-success/10 text-success border border-success/10';
+    }
+    if (s === 'IN_PROGRESS' || s === 'IN PROGRESS') {
+      return 'bg-amber-500/10 text-amber-500 animate-pulse-subtle border border-amber-500/10';
+    }
+    if (s.includes('DELAY')) {
+      return 'bg-amber-500/10 text-amber-500 border border-amber-500/10';
+    }
+    if (s.includes('CANCEL') || s.includes('CNL')) {
+      return 'bg-error/10 text-error border border-error/10';
+    }
+    if (s.includes('LANDED') || s.includes('DEPARTED') || s.includes('ARRIV')) {
+      return 'bg-[#22d3ee]/10 text-[#22d3ee] border border-[#22d3ee]/20';
+    }
+    if (s.includes('BOARDING') || s.includes('GATE') || s.includes('FINAL') || s.includes('CLOSED')) {
+      return 'bg-warning/10 text-warning border border-warning/10';
+    }
+    return 'bg-surface border border-white/10 text-on-surface-dim';
+  };
+
   const frozenFlights = briefingInfo?.staffAssignments?.frozenFlights;
 
   const intlFlightsToRender = frozenFlights?.intl 
     ? frozenFlights.intl.map((ff: any) => {
-        const liveJob = (flightJobs || []).find(j => j.id === ff.id);
+        const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const liveJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
         return liveJob ? { ...ff, status: liveJob.status } : ff;
-      }).filter((f: any) => f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS')
+      }).filter((f: any) => f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED')
     : (flightJobs || []).filter(f => {
         const isDep = f.type ? f.type === 'departure' : !!f.std;
-        return isDep && isFlightInShift(f.std) && f.date === selectedBriefingDate && f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS';
+        return isDep && isFlightInShift(f.std) && f.date === selectedBriefingDate && f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED';
       }).sort((a, b) => (a.std || '').localeCompare(b.std || ''));
 
   const domesticFlightsToRender = frozenFlights?.domestic 
     ? frozenFlights.domestic.map((ff: any) => {
-        const liveJob = (domesticFlights || []).find(j => j.id === ff.id);
+        const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const liveJob = (domesticFlights || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
         return liveJob ? { ...ff, status: liveJob.status } : ff;
-      }).filter((f: any) => f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS')
-    : (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && f.date === selectedBriefingDate && f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS')
+      }).filter((f: any) => f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED')
+    : (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && f.date === selectedBriefingDate && f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED')
       .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
 
   const adhocFlightsToRender = briefingInfo?.staffAssignments?.adhocFlights !== undefined
@@ -744,13 +770,14 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
               const itpStaffList = itpUniqueStaff.map(id => activeStaff.find(u => u.id === id)).filter(Boolean);
 
               // Group assigned ITP staff
-              const assignedOperators = itpStaffList.filter(u => u.role === UserRole.ITP_OPERATOR);
+              const assignedOperators = itpStaffList.filter(u => u.role === UserRole.ITP_OPERATOR || u.role === UserRole.ITP_SUPERVISOR);
               const assignedOfficers = itpStaffList.filter(u => u.role === UserRole.ITP_OFFICER);
               const assignedHydrantOps = itpStaffList.filter(u => u.role === UserRole.ITP_HD_OPERATOR);
               const assignedManagement = itpStaffList.filter(u => u.role === UserRole.ITP_MANAGER || u.role === UserRole.ADMIN);
 
               const assignedOthers = itpStaffList.filter(u => 
                 u.role !== UserRole.ITP_OPERATOR &&
+                u.role !== UserRole.ITP_SUPERVISOR &&
                 u.role !== UserRole.ITP_OFFICER &&
                 u.role !== UserRole.ITP_HD_OPERATOR &&
                 u.role !== UserRole.ITP_MANAGER &&
@@ -825,7 +852,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
                     {frozenFlights && (
                       <button
                         onClick={handleResetFlights}
-                        className="p-1.5 bg-error/10 text-error border border-error/20 rounded-xl hover:bg-error hover:text-white transition-all shrink-0 flex items-center justify-center"
+                        className="p-1.5 bg-error/10 text-error border border-error rounded-full hover:bg-error hover:text-white transition-all shrink-0 flex items-center justify-center cursor-pointer"
                         title="Reset frozen flights to live feed"
                       >
                         <Snowflake className="w-3.5 h-3.5" />
@@ -851,11 +878,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
                             </button>
                           )}
                         </div>
-                        <div className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${
-                          job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/10' : 
-                          job.status === 'IN_PROGRESS' ? 'bg-amber-500/10 text-amber-500 animate-pulse-subtle border border-amber-500/10' : 
-                          'bg-surface border border-white/10 text-on-surface-dim'
-                        }`}>
+                        <div className={`whitespace-nowrap text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${getBriefingStatusStyle(job.status)}`}>
                           {job.status.replace('_', ' ')}
                         </div>
                       </div>
@@ -887,7 +910,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
                     {frozenFlights && (
                       <button
                         onClick={handleResetFlights}
-                        className="p-1.5 bg-error/10 text-error border border-error/20 rounded-xl hover:bg-error hover:text-white transition-all shrink-0 flex items-center justify-center"
+                        className="p-1.5 bg-error/10 text-error border border-error rounded-full hover:bg-error hover:text-white transition-all shrink-0 flex items-center justify-center cursor-pointer"
                         title="Reset frozen flights to live feed"
                       >
                         <Snowflake className="w-3.5 h-3.5" />
@@ -913,11 +936,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
                             </button>
                           )}
                         </div>
-                        <div className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${
-                          flight.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/10' : 
-                          flight.status === 'IN_PROGRESS' ? 'bg-amber-500/10 text-amber-500 animate-pulse-subtle border border-amber-500/10' : 
-                          'bg-surface border border-white/10 text-on-surface-dim'
-                        }`}>
+                        <div className={`whitespace-nowrap text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${getBriefingStatusStyle(flight.status)}`}>
                           {flight.status.replace('_', ' ')}
                         </div>
                       </div>
@@ -971,11 +990,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
                             </button>
                           )}
                         </div>
-                        <div className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${
-                          flight.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/10' : 
-                          flight.status === 'IN_PROGRESS' ? 'bg-amber-500/10 text-amber-500 animate-pulse-subtle border border-amber-500/10' : 
-                          'bg-surface border border-white/10 text-on-surface-dim'
-                        }`}>
+                        <div className={`whitespace-nowrap text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${getBriefingStatusStyle(flight.status)}`}>
                           {flight.status.replace('_', ' ')}
                         </div>
                       </div>
@@ -1008,7 +1023,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
               </div>
               {!isOperatorsCollapsed && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                  {renderStaffSelectArray(staffAssignments.activeOperators, [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.DEPOT_OPERATOR], "Operators", "bg-success shadow-[0_0_10px_rgba(34,197,94,0.4)]", 'success', (newVals) => setStaffAssignments(prev => ({...prev, activeOperators: newVals})))}
+                  {renderStaffSelectArray(staffAssignments.activeOperators, [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.DEPOT_OPERATOR, UserRole.ITP_SUPERVISOR], "Operators", "bg-success shadow-[0_0_10px_rgba(34,197,94,0.4)]", 'success', (newVals) => setStaffAssignments(prev => ({...prev, activeOperators: newVals})))}
                 </div>
               )}
             </div>
@@ -1052,7 +1067,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
               </div>
               {!isHydrantCollapsed && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                  {renderStaffSelectArray(staffAssignments.hydrantOpsOfficers, [UserRole.ITP_OFFICER, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OPERATOR], "Hydrant Officers", "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]", 'warning', (newVals) => setStaffAssignments(prev => ({...prev, hydrantOpsOfficers: newVals})))}
+                  {renderStaffSelectArray(staffAssignments.hydrantOpsOfficers, [UserRole.ITP_OFFICER, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OPERATOR, UserRole.ITP_SUPERVISOR], "Hydrant Officers", "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]", 'warning', (newVals) => setStaffAssignments(prev => ({...prev, hydrantOpsOfficers: newVals})))}
                 </div>
               )}
             </div>
@@ -1074,9 +1089,9 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
               </div>
               {!isStaffingCollapsed && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-200">
-                  {renderStaffSelect(staffAssignments.dutySupervisor, [UserRole.ITP_MANAGER], "Duty Supervisor", (id) => setStaffAssignments(prev => ({ ...prev, dutySupervisor: id })))}
-                  {/* Manager or Incharge will be same - using ITP_MANAGER role for Shift In-Charge selection */}
-                  {renderStaffSelect(staffAssignments.shiftInCharge, [UserRole.ITP_MANAGER, UserRole.DEPOT_MANAGER], "Shift In-Charge", (id) => setStaffAssignments(prev => ({ ...prev, shiftInCharge: id })))}
+                  {renderStaffSelect(staffAssignments.dutySupervisor, [UserRole.ITP_SUPERVISOR], "Duty Supervisor", (id) => setStaffAssignments(prev => ({ ...prev, dutySupervisor: id })))}
+                  {/* Manager or Shift In-Charge selection - using ITP_MANAGER role */}
+                  {renderStaffSelect(staffAssignments.shiftInCharge, [UserRole.ITP_MANAGER], "Shift In-Charge", (id) => setStaffAssignments(prev => ({ ...prev, shiftInCharge: id })))}
                 </div>
               )}
             </div>
@@ -1396,9 +1411,9 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
           <div className="card-premium p-6 sm:p-8 max-w-md w-full relative z-10 shadow-2xl border border-outline scale-in-center animate-in fade-in zoom-in duration-200 flex flex-col space-y-6">
             
             {/* Modal Header */}
-            <div className="flex items-center space-x-3 text-sky-400">
-              <div className="p-2 bg-sky-400/10 rounded-lg">
-                <AlertTriangle className="w-5 h-5 text-sky-400" />
+            <div className="flex items-center space-x-3 text-error">
+              <div className="p-2 bg-error/10 border border-error/20 rounded-lg">
+                <AlertTriangle className="w-5 h-5 text-error" />
               </div>
               <h2 className="text-sm font-black uppercase tracking-widest text-on-surface">Unfreeze Live Feed?</h2>
             </div>
@@ -1418,7 +1433,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
               </button>
               <button
                 onClick={confirmResetFlights}
-                className="px-4 py-2.5 bg-sky-400 hover:bg-sky-500 text-surface-lowest rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-md shadow-sky-400/20"
+                className="px-4 py-2.5 bg-error hover:bg-error/80 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-md shadow-error/20"
               >
                 Yes, Unfreeze
               </button>

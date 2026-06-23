@@ -64,7 +64,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
   // Logic to determine initial view and if switching is allowed
   const isItpManager = user?.role === UserRole.ITP_MANAGER;
-  const isItpOperator = user ? [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(user.role) : false;
+  const isItpOperator = user ? [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER, UserRole.ITP_SUPERVISOR].includes(user.role) : false;
   const isDualRole = user ? [UserRole.ADMIN, UserRole.EXECUTIVE].includes(user.role) : false;
   const isDepotRole = user ? [UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(user.role) : false;
   
@@ -191,7 +191,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
     { name: 'Ullage (Empty)', value: maxJetA1 - totalJetA1 },
   ];
 
-  const operators = (staff && staff.length > 0 ? staff : MOCK_USERS).filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(u.role));
+  const operators = (staff && staff.length > 0 ? staff : MOCK_USERS).filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER, UserRole.ITP_SUPERVISOR].includes(u.role));
 
   // --- Sub-Component: Operator Dashboard (My Tasks) ---
   const renderOperatorDashboard = () => {
@@ -510,7 +510,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                                 </div>
                                             )}
                                         </div>
-                                        <span className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
+                                        <span className={`whitespace-nowrap px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
                                             displayStatus === 'COMPLETED' ? 'bg-success/10 text-success border-success/10' : 
                                             displayStatus === 'DELAYED' ? 'bg-error/10 text-error border-error/10 animate-pulse' :
                                             displayStatus === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/10 animate-pulse' : 'bg-surface-dim text-on-surface-dim border-outline'
@@ -535,7 +535,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                 </div>
                                 <div className="bg-surface-dim p-6 flex flex-col justify-center border-t md:border-t-0 md:border-l border-outline w-full md:w-48">
                                       {flight.status !== 'COMPLETED' ? (
-                                         user.role === UserRole.ITP_OPERATOR ? (
+                                         [UserRole.ITP_OPERATOR, UserRole.ITP_SUPERVISOR].includes(user.role) ? (
                                              <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider text-center opacity-40">VIEW ONLY</span>
                                          ) : (
                                             <button 
@@ -604,7 +604,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                          </div>
 
                                          {job.status !== 'COMPLETED' ? (
-                                            user.role === UserRole.ITP_OPERATOR ? null : (
+                                            [UserRole.ITP_OPERATOR, UserRole.ITP_SUPERVISOR].includes(user.role) ? null : (
                                               <button 
                                                 onClick={() => onStartJob?.(job)}
                                                 className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-lg sm:rounded-xl group shadow-premium kinetic-gradient text-white hover:scale-[1.05] active:scale-95 transition-all"
@@ -661,7 +661,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                               )}
                                           </div>
                                           
-                                          <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
+                                          <span className={`whitespace-nowrap px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
                                              displayStatus === 'COMPLETED' ? 'bg-success/10 text-success border-success/10' : 
                                              displayStatus === 'DELAYED' ? 'bg-error/10 text-error border-error/10 animate-pulse' :
                                              displayStatus === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/10 animate-pulse' : 'bg-surface-dim text-on-surface-dim border-outline'

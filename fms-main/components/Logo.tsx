@@ -20,7 +20,7 @@ export const Logo: React.FC<LogoProps> = ({ className = "h-12 w-auto" }) => {
         </radialGradient>
       </defs>
       
-      <circle cx="60" cy="60" r="50" fill="url(#glow)" />
+      <circle cx="60" cy="60" r="50" fill="url(#glow)" className="logo-glow-pulse" />
 
       {/* Abstract Tech/Fuel Shape */}
       <path 
@@ -29,21 +29,23 @@ export const Logo: React.FC<LogoProps> = ({ className = "h-12 w-auto" }) => {
         strokeWidth="8" 
         strokeLinecap="round" 
         strokeLinejoin="round"
+        className="logo-hex-draw"
       />
       
       {/* Droplet / Core indicator */}
       <path 
         d="M60 35 C60 35 45 55 45 65 C45 73.284 51.716 80 60 80 C68.284 80 75 73.284 75 65 C75 55 60 35 60 35 Z" 
         fill="currentColor" 
+        className="logo-drop-pulse"
       />
       
       {/* Connecting nodes */}
-      <circle cx="60" cy="15" r="6" fill="currentColor" />
-      <circle cx="100" cy="38" r="6" fill="currentColor" />
-      <circle cx="100" cy="82" r="6" fill="currentColor" />
-      <circle cx="60" cy="105" r="6" fill="currentColor" />
-      <circle cx="20" cy="82" r="6" fill="currentColor" />
-      <circle cx="20" cy="38" r="6" fill="currentColor" />
+      <circle cx="60" cy="15" r="6" fill="currentColor" className="logo-node logo-node-1" />
+      <circle cx="100" cy="38" r="6" fill="currentColor" className="logo-node logo-node-2" />
+      <circle cx="100" cy="82" r="6" fill="currentColor" className="logo-node logo-node-3" />
+      <circle cx="60" cy="105" r="6" fill="currentColor" className="logo-node logo-node-4" />
+      <circle cx="20" cy="82" r="6" fill="currentColor" className="logo-node logo-node-5" />
+      <circle cx="20" cy="38" r="6" fill="currentColor" className="logo-node logo-node-6" />
     </svg>
   );
 };

@@ -32,6 +32,7 @@ interface OperationalDataContextType {
   equipment: Equipment[];
   tanks: Tank[];
   flightJobs: FlightJob[];
+  rawFlightJobs: FlightJob[];
   domesticFlights: any[];
   externalFlights: any[];
   isExternalFlightsLoading: boolean;
@@ -207,7 +208,22 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
     const dbJobs = flightJobs.filter(job => !['j1', 'j2', 'j3', 'j4'].includes(job.id));
     const merged = [...dbJobs];
-    const liveIntl = externalFlights.filter((f: any) => f.category?.toLowerCase() === 'international');
+    const liveIntl = externalFlights.filter((f: any) => {
+      if (f.category?.toLowerCase() !== 'international') return false;
+      const statusLower = (f.status || '').toLowerCase();
+      return !(statusLower.includes('cancel') || statusLower.includes('cnl'));
+    });
+
+    const getStatusFromFids = (fidsStatus?: string, currentStatus?: string) => {
+      const current = currentStatus || 'PENDING';
+      if (current === 'IN_PROGRESS' || current === 'COMPLETED') {
+        return current;
+      }
+      if (!fidsStatus) {
+        return current;
+      }
+      return fidsStatus.toUpperCase();
+    };
 
     liveIntl.forEach((lf: any) => {
       const lfNumNorm = (lf.flightNumber || '').replace(/\s+/g, '').toLowerCase();
@@ -240,6 +256,9 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       }
 
       if (existingJobIdx !== -1) {
+        const currentStatus = merged[existingJobIdx].status;
+        const newStatus = getStatusFromFids(lf.status, currentStatus);
+
         merged[existingJobIdx] = {
           ...merged[existingJobIdx],
           sta: staVal || merged[existingJobIdx].sta,
@@ -248,9 +267,11 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           stand: standVal || merged[existingJobIdx].stand,
           route: routeStr || merged[existingJobIdx].route,
           date: lf.date || merged[existingJobIdx].date,
-          type: lf.type || merged[existingJobIdx].type
+          type: lf.type || merged[existingJobIdx].type,
+          status: newStatus
         };
       } else {
+        const newStatus = getStatusFromFids(lf.status, 'PENDING');
         merged.push({
           id: lf.id || `fj-live-${lf.flightNumber}-${lf.scheduledTime}`,
           flightNumber: lf.flightNumber,
@@ -263,7 +284,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           assignedTo: '',
           assignedOfficer: '',
           equipmentUsage: 'HYDRANT',
-          status: 'PENDING',
+          status: newStatus,
           route: routeStr,
           isVirtual: true,
           date: lf.date,
@@ -278,7 +299,11 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     if (!externalFlights || externalFlights.length === 0) {
       return domesticFlights;
     }
-    const liveDom = externalFlights.filter((f: any) => f.category?.toLowerCase() === 'domestic');
+    const liveDom = externalFlights.filter((f: any) => {
+      if (f.category?.toLowerCase() !== 'domestic') return false;
+      const statusLower = (f.status || '').toLowerCase();
+      return !(statusLower.includes('cancel') || statusLower.includes('cnl'));
+    });
     return liveDom.map((f: any, idx: number) => {
       let staVal = f.type === 'arrival' ? f.scheduledTime : '';
       let stdVal = f.type === 'departure' ? f.scheduledTime : '';
@@ -298,13 +323,20 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         }
       }
 
+      const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      const matchingJob = flightJobs.find((j: any) => 
+        (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo &&
+        (!j.date || j.date === f.date)
+      );
+
       let status = 'PENDING';
-      if (f.status) {
-        const s = f.status.toLowerCase();
-        if (s.includes('landed') || s.includes('arrive') || s.includes('departed')) {
-          status = 'COMPLETED';
-        } else if (s.includes('active') || s.includes('boarding') || s.includes('gate') || s.includes('final call')) {
-          status = 'IN_PROGRESS';
+      const currentStatus = matchingJob?.status;
+
+      if (currentStatus === 'IN_PROGRESS' || currentStatus === 'COMPLETED') {
+        status = currentStatus;
+      } else {
+        if (f.status) {
+          status = f.status.toUpperCase();
         }
       }
 
@@ -324,7 +356,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         type: f.type
       };
     });
-  }, [domesticFlights, externalFlights]);
+  }, [domesticFlights, externalFlights, flightJobs]);
 
   const refreshExternalFlights = useCallback(async () => {
     try {
@@ -358,10 +390,6 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   });
 
   const [selectedBriefingDate, setSelectedBriefingDateState] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem('fms_selected_briefing_date');
-      if (saved) return saved;
-    } catch(e) {}
     return new Date().toISOString().split('T')[0];
   });
 
@@ -577,7 +605,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           return [...mappedLive, ...fallbackMocks];
         });
       }
-      if (fetchedJobs && fetchedJobs.length > 0) setFlightJobs(fetchedJobs);
+      if (fetchedJobs) setFlightJobs(fetchedJobs);
       if (fetchedBriefing && typeof fetchedBriefing === 'object') {
          // Merge with default staff if missing
          const staff = (fetchedBriefing as any).staffAssignments || {
@@ -918,7 +946,44 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   };
 
   const deleteFlightJob = async (id: string) => {
+    const jobToDelete = flightJobs.find(j => j.id === id);
     setFlightJobs(prev => prev.filter(j => j.id !== id));
+
+    if (jobToDelete && briefingInfo?.staffAssignments?.frozenFlights) {
+      const cleanNo = (jobToDelete.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      const existingFrozen = briefingInfo.staffAssignments.frozenFlights;
+      let changed = false;
+
+      const newIntl = (existingFrozen.intl || []).filter((f: any) => {
+        const match = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo;
+        if (match) changed = true;
+        return !match;
+      });
+      const newDomestic = (existingFrozen.domestic || []).filter((f: any) => {
+        const match = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo;
+        if (match) changed = true;
+        return !match;
+      });
+      const newAdhoc = (existingFrozen.adhoc || []).filter((f: any) => {
+        const match = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo;
+        if (match) changed = true;
+        return !match;
+      });
+
+      if (changed) {
+        const updatedStaffAssignments = {
+          ...briefingInfo.staffAssignments,
+          frozenFlights: {
+            ...existingFrozen,
+            intl: newIntl,
+            domestic: newDomestic,
+            adhoc: newAdhoc
+          }
+        };
+        await updateBriefingInfo(briefingInfo.info || [], briefingInfo.dieselNeeds || [], updatedStaffAssignments);
+      }
+    }
+
     if (appUser) {
       try {
         await supabaseService.deleteFlightJob(id);
@@ -1114,6 +1179,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       equipment: equipment || [],
       tanks: tanks || [],
       flightJobs: mergedFlightJobs || [],
+      rawFlightJobs: flightJobs || [],
       domesticFlights: mergedDomesticFlights || [],
       externalFlights: externalFlights || [],
       isExternalFlightsLoading,

@@ -4,7 +4,7 @@
   /* Layout Spacing */
   --header-height: 72px;
   --alert-bar-height: 40px;
-  --sidebar-width: 280px;
+  --sidebar-width: 240px;
 
   /* Global Effects */
   --glass-blur: 12px;
@@ -468,4 +468,66 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   -ms-overflow-style: none !important;
   scrollbar-width: none !important;
 }
+
+/* Premium Brand Logo Animations (Splash screen style) */
+@keyframes logo-drawHex {
+  0% { stroke-dashoffset: 400; }
+  50% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -400; }
+}
+
+@keyframes logo-breathe {
+  0%, 100% { transform: scale(0.9); opacity: 0.85; }
+  50% { transform: scale(1.04); opacity: 1; }
+}
+
+@keyframes logo-glowPulse {
+  0%, 100% { transform: scale(0.75); opacity: 0.35; }
+  50% { transform: scale(1.2); opacity: 0.75; }
+}
+
+@keyframes logo-nodePulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.4); }
+}
+
+/* Trigger animations on group hover or when active .logo-animate class is applied */
+.group:hover .logo-hex-draw,
+.logo-animate .logo-hex-draw {
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
+  animation: logo-drawHex 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards infinite;
+}
+
+.group:hover .logo-drop-pulse,
+.logo-animate .logo-drop-pulse {
+  transform-origin: 60px 60px;
+  animation: logo-breathe 1.5s ease-in-out infinite;
+}
+
+.group:hover .logo-glow-pulse,
+.logo-animate .logo-glow-pulse {
+  transform-origin: 60px 60px;
+  animation: logo-glowPulse 1.5s ease-in-out infinite;
+}
+
+.group:hover .logo-node,
+.logo-animate .logo-node {
+  opacity: 0.2;
+  animation: logo-nodePulse 1.5s ease-in-out infinite;
+}
+
+.group:hover .logo-node-1,
+.logo-animate .logo-node-1 { animation-delay: 0s; transform-origin: 60px 15px; }
+.group:hover .logo-node-2,
+.logo-animate .logo-node-2 { animation-delay: 0.25s; transform-origin: 100px 38px; }
+.group:hover .logo-node-3,
+.logo-animate .logo-node-3 { animation-delay: 0.5s; transform-origin: 100px 82px; }
+.group:hover .logo-node-4,
+.logo-animate .logo-node-4 { animation-delay: 0.75s; transform-origin: 60px 105px; }
+.group:hover .logo-node-5,
+.logo-animate .logo-node-5 { animation-delay: 1.0s; transform-origin: 20px 82px; }
+.group:hover .logo-node-6,
+.logo-animate .logo-node-6 { animation-delay: 1.25s; transform-origin: 20px 38px; }
+
 

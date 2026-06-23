@@ -64,6 +64,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
   });
 
   const canEdit = user.role === UserRole.ADMIN || user.role === UserRole.ITP_MANAGER || user.role === UserRole.DEPOT_MANAGER;
+  const isItpStaff = user ? [UserRole.ITP_MANAGER, UserRole.ITP_SUPERVISOR, UserRole.ITP_OFFICER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(user.role) : false;
 
   const handleStatusChange = (id: string, newStatus: EqStatus) => {
     if (newStatus === EqStatus.AVAILABLE || newStatus === EqStatus.IN_USE) {
@@ -117,6 +118,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
 
   const filteredEquipment = (equipment || []).filter(eq => {
     if (!eq) return false;
+    if (isItpStaff && (eq.type === EquipmentType.DIESEL_TRUCK || eq.type === EquipmentType.HYDRANT_SERVICE)) return false;
     const matchesSearch = (eq.name || eq.id || '').toLowerCase().includes((searchTerm || '').toLowerCase());
     const matchesFilter = filterType === 'All' || eq.type === filterType;
     return matchesSearch && matchesFilter;
@@ -159,16 +161,18 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
     status === EqStatus.MAINTENANCE || status === EqStatus.OUT_OF_SERVICE;
 
   // Grouping logic
-  const equipmentByType = Object.values(EquipmentType).reduce((acc, type) => {
-    const items = filteredEquipment.filter(eq => eq.type === type);
-    if (items.length > 0 || filterType === type) {
-      acc[type] = {
-        inService: items.filter(eq => !isOutOfService(eq.status)),
-        outOfService: items.filter(eq => isOutOfService(eq.status))
-      };
-    }
-    return acc;
-  }, {} as Record<string, { inService: Equipment[], outOfService: Equipment[] }>);
+  const equipmentByType = Object.values(EquipmentType)
+    .filter(type => !isItpStaff || (type !== EquipmentType.DIESEL_TRUCK && type !== EquipmentType.HYDRANT_SERVICE))
+    .reduce((acc, type) => {
+      const items = filteredEquipment.filter(eq => eq.type === type);
+      if (items.length > 0 || filterType === type) {
+        acc[type] = {
+          inService: items.filter(eq => !isOutOfService(eq.status)),
+          outOfService: items.filter(eq => isOutOfService(eq.status))
+        };
+      }
+      return acc;
+    }, {} as Record<string, { inService: Equipment[], outOfService: Equipment[] }>);
 
   const exportToPDF = () => {
     const printWindow = window.open('', '_blank');
@@ -501,7 +505,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
               />
             </div>
             
-            {user && ![UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(user.role) && (
+            {user && ![UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER, UserRole.ITP_SUPERVISOR].includes(user.role) && (
               <button
                 onClick={exportToPDF}
                 className="flex items-center justify-center p-2 lg:px-4 lg:py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl hover-kinetic-gradient transition-all active:scale-95 flex-shrink-0"
@@ -513,7 +517,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
             )}
           </div>
           
-          <div className="bg-surface-dim p-1 rounded-2xl border border-outline relative flex w-full sm:w-auto overflow-x-auto no-scrollbar shadow-inner">
+          <div className="bg-surface-dim p-1 rounded-2xl border border-outline relative flex w-fit max-w-full sm:w-auto overflow-x-auto no-scrollbar shadow-inner">
             <div 
               className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient-no-glow transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
                 ${filterType === 'All' ? 'left-1 w-[70px] translate-x-0' : ''}
@@ -531,22 +535,24 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
             >
               ALL
             </button>
-            {Object.values(EquipmentType).map((type, idx) => {
-              const width = type === EquipmentType.REFUELLER ? 'w-[100px]' : 
-                           type === EquipmentType.HYDRANT_DISPENSER ? 'w-[150px]' :
-                           type === EquipmentType.DIESEL_TRUCK ? 'w-[110px]' : 'w-[140px]';
-              return (
-                <button
-                  key={type}
-                  onClick={() => setFilterType(type)}
-                  className={`${width} flex-shrink-0 flex items-center justify-center py-2 text-[8px] font-black uppercase tracking-widest transition-all relative z-10 ${
-                    filterType === type ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
-                  }`}
-                >
-                  {type.replace('_', ' ')}
-                </button>
-              );
-            })}
+            {Object.values(EquipmentType)
+              .filter(type => !isItpStaff || (type !== EquipmentType.DIESEL_TRUCK && type !== EquipmentType.HYDRANT_SERVICE))
+              .map((type, idx) => {
+                const width = type === EquipmentType.REFUELLER ? 'w-[100px]' : 
+                             type === EquipmentType.HYDRANT_DISPENSER ? 'w-[150px]' :
+                             type === EquipmentType.DIESEL_TRUCK ? 'w-[110px]' : 'w-[140px]';
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setFilterType(type)}
+                    className={`${width} flex-shrink-0 flex items-center justify-center py-2 text-[8px] font-black uppercase tracking-widest transition-all relative z-10 ${
+                      filterType === type ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+                    }`}
+                  >
+                    {type.replace('_', ' ')}
+                  </button>
+                );
+              })}
           </div>
         </div>
       </div>

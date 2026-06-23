@@ -6,6 +6,7 @@ export enum UserRole {
   ITP_OFFICER = 'ITP_OFFICER',
   ITP_OPERATOR = 'ITP_OPERATOR',
   ITP_HD_OPERATOR = 'ITP_HD_OPERATOR',
+  ITP_SUPERVISOR = 'ITP_SUPERVISOR',
   DEPOT_OPERATOR = 'DEPOT_OPERATOR',
   EXECUTIVE = 'EXECUTIVE',
   COMMERCIAL = 'COMMERCIAL',
@@ -94,7 +95,7 @@ export interface FlightJob {
   assignedTo?: string; // User ID
   assignedOfficer?: string; // Officer User ID for Refueller
   equipmentUsage?: 'HYDRANT' | 'REFUELLER';
-  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | string;
   vehicleId?: string;
   remarks?: string;
   deliveryNumber?: string;

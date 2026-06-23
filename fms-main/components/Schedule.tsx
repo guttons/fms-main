@@ -79,19 +79,47 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
   const getFidsStatusColor = (status?: string) => {
     const s = (status || '').toLowerCase();
-    if (s.includes('landed') || s.includes('departed')) {
-      return 'bg-success/10 text-success border-success/20';
+    if (s.includes('landed') || s.includes('departed') || s.includes('arrive')) {
+      return 'bg-[#22d3ee]/10 text-[#22d3ee] border-[#22d3ee]/20';
     }
-    if (s.includes('cancel')) {
+    if (s.includes('cancel') || s.includes('cnl')) {
       return 'bg-error/10 text-error border-error/20';
     }
-    if (s.includes('delay') || s.includes('final') || s.includes('closed')) {
+    if (s.includes('delay') || s.includes('final') || s.includes('closed') || s.includes('boarding') || s.includes('gate')) {
       return 'bg-warning/10 text-warning border-warning/20';
     }
     return 'bg-surface-dim text-on-surface-dim border-outline opacity-60';
   };
 
+  const getStatusColor = (status?: string) => {
+    if (!status) return 'bg-surface-dim text-on-surface-dim border-outline';
+    const s = status.toUpperCase();
+    if (s === 'COMPLETED') {
+      return 'bg-success/10 text-success border-success/20 shadow-[0_0_12px_rgba(34,197,94,0.1)]';
+    }
+    if (s === 'IN_PROGRESS' || s === 'IN PROGRESS') {
+      return 'bg-warning/10 text-warning border-warning/20';
+    }
+    if (s.includes('DELAY')) {
+      return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+    }
+    if (s.includes('CANCEL') || s.includes('CNL')) {
+      return 'bg-error/10 text-error border-error/20';
+    }
+    if (s.includes('LANDED') || s.includes('DEPARTED') || s.includes('ARRIV')) {
+      return 'bg-[#22d3ee]/10 text-[#22d3ee] border-[#22d3ee]/20';
+    }
+    if (s.includes('BOARDING') || s.includes('GATE') || s.includes('FINAL') || s.includes('CLOSED')) {
+      return 'bg-warning/10 text-warning border-warning/20';
+    }
+    return 'bg-surface-dim text-on-surface-dim border-outline';
+  };
+
   const handleImportClick = (flight: any) => {
+    const s = (flight.status || '').toLowerCase();
+    if (s.includes('cancel') || s.includes('cnl')) {
+      return;
+    }
     // Calculate route: Origin -> Male (MLE) or Male (MLE) -> Destination
     const routeStr = flight.type === 'arrival'
       ? `${flight.originCode || flight.origin || ''} ➔ MLE`
@@ -210,7 +238,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
         {parts.map((part, idx) => {
           if (part === 'MLE') {
             return (
-              <span key={idx} className="text-[0.75em] opacity-100 mx-[1px] font-bold leading-none relative top-[1px]">
+              <span key={idx} className="text-[0.75em] text-on-surface-dim opacity-35 mx-[1px] font-bold leading-none relative top-[1px]">
                 {part}
               </span>
             );
@@ -282,7 +310,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
   );
 
   // Modal removed — replaced by shift selector
-  const operators = (staff && staff.length > 0 ? staff : MOCK_USERS).filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR].includes(u.role));
+  const operators = (staff && staff.length > 0 ? staff : MOCK_USERS).filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_SUPERVISOR].includes(u.role));
 
   useEffect(() => {
     if (briefingInfo?.dieselNeeds) {
@@ -642,7 +670,10 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                             )}
                           </td>
                           <td className="px-4 py-6 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex justify-end items-center">
+                            <div className="flex justify-end items-center gap-3">
+                              <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${getStatusColor(item.status)}`}>
+                                {item.status.replace('_', ' ')}
+                              </span>
                               <button 
                                 onClick={() => handleAssignFlight(item.id, 'equipmentUsage', activeEquipmentUsage === 'HYDRANT' ? 'REFUELLER' : 'HYDRANT')} 
                                 className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all shrink-0 cursor-pointer ${
@@ -753,6 +784,12 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                           </div>
                         )}
                       </div>
+                      <div className="flex justify-between items-center mt-4 pt-4 border-t border-outline/30">
+                        <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Status</span>
+                        <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border ${getStatusColor(item.status)}`}>
+                          {item.status.replace('_', ' ')}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
@@ -798,7 +835,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                       <tr>
                         <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">TASK ID</th>
                         <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">ASSET / SECTOR</th>
-                        <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">ETD/ETA</th>
+                        <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STD</th>
                         <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STATUS</th>
                       </tr>
                     </thead>
@@ -844,14 +881,12 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                             <td className="px-4 py-6 whitespace-nowrap">
                               <div className="flex items-center text-sm font-black">
                                 <Clock className="w-4 h-4 mr-2.5 opacity-40" />
-                                {flight.eta}
+                                {flight.std || '--:--'}
                               </div>
                             </td>
 
                             <td className="px-4 py-6 whitespace-nowrap">
-                              <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${flight.status === 'COMPLETED' ? 'bg-success/10 text-success border-success/20 shadow-[0_0_12px_rgba(34,197,94,0.1)]' :
-                                flight.status === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/20' : 'bg-surface-dim text-on-surface-dim border-outline'
-                                }`}>
+                              <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${getStatusColor(flight.status)}`}>
                                 {flight.status.replace('_', ' ')}
                               </span>
                             </td>
@@ -907,26 +942,16 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2 mb-6 p-3 bg-surface-dim rounded-xl border border-outline">
-                        <div className="text-center border-r border-outline/30">
-                          <p className="text-[8px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-1">STA</p>
-                          <p className="text-[11px] font-[900] text-on-surface">{flight.sta || '--:--'}</p>
-                        </div>
-                        <div className="text-center border-r border-outline/30">
-                          <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${delayed ? 'text-error opacity-60' : 'text-primary opacity-60'}`}>ETA</p>
-                          <p className={`text-[11px] font-[900] ${delayed ? 'text-error' : 'text-primary'}`}>{flight.eta}</p>
-                        </div>
+                      <div className="flex justify-center items-center p-3 bg-surface-dim rounded-xl border border-outline">
                         <div className="text-center">
                           <p className="text-[8px] font-black text-warning opacity-60 uppercase tracking-widest mb-1">STD</p>
-                          <p className="text-[11px] font-[900] text-warning">{flight.std || '--:--'}</p>
+                          <p className="text-[14px] font-[900] text-warning">{flight.std || '--:--'}</p>
                         </div>
                       </div>
 
                       <div className="flex justify-between items-center mt-4 pt-4 border-t border-outline/30">
                         <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Status</span>
-                        <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border ${flight.status === 'COMPLETED' ? 'bg-success/10 text-success border-success/20' :
-                          flight.status === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/20' : 'bg-surface-dim text-on-surface-dim border-outline'
-                          }`}>
+                        <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border ${getStatusColor(flight.status)}`}>
                           {flight.status.replace('_', ' ')}
                         </span>
                       </div>
@@ -1002,9 +1027,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                             </td>
 
                             <td className="px-4 py-6 whitespace-nowrap">
-                              <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${flight.status === 'COMPLETED' ? 'bg-success/10 text-success border-success/20 shadow-[0_0_12px_rgba(34,197,94,0.1)]' :
-                                flight.status === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/20' : 'bg-surface-dim text-on-surface-dim border-outline'
-                                }`}>
+                              <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${getStatusColor(flight.status)}`}>
                                 {flight.status.replace('_', ' ')}
                               </span>
                             </td>
@@ -1080,9 +1103,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
                       <div className="flex justify-between items-center mt-4 pt-4 border-t border-outline/30">
                         <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Status</span>
-                        <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border ${flight.status === 'COMPLETED' ? 'bg-success/10 text-success border-success/20' :
-                          flight.status === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/20' : 'bg-surface-dim text-on-surface-dim border-outline'
-                          }`}>
+                        <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border ${getStatusColor(flight.status)}`}>
                           {flight.status.replace('_', ' ')}
                         </span>
                       </div>
@@ -1490,6 +1511,10 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                                     </button>
                                   )}
                                 </div>
+                              ) : flight.status && (flight.status.toLowerCase().includes('cancel') || flight.status.toLowerCase().includes('cnl')) ? (
+                                <span className="inline-flex items-center px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-error/10 text-error border border-error/20 select-none">
+                                  Cancelled
+                                </span>
                               ) : (
                                 <button
                                   onClick={() => handleImportClick(flight)}

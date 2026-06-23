@@ -45,7 +45,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
   });
 
   // Extract staff roles for personnel dropdowns
-  const activeOperators = (staff || []).filter(s => [UserRole.DEPOT_OPERATOR, UserRole.ITP_OPERATOR].includes(s.role));
+  const activeOperators = (staff || []).filter(s => [UserRole.DEPOT_OPERATOR, UserRole.ITP_OPERATOR, UserRole.ITP_SUPERVISOR].includes(s.role));
   const activeOfficers = (staff || []).filter(s => [UserRole.DEPOT_MANAGER, UserRole.ITP_MANAGER, UserRole.ADMIN].includes(s.role));
 
   const handleBridgingComplete = async (vehicleId: string) => {

@@ -35,6 +35,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     if (!user || !user.role) return [];
     switch (user.role) {
       case UserRole.ITP_OPERATOR:
+      case UserRole.ITP_SUPERVISOR:
       case UserRole.ITP_HD_OPERATOR:
       case UserRole.ITP_OFFICER:
       case UserRole.ITP_MANAGER:

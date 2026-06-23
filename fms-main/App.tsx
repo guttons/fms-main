@@ -215,6 +215,7 @@ const AppContextContent: React.FC<any> = ({
   };
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isHeaderLogoSpinning, setIsHeaderLogoSpinning] = useState(false);
   const [mainElement, setMainElement] = useState<HTMLElement | null>(null);
 
   const alertsRef = React.useRef<HTMLDivElement>(null);
@@ -274,8 +275,8 @@ const AppContextContent: React.FC<any> = ({
       if (a.targetRole === currentUser.role) return true;
       if ([UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(currentUser.role) && 
           a.targetRole && [UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(a.targetRole as UserRole)) return true;
-      if ([UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(currentUser.role) && 
-          a.targetRole && [UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(a.targetRole as UserRole)) return true;
+      if ([UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER, UserRole.ITP_SUPERVISOR].includes(currentUser.role) && 
+          a.targetRole && [UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER, UserRole.ITP_SUPERVISOR].includes(a.targetRole as UserRole)) return true;
       return !a.targetRole;
     });
 
@@ -624,9 +625,9 @@ const AppContextContent: React.FC<any> = ({
     // Depot role group: both DEPOT_MANAGER and DEPOT_OPERATOR see depot-targeted alerts
     if ([UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(currentUser.role) && 
         a.targetRole && [UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(a.targetRole as UserRole)) return true;
-    // ITP role group: ITP_MANAGER, ITP_OPERATOR, ITP_HD_OPERATOR, and ITP_OFFICER see each other's alerts
-    if ([UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(currentUser.role) && 
-        a.targetRole && [UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(a.targetRole as UserRole)) return true;
+     // ITP role group: ITP_MANAGER, ITP_OPERATOR, ITP_HD_OPERATOR, ITP_SUPERVISOR, and ITP_OFFICER see each other's alerts
+    if ([UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER, UserRole.ITP_SUPERVISOR].includes(currentUser.role) && 
+        a.targetRole && [UserRole.ITP_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER, UserRole.ITP_SUPERVISOR].includes(a.targetRole as UserRole)) return true;
     return !a.targetRole;
   });
 
@@ -713,7 +714,7 @@ const AppContextContent: React.FC<any> = ({
         }
         return <FuelReports user={currentUser} />;
       case 'commercial-reports':
-        if (currentUser?.role && [UserRole.DEPOT_OPERATOR, UserRole.DEPOT_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_MANAGER, UserRole.ITP_OFFICER].includes(currentUser?.role)) {
+        if (currentUser?.role && [UserRole.DEPOT_OPERATOR, UserRole.DEPOT_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_SUPERVISOR, UserRole.ITP_MANAGER, UserRole.ITP_OFFICER].includes(currentUser?.role)) {
           return (
             <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-300">
               <div className="w-24 h-24 bg-error/10 rounded-[32px] flex items-center justify-center mb-6 border border-error/20 shadow-premium">
@@ -774,11 +775,12 @@ const AppContextContent: React.FC<any> = ({
           onSettingsClick={() => {
             if (currentUser?.role === UserRole.ADMIN) {
               setActiveView('admin');
-              setIsMobileMenuOpen(false);
             } else {
               setIsSettingsOpen(true);
             }
+            setIsMobileMenuOpen(false);
           }}
+          onCloseMobileMenu={() => setIsMobileMenuOpen(false)}
         />
 
         {/* Content Area */}
@@ -873,10 +875,14 @@ const AppContextContent: React.FC<any> = ({
             <div className="flex items-center flex-1 transition-all">
                 <div className="flex items-center space-x-4">
                   <button 
-                    onClick={() => setIsMobileMenuOpen(true)}
-                    className="lg:hidden active:scale-95 transition-transform"
+                    onClick={() => {
+                      setIsHeaderLogoSpinning(true);
+                      setTimeout(() => setIsHeaderLogoSpinning(false), 800);
+                      setIsMobileMenuOpen(true);
+                    }}
+                    className="lg:hidden active:scale-95 transition-transform group"
                   >
-                    <Logo className="h-12 w-auto object-contain text-primary" />
+                    <Logo className={`h-12 w-auto object-contain text-primary ${isHeaderLogoSpinning ? 'logo-animate' : ''}`} />
                   </button>
                   <div className="hidden lg:block">
                     <h1 className="text-lg font-black tracking-tighter leading-none text-primary uppercase">FUEL SERVICES</h1>
@@ -1262,12 +1268,14 @@ const AppContextContent: React.FC<any> = ({
         </div>
         
         {/* Mobile Overlay */}
-        {isMobileMenuOpen && (
-          <div 
-            className="fixed inset-0 bg-primary/40 backdrop-blur-sm z-50 lg:hidden"
-            onClick={() => setIsMobileMenuOpen(false)}
-          />
-        )}
+        <div 
+          className={`fixed inset-0 bg-primary/40 backdrop-blur-sm z-50 lg:hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            isMobileMenuOpen 
+              ? 'opacity-100 pointer-events-auto' 
+              : 'opacity-0 pointer-events-none'
+          }`}
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
 
         {/* Install toast is now handled by NotificationContext.notifyWithAction() */}
 

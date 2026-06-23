@@ -10,6 +10,7 @@ export const MOCK_USERS: User[] = [
   { id: 'u4', name: 'Depot Operator', role: UserRole.DEPOT_OPERATOR, avatar: 'https://picsum.photos/100/100?random=4' },
   { id: 'u7', name: 'Hydrant Specialist A', role: UserRole.ITP_HD_OPERATOR, avatar: 'https://picsum.photos/100/100?random=7' },
   { id: 'u8', name: 'Hydrant Specialist B', role: UserRole.ITP_HD_OPERATOR, avatar: 'https://picsum.photos/100/100?random=8' },
+  { id: 'u11', name: 'ITP Supervisor A', role: UserRole.ITP_SUPERVISOR, avatar: 'https://picsum.photos/100/100?random=11' },
   { id: 'u5', name: 'Executive Director', role: UserRole.EXECUTIVE, avatar: 'https://picsum.photos/100/100?random=5' },
   { id: 'u6', name: 'Commercial Analyst', role: UserRole.COMMERCIAL, avatar: 'https://picsum.photos/100/100?random=6' },
   { id: 'u9', name: 'Finance Manager', role: UserRole.FINANCE, avatar: 'https://picsum.photos/100/100?random=9' },

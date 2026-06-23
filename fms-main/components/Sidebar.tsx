@@ -31,6 +31,7 @@ interface SidebarProps {
   onLogout: () => void;
   isMobileMenuOpen: boolean;
   onSettingsClick: () => void;
+  onCloseMobileMenu?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
@@ -39,7 +40,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveView, 
   onLogout, 
   isMobileMenuOpen,
-  onSettingsClick
+  onSettingsClick,
+  onCloseMobileMenu
 }) => {
   const [isCollapsed, setIsCollapsed] = React.useState(() => {
     try {
@@ -49,6 +51,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   });
 
+  const [isSpinning, setIsSpinning] = React.useState(false);
   const [hoveredTooltip, setHoveredTooltip] = React.useState<{ top: number; label: string; left?: string; isError?: boolean } | null>(null);
 
   const toggleCollapse = () => {
@@ -65,6 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (!user || !user.role) return [];
     switch (user.role) {
       case UserRole.ITP_OPERATOR:
+      case UserRole.ITP_SUPERVISOR:
       case UserRole.ITP_HD_OPERATOR:
       case UserRole.ITP_OFFICER:
         return [
@@ -178,27 +182,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside className={`
-      fixed inset-y-0 left-0 z-[60] bg-surface border-r border-outline transform transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
+      fixed inset-y-0 left-0 z-[60] bg-surface border-r border-outline transform transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
       ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl w-[var(--sidebar-width)]' : '-translate-x-full w-[var(--sidebar-width)]'} 
       lg:translate-x-0 lg:static lg:inset-0 shadow-sm transition-colors duration-500
       ${isCollapsed ? 'lg:w-[78px]' : 'lg:w-[var(--sidebar-width)]'}
     `}>
       <div className="h-full flex flex-col">
         {/* Brand */}
-        <div className={`h-[72px] flex items-center bg-surface-dim/20 border-b border-outline relative transition-all duration-300 ${
-          isCollapsed ? 'lg:px-0 lg:justify-center px-8 justify-between' : 'px-8 justify-between'
-        }`}>
-          <h1 className={`text-5xl font-[1000] text-primary uppercase tracking-[-0.05em] leading-none italic drop-shadow-[0_0_12px_rgba(var(--color-primary),0.2)] transition-all duration-300 whitespace-nowrap inline-block ${
+        <button 
+          onClick={() => {
+            setIsSpinning(true);
+            setTimeout(() => setIsSpinning(false), 800);
+            if (window.innerWidth < 1024) {
+              onCloseMobileMenu?.();
+            } else {
+              toggleCollapse();
+            }
+          }}
+          className={`w-full h-[72px] flex items-center bg-surface-dim/20 border-b border-outline relative transition-all duration-300 focus:outline-none hover:bg-surface-dim/40 cursor-pointer group ${
+            isCollapsed ? 'lg:px-0 lg:justify-center px-8 gap-3' : 'px-8 gap-3'
+          }`}
+        >
+          <div className={`transition-all duration-300 shrink-0 flex items-center justify-center ${
+            isCollapsed ? 'lg:scale-75' : 'scale-100'
+          }`}>
+            <Logo className={`h-14 w-auto object-contain text-primary transition-all duration-300 ${isSpinning ? 'logo-animate' : ''}`} />
+          </div>
+          <span className={`text-5xl font-[1000] text-primary uppercase tracking-[-0.05em] leading-none italic drop-shadow-[0_0_12px_rgba(var(--color-primary),0.2)] transition-all duration-300 whitespace-nowrap inline-block text-left ${
             isCollapsed ? 'lg:opacity-0 lg:max-w-0 lg:overflow-hidden lg:pointer-events-none' : 'lg:opacity-100 lg:max-w-[150px]'
           }`}>
             FMS
-          </h1>
-          <div className={`transition-all duration-300 ${
-            isCollapsed ? 'hidden lg:flex lg:scale-75 lg:justify-center lg:w-full' : 'hidden lg:flex items-center space-x-3'
-          }`}>
-            <Logo className="h-14 w-auto object-contain text-primary transition-all duration-300" />
-          </div>
-        </div>
+          </span>
+        </button>
 
         {/* Navigation */}
         <nav 
@@ -322,26 +337,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
             </div>
 
-            {/* Collapse Toggle */}
-            <div className={`hidden lg:flex relative group w-full border-t border-outline/50 transition-all duration-300 ${
-              isCollapsed ? 'lg:justify-center lg:pt-2' : 'lg:justify-end lg:pt-4'
-            }`}>
-              <button 
-                onClick={toggleCollapse}
-                onMouseEnter={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  setHoveredTooltip({
-                    top: rect.top + rect.height / 2,
-                    label: isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar',
-                    left: isCollapsed ? '66px' : '258px'
-                  });
-                }}
-                onMouseLeave={() => setHoveredTooltip(null)}
-                className="w-11 h-11 flex items-center justify-center rounded-xl transition-all duration-300 text-on-surface-dim hover:bg-surface-dim hover:text-on-surface cursor-pointer"
-              >
-                <PanelLeft className={`w-4 h-4 opacity-60 hover:opacity-100 transition-all duration-300 shrink-0 ${isCollapsed ? 'rotate-180' : ''}`} />
-              </button>
-            </div>
+
           </div>
         </div>
       </div>

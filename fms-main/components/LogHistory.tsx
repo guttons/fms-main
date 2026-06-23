@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { MOCK_USERS } from '../constants';
-import { FileText, Search, Download, Filter, X, Calendar, Plane, Anchor, Droplet, Fuel, Truck, Sailboat } from 'lucide-react';
+import { FileText, Search, Download, Filter, X, Calendar, Plane, Anchor, Droplet, Fuel, Truck, Sailboat, AlertTriangle } from 'lucide-react';
 import { Logo } from './Logo';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { supabaseService } from '../services/supabaseService';
@@ -113,6 +113,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   };
 
   const [editingLog, setEditingLog] = useState<FlightLog | null>(null);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [editForm, setEditForm] = useState({
     flightNumber: '',
     aircraftReg: '',
@@ -239,6 +240,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
       document.documentElement.classList.add('modal-open');
     } else {
       document.documentElement.classList.remove('modal-open');
+      setShowConfirmDelete(false);
     }
     return () => {
       document.documentElement.classList.remove('modal-open');
@@ -280,12 +282,12 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
   const handleDeleteLog = async () => {
     if (!editingLog) return;
-    if (!window.confirm('Are you absolutely sure you want to delete this operational log record? This action is permanent.')) return;
 
     setSaving(true);
     try {
       await supabaseService.deleteFlightLog(editingLog.id);
       setEditingLog(null);
+      setShowConfirmDelete(false);
       await fetchLogs();
     } catch (error) {
       console.error('Error deleting log:', error);
@@ -392,7 +394,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
              >
                 <Filter className="w-5 h-5" />
              </button>
-             {user && ![UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER].includes(user.role) && (
+             {user && ![UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER, UserRole.ITP_SUPERVISOR].includes(user.role) && (
                <button className="flex items-center justify-center p-4 sm:px-8 sm:py-4 kinetic-gradient text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all">
                   <Download className="w-5 h-5 sm:w-4 sm:h-4 sm:mr-3" />
                   <span className="hidden sm:inline">EXPORT CSV</span>
@@ -1220,7 +1222,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
             <div className="p-5 sm:p-8 pt-4 border-t border-outline shrink-0 flex gap-4">
               <button 
                 type="button"
-                onClick={handleDeleteLog}
+                onClick={() => setShowConfirmDelete(true)}
                 disabled={saving}
                 className="flex-1 bg-error/10 border border-error/30 text-error hover:bg-error hover:text-white font-black uppercase tracking-[0.2em] py-4 rounded-xl transition-all active:scale-95 text-[11px] disabled:opacity-30 disabled:cursor-not-allowed"
               >
@@ -1233,6 +1235,52 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                 className="flex-[2] kinetic-gradient text-white font-black uppercase tracking-[0.2em] py-4 rounded-xl shadow-premium hover:shadow-glow transition-all active:scale-95 text-[11px] disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {saving ? 'Saving...' : 'Save Log Record'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Nice Confirm Delete Modal */}
+      {showConfirmDelete && editingLog && createPortal(
+        <div 
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto"
+          onClick={() => setShowConfirmDelete(false)}
+        >
+          <div 
+            className="bg-surface-container rounded-[24px] sm:rounded-[32px] p-6 sm:p-8 max-w-sm w-full mx-4 shadow-premium border border-outline my-auto animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-4 mb-6">
+              <div className="p-3 rounded-2xl bg-error/10 border border-error/20">
+                <AlertTriangle className="w-6 h-6 text-error" />
+              </div>
+              <div>
+                <p className="text-sm font-black text-on-surface uppercase tracking-tight">Confirm Deletion</p>
+                <p className="text-[10px] font-black text-on-surface-dim opacity-60 uppercase tracking-widest mt-0.5">This cannot be undone</p>
+              </div>
+            </div>
+            
+            <p className="text-[12px] font-bold text-on-surface-dim leading-relaxed mb-8">
+              Are you absolutely sure you want to delete this operational log record? This action is permanent.
+            </p>
+            
+            <div className="flex gap-3">
+              <button 
+                type="button"
+                onClick={() => setShowConfirmDelete(false)} 
+                className="flex-1 px-4 py-3 rounded-xl border border-outline hover:bg-surface-container-low text-[11px] font-black uppercase tracking-widest text-on-surface-dim transition-all active:scale-95"
+              >
+                Cancel
+              </button>
+              <button 
+                type="button"
+                onClick={handleDeleteLog} 
+                disabled={saving}
+                className="flex-1 px-4 py-3 rounded-xl bg-error hover:bg-error/90 text-white text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>
