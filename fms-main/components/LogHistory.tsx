@@ -44,6 +44,8 @@ interface LogHistoryProps {
 
 export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   const { staff, equipment } = useOperationalData();
+  const activeOperators = (staff || []).filter(s => [UserRole.DEPOT_OPERATOR, UserRole.ITP_OPERATOR, UserRole.ITP_SUPERVISOR].includes(s.role));
+  const activeOfficers = (staff || []).filter(s => [UserRole.DEPOT_MANAGER, UserRole.ITP_MANAGER, UserRole.ADMIN].includes(s.role));
   const [logs, setLogs] = useState<FlightLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -128,11 +130,55 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     timeArrived: '',
     timePosition: '',
     timeStart: '',
-    timeEnd: ''
+    timeEnd: '',
+
+    // Seaplane specific
+    seaplaneOperator: 'TMA',
+    seaplanePumpId: '',
+    seaplaneCo: '',
+
+    // Marine specific
+    marineVesselName: '',
+    marineRefuellerId: '',
+    marineSupervisor: '',
+    marineOperatorId: '',
+    marineVisualCheck: true,
+    marineWaterCheck: true,
+
+    // Filling Station specific
+    fillingStation: 'LFS',
+    fillingFuelType: 'Diesel',
+    fillingVehicleReg: '',
+    fillingDriverName: '',
+    fillingPaymentMode: 'Credit',
+    fillingReceivedBy: '',
+    fillingEquipmentName: '',
+
+    // Bridging specific
+    bridgingSourceTankId: '',
+    bridgingVehicleId: '',
+    bridgingVisualCheck: true,
+    bridgingCwdCheck: true,
+    bridgingDensity: 0,
+    bridgingTemperature: 0,
+    bridgingOperatorId: '',
+    bridgingSupervisor: ''
   });
   const [saving, setSaving] = useState(false);
 
-  const canEdit = user?.role === UserRole.ITP_MANAGER || user?.role === UserRole.ADMIN;
+  const canEditLog = (log: FlightLog): boolean => {
+    if (!user) return false;
+    if (user.role === UserRole.ADMIN) return true;
+    
+    const type = resolveLogType(log);
+    if (type === 'FLIGHT') {
+      return user.role === UserRole.ITP_MANAGER;
+    }
+    if (type === 'SEAPLANE' || type === 'MARINE' || type === 'FILLING_STATION' || type === 'BRIDGING') {
+      return user.role === UserRole.DEPOT_MANAGER;
+    }
+    return false;
+  };
 
   const getLocalDatePart = (isoString?: string) => {
     if (!isoString) return '';
@@ -216,7 +262,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
         visualCheckPassed: blog.visualCheckPassed,
         cwdCheckPassed: blog.cwdCheckPassed,
         density: blog.density,
-        temperature: blog.temperature
+        temperature: blog.temperature,
+        co: blog.co
       } as any));
 
       const filteredFlightLogs = (fetchedFlightLogs || []).filter(
@@ -250,27 +297,94 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   const handleSaveEdit = async () => {
     if (!editingLog) return;
     
-    // Validate ticket number to exactly 6 digits
+    const type = resolveLogType(editingLog);
+    
+    // Validate ticket number to exactly 6 digits (if not Bridging)
     const cleanTicket = editForm.deliveryNumber.replace(/\D/g, '');
-    if (cleanTicket.length !== 6) return;
+    if (type !== 'BRIDGING' && cleanTicket.length !== 6) return;
 
     setSaving(true);
     try {
-      await supabaseService.updateFlightLog(editingLog.id, {
-        flightNumber: editForm.flightNumber,
-        aircraftReg: editForm.aircraftReg,
-        aircraftType: editForm.aircraftType,
-        stand: editForm.stand,
-        deliveryNumber: `MLE-${cleanTicket}`,
-        volume: Number(editForm.volume),
-        meterOpen: Number(editForm.meterOpen),
-        meterClose: Number(editForm.meterClose),
-        remarks: editForm.remarks,
-        timestampArrived: combineDateAndTime(editForm.date, editForm.timeArrived),
-        timestampPosition: combineDateAndTime(editForm.date, editForm.timePosition),
-        timestampStart: combineDateAndTime(editForm.date, editForm.timeStart),
-        timestampInitialEnd: combineDateAndTime(editForm.date, editForm.timeEnd)
-      });
+      if (type === 'SEAPLANE') {
+        await supabaseService.updateFlightLog(editingLog.id, {
+          flightNumber: `SEAPLANE-${editForm.seaplaneOperator.toUpperCase()}`,
+          aircraftReg: `PUMP-${editForm.seaplanePumpId.toUpperCase()}`,
+          vehicleId: editForm.seaplanePumpId.toUpperCase(),
+          deliveryNumber: editForm.deliveryNumber ? `MLE-${cleanTicket}` : undefined,
+          volume: Number(editForm.volume),
+          meterOpen: 0,
+          meterClose: Number(editForm.volume),
+          timestampStart: combineDateAndTime(editForm.date, editForm.timeStart),
+          timestampFinalEnd: combineDateAndTime(editForm.date, editForm.timeEnd),
+          co: editForm.seaplaneCo,
+          remarks: editForm.remarks || `Seaplane Volume logged for ${editForm.seaplaneOperator}`
+        } as any);
+      } else if (type === 'MARINE') {
+        const remarksStr = `Marine Loading for ${editForm.marineVesselName} (Supervised by ${editForm.marineSupervisor})`;
+        await supabaseService.updateFlightLog(editingLog.id, {
+          flightNumber: `VESSEL-${editForm.marineVesselName.toUpperCase()}`,
+          aircraftReg: `VESSEL-${editForm.marineVesselName.toUpperCase()}`,
+          vehicleId: editForm.marineRefuellerId.toUpperCase(),
+          operatorId: editForm.marineOperatorId,
+          deliveryNumber: editForm.deliveryNumber ? `MLE-${cleanTicket}` : undefined,
+          volume: Number(editForm.volume),
+          meterOpen: Number(editForm.meterOpen),
+          meterClose: Number(editForm.meterClose),
+          appearanceCheck: editForm.marineVisualCheck,
+          waterCheck: editForm.marineWaterCheck,
+          timestampStart: combineDateAndTime(editForm.date, editForm.timeStart),
+          timestampFinalEnd: combineDateAndTime(editForm.date, editForm.timeEnd),
+          remarks: remarksStr
+        } as any);
+      } else if (type === 'FILLING_STATION') {
+        const remarksStr = `Ground support refuel: ${editForm.fillingVehicleReg} loaded with ${editForm.volume}L ${editForm.fillingFuelType} (On account of: ${editForm.fillingDriverName}, Payment: ${editForm.fillingPaymentMode}, Received by: ${editForm.fillingReceivedBy}, Equipment: ${editForm.fillingEquipmentName})`;
+        await supabaseService.updateFlightLog(editingLog.id, {
+          flightNumber: `GROUND-${editForm.fillingStation}-${editForm.fillingFuelType.toUpperCase()}`,
+          aircraftReg: editForm.fillingVehicleReg.toUpperCase(),
+          vehicleId: editForm.fillingVehicleReg.toUpperCase(),
+          stand: editForm.fillingStation === 'LFS' ? 'LANDSIDE STATION' : 'AIRSIDE STATION',
+          deliveryNumber: editForm.deliveryNumber ? `MLE-${cleanTicket}` : undefined,
+          volume: Number(editForm.volume),
+          meterOpen: 0,
+          meterClose: Number(editForm.volume),
+          timestampStart: `${editForm.date}T08:00:00.000Z`,
+          timestampFinalEnd: `${editForm.date}T16:00:00.000Z`,
+          remarks: remarksStr
+        } as any);
+      } else if (type === 'BRIDGING') {
+        const remarksStr = `QC Visual: ${editForm.bridgingVisualCheck ? 'PASS' : 'FAIL'}, CWD: ${editForm.bridgingCwdCheck ? 'PASS' : 'FAIL'}` +
+          (editForm.bridgingDensity ? `, Density: ${editForm.bridgingDensity}` : '') +
+          (editForm.bridgingTemperature ? `, Temp: ${editForm.bridgingTemperature}` : '');
+        await supabaseService.updateFlightLog(editingLog.id, {
+          flightNumber: `LOAD-${editForm.bridgingVehicleId}`,
+          aircraftReg: editForm.bridgingSourceTankId,
+          vehicleId: editForm.bridgingVehicleId,
+          volume: Number(editForm.volume),
+          panelCheck: editForm.bridgingVisualCheck,
+          waterCheck: editForm.bridgingCwdCheck,
+          timestampStart: combineDateAndTime(editForm.date, editForm.timeStart),
+          timestampFinalEnd: combineDateAndTime(editForm.date, editForm.timeEnd),
+          remarks: remarksStr,
+          operatorId: editForm.bridgingOperatorId,
+          co: editForm.bridgingSupervisor
+        } as any);
+      } else {
+        await supabaseService.updateFlightLog(editingLog.id, {
+          flightNumber: editForm.flightNumber,
+          aircraftReg: editForm.aircraftReg,
+          aircraftType: editForm.aircraftType,
+          stand: editForm.stand,
+          deliveryNumber: `MLE-${cleanTicket}`,
+          volume: Number(editForm.volume),
+          meterOpen: Number(editForm.meterOpen),
+          meterClose: Number(editForm.meterClose),
+          remarks: editForm.remarks,
+          timestampArrived: combineDateAndTime(editForm.date, editForm.timeArrived),
+          timestampPosition: combineDateAndTime(editForm.date, editForm.timePosition),
+          timestampStart: combineDateAndTime(editForm.date, editForm.timeStart),
+          timestampInitialEnd: combineDateAndTime(editForm.date, editForm.timeEnd)
+        });
+      }
       setEditingLog(null);
       await fetchLogs();
     } catch (error) {
@@ -358,7 +472,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
   const totalVolume = sortedLogs.reduce((sum, log) => sum + (log.volume || 0), 0);
 
-  const isValidTicket = editForm.deliveryNumber.replace(/\D/g, '').length === 6;
+  const currentEditingLogType = editingLog ? resolveLogType(editingLog) : selectedLogType;
+  const isValidTicket = currentEditingLogType === 'BRIDGING' || editForm.deliveryNumber.replace(/\D/g, '').length === 6;
 
   return (
     <div className="p-6 lg:p-10 space-y-10">
@@ -795,36 +910,76 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                             </>
                           )}
 
-                          {/* Edit / Details Action Cell (always the last column) */}
-                          <td className="px-10 py-6 text-right">
-                              {canEdit && resolveLogType(log) !== 'BRIDGING' ? (
-                                <button 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditingLog(log);
-                                    const primaryDate = getLocalDatePart(log.timestampStart || log.timestampArrived || log.timestampPosition || log.timestampInitialEnd) || new Date().toISOString().split('T')[0];
-                                    setEditForm({
-                                      flightNumber: log.flightNumber || '',
-                                      aircraftReg: log.aircraftReg || '',
-                                      aircraftType: log.aircraftType || '',
-                                      stand: log.stand || '',
-                                      deliveryNumber: log.deliveryNumber ? log.deliveryNumber.replace('MLE-', '') : '',
-                                      volume: log.volume || 0,
-                                      meterOpen: log.meterOpen || 0,
-                                      meterClose: log.meterClose || 0,
-                                      remarks: log.remarks || '',
-                                      date: primaryDate,
-                                      timeArrived: getLocalTimePart(log.timestampArrived),
-                                      timePosition: getLocalTimePart(log.timestampPosition),
-                                      timeStart: getLocalTimePart(log.timestampStart),
-                                      timeEnd: getLocalTimePart(log.timestampInitialEnd)
-                                    });
-                                  }} 
-                                  className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-[0.3em] transition-all"
-                                >
-                                  EDIT
-                                </button>
-                              ) : (
+                           {/* Edit / Details Action Cell (always the last column) */}
+                           <td className="px-10 py-6 text-right">
+                               {canEditLog(log) ? (
+                                 <button 
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     setEditingLog(log);
+                                     const logType = resolveLogType(log);
+                                     const primaryDate = getLocalDatePart(log.timestampStart || log.timestampArrived || log.timestampPosition || log.timestampInitialEnd || log.operationalDate) || new Date().toISOString().split('T')[0];
+                                     
+                                     // Parse ground and marine fields
+                                     const groundData = parseGroundLog(log);
+                                     const marineData = parseMarineLog(log);
+                                     const seaplaneOp = logType === 'SEAPLANE' ? (log.flightNumber || '').replace('SEAPLANE-', '') : 'TMA';
+                                     const seaplanePump = logType === 'SEAPLANE' ? (log.aircraftReg || '').replace('PUMP-', '') : '';
+
+                                     setEditForm({
+                                       flightNumber: log.flightNumber || '',
+                                       aircraftReg: log.aircraftReg || '',
+                                       aircraftType: log.aircraftType || '',
+                                       stand: log.stand || '',
+                                       deliveryNumber: logType === 'BRIDGING' ? (log.deliveryNumber || '') : (log.deliveryNumber ? log.deliveryNumber.replace('MLE-', '') : ''),
+                                       volume: log.volume || 0,
+                                       meterOpen: log.meterOpen || 0,
+                                       meterClose: log.meterClose || 0,
+                                       remarks: log.remarks || '',
+                                       date: primaryDate,
+                                       timeArrived: getLocalTimePart(log.timestampArrived),
+                                       timePosition: getLocalTimePart(log.timestampPosition),
+                                       timeStart: getLocalTimePart(log.timestampStart),
+                                       timeEnd: getLocalTimePart(log.timestampFinalEnd || log.timestampInitialEnd),
+
+                                       // Seaplane specific
+                                       seaplaneOperator: seaplaneOp,
+                                       seaplanePumpId: seaplanePump,
+                                       seaplaneCo: (log as any).co || '',
+
+                                       // Marine specific
+                                       marineVesselName: marineData.vesselName || '',
+                                       marineRefuellerId: log.vehicleId || '',
+                                       marineSupervisor: marineData.supervisor || '',
+                                       marineOperatorId: log.operatorId || '',
+                                       marineVisualCheck: log.appearanceCheck ?? true,
+                                       marineWaterCheck: log.waterCheck ?? true,
+
+                                       // Filling Station specific
+                                       fillingStation: groundData.station.includes('Landside') ? 'LFS' : 'AFS',
+                                       fillingFuelType: groundData.fuelType || 'Diesel',
+                                       fillingVehicleReg: log.aircraftReg || '',
+                                       fillingDriverName: groundData.account || '',
+                                       fillingPaymentMode: groundData.paymentMode || 'Credit',
+                                       fillingReceivedBy: groundData.receivedBy || '',
+                                       fillingEquipmentName: groundData.equipmentName || '',
+
+                                       // Bridging specific
+                                       bridgingSourceTankId: log.aircraftReg || '',
+                                       bridgingVehicleId: log.vehicleId || '',
+                                       bridgingVisualCheck: (log as any).visualCheckPassed ?? true,
+                                       bridgingCwdCheck: (log as any).cwdCheckPassed ?? true,
+                                       bridgingDensity: (log as any).density || 0,
+                                       bridgingTemperature: (log as any).temperature || 0,
+                                       bridgingOperatorId: log.operatorId || '',
+                                       bridgingSupervisor: (log as any).co || ''
+                                     });
+                                   }} 
+                                   className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-[0.3em] transition-all"
+                                 >
+                                   EDIT
+                                 </button>
+                               ) : (
                                 <button className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-[0.3em] transition-all">
                                   {isExpanded ? 'HIDE' : 'DETAILS'}
                                 </button>
@@ -878,7 +1033,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
                                  {/* Seaplane details */}
                                  {selectedLogType === 'SEAPLANE' && (
-                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-in fade-in duration-300">
+                                   <div className="grid grid-cols-2 md:grid-cols-5 gap-6 animate-in fade-in duration-300">
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Operator Name</span>
                                          <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{seaplaneOp}</span>
@@ -888,6 +1043,10 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                          <span className="text-[11px] font-mono text-on-surface">PUMP-{pumpId}</span>
                                       </div>
                                       <div className="flex flex-col gap-1">
+                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Verifying Officer Name</span>
+                                          <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.co || 'N/A'}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Pumping Window</span>
                                          <span className="text-[11px] font-mono text-on-surface">08:00 - 16:00</span>
                                       </div>
@@ -895,7 +1054,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Database Sync Time</span>
                                          <span className="text-[11px] font-mono text-on-surface">{log.timestampClearance ? new Date(log.timestampClearance).toLocaleString() : 'N/A'}</span>
                                       </div>
-                                      <div className="flex flex-col gap-1 col-span-2 md:col-span-4">
+                                      <div className="flex flex-col gap-1 col-span-2 md:col-span-5">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Remarks</span>
                                          <span className="text-[11px] text-on-surface opacity-80">{log.remarks || 'No operational remarks.'}</span>
                                       </div>
@@ -1053,169 +1212,763 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
             {/* Content: Scrollable */}
             <div className="p-5 sm:p-8 pt-4 overflow-y-auto space-y-6 flex-1">
-              {/* Flight Info Grid */}
-              <div>
-                <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Flight & Aircraft Details</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {resolveLogType(editingLog) === 'FLIGHT' && (
+                <>
+                  {/* Flight Info Grid */}
                   <div>
-                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Flight Number</label>
-                    <input 
-                      type="text"
-                      value={editForm.flightNumber}
-                      onChange={e => setEditForm({...editForm, flightNumber: e.target.value})}
-                      className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
-                    />
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Flight & Aircraft Details</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Flight Number</label>
+                        <input 
+                          type="text"
+                          value={editForm.flightNumber}
+                          onChange={e => setEditForm({...editForm, flightNumber: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Aircraft Reg</label>
+                        <input 
+                          type="text"
+                          value={editForm.aircraftReg}
+                          onChange={e => setEditForm({...editForm, aircraftReg: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Aircraft Type</label>
+                        <input 
+                          type="text"
+                          value={editForm.aircraftType}
+                          onChange={e => setEditForm({...editForm, aircraftType: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Stand</label>
+                        <input 
+                          type="text"
+                          value={editForm.stand}
+                          onChange={e => setEditForm({...editForm, stand: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Aircraft Reg</label>
-                    <input 
-                      type="text"
-                      value={editForm.aircraftReg}
-                      onChange={e => setEditForm({...editForm, aircraftReg: e.target.value})}
-                      className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Aircraft Type</label>
-                    <input 
-                      type="text"
-                      value={editForm.aircraftType}
-                      onChange={e => setEditForm({...editForm, aircraftType: e.target.value})}
-                      className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Stand</label>
-                    <input 
-                      type="text"
-                      value={editForm.stand}
-                      onChange={e => setEditForm({...editForm, stand: e.target.value})}
-                      className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
 
-              {/* Delivery & Volumetrics */}
-              <div>
-                <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Delivery & Meter Readings</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {/* Delivery & Volumetrics */}
                   <div>
-                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Ticket Number</label>
-                    <div className="relative">
-                      <input 
-                        type="text"
-                        maxLength={6}
-                        value={editForm.deliveryNumber}
-                        onChange={e => {
-                          const val = e.target.value.replace(/\D/g, '');
-                          setEditForm({...editForm, deliveryNumber: val});
-                        }}
-                        className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-error font-mono text-[12px] font-black focus:border-primary outline-none"
-                        placeholder="000000"
-                      />
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Delivery & Meter Readings</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Ticket Number</label>
+                        <div className="relative">
+                          <input 
+                            type="text"
+                            maxLength={6}
+                            value={editForm.deliveryNumber}
+                            onChange={e => {
+                              const val = e.target.value.replace(/\D/g, '');
+                              setEditForm({...editForm, deliveryNumber: val});
+                            }}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-error font-mono text-[12px] font-black focus:border-primary outline-none"
+                            placeholder="000000"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Volume (Liters)</label>
+                        <input 
+                          type="number"
+                          value={editForm.volume}
+                          onChange={e => setEditForm({...editForm, volume: e.target.valueAsNumber || 0})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Meter Open</label>
+                        <input 
+                          type="number"
+                          value={editForm.meterOpen}
+                          onChange={e => setEditForm({...editForm, meterOpen: e.target.valueAsNumber || 0})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Meter Close</label>
+                        <input 
+                          type="number"
+                          value={editForm.meterClose}
+                          onChange={e => setEditForm({...editForm, meterClose: e.target.valueAsNumber || 0})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
+                        />
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Volume (Liters)</label>
-                    <input 
-                      type="number"
-                      value={editForm.volume}
-                      onChange={e => setEditForm({...editForm, volume: e.target.valueAsNumber || 0})}
-                      className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Meter Open</label>
-                    <input 
-                      type="number"
-                      value={editForm.meterOpen}
-                      onChange={e => setEditForm({...editForm, meterOpen: e.target.valueAsNumber || 0})}
-                      className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Meter Close</label>
-                    <input 
-                      type="number"
-                      value={editForm.meterClose}
-                      onChange={e => setEditForm({...editForm, meterClose: e.target.valueAsNumber || 0})}
-                      className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
 
-              {/* Date & Timings */}
-              <div>
-                <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Operation Timing Specifications</h4>
-                <div className="space-y-4">
+                  {/* Date & Timings */}
                   <div>
-                    <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Operation Date</label>
-                    <div className="relative">
-                       <input 
-                         type="date"
-                         value={editForm.date}
-                         onChange={e => setEditForm({...editForm, date: e.target.value})}
-                         onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
-                         className="w-full pl-10 pr-4 py-2 bg-surface-lowest border border-outline rounded-xl text-on-surface text-[12px] font-bold focus:border-primary outline-none cursor-pointer"
-                       />
-                       <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Operation Timing Specifications</h4>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Operation Date</label>
+                        <div className="relative">
+                           <input 
+                             type="date"
+                             value={editForm.date}
+                             onChange={e => setEditForm({...editForm, date: e.target.value})}
+                             onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                             className="w-full pl-10 pr-4 py-2 bg-surface-lowest border border-outline rounded-xl text-on-surface text-[12px] font-bold focus:border-primary outline-none cursor-pointer"
+                           />
+                           <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div>
+                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Arrived</label>
+                          <input 
+                            type="time"
+                            value={editForm.timeArrived}
+                            onChange={e => setEditForm({...editForm, timeArrived: e.target.value})}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Positioned</label>
+                          <input 
+                            type="time"
+                            value={editForm.timePosition}
+                            onChange={e => setEditForm({...editForm, timePosition: e.target.value})}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Dispense Start</label>
+                          <input 
+                            type="time"
+                            value={editForm.timeStart}
+                            onChange={e => setEditForm({...editForm, timeStart: e.target.value})}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Dispense End</label>
+                          <input 
+                            type="time"
+                            value={editForm.timeEnd}
+                            onChange={e => setEditForm({...editForm, timeEnd: e.target.value})}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <div>
-                      <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Arrived</label>
-                      <input 
-                        type="time"
-                        value={editForm.timeArrived}
-                        onChange={e => setEditForm({...editForm, timeArrived: e.target.value})}
-                        className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
-                      />
+                </>
+              )}
+
+              {resolveLogType(editingLog) === 'SEAPLANE' && (
+                <>
+                  {/* Seaplane Details */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Seaplane & Dock Details</h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Operator</label>
+                        <select 
+                          value={editForm.seaplaneOperator}
+                          onChange={e => setEditForm({...editForm, seaplaneOperator: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                        >
+                          <option value="TRANS MALDIVIAN AIRWAYS">TRANS MALDIVIAN AIRWAYS</option>
+                          <option value="(SEAPLANE) ISLAND AVIATION SERVICES">ISLAND AVIATION SERVICES</option>
+                          <option value="(SEAPLANE) MANTA AIR">MANTA AIR</option>
+                          <option value="VILLA AIR SEAPLANES">VILLA AIR SEAPLANES</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Dispenser / Pump ID</label>
+                        <input 
+                          type="text"
+                          value={editForm.seaplanePumpId}
+                          onChange={e => setEditForm({...editForm, seaplanePumpId: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          placeholder="E.G. SP-04"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Verifying Officer Name</label>
+                        <select 
+                          value={editForm.seaplaneCo || ''}
+                          onChange={e => setEditForm({...editForm, seaplaneCo: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none cursor-pointer"
+                        >
+                          <option value="">SELECT OFFICER...</option>
+                          {(activeOfficers.length > 0 ? activeOfficers : staff || []).map(off => (
+                            <option key={off.id} value={off.name}>{off.name}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Positioned</label>
-                      <input 
-                        type="time"
-                        value={editForm.timePosition}
-                        onChange={e => setEditForm({...editForm, timePosition: e.target.value})}
-                        className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
-                      />
+                  </div>
+
+                  {/* Volumetrics */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Delivery Details</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Ticket Number</label>
+                        <input 
+                          type="text"
+                          maxLength={6}
+                          value={editForm.deliveryNumber}
+                          onChange={e => setEditForm({...editForm, deliveryNumber: e.target.value.replace(/\D/g, '')})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-error font-mono text-[12px] font-black focus:border-primary outline-none"
+                          placeholder="000000"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Total Volume (Liters)</label>
+                        <input 
+                          type="number"
+                          value={editForm.volume}
+                          onChange={e => setEditForm({...editForm, volume: e.target.valueAsNumber || 0})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Dispense Start</label>
-                      <input 
-                        type="time"
-                        value={editForm.timeStart}
-                        onChange={e => setEditForm({...editForm, timeStart: e.target.value})}
-                        className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
-                      />
+                  </div>
+
+                  {/* Timings */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Operation Timings</h4>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Operation Date</label>
+                        <div className="relative">
+                          <input 
+                            type="date"
+                            value={editForm.date}
+                            onChange={e => setEditForm({...editForm, date: e.target.value})}
+                            className="w-full pl-10 pr-4 py-2 bg-surface-lowest border border-outline rounded-xl text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          />
+                          <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Start Time</label>
+                          <input 
+                            type="time"
+                            value={editForm.timeStart}
+                            onChange={e => setEditForm({...editForm, timeStart: e.target.value})}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">End Time</label>
+                          <input 
+                            type="time"
+                            value={editForm.timeEnd}
+                            onChange={e => setEditForm({...editForm, timeEnd: e.target.value})}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          />
+                        </div>
+                      </div>
                     </div>
+                  </div>
+                </>
+              )}
+
+              {resolveLogType(editingLog) === 'MARINE' && (
+                <>
+                  {/* Marine Assignment */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Vessel & Asset Assignment</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Vessel Name</label>
+                        <input 
+                          type="text"
+                          value={editForm.marineVesselName}
+                          onChange={e => setEditForm({...editForm, marineVesselName: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          placeholder="E.G. MV SEA BREEZE"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Refueller ID</label>
+                        <input 
+                          type="text"
+                          value={editForm.marineRefuellerId}
+                          onChange={e => setEditForm({...editForm, marineRefuellerId: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          placeholder="E.G. RF-10"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Volumetrics */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Delivery & Metering</h4>
+                    <div className="grid grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Ticket Number</label>
+                        <input 
+                          type="text"
+                          maxLength={6}
+                          value={editForm.deliveryNumber}
+                          onChange={e => setEditForm({...editForm, deliveryNumber: e.target.value.replace(/\D/g, '')})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-error font-mono text-[12px] font-black focus:border-primary outline-none"
+                          placeholder="000000"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Volume (Liters)</label>
+                        <input 
+                          type="number"
+                          value={editForm.volume}
+                          onChange={e => setEditForm({...editForm, volume: e.target.valueAsNumber || 0})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Meter Open</label>
+                        <input 
+                          type="number"
+                          value={editForm.volume ? editForm.meterOpen : 0}
+                          onChange={e => setEditForm({...editForm, meterOpen: e.target.valueAsNumber || 0})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Meter Close</label>
+                        <input 
+                          type="number"
+                          value={editForm.volume ? editForm.meterClose : 0}
+                          onChange={e => setEditForm({...editForm, meterClose: e.target.valueAsNumber || 0})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* QC Checks */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Quality Control Checks</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <label className="flex items-center space-x-3 bg-surface-lowest border border-outline rounded-xl p-3 cursor-pointer hover:border-primary transition-all">
+                        <input 
+                          type="checkbox"
+                          checked={editForm.marineVisualCheck}
+                          onChange={e => setEditForm({...editForm, marineVisualCheck: e.target.checked})}
+                          className="w-4 h-4 rounded text-primary focus:ring-primary border-outline bg-surface-dim"
+                        />
+                        <span className="text-[12px] font-bold text-on-surface uppercase tracking-wider">QC Visual Check Pass</span>
+                      </label>
+                      <label className="flex items-center space-x-3 bg-surface-lowest border border-outline rounded-xl p-3 cursor-pointer hover:border-primary transition-all">
+                        <input 
+                          type="checkbox"
+                          checked={editForm.marineWaterCheck}
+                          onChange={e => setEditForm({...editForm, marineWaterCheck: e.target.checked})}
+                          className="w-4 h-4 rounded text-primary focus:ring-primary border-outline bg-surface-dim"
+                        />
+                        <span className="text-[12px] font-bold text-on-surface uppercase tracking-wider">QC Water Check Pass</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Timings */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Operation Timings</h4>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Operation Date</label>
+                        <div className="relative">
+                          <input 
+                            type="date"
+                            value={editForm.date}
+                            onChange={e => setEditForm({...editForm, date: e.target.value})}
+                            className="w-full pl-10 pr-4 py-2 bg-surface-lowest border border-outline rounded-xl text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          />
+                          <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Start Time</label>
+                          <input 
+                            type="time"
+                            value={editForm.timeStart}
+                            onChange={e => setEditForm({...editForm, timeStart: e.target.value})}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">End Time</label>
+                          <input 
+                            type="time"
+                            value={editForm.timeEnd}
+                            onChange={e => setEditForm({...editForm, timeEnd: e.target.value})}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Personnel Involved */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Personnel Involved</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Supervisor</label>
+                        <input 
+                          type="text"
+                          value={editForm.marineSupervisor}
+                          onChange={e => setEditForm({...editForm, marineSupervisor: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          placeholder="Supervisor Name"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Transfer Operator Name</label>
+                        <select 
+                          value={editForm.marineOperatorId}
+                          onChange={e => setEditForm({...editForm, marineOperatorId: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                        >
+                          <option value="">SELECT OPERATOR...</option>
+                          {(staff || []).map(op => (
+                            <option key={op.id} value={op.name}>{op.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {resolveLogType(editingLog) === 'FILLING_STATION' && (
+                <>
+                  {/* Station & Product */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Station & Product Details</h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Station</label>
+                        <select 
+                          value={editForm.fillingStation}
+                          onChange={e => setEditForm({...editForm, fillingStation: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                        >
+                          <option value="LFS">LANDSIDE (LFS)</option>
+                          <option value="AFS">AIRSIDE (AFS)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Fuel Type</label>
+                        <select 
+                          value={editForm.fillingFuelType}
+                          onChange={e => setEditForm({...editForm, fillingFuelType: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                        >
+                          <option value="Diesel">DIESEL</option>
+                          <option value="Petrol">PETROL</option>
+                          <option value="Lube Oil">LUBE OIL</option>
+                          <option value="Internal">INTERNAL</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Vehicle Reg</label>
+                        <input 
+                          type="text"
+                          value={editForm.fillingVehicleReg}
+                          onChange={e => setEditForm({...editForm, fillingVehicleReg: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          placeholder="E.G. 8Q-XYZ"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Transaction Details */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Transaction Details</h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Invoice Number</label>
+                        <input 
+                          type="text"
+                          maxLength={6}
+                          value={editForm.deliveryNumber}
+                          onChange={e => setEditForm({...editForm, deliveryNumber: e.target.value.replace(/\D/g, '')})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-error font-mono text-[12px] font-black focus:border-primary outline-none"
+                          placeholder="000000"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Driver / On Account Of</label>
+                        <input 
+                          type="text"
+                          value={editForm.fillingDriverName}
+                          onChange={e => setEditForm({...editForm, fillingDriverName: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          placeholder="Driver Name"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Total Volume (Liters)</label>
+                        <input 
+                          type="number"
+                          value={editForm.volume}
+                          onChange={e => setEditForm({...editForm, volume: e.target.valueAsNumber || 0})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Logistics & Accounting */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Logistics & Accounting</h4>
+                    <div className="grid grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Payment Mode</label>
+                        <select 
+                          value={editForm.fillingPaymentMode}
+                          onChange={e => setEditForm({...editForm, fillingPaymentMode: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                        >
+                          <option value="Credit">CREDIT</option>
+                          <option value="Cash">CASH</option>
+                        </select>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Received By</label>
+                        <input 
+                          type="text"
+                          value={editForm.fillingReceivedBy}
+                          onChange={e => setEditForm({...editForm, fillingReceivedBy: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          placeholder="Recipient Name"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Equipment</label>
+                        <input 
+                          type="text"
+                          value={editForm.fillingEquipmentName}
+                          onChange={e => setEditForm({...editForm, fillingEquipmentName: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          placeholder="Equipment Name"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Timing */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Timing Details</h4>
                     <div>
-                      <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Dispense End</label>
+                      <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Operation Date</label>
+                      <div className="relative">
+                        <input 
+                          type="date"
+                          value={editForm.date}
+                          onChange={e => setEditForm({...editForm, date: e.target.value})}
+                          className="w-full pl-10 pr-4 py-2 bg-surface-lowest border border-outline rounded-xl text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                        />
+                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {resolveLogType(editingLog) === 'BRIDGING' && (
+                <>
+                  {/* Bridging Details */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Refueller Loading Details</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Source Tank</label>
+                        <input 
+                          type="text"
+                          value={editForm.bridgingSourceTankId}
+                          onChange={e => setEditForm({...editForm, bridgingSourceTankId: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          placeholder="Source Tank ID"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Refueller / Vehicle ID</label>
+                        <input 
+                          type="text"
+                          value={editForm.bridgingVehicleId}
+                          onChange={e => setEditForm({...editForm, bridgingVehicleId: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          placeholder="RF-XX"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Volumetrics */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Volumetrics</h4>
+                    <div>
+                      <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Total Volume (Liters)</label>
                       <input 
-                        type="time"
-                        value={editForm.timeEnd}
-                        onChange={e => setEditForm({...editForm, timeEnd: e.target.value})}
-                        className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                        type="number"
+                        value={editForm.volume}
+                        onChange={e => setEditForm({...editForm, volume: e.target.valueAsNumber || 0})}
+                        className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
                       />
                     </div>
                   </div>
-                </div>
-              </div>
+
+                  {/* QC Checks */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Quality Control & Density</h4>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <label className="flex items-center space-x-3 bg-surface-lowest border border-outline rounded-xl p-3 cursor-pointer hover:border-primary transition-all">
+                          <input 
+                            type="checkbox"
+                            checked={editForm.bridgingVisualCheck}
+                            onChange={e => setEditForm({...editForm, bridgingVisualCheck: e.target.checked})}
+                            className="w-4 h-4 rounded text-primary focus:ring-primary border-outline bg-surface-dim"
+                          />
+                          <span className="text-[12px] font-bold text-on-surface uppercase tracking-wider">QC Visual Check Pass</span>
+                        </label>
+                        <label className="flex items-center space-x-3 bg-surface-lowest border border-outline rounded-xl p-3 cursor-pointer hover:border-primary transition-all">
+                          <input 
+                            type="checkbox"
+                            checked={editForm.bridgingCwdCheck}
+                            onChange={e => setEditForm({...editForm, bridgingCwdCheck: e.target.checked})}
+                            className="w-4 h-4 rounded text-primary focus:ring-primary border-outline bg-surface-dim"
+                          />
+                          <span className="text-[12px] font-bold text-on-surface uppercase tracking-wider">QC CWD Check Pass</span>
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Observed Density (kg/m³)</label>
+                          <input 
+                            type="number"
+                            step="0.1"
+                            value={editForm.bridgingDensity || ''}
+                            onChange={e => setEditForm({...editForm, bridgingDensity: e.target.valueAsNumber || 0})}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
+                            placeholder="0.0"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Observed Temp (°C)</label>
+                          <input 
+                            type="number"
+                            step="0.1"
+                            value={editForm.bridgingTemperature || ''}
+                            onChange={e => setEditForm({...editForm, bridgingTemperature: e.target.valueAsNumber || 0})}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none font-mono"
+                            placeholder="0.0"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Timings */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Operation Timings</h4>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Operation Date</label>
+                        <div className="relative">
+                          <input 
+                            type="date"
+                            value={editForm.date}
+                            onChange={e => setEditForm({...editForm, date: e.target.value})}
+                            className="w-full pl-10 pr-4 py-2 bg-surface-lowest border border-outline rounded-xl text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          />
+                          <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Start Time</label>
+                          <input 
+                            type="time"
+                            value={editForm.timeStart}
+                            onChange={e => setEditForm({...editForm, timeStart: e.target.value})}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">End Time</label>
+                          <input 
+                            type="time"
+                            value={editForm.timeEnd}
+                            onChange={e => setEditForm({...editForm, timeEnd: e.target.value})}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Personnel Involved */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Personnel Involved</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Fueling Operator Name</label>
+                        <select 
+                          value={editForm.bridgingOperatorId}
+                          onChange={e => setEditForm({...editForm, bridgingOperatorId: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                        >
+                          <option value="">SELECT OPERATOR...</option>
+                          {(activeOperators.length > 0 ? activeOperators : staff).map(op => (
+                            <option key={op.id} value={op.name}>{op.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Verifying Officer Name</label>
+                        <select 
+                          value={editForm.bridgingSupervisor}
+                          onChange={e => setEditForm({...editForm, bridgingSupervisor: e.target.value})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                        >
+                          <option value="">SELECT OFFICER...</option>
+                          {(activeOfficers.length > 0 ? activeOfficers : staff).map(off => (
+                            <option key={off.id} value={off.name}>{off.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Remarks */}
-              <div>
-                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-widest mb-2">Remarks</label>
-                <textarea 
-                  value={editForm.remarks}
-                  onChange={e => setEditForm({...editForm, remarks: e.target.value})}
-                  rows={2}
-                  className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-on-surface text-[12px] font-bold focus:border-primary outline-none resize-none"
-                  placeholder="Enter any additional details or remarks..."
-                />
-              </div>
+              {resolveLogType(editingLog) === 'FLIGHT' && (
+                <div>
+                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-widest mb-2">Remarks</label>
+                  <textarea 
+                    value={editForm.remarks}
+                    onChange={e => setEditForm({...editForm, remarks: e.target.value})}
+                    rows={2}
+                    className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-on-surface text-[12px] font-bold focus:border-primary outline-none resize-none"
+                    placeholder="Enter any additional details or remarks..."
+                  />
+                </div>
+              )}
             </div>
 
             {/* Footer: sticky/fixed */}

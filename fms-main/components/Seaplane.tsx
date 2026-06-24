@@ -3,13 +3,15 @@ import React, { useState } from 'react';
 import { Sailboat, MapPin, Droplet, Save, CheckCircle, AlertTriangle, Calendar, FileText } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
+import { UserRole } from '../types';
 
 interface SeaplaneProps {
     user?: any;
 }
 
 export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
-    const { flightLogs } = useOperationalData();
+    const { flightLogs, staff } = useOperationalData();
+    const activeOfficers = (staff || []).filter(s => [UserRole.DEPOT_MANAGER, UserRole.ITP_MANAGER, UserRole.ADMIN].includes(s.role));
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
     const [duplicateError, setDuplicateError] = useState<string | null>(null);
@@ -18,7 +20,8 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
         pumpId: '',
         date: new Date().toISOString().split('T')[0],
         deliveryNumber: '',
-        volume: ''
+        volume: '',
+        co: ''
     });
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -68,6 +71,7 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                 walkAroundCheck: true,
                 appearanceCheck: true,
                 waterCheck: true,
+                co: formData.co,
                 remarks: `Seaplane Volume logged for ${formData.operator}`
             };
 
@@ -79,7 +83,8 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                 pumpId: '',
                 date: new Date().toISOString().split('T')[0],
                 deliveryNumber: '',
-                volume: ''
+                volume: '',
+                co: ''
             });
         } catch (error) {
             console.error('Error logging seaplane volume:', error);
@@ -130,35 +135,47 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6 lg:space-y-8">
-                {/* Standalone Delivery Ticket Card designed like IntoPlane */}
-                <div className="card-premium p-6 lg:p-8 border-outline overflow-hidden">
-                    <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Delivery Ticket Number</label>
-                    <div className="flex items-center gap-2 max-w-full overflow-hidden">
-                        <span className="text-2xl sm:text-3xl font-mono font-black text-on-surface-dim opacity-30 shrink-0">MLE-</span>
-                        <input 
-                            type="text" 
-                            maxLength={6}
-                            required
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            className={`flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 transition-all text-error placeholder:text-error/20 ${
-                                duplicateError ? 'border-error' : 'border-outline focus:border-primary'
-                            }`}
-                            placeholder="000000"
-                            value={formData.deliveryNumber}
-                            onChange={(e) => {
-                                const val = e.target.value.replace(/\D/g, '').slice(0, 6);
-                                setFormData(prev => ({ ...prev, deliveryNumber: val }));
-                                if (duplicateError) setDuplicateError(null);
-                            }}
-                        />
-                    </div>
-                    {duplicateError && (
-                        <div className="mt-4 flex items-start gap-3 p-3 bg-error/10 border border-error/30 rounded-xl">
-                            <AlertTriangle className="w-4 h-4 text-error mt-0.5 shrink-0" />
-                            <p className="text-[10px] font-black text-error uppercase tracking-widest leading-relaxed">{duplicateError}</p>
+                {/* Standalone Delivery Ticket & Resource Protocol Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Standalone Delivery Ticket Card designed like IntoPlane */}
+                    <div className="card-premium p-6 lg:p-8 border-outline overflow-hidden lg:col-span-2 flex flex-col justify-center">
+                        <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Delivery Ticket Number</label>
+                        <div className="flex items-center gap-2 max-w-full overflow-hidden">
+                            <span className="text-2xl sm:text-3xl font-mono font-black text-on-surface-dim opacity-30 shrink-0">MLE-</span>
+                            <input 
+                                type="text" 
+                                maxLength={6}
+                                required
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                className={`flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 transition-all text-error placeholder:text-error/20 ${
+                                    duplicateError ? 'border-error' : 'border-outline focus:border-primary'
+                                }`}
+                                placeholder="000000"
+                                value={formData.deliveryNumber}
+                                onChange={(e) => {
+                                    const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                                    setFormData(prev => ({ ...prev, deliveryNumber: val }));
+                                    if (duplicateError) setDuplicateError(null);
+                                }}
+                            />
                         </div>
-                    )}
+                        {duplicateError && (
+                            <div className="mt-4 flex items-start gap-3 p-3 bg-error/10 border border-error/30 rounded-xl">
+                                <AlertTriangle className="w-4 h-4 text-error mt-0.5 shrink-0" />
+                                <p className="text-[10px] font-black text-error uppercase tracking-widest leading-relaxed">{duplicateError}</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Resource Protocol Card */}
+                    <div className="card-premium p-6 lg:p-8 border-outline flex flex-col justify-between">
+                        <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Resource Protocol</label>
+                        <div className="w-full px-6 py-4 bg-primary/5 border border-primary/20 rounded-2xl text-primary font-black uppercase tracking-widest flex items-center shadow-inner mt-auto">
+                            <Droplet className="w-4.5 h-4.5 mr-3 text-primary animate-pulse shrink-0" />
+                            JET A-1
+                        </div>
+                    </div>
                 </div>
 
                 <div className="card-premium p-6 lg:p-10">
@@ -199,9 +216,10 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                                 required
                             >
                                 <option value="">SELECT OPERATOR...</option>
-                                <option value="TMA">TRANS MALDIVIAN (TMA)</option>
-                                <option value="Manta">MANTA AIR</option>
-                                <option value="Flyme">FLYME</option>
+                                <option value="TRANS MALDIVIAN AIRWAYS">TRANS MALDIVIAN AIRWAYS</option>
+                                <option value="(SEAPLANE) ISLAND AVIATION SERVICES">ISLAND AVIATION SERVICES</option>
+                                <option value="(SEAPLANE) MANTA AIR">MANTA AIR</option>
+                                <option value="VILLA AIR SEAPLANES">VILLA AIR SEAPLANES</option>
                             </select>
                          </div>
 
@@ -219,14 +237,22 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                             />
                          </div>
 
-                         {/* Fuel Type Readonly */}
-                         <div>
-                            <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-4 tracking-widest opacity-40">Resource Protocol</label>
-                            <div className="w-full px-6 py-4 bg-primary/5 border border-primary/20 rounded-2xl text-primary font-black uppercase tracking-widest flex items-center shadow-inner">
-                                <Droplet className="w-4 h-4 mr-3 opacity-60" />
-                                JET A-1
-                            </div>
-                         </div>
+                          {/* Verifying Officer Name Field */}
+                          <div>
+                             <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-4 tracking-widest opacity-40">Verifying Officer Name</label>
+                             <select 
+                                 required 
+                                 name="co"
+                                 value={formData.co}
+                                 onChange={handleInputChange}
+                                 className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all appearance-none cursor-pointer" 
+                             >
+                                 <option value="">SELECT OFFICER...</option>
+                                 {(activeOfficers.length > 0 ? activeOfficers : staff || []).map(off => (
+                                     <option key={off.id} value={off.name}>{off.name}</option>
+                                 ))}
+                             </select>
+                          </div>
                     </div>
                 </div>
 

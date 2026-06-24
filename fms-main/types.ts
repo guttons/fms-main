@@ -161,6 +161,7 @@ export interface BridgingLog {
   temperature?: number;
   operatorId: string;
   date?: string;
+  co?: string;
 }
 
 export interface ForecastScenario {

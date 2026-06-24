@@ -41,6 +41,7 @@ const OPERATIONS_LOG_SCHEMA: TableSchema = {
     { name: 'remarks',              type: 'STRING',    mode: 'NULLABLE'  },
     { name: 'tactical_operator',    type: 'STRING',    mode: 'NULLABLE'  },
     { name: 'route',                type: 'STRING',    mode: 'NULLABLE'  },
+    { name: 'co',                   type: 'STRING',    mode: 'NULLABLE'  },
     { name: 'is_deleted',           type: 'BOOL',      mode: 'NULLABLE'  },
     { name: 'created_at',           type: 'TIMESTAMP', mode: 'NULLABLE'  },
     { name: 'updated_at',           type: 'TIMESTAMP', mode: 'NULLABLE'  },
@@ -68,6 +69,9 @@ async function ensureSchema(): Promise<void> {
       const alterSql = `ALTER TABLE ${TABLE_REF} ADD COLUMN IF NOT EXISTS route STRING`;
       console.log(`[BigQuery] Schema migration: ${alterSql}`);
       await bigquery.query({ query: alterSql, location: 'US' });
+      const alterSqlCo = `ALTER TABLE ${TABLE_REF} ADD COLUMN IF NOT EXISTS co STRING`;
+      console.log(`[BigQuery] Schema migration: ${alterSqlCo}`);
+      await bigquery.query({ query: alterSqlCo, location: 'US' });
     } catch (e: any) {
       console.error('[BigQuery] Migration failed:', e.message);
     }
@@ -104,6 +108,7 @@ function rowToLog(row: Record<string, any>) {
     remarks:             row.remarks,
     tacticalOperator:    row.tactical_operator,
     route:               row.route,
+    co:                  row.co,
   };
 }
 
@@ -137,6 +142,7 @@ function logToRow(log: Record<string, any>, id: string): Record<string, any> {
     remarks:               log.remarks             ?? null,
     tactical_operator:     log.tacticalOperator    ?? null,
     route:                 log.route               ?? null,
+    co:                    log.co                  ?? null,
     is_deleted:            false,
     created_at:            now,
     updated_at:            now,

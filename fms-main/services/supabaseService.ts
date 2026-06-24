@@ -547,7 +547,8 @@ export const supabaseService = {
           density: densityMatch ? parseFloat(densityMatch[1]) : undefined,
           temperature: tempMatch ? parseFloat(tempMatch[1]) : undefined,
           operatorId: log.operatorId,
-          date: getLocalDate(log.timestampStart || log.timestampClearance)
+          date: getLocalDate(log.timestampStart || log.timestampClearance),
+          co: log.co
         } as BridgingLog;
       });
     } catch (error) {
@@ -577,6 +578,7 @@ export const supabaseService = {
       volume: log.volume,
       panelCheck: log.visualCheckPassed,
       waterCheck: log.cwdCheckPassed,
+      co: log.co,
       remarks: remarksStr
     };
 

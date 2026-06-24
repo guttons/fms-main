@@ -254,6 +254,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
           visualCheckPassed: formData.visualCheckPassed,
           cwdCheckPassed: formData.cwdCheckPassed,
           operatorId: formData.operatorName || user?.name || 'System Admin',
+          co: formData.supervisorName,
           density: formData.density ? parseFloat(formData.density) : undefined,
           temperature: formData.temperature ? parseFloat(formData.temperature) : undefined,
           date: formData.date

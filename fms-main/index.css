@@ -4,7 +4,7 @@
   /* Layout Spacing */
   --header-height: 72px;
   --alert-bar-height: 40px;
-  --sidebar-width: 240px;
+  --sidebar-width: 280px;
 
   /* Global Effects */
   --glass-blur: 12px;
@@ -13,6 +13,7 @@
   --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
   --shadow-premium: 0 12px 40px rgba(25, 28, 30, 0.06);
 }
+
 
 /* Default Theme (Light) */
 :root, [data-theme='light'] {
@@ -496,38 +497,46 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .logo-animate .logo-hex-draw {
   stroke-dasharray: 400;
   stroke-dashoffset: 400;
-  animation: logo-drawHex 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards infinite;
+  animation: logo-drawHex 1.8s cubic-bezier(0.4, 0, 0.2, 1) forwards infinite;
 }
 
 .group:hover .logo-drop-pulse,
 .logo-animate .logo-drop-pulse {
   transform-origin: 60px 60px;
-  animation: logo-breathe 1.5s ease-in-out infinite;
+  animation: logo-breathe 1.2s ease-in-out infinite;
 }
 
 .group:hover .logo-glow-pulse,
 .logo-animate .logo-glow-pulse {
   transform-origin: 60px 60px;
-  animation: logo-glowPulse 1.5s ease-in-out infinite;
+  animation: logo-glowPulse 1.2s ease-in-out infinite;
 }
 
 .group:hover .logo-node,
 .logo-animate .logo-node {
   opacity: 0.2;
-  animation: logo-nodePulse 1.5s ease-in-out infinite;
+  animation: logo-nodePulse 1.0s ease-in-out infinite;
 }
 
 .group:hover .logo-node-1,
 .logo-animate .logo-node-1 { animation-delay: 0s; transform-origin: 60px 15px; }
 .group:hover .logo-node-2,
-.logo-animate .logo-node-2 { animation-delay: 0.25s; transform-origin: 100px 38px; }
+.logo-animate .logo-node-2 { animation-delay: 0.12s; transform-origin: 100px 38px; }
 .group:hover .logo-node-3,
-.logo-animate .logo-node-3 { animation-delay: 0.5s; transform-origin: 100px 82px; }
+.logo-animate .logo-node-3 { animation-delay: 0.24s; transform-origin: 100px 82px; }
 .group:hover .logo-node-4,
-.logo-animate .logo-node-4 { animation-delay: 0.75s; transform-origin: 60px 105px; }
+.logo-animate .logo-node-4 { animation-delay: 0.36s; transform-origin: 60px 105px; }
 .group:hover .logo-node-5,
-.logo-animate .logo-node-5 { animation-delay: 1.0s; transform-origin: 20px 82px; }
+.logo-animate .logo-node-5 { animation-delay: 0.48s; transform-origin: 20px 82px; }
 .group:hover .logo-node-6,
-.logo-animate .logo-node-6 { animation-delay: 1.25s; transform-origin: 20px 38px; }
+.logo-animate .logo-node-6 { animation-delay: 0.6s; transform-origin: 20px 38px; }
+
+/* Custom Header/Footer for JIG compliance receipt viewer */
+.receipt-modal-header-footer {
+  background-color: #f1f5f9;
+}
+[data-theme='dark'] .receipt-modal-header-footer {
+  background-color: #070e1b; /* Deep midnight blue */
+}
 
 

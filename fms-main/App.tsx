@@ -239,6 +239,16 @@ const AppContextContent: React.FC<any> = ({
     };
   }, [showAlertsPanel, isSettingsOpen]);
 
+  const wasMobileMenuOpenRef = React.useRef(isMobileMenuOpen);
+  useEffect(() => {
+    if (!isMobileMenuOpen && wasMobileMenuOpenRef.current) {
+      setIsHeaderLogoSpinning(true);
+      const timer = setTimeout(() => setIsHeaderLogoSpinning(false), 1800);
+      return () => clearTimeout(timer);
+    }
+    wasMobileMenuOpenRef.current = isMobileMenuOpen;
+  }, [isMobileMenuOpen]);
+
   const mainRefCallback = React.useCallback((node: HTMLElement | null) => {
     scrollRef.current = node;
     setMainElement(node);
@@ -876,8 +886,6 @@ const AppContextContent: React.FC<any> = ({
                 <div className="flex items-center space-x-4">
                   <button 
                     onClick={() => {
-                      setIsHeaderLogoSpinning(true);
-                      setTimeout(() => setIsHeaderLogoSpinning(false), 800);
                       setIsMobileMenuOpen(true);
                     }}
                     className="lg:hidden active:scale-95 transition-transform group"

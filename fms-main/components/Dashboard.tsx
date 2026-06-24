@@ -4,7 +4,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend, BarChart, Bar, ComposedChart
 } from 'recharts';
-import { MOCK_ALERTS, MOCK_USERS } from '../constants';
+import { MOCK_ALERTS, MOCK_USERS, MOCK_ADHOC_FLIGHTS } from '../constants';
 import { FuelType, Tank, User, UserRole, FlightJob, Equipment, EquipmentStatus as EqStatus, EquipmentType } from '../types';
 import { AlertTriangle, AlertOctagon, TrendingDown, TrendingUp, Activity, Droplet, Users, Clock, Plane, LayoutDashboard, MapPin, CheckCircle, Truck, Play, Thermometer, CloudSun, Wind, RefreshCw, Send, Globe, Anchor, ShoppingBag, Database, Eye, ChevronRight, ChevronDown } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
@@ -58,7 +58,7 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onStartJob, onSelectEquipment }) => {
-  const { tanks = [], equipment = [], briefingInfo, flightJobs = [], domesticFlights = [], alerts = [], createAlert, acknowledgeAlert, staff = [], updateEquipmentStatus, domesticAssignments, selectedBriefingShift, serviceTankId } = useOperationalData();
+  const { tanks = [], equipment = [], briefingInfo, flightJobs = [], domesticFlights = [], alerts = [], createAlert, acknowledgeAlert, staff = [], updateEquipmentStatus, domesticAssignments, selectedBriefingShift, serviceTankId, selectedBriefingDate, flightLogs = [] } = useOperationalData();
   const { notify } = useNotification();
   // Logic to determine initial view and if switching is allowed
 
@@ -680,6 +680,182 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
     );
   };
 
+  // Helper variables and functions for Live Refueling Status
+  const shiftRanges: Record<string, { start: string; end: string; crossesMidnight: boolean }> = {
+    'Morning': { start: '07:30', end: '16:00', crossesMidnight: false },
+    'Evening': { start: '15:00', end: '23:30', crossesMidnight: false },
+    'Night': { start: '22:30', end: '08:30', crossesMidnight: true },
+  };
+
+  const isFlightInShift = (dep?: string) => {
+    if (!dep) return true;
+    const range = shiftRanges[selectedBriefingShift || 'Morning'];
+    if (!range) return true;
+    if (range.crossesMidnight) {
+      return dep >= range.start || dep <= range.end;
+    }
+    return dep >= range.start && dep <= range.end;
+  };
+
+  const frozenFlights = briefingInfo?.staffAssignments?.frozenFlights;
+
+  const intlJobs = (frozenFlights?.intl 
+    ? frozenFlights.intl.map((ff: any) => {
+        const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const dbJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+        const status = dbJob ? dbJob.status : 'PENDING';
+        return { ...ff, status };
+      })
+    : (flightJobs || []).filter(f => {
+        const isDep = f.type ? f.type === 'departure' : !!f.std;
+        return isDep && isFlightInShift(f.std) && f.date === selectedBriefingDate;
+      }).map(f => {
+        const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const dbJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+        const status = dbJob ? dbJob.status : 'PENDING';
+        return { ...f, status };
+      })
+  ).filter((f: any) => f.status?.toUpperCase() !== 'CANCELLED')
+   .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+
+  const domesticJobsRaw = (frozenFlights?.domestic 
+    ? frozenFlights.domestic.map((ff: any) => {
+        const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const dbJob = (domesticFlights || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+        const status = dbJob ? dbJob.status : 'PENDING';
+        return { ...ff, status };
+      })
+    : (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && f.date === selectedBriefingDate).map(f => {
+        const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const dbJob = (domesticFlights || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+        const status = dbJob ? dbJob.status : 'PENDING';
+        return { ...f, status };
+      })
+  ).filter((f: any) => f.status?.toUpperCase() !== 'CANCELLED');
+
+  const domesticJobs = domesticJobsRaw.map((df: any) => {
+      const assignment = (domesticAssignments || []).find(da => da.team_name === df.assignedTeam);
+      return {
+          ...df,
+          assignedTo: assignment?.op1 || '',
+          assignedOfficer: assignment?.op2 || '',
+          isDomestic: true,
+      };
+  }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+
+  const adhocJobsRaw = briefingInfo?.staffAssignments?.adhocFlights !== undefined
+    ? briefingInfo.staffAssignments.adhocFlights
+    : MOCK_ADHOC_FLIGHTS.filter(f => isFlightInShift(f.sta || f.std) && (!f.date || f.date === selectedBriefingDate));
+
+  const adhocJobs = adhocJobsRaw.map((f: any) => ({
+      ...f,
+      isAdhoc: true,
+  })).sort((a: any, b: any) => (a.std || a.sta || '').localeCompare(b.std || b.sta || ''));
+
+  const ongoingIntl = intlJobs.filter(j => j.status === 'IN_PROGRESS');
+  const ongoingDom = domesticJobs.filter(j => j.status === 'IN_PROGRESS');
+  const ongoingAdhoc = adhocJobs.filter(j => j.status === 'IN_PROGRESS');
+
+  const completedIntl = intlJobs.filter(j => j.status === 'COMPLETED');
+  const completedDom = domesticJobs.filter(j => j.status === 'COMPLETED');
+  const completedAdhoc = adhocJobs.filter(j => j.status === 'COMPLETED');
+
+  const hasAdhoc = adhocJobs.length > 0;
+
+  const getFlightVolume = (flightNumber: string) => {
+    const log = (flightLogs || []).find(l => l.flightNumber === flightNumber && l.status === 'COMPLETED');
+    return log?.volume;
+  };
+
+  const getFlightVehicle = (job: FlightJob, isCompleted: boolean) => {
+    if (job.vehicleId) return job.vehicleId;
+    const log = (flightLogs || []).find(l => l.flightNumber === job.flightNumber && l.status === (isCompleted ? 'COMPLETED' : 'IN_PROGRESS'));
+    return log?.vehicleId;
+  };
+
+  const renderFlightListCard = (job: FlightJob, isCompleted: boolean) => {
+    const usersList = staff && staff.length > 0 ? staff : MOCK_USERS;
+    const assignee = usersList.find(u => u.id === job.assignedTo);
+    const assigneeName = assignee?.name || 'Unassigned';
+    
+    const vehicleId = getFlightVehicle(job, isCompleted);
+    const volume = getFlightVolume(job.flightNumber);
+
+    return (
+      <div key={job.id} className="bg-surface-dim/40 border border-outline/50 p-4 rounded-2xl flex items-center justify-between hover:border-primary/30 transition-all">
+        <div className="flex items-center space-x-3 min-w-0 flex-1">
+          <div className="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center shrink-0">
+            <Plane className={`w-5 h-5 ${isCompleted ? 'text-success' : 'text-warning animate-pulse'}`} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-black text-on-surface tracking-tight">{job.flightNumber}</span>
+              <span className="bg-surface-container-low px-1.5 py-0.5 rounded text-[8px] font-black text-on-surface-dim uppercase tracking-wider">{job.aircraftReg}</span>
+            </div>
+            <div className="flex items-center gap-2 mt-1 text-[9px] font-bold text-on-surface-dim">
+              <span>Stand {job.stand}</span>
+              {vehicleId && (
+                <>
+                  <span className="opacity-30">•</span>
+                  <span className="flex items-center gap-0.5 uppercase">
+                    <Truck className="w-2.5 h-2.5 opacity-60" /> {vehicleId}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          {isCompleted ? (
+            <div>
+              {volume !== undefined ? (
+                <span className="text-xs font-black text-success font-mono">
+                  {volume.toLocaleString()} L
+                </span>
+              ) : (
+                <span className="text-[10px] font-black text-success uppercase tracking-wider">Completed</span>
+              )}
+              <span className="block text-[8px] font-bold text-on-surface-dim opacity-50 uppercase tracking-widest mt-0.5">
+                Uplift
+              </span>
+            </div>
+          ) : (
+            <div>
+              <span className="text-[10px] font-black text-warning uppercase tracking-widest animate-pulse flex items-center gap-1 justify-end">
+                <span className="w-1.5 h-1.5 rounded-full bg-warning animate-ping"></span>
+                Fueling
+              </span>
+              <span className="block text-[8px] font-bold text-on-surface-dim opacity-50 uppercase tracking-widest mt-0.5">
+                {assigneeName.split(' ')[0]}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderCategoryList = (jobs: FlightJob[], title: string, isCompleted: boolean, typeColor: string) => {
+    if (jobs.length === 0) {
+      return (
+        <div className="py-2.5 px-4 bg-surface-dim/20 border border-dashed border-outline/40 rounded-xl text-center">
+          <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-wider">No {title.toLowerCase()} refuelings</p>
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-2">
+        <p className={`text-[8.5px] font-black uppercase tracking-[0.2em] opacity-60 flex items-center ${typeColor}`}>
+          <span className="w-2.5 h-[1px] bg-current opacity-40 mr-1.5"></span>
+          {title}
+        </p>
+        <div className="space-y-2">
+          {jobs.map(job => renderFlightListCard(job, isCompleted))}
+        </div>
+      </div>
+    );
+  };
+
   const renderItpDashboard = () => (
       <div className="space-y-10 animate-in fade-in slide-in-from-left-4 duration-500 ease-out">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1045,6 +1221,45 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                   <span className="text-3xl font-black text-on-surface tracking-tighter">85%</span>
                   <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">On Time</span>
                 </div>
+              </div>
+           </div>
+           
+           {/* Live Refueling Tracking */}
+           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-2 duration-500 lg:col-span-2">
+              {/* Ongoing Refueling Column */}
+              <div className="card-premium p-6 sm:p-8 flex flex-col group">
+                 <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
+                       <Droplet className="w-4 h-4 mr-3 text-warning animate-pulse" />
+                       Ongoing Refueling
+                    </h3>
+                    <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-warning/10 text-warning border border-warning/25 animate-pulse">
+                       {(ongoingIntl.length + ongoingDom.length + ongoingAdhoc.length)} Active
+                    </span>
+                 </div>
+                 <div className="space-y-6">
+                    {renderCategoryList(ongoingIntl, "International Operations", false, "text-primary")}
+                    {renderCategoryList(ongoingDom, "Domestic Operations", false, "text-success")}
+                    {hasAdhoc && renderCategoryList(ongoingAdhoc, "Ad-Hoc Operations", false, "text-warning")}
+                 </div>
+              </div>
+
+              {/* Recently Completed Column */}
+              <div className="card-premium p-6 sm:p-8 flex flex-col group">
+                 <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
+                       <CheckCircle className="w-4 h-4 mr-3 text-success" />
+                       Recently Completed
+                    </h3>
+                    <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-success/10 text-success border border-success/25">
+                       {(completedIntl.length + completedDom.length + completedAdhoc.length)} Done
+                    </span>
+                 </div>
+                 <div className="space-y-6">
+                    {renderCategoryList(completedIntl, "International Operations", true, "text-primary")}
+                    {renderCategoryList(completedDom, "Domestic Operations", true, "text-success")}
+                    {hasAdhoc && renderCategoryList(completedAdhoc, "Ad-Hoc Operations", true, "text-warning")}
+                 </div>
               </div>
            </div>
         </div>

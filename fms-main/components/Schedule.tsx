@@ -273,17 +273,35 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
   };
 
   const scheduledFlights = useMemo(() => {
+    const frozen = briefingInfo?.staffAssignments?.frozenFlights;
+    if (frozen?.intl) {
+      return frozen.intl.map((ff: any) => {
+        const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const dbJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+        return dbJob ? { ...ff, ...dbJob } : ff;
+      }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+    }
+
     const filtered = flightJobs.filter(f => {
       const isDep = f.type ? f.type === 'departure' : !!f.std;
       return isDep && isFlightInShift(f.std) && f.date === todayDate;
     });
     return [...filtered].sort((a, b) => (a.std || '').localeCompare(b.std || ''));
-  }, [flightJobs, selectedBriefingShift, todayDate]);
+  }, [flightJobs, selectedBriefingShift, todayDate, briefingInfo]);
 
   const domesticFlightsToRender = useMemo(() => {
+    const frozen = briefingInfo?.staffAssignments?.frozenFlights;
+    if (frozen?.domestic) {
+      return frozen.domestic.map((ff: any) => {
+        const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const domJob = (domesticFlights || []).find((f: any) => (f.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+        return domJob ? { ...ff, ...domJob } : ff;
+      }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+    }
+
     const filtered = (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && f.date === todayDate);
     return [...filtered].sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
-  }, [domesticFlights, selectedBriefingShift, todayDate]);
+  }, [domesticFlights, selectedBriefingShift, todayDate, briefingInfo]);
 
   const adhocFlightsToRender = briefingInfo?.staffAssignments?.adhocFlights !== undefined
     ? briefingInfo.staffAssignments.adhocFlights

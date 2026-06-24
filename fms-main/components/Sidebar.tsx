@@ -20,7 +20,14 @@ import {
   ToggleRight,
   ToggleLeft,
   Fuel,
-  PanelLeft
+  PanelLeft,
+  Briefcase,
+  Coins,
+  Receipt,
+  HelpCircle,
+  History,
+  BookOpen,
+  BarChart3
 } from 'lucide-react';
 import { Logo } from './Logo';
 
@@ -54,6 +61,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isSpinning, setIsSpinning] = React.useState(false);
   const [hoveredTooltip, setHoveredTooltip] = React.useState<{ top: number; label: string; left?: string; isError?: boolean } | null>(null);
 
+  React.useEffect(() => {
+    if (isMobileMenuOpen) {
+      setIsSpinning(true);
+      const timer = setTimeout(() => setIsSpinning(false), 1800);
+      return () => clearTimeout(timer);
+    }
+  }, [isMobileMenuOpen]);
+
   const toggleCollapse = () => {
     setIsCollapsed(prev => {
       const next = !prev;
@@ -75,7 +90,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
-          { id: 'history', label: 'Log History', icon: FileText },
+          { id: 'history', label: 'Log History', icon: History },
         ];
       
       case UserRole.ITP_MANAGER:
@@ -83,10 +98,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
-          { id: 'briefing', label: 'Shift Briefing', icon: ClipboardList },
+          { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
-          { id: 'history', label: 'Log History', icon: FileText },
-          { id: 'depot-reports', label: 'Fuel Reports', icon: ClipboardList },
+          { id: 'history', label: 'Log History', icon: History },
+          { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
         ];
 
       case UserRole.DEPOT_OPERATOR:
@@ -111,36 +126,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
           { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
           { id: 'forecasting', label: 'Stock Forecasting', icon: TrendingUp },
-          { id: 'depot-reports', label: 'Fuel Reports', icon: ClipboardList },
+          { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
-          { id: 'history', label: 'Log History', icon: FileText },
+          { id: 'history', label: 'Log History', icon: History },
         ];
 
       case UserRole.EXECUTIVE:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'executive', label: 'Executive Module', icon: ClipboardList },
+          { id: 'executive', label: 'Executive Module', icon: Briefcase },
           { id: 'forecasting', label: 'Forecasting & Trends', icon: TrendingUp },
-          { id: 'depot-reports', label: 'Fuel Reports', icon: ClipboardList },
-          { id: 'commercial-reports', label: 'Commercial Reports', icon: FileText },
-          { id: 'finance', label: 'Finance & Billing', icon: FileText },
+          { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
+          { id: 'commercial-reports', label: 'Commercial Reports', icon: Coins },
+          { id: 'finance', label: 'Finance & Billing', icon: Receipt },
         ];
 
       case UserRole.COMMERCIAL:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'forecasting', label: 'Forecasting & Trends', icon: TrendingUp },
-          { id: 'depot-reports', label: 'Fuel Reports', icon: ClipboardList },
-          { id: 'commercial-reports', label: 'Commercial Reports', icon: FileText },
-          { id: 'finance', label: 'Finance & Billing', icon: FileText },
+          { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
+          { id: 'commercial-reports', label: 'Commercial Reports', icon: Coins },
+          { id: 'finance', label: 'Finance & Billing', icon: Receipt },
         ];
 
       case UserRole.FINANCE:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'finance', label: 'Finance & Billing', icon: FileText },
-          { id: 'depot-reports', label: 'Fuel Reports', icon: ClipboardList },
-          { id: 'reports', label: 'Financial Reports', icon: ClipboardList },
+          { id: 'finance', label: 'Finance & Billing', icon: Receipt },
+          { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
+          { id: 'reports', label: 'Financial Reports', icon: FileText },
         ];
 
       case UserRole.CUSTOMER:
@@ -153,8 +168,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
-          { id: 'history', label: 'Log History', icon: FileText },
-          { id: 'briefing', label: 'Shift Briefing', icon: ClipboardList },
+          { id: 'history', label: 'Log History', icon: History },
+          { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'intoplane', label: 'Into-Plane Ops', icon: Plane },
           { id: 'stock', label: 'Stock Management', icon: Database },
           { id: 'bridging', label: 'Transfer Oversight', icon: Droplet },
@@ -163,17 +178,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
           { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
           { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
-          { id: 'depot-reports', label: 'Fuel Reports', icon: ClipboardList },
-          { id: 'commercial-reports', label: 'Commercial Reports', icon: FileText },
-          { id: 'executive', label: 'Executive Module', icon: ClipboardList },
-          { id: 'finance', label: 'Finance & Billing', icon: FileText },
+          { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
+          { id: 'commercial-reports', label: 'Commercial Reports', icon: Coins },
+          { id: 'executive', label: 'Executive Module', icon: Briefcase },
+          { id: 'finance', label: 'Finance & Billing', icon: Receipt },
           { id: 'customer-portal', label: 'Customer Portal', icon: Plane },
         ];
       
       default:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'history', label: 'Log History', icon: FileText },
+          { id: 'history', label: 'Log History', icon: History },
         ];
     }
   };
@@ -191,11 +206,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Brand */}
         <button 
           onClick={() => {
-            setIsSpinning(true);
-            setTimeout(() => setIsSpinning(false), 800);
             if (window.innerWidth < 1024) {
               onCloseMobileMenu?.();
             } else {
+              setIsSpinning(true);
+              setTimeout(() => setIsSpinning(false), 1800);
               toggleCollapse();
             }
           }}
@@ -278,7 +293,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onMouseLeave={() => setHoveredTooltip(null)}
                 className={`w-full flex items-center text-on-surface-dim hover:text-primary transition-colors text-[13.5px] font-bold transition-all duration-300 rounded-xl px-2 py-2 ${isCollapsed ? 'lg:w-11 lg:h-11 lg:p-0 lg:justify-center' : ''}`}
               >
-                <ClipboardList className={`w-4 h-4 ${isCollapsed ? 'lg:mr-0' : 'lg:mr-3'} mr-3 opacity-40 hover:opacity-100 transition-all duration-300 shrink-0`} />
+                <HelpCircle className={`w-4 h-4 ${isCollapsed ? 'lg:mr-0' : 'lg:mr-3'} mr-3 opacity-40 hover:opacity-100 transition-all duration-300 shrink-0`} />
                 <span className={`whitespace-nowrap transition-all duration-300 inline-block ${isCollapsed ? 'lg:opacity-0 lg:max-w-0 lg:overflow-hidden lg:pointer-events-none' : 'lg:opacity-100 lg:max-w-[150px]'}`}>
                   Help Center
                 </span>

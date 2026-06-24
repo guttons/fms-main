@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   FileText, Download, Calendar, Search, ShieldCheck, RefreshCw, 
   Layers, TrendingUp, TrendingDown, ClipboardList, Anchor, 
@@ -576,29 +577,30 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       )}
 
       {/* ── HIGH FIDELITY MACL Figure 1.5 TEMPLATE POPUP MODAL ── */}
-      {selectedShipment && (
+      {/* ── HIGH FIDELITY MACL Figure 1.5 TEMPLATE POPUP MODAL ── */}
+      {selectedShipment && createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[999] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white text-black border border-slate-300 w-full max-w-4xl rounded-2xl shadow-premium overflow-hidden flex flex-col my-8 relative max-h-[90vh]">
+          <div className="bg-surface text-on-surface border border-outline w-full max-w-5xl lg:max-w-6xl xl:max-w-7xl rounded-2xl shadow-premium overflow-hidden flex flex-col my-8 relative max-h-[90vh]">
             
             {/* Modal Header */}
-            <div className="bg-slate-100 px-8 py-4 border-b border-slate-200 flex justify-between items-center text-slate-800 shrink-0">
+            <div className="receipt-modal-header-footer px-8 py-4 border-b border-outline flex justify-between items-center text-on-surface shrink-0">
               <div className="flex items-center gap-3">
                 <FileText className="w-5 h-5 text-primary" />
                 <span className="text-xs font-black uppercase tracking-widest">JIG Compliance Document Viewer</span>
               </div>
               <button 
                 onClick={() => setSelectedShipment(null)}
-                className="p-1.5 rounded-lg text-slate-500 hover:text-black hover:bg-slate-200 transition-colors"
+                className="p-1.5 rounded-lg text-on-surface-dim hover:text-on-surface hover:bg-on-surface/10 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Document Content Scroll Area */}
-            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+            <div className="flex-1 overflow-auto p-4 md:p-8 custom-scrollbar bg-surface-dim">
               
               {/* Figure 1.5 Replica Layout */}
-              <div className="border-[3px] border-black p-6 font-sans text-xs bg-white text-black select-text">
+              <div className="border-[3px] border-black p-6 font-sans text-xs bg-white text-black select-text min-w-[760px] mx-auto shadow-md">
                 
                 {/* Brand Header */}
                 <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-4">
@@ -765,7 +767,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                 </table>
 
                 {/* Bottom section: Receipts Summary & Remarks (Double column) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border border-black p-4">
+                <div className="grid grid-cols-2 gap-6 border border-black p-4">
                   {/* Left Column: Receipts Summary */}
                   <div>
                     <h3 className="font-extrabold border-b border-black pb-1 mb-2 text-center uppercase bg-slate-100">RECEIPTS</h3>
@@ -837,10 +839,10 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
             </div>
 
             {/* Modal Actions */}
-            <div className="bg-slate-50 px-8 py-5 border-t border-slate-200 flex justify-end gap-3 shrink-0">
+            <div className="receipt-modal-header-footer px-8 py-5 border-t border-outline flex justify-end gap-3 shrink-0">
               <button 
                 onClick={() => setSelectedShipment(null)}
-                className="px-6 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 hover:scale-105 shadow-sm"
+                className="px-6 py-2.5 bg-surface-container border border-outline hover:bg-surface-container-highest text-on-surface rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 hover:scale-105 shadow-sm"
               >
                 Close Receipt
               </button>
@@ -853,7 +855,8 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

@@ -37,6 +37,7 @@ interface ShipmentData {
   vessel: string;
   arrivalDate: string;
   isConfirmed: boolean;
+  isCancelled?: boolean;
   orderQtyMt: number;
   averageSales: number;
   deadStock: number;
@@ -125,17 +126,20 @@ const CustomTooltip: React.FC<any> = ({ active, payload, label }) => {
     const ullageObj = payload.find((item: any) => item.name === 'Available Ullage');
     const rawData = payload[0]?.payload || {};
     const closingStock = rawData.closingStock;
+    const isCancelled = rawData.isCancelled;
     const availableUllage = rawData.remainingUllageAfterReceipt !== undefined 
       ? Math.max(0, rawData.remainingUllageAfterReceipt)
       : (ullageObj ? Number(ullageObj.value) : 0);
 
     return (
       <div className="bg-[var(--color-surface-dim)] border border-[var(--color-outline)] p-4 rounded-xl shadow-premium space-y-1.5 min-w-[200px]">
-        <p className="text-xs font-black text-[var(--color-on-surface)] uppercase tracking-wider mb-2">{label}</p>
+        <p className="text-xs font-black text-[var(--color-on-surface)] uppercase tracking-wider mb-2">
+          {label} {isCancelled && <span className="text-error text-[9px] ml-1.5">(CANCELLED)</span>}
+        </p>
         {closingStockObj && (
           <div className="flex justify-between items-center gap-6">
             <span className="font-bold text-[var(--color-on-surface-dim)] opacity-85">Closing Stock:</span>
-            <span className="font-mono font-black text-primary">{closingStock?.toLocaleString()} L</span>
+            <span className={`font-mono font-black ${isCancelled ? 'text-on-surface-dim/50 line-through' : 'text-primary'}`}>{closingStock?.toLocaleString()} L</span>
           </div>
         )}
         {ullageObj && (
@@ -153,6 +157,14 @@ const CustomTooltip: React.FC<any> = ({ active, payload, label }) => {
 export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
   // Static daily view calendar state (initializes to Velana operational day)
   const [selectedDate, setSelectedDate] = useState<string>('2026-06-02');
+  const [isMobile, setIsMobile] = useState(false);
+
+  React.useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Compute daily summary snapshots dynamically based on active selected calendar date
   const snapshot = useMemo(() => generateSnapshotForDate(selectedDate), [selectedDate]);
@@ -185,6 +197,7 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
       vessel: 'MT.ALIMAS',
       arrivalDate: '2026-06-12',
       isConfirmed: true,
+      isCancelled: false,
       orderQtyMt: 10000,
       averageSales: 552887,
       deadStock: 2500000
@@ -195,6 +208,7 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
       vessel: 'MT.NEON',
       arrivalDate: '2026-07-14',
       isConfirmed: false,
+      isCancelled: false,
       orderQtyMt: 13000,
       averageSales: 665000,
       deadStock: 2500000
@@ -205,6 +219,7 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
       vessel: 'MT.NEON',
       arrivalDate: '2026-08-02',
       isConfirmed: false,
+      isCancelled: false,
       orderQtyMt: 11000,
       averageSales: 745000,
       deadStock: 2500000
@@ -215,6 +230,7 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
       vessel: 'MT.NEON',
       arrivalDate: '2026-08-21',
       isConfirmed: false,
+      isCancelled: false,
       orderQtyMt: 10000,
       averageSales: 732000,
       deadStock: 2500000
@@ -225,6 +241,7 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
       vessel: 'MT.NEON',
       arrivalDate: '2026-09-09',
       isConfirmed: false,
+      isCancelled: false,
       orderQtyMt: 10000,
       averageSales: 727000,
       deadStock: 2500000
@@ -254,7 +271,9 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
       const orderQtyLiters = shipment.orderQtyMt * 1270;
       const openingStock = index === 0 ? initialStock : prevClosingStock;
       const availableUllageAtArrival = Math.max(0, 45000000 - openingStock);
-      const closingStock = openingStock - estimatedSales + orderQtyLiters;
+      // If the shipment is cancelled, no fuel receipt is added
+      const receiptQty = shipment.isCancelled ? 0 : orderQtyLiters;
+      const closingStock = openingStock - estimatedSales + receiptQty;
       const remainingUllageAfterReceipt = 45000000 - closingStock;
       const stockAvailableAtVesselArrival = openingStock - estimatedSales - shipment.deadStock;
       
@@ -288,10 +307,21 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
   const renderCustomTick = (props: any) => {
     const { x, y, payload } = props;
     const shipment = calculatedShipments.find(s => s.shipmentNumber === payload.value);
-    const color = shipment?.isConfirmed ? '#22c55e' : '#f59e0b'; // success green / warning yellow-orange
+    const color = shipment?.isCancelled 
+      ? '#ef4444' // red/error for cancelled
+      : shipment?.isConfirmed 
+        ? '#22c55e' // success green
+        : '#f59e0b'; // warning yellow-orange
+        
+    const match = payload.value.match(/(\d+)/);
+    const num = match ? match[1] : payload.value;
+    const labelText = isMobile 
+      ? `${num}${shipment?.isCancelled ? '✗' : ''}` 
+      : `${payload.value}${shipment?.isCancelled ? ' (CANC)' : ''}`;
+
     return (
-      <text x={x} y={y + 12} textAnchor="middle" fill={color} fontSize={9} fontWeight={900} className="uppercase tracking-wider">
-        {payload.value}
+      <text x={x} y={y + 12} textAnchor="middle" fill={color} fontSize={isMobile ? 8 : 9} fontWeight={900} className="uppercase tracking-wider">
+        {labelText}
       </text>
     );
   };
@@ -319,6 +349,7 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
           vessel: lastShipment.vessel,
           arrivalDate: nextArrivalDate,
           isConfirmed: false,
+          isCancelled: false,
           orderQtyMt: lastShipment.orderQtyMt,
           averageSales: lastShipment.averageSales,
           deadStock: lastShipment.deadStock
@@ -760,20 +791,32 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                         <th 
                           key={s.id} 
                           className={`px-4 py-4 text-center font-bold border-b border-outline w-48 transition-colors duration-300 z-10 ${
-                            s.isConfirmed ? 'bg-primary/10 text-primary' : 'bg-surface-lowest'
+                            s.isCancelled
+                              ? 'bg-error/5 text-on-surface-dim opacity-70'
+                              : s.isConfirmed ? 'bg-primary/10 text-primary' : 'bg-surface-lowest'
                           }`}
                         >
                           <div className="flex flex-col items-center space-y-1.5">
                             <span className="text-[10px] font-black uppercase tracking-wider">{s.shipmentNumber}</span>
                             <button
-                              onClick={() => handleUpdateShipment(originalIdx, { isConfirmed: !s.isConfirmed })}
+                              onClick={() => {
+                                if (s.isCancelled) {
+                                  handleUpdateShipment(originalIdx, { isConfirmed: false, isCancelled: false });
+                                } else if (s.isConfirmed) {
+                                  handleUpdateShipment(originalIdx, { isConfirmed: false, isCancelled: true });
+                                } else {
+                                  handleUpdateShipment(originalIdx, { isConfirmed: true, isCancelled: false });
+                                }
+                              }}
                               className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest transition-all ${
-                                s.isConfirmed 
-                                  ? 'bg-success/20 text-success border border-success/30 hover:bg-success hover:text-white' 
-                                  : 'bg-warning/20 text-warning border border-warning/30 hover:bg-warning hover:text-white'
+                                s.isCancelled
+                                  ? 'bg-error/20 text-error border border-error/30 hover:bg-error hover:text-white'
+                                  : s.isConfirmed 
+                                    ? 'bg-success/20 text-success border border-success/30 hover:bg-success hover:text-white' 
+                                    : 'bg-warning/20 text-warning border border-warning/30 hover:bg-warning hover:text-white'
                               }`}
                             >
-                              {s.isConfirmed ? '✓ Confirmed' : '⚡ Forecast'}
+                              {s.isCancelled ? '✗ Cancelled' : s.isConfirmed ? '✓ Confirmed' : '⚡ Forecast'}
                             </button>
                           </div>
                         </th>
@@ -796,12 +839,16 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                     {visibleShipments.map((s) => {
                       const originalIdx = shipments.findIndex(item => item.id === s.id);
                       return (
-                        <td key={s.id} className={`px-3 py-1 text-center ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                        <td key={s.id} className={`px-3 py-1 text-center ${
+                          s.isCancelled ? 'bg-error/5 opacity-70' : s.isConfirmed ? 'bg-primary/5' : ''
+                        }`}>
                           <input 
                             type="text" 
                             value={s.vessel}
                             onChange={(e) => handleUpdateShipment(originalIdx, { vessel: e.target.value })}
-                            className="bg-transparent border border-transparent hover:border-outline/50 focus:border-primary focus:bg-surface-lowest outline-none rounded-lg px-2.5 py-1.5 text-xs font-black text-center text-on-surface w-full transition-all"
+                            className={`bg-transparent border border-transparent hover:border-outline/50 focus:border-primary focus:bg-surface-lowest outline-none rounded-lg px-2.5 py-1.5 text-xs font-black text-center w-full transition-all ${
+                              s.isCancelled ? 'text-on-surface-dim/40 line-through' : 'text-on-surface'
+                            }`}
                           />
                         </td>
                       );
@@ -822,7 +869,9 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                     {visibleShipments.map((s) => {
                       const originalIdx = shipments.findIndex(item => item.id === s.id);
                       return (
-                        <td key={s.id} className={`px-3 py-1 text-center ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                        <td key={s.id} className={`px-3 py-1 text-center ${
+                          s.isCancelled ? 'bg-error/5 opacity-70' : s.isConfirmed ? 'bg-primary/5' : ''
+                        }`}>
                           <input 
                             type="date" 
                             value={s.arrivalDate}
@@ -831,7 +880,9 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                               e.stopPropagation();
                               try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {}
                             }}
-                            className="bg-transparent border border-transparent hover:border-outline/50 focus:border-primary focus:bg-surface-lowest outline-none rounded-lg px-2.5 py-1.5 text-xs font-mono text-center text-on-surface w-full transition-all cursor-pointer font-black"
+                            className={`bg-transparent border border-transparent hover:border-outline/50 focus:border-primary focus:bg-surface-lowest outline-none rounded-lg px-2.5 py-1.5 text-xs font-mono text-center w-full transition-all cursor-pointer font-black ${
+                              s.isCancelled ? 'text-on-surface-dim/40' : 'text-on-surface'
+                            }`}
                           />
                         </td>
                       );
@@ -850,7 +901,9 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                       </div>
                     </td>
                     {visibleShipments.map((s) => (
-                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-black text-on-surface ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-black ${
+                        s.isCancelled ? 'bg-error/5 text-on-surface-dim/40 opacity-70' : 'text-on-surface'
+                      } ${s.isConfirmed && !s.isCancelled ? 'bg-primary/5' : ''}`}>
                         {s.daysBetween} Days
                       </td>
                     ))}
@@ -868,7 +921,9 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                       </div>
                     </td>
                     {visibleShipments.map((s) => (
-                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-bold text-on-surface-dim ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-bold ${
+                        s.isCancelled ? 'bg-error/5 text-on-surface-dim/40 opacity-70' : 'text-on-surface-dim'
+                      } ${s.isConfirmed && !s.isCancelled ? 'bg-primary/5' : ''}`}>
                         {s.openingStock.toLocaleString()}
                       </td>
                     ))}
@@ -888,7 +943,9 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                     {visibleShipments.map((s) => {
                       const originalIdx = shipments.findIndex(item => item.id === s.id);
                       return (
-                        <td key={s.id} className={`px-3 py-1 text-center ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                        <td key={s.id} className={`px-3 py-1 text-center ${
+                          s.isCancelled ? 'bg-error/5 opacity-70' : s.isConfirmed ? 'bg-primary/5' : ''
+                        }`}>
                           <input 
                             type="text" 
                             inputMode="numeric"
@@ -899,7 +956,7 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                               handleUpdateShipment(originalIdx, { orderQtyMt: num });
                             }}
                             className={`bg-transparent border border-transparent hover:border-outline/50 focus:border-primary focus:bg-surface-lowest outline-none rounded-lg px-2.5 py-1.5 text-xs font-mono text-center w-full transition-all font-black ${
-                              s.isConfirmed ? 'text-success' : 'text-warning'
+                              s.isCancelled ? 'text-on-surface-dim/40 line-through' : s.isConfirmed ? 'text-success' : 'text-warning'
                             }`}
                           />
                         </td>
@@ -919,7 +976,13 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                       </div>
                     </td>
                     {visibleShipments.map((s) => (
-                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-black ${s.isConfirmed ? 'text-success bg-primary/5' : 'text-warning'}`}>
+                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-black ${
+                        s.isCancelled 
+                          ? 'text-on-surface-dim/40 line-through bg-error/5 opacity-70' 
+                          : s.isConfirmed 
+                            ? 'text-success bg-primary/5' 
+                            : 'text-warning'
+                      }`}>
                         {s.orderQtyLiters.toLocaleString()}
                       </td>
                     ))}
@@ -937,7 +1000,9 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                       </div>
                     </td>
                     {visibleShipments.map((s) => (
-                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-bold text-on-surface-dim ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-bold ${
+                        s.isCancelled ? 'bg-error/5 text-on-surface-dim/40 opacity-70' : 'text-on-surface-dim'
+                      } ${s.isConfirmed && !s.isCancelled ? 'bg-primary/5' : ''}`}>
                         {s.estimatedSales.toLocaleString()}
                       </td>
                     ))}
@@ -955,7 +1020,9 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                       </div>
                     </td>
                     {visibleShipments.map((s) => (
-                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-bold text-on-surface-dim ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-bold ${
+                        s.isCancelled ? 'bg-error/5 text-on-surface-dim/40 opacity-70' : 'text-on-surface-dim'
+                      } ${s.isConfirmed && !s.isCancelled ? 'bg-primary/5' : ''}`}>
                         {s.availableUllageAtArrival.toLocaleString()}
                       </td>
                     ))}
@@ -973,7 +1040,9 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                       </div>
                     </td>
                     {visibleShipments.map((s) => (
-                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-black text-on-surface ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-black text-on-surface ${
+                        s.isCancelled ? 'bg-error/5 text-on-surface-dim/40 opacity-70' : ''
+                      } ${s.isConfirmed && !s.isCancelled ? 'bg-primary/5' : ''}`}>
                         {s.closingStock.toLocaleString()}
                       </td>
                     ))}
@@ -996,8 +1065,12 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                         <td 
                           key={s.id} 
                           className={`px-4 py-3 text-center font-mono ${
-                            isOverfill ? 'text-error font-black bg-error/10 animate-pulse' : 'text-on-surface-dim font-bold'
-                          } ${s.isConfirmed && !isOverfill ? 'bg-primary/5' : ''}`}
+                            isOverfill 
+                              ? 'text-error font-black bg-error/10 animate-pulse' 
+                              : s.isCancelled 
+                                ? 'text-on-surface-dim/45 font-bold bg-error/5 opacity-70' 
+                                : 'text-on-surface-dim font-bold'
+                          } ${s.isConfirmed && !s.isCancelled && !isOverfill ? 'bg-primary/5' : ''}`}
                         >
                           {isOverfill ? (
                             <span className="flex flex-col items-center">
@@ -1026,7 +1099,9 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                     {visibleShipments.map((s) => {
                       const originalIdx = shipments.findIndex(item => item.id === s.id);
                       return (
-                        <td key={s.id} className={`px-3 py-1 text-center ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                        <td key={s.id} className={`px-3 py-1 text-center ${
+                          s.isCancelled ? 'bg-error/5 opacity-70' : s.isConfirmed ? 'bg-primary/5' : ''
+                        }`}>
                           <input 
                             type="text" 
                             inputMode="numeric"
@@ -1036,7 +1111,9 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                               const num = clean === '' ? 0 : parseInt(clean, 10);
                               handleUpdateShipment(originalIdx, { deadStock: num });
                             }}
-                            className="bg-transparent border border-transparent hover:border-outline/50 focus:border-primary focus:bg-surface-lowest outline-none rounded-lg px-2.5 py-1.5 text-xs font-mono text-center text-on-surface w-full transition-all font-black text-error"
+                            className={`bg-transparent border border-transparent hover:border-outline/50 focus:border-primary focus:bg-surface-lowest outline-none rounded-lg px-2.5 py-1.5 text-xs font-mono text-center w-full transition-all font-black ${
+                              s.isCancelled ? 'text-error/40 line-through' : 'text-error'
+                            }`}
                           />
                         </td>
                       );
@@ -1055,7 +1132,9 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                       </div>
                     </td>
                     {visibleShipments.map((s) => (
-                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-bold text-on-surface-dim ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                      <td key={s.id} className={`px-4 py-3 text-center font-mono font-bold ${
+                        s.isCancelled ? 'bg-error/5 text-on-surface-dim/40 opacity-70' : 'text-on-surface-dim'
+                      } ${s.isConfirmed && !s.isCancelled ? 'bg-primary/5' : ''}`}>
                         {s.stockAvailableAtVesselArrival.toLocaleString()}
                       </td>
                     ))}
@@ -1075,7 +1154,9 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                     {visibleShipments.map((s) => {
                       const originalIdx = shipments.findIndex(item => item.id === s.id);
                       return (
-                        <td key={s.id} className={`px-3 py-1 text-center ${s.isConfirmed ? 'bg-primary/5' : ''}`}>
+                        <td key={s.id} className={`px-3 py-1 text-center ${
+                          s.isCancelled ? 'bg-error/5 opacity-70' : s.isConfirmed ? 'bg-primary/5' : ''
+                        }`}>
                           <input 
                             type="text" 
                             inputMode="numeric"
@@ -1085,7 +1166,9 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                               const num = clean === '' ? 0 : parseInt(clean, 10);
                               handleUpdateShipment(originalIdx, { averageSales: num });
                             }}
-                            className="bg-transparent border border-transparent hover:border-outline/50 focus:border-primary focus:bg-surface-lowest outline-none rounded-lg px-2.5 py-1.5 text-xs font-mono text-center text-on-surface w-full transition-all font-black"
+                            className={`bg-transparent border border-transparent hover:border-outline/50 focus:border-primary focus:bg-surface-lowest outline-none rounded-lg px-2.5 py-1.5 text-xs font-mono text-center text-on-surface w-full transition-all font-black ${
+                              s.isCancelled ? 'text-on-surface-dim/40' : 'text-on-surface'
+                            }`}
                           />
                         </td>
                       );
@@ -1109,8 +1192,12 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                         <td 
                           key={s.id} 
                           className={`px-4 py-3 text-center font-mono font-black ${
-                            isRedAlert ? 'text-error bg-error/15 text-sm animate-pulse' : 'text-success bg-success/5'
-                          } ${s.isConfirmed && !isRedAlert ? 'bg-primary/5' : ''}`}
+                            isRedAlert 
+                              ? 'text-error bg-error/15 text-sm animate-pulse' 
+                              : s.isCancelled 
+                                ? 'text-success/50 bg-error/5 opacity-70' 
+                                : 'text-success bg-success/5'
+                          } ${s.isConfirmed && !s.isCancelled && !isRedAlert ? 'bg-primary/5' : ''}`}
                         >
                           {isRedAlert ? (
                             <span className="flex items-center justify-center gap-1">
@@ -1143,14 +1230,15 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={visibleShipments} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
-                    <XAxis dataKey="shipmentNumber" tick={renderCustomTick} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="shipmentNumber" tick={renderCustomTick} axisLine={false} tickLine={false} interval={0} />
                     <YAxis tickFormatter={(val) => `${(val / 1000000).toFixed(1)}M`} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
                     <Tooltip content={<CustomTooltip />} cursor={false} />
                     <Bar dataKey="closingStock" name="Closing Stock" stackId="a" fill="var(--color-primary)" radius={[0, 0, 0, 0]}>
                       {visibleShipments.map((entry, index) => (
                         <Cell 
                           key={`cell-${index}`} 
-                          fill={entry.remainingUllageAfterReceipt < 0 ? '#ef4444' : 'var(--color-primary)'} 
+                          fill={entry.isCancelled ? '#4b5563' : entry.remainingUllageAfterReceipt < 0 ? '#ef4444' : 'var(--color-primary)'} 
+                          opacity={entry.isCancelled ? 0.4 : 1}
                         />
                       ))}
                     </Bar>
@@ -1169,7 +1257,7 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={visibleShipments} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
-                    <XAxis dataKey="shipmentNumber" tick={renderCustomTick} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="shipmentNumber" tick={renderCustomTick} axisLine={false} tickLine={false} interval={0} />
                     <YAxis tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
                     <Tooltip 
                       formatter={(value: any) => [`${Math.round(value)} Days`, 'Stock Coverage']}
