@@ -53,7 +53,7 @@ const FLIGHT_PERFORMANCE = [
 interface DashboardProps {
   user: User;
   setActiveView: (view: string) => void;
-  onStartJob?: (job: FlightJob) => void;
+  onStartJob?: (job: FlightJob, vehicleId?: string) => void;
   onSelectEquipment?: (eqId: string) => void;
 }
 
@@ -104,6 +104,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
   const [allEquipmentAssignments, setAllEquipmentAssignments] = useState<any[]>([]);
   const [allDomesticAssignments, setAllDomesticAssignments] = useState<any[]>([]);
   const [rotationIndex, setRotationIndex] = useState(0);
+  const [selectedEquipments, setSelectedEquipments] = useState<Record<string, string>>({});
 
   const [completedAllocationIds, setCompletedAllocationIds] = useState<string[]>(() => {
     try {
@@ -577,6 +578,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                     const assigneeName = usersList.find(u => u.id === job.assignedTo)?.name || 'Unknown';
                     const officerName = job.assignedOfficer ? usersList.find(u => u.id === job.assignedOfficer)?.name : null;
                     
+                    const isRfJob = job.equipmentUsage?.toUpperCase() === 'REFUELLER';
+                    const isHdJob = job.equipmentUsage?.toUpperCase() === 'HYDRANT';
+                    const availableEquip = (equipment || []).filter(eq => {
+                      if (eq.status !== EqStatus.AVAILABLE) return false;
+                      if (isRfJob) return eq.id.startsWith('RF');
+                      if (isHdJob) return eq.id.startsWith('HD');
+                      return eq.id.startsWith('RF') || eq.id.startsWith('HD');
+                    });
+                    
                     return (
                         <div key={job.id} className="card-premium border-l-4 border-l-primary overflow-hidden active:scale-[0.99] transition-transform">
                             <div className="p-6">
@@ -604,15 +614,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                          </div>
 
                                          {job.status !== 'COMPLETED' ? (
-                                            [UserRole.ITP_OPERATOR, UserRole.ITP_SUPERVISOR].includes(user.role) ? null : (
                                               <button 
-                                                onClick={() => onStartJob?.(job)}
+                                                onClick={() => {
+                                                  const selectedEq = selectedEquipments[job.id];
+                                                  if (!selectedEq && job.status === 'PENDING') {
+                                                    notify("Please select an equipment to start the job.", "warning");
+                                                    return;
+                                                  }
+                                                  onStartJob?.(job, selectedEq);
+                                                }}
                                                 className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-lg sm:rounded-xl group shadow-premium kinetic-gradient text-white hover:scale-[1.05] active:scale-95 transition-all"
                                                 title="Start Job"
                                               >
                                                   <Play className="!w-7 !h-7 !fill-white !text-white stroke-[2.5] ml-0.5 group-hover:scale-110 transition-transform" />
                                               </button>
-                                            )
                                          ) : (
                                              <div 
                                                  onClick={() => notify(`Details for ${job.flightNumber} are in the history log.`, "info")}
@@ -626,21 +641,49 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                 </div>
 
                                 <div className="mt-6 pt-6 border-t border-outline/30 space-y-4">
-                                    {/* Row 1: Tactical Times */}
-                                    <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-widest bg-surface-dim/40 px-4 py-2.5 rounded-2xl border border-outline/50 w-fit">
-                                         <div className="flex flex-col">
-                                             <span className="opacity-40 mb-1">STA</span>
-                                             <span className="text-on-surface text-sm font-black tracking-tight">{job.sta || '--:--'}</span>
+                                    {/* Row 1: Tactical Times & Equipment Selection */}
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                        <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-widest bg-surface-dim/40 px-4 py-2.5 rounded-2xl border border-outline/50 w-fit">
+                                             <div className="flex flex-col">
+                                                 <span className="opacity-40 mb-1">STA</span>
+                                                 <span className="text-on-surface text-sm font-black tracking-tight">{job.sta || '--:--'}</span>
+                                             </div>
+                                             <div className="flex flex-col">
+                                                 <span className="opacity-40 mb-1 text-primary">ETA</span>
+                                                 <span className={`${delayed ? 'text-error' : 'text-primary'} text-sm font-black tracking-tight transition-colors`}>{job.eta || '--:--'}</span>
+                                             </div>
+                                             <div className="flex flex-col">
+                                                 <span className="opacity-40 mb-1 text-warning">STD</span>
+                                                 <span className="text-warning text-sm font-black tracking-tight">{job.std || '--:--'}</span>
+                                             </div>
                                          </div>
-                                         <div className="flex flex-col">
-                                             <span className="opacity-40 mb-1 text-primary">ETA</span>
-                                             <span className={`${delayed ? 'text-error' : 'text-primary'} text-sm font-black tracking-tight transition-colors`}>{job.eta || '--:--'}</span>
-                                         </div>
-                                         <div className="flex flex-col">
-                                             <span className="opacity-40 mb-1 text-warning">STD</span>
-                                             <span className="text-warning text-sm font-black tracking-tight">{job.std || '--:--'}</span>
-                                         </div>
-                                     </div>
+
+                                         {/* Equipment Selection Option */}
+                                         {job.status === 'PENDING' && (
+                                             <div className="flex items-center gap-3 bg-surface-dim/30 px-4 py-2 rounded-2xl border border-outline/40">
+                                                 <span className="text-[10px] font-black uppercase tracking-widest text-on-surface-dim whitespace-nowrap">Equipment:</span>
+                                                 <select
+                                                     value={selectedEquipments[job.id] || ''}
+                                                     onChange={(e) => setSelectedEquipments(prev => ({ ...prev, [job.id]: e.target.value }))}
+                                                     className="bg-surface-lowest border border-outline rounded-xl px-4 py-2 text-[11px] font-bold text-on-surface outline-none focus:border-primary transition-colors cursor-pointer w-36 appearance-none"
+                                                     style={{
+                                                         backgroundImage: `url("data:image/svg+xml;utf8,<svg fill='none' stroke='%23888888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' class='lucide lucide-chevron-down' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><polyline points='6 9 12 15 18 9'/></svg>")`,
+                                                         backgroundPosition: 'right 10px center',
+                                                         backgroundSize: '10px',
+                                                         backgroundRepeat: 'no-repeat',
+                                                         paddingRight: '24px'
+                                                     }}
+                                                 >
+                                                     <option value="" className="bg-surface-dim">-- Select --</option>
+                                                     {availableEquip.map(eq => (
+                                                         <option key={eq.id} value={eq.id} className="bg-surface-dim">
+                                                             {eq.id}
+                                                         </option>
+                                                     ))}
+                                                 </select>
+                                             </div>
+                                         )}
+                                    </div>
 
                                      {/* Row 2: Operator (Left) & Status (Right) */}
                                       <div className="flex items-center justify-between gap-4">

@@ -561,11 +561,11 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         ],
         dieselNeeds: [],
         staffAssignments: {
-          activeOperators: ['u3', 'u3b'],
-          activeOfficers: ['u1'],
+          activeOperators: ['u3b'],
+          activeOfficers: ['u3'],
           hydrantOpsOfficers: ['u7'],
           dutySupervisor: 'u2',
-          shiftInCharge: 'u2b',
+          shiftInCharge: 'u11',
           adhocFlights: []
         }
       });
@@ -608,13 +608,13 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       if (fetchedJobs) setFlightJobs(fetchedJobs);
       if (fetchedBriefing && typeof fetchedBriefing === 'object') {
          // Merge with default staff if missing
-         const staff = (fetchedBriefing as any).staffAssignments || {
-            activeOperators: ['u3', 'u3b'],
-            activeOfficers: ['u1'],
+          const staff = (fetchedBriefing as any).staffAssignments || {
+            activeOperators: ['u3b'],
+            activeOfficers: ['u3'],
             hydrantOpsOfficers: ['u7'],
             dutySupervisor: 'u2',
-            shiftInCharge: 'u2b'
-         };
+            shiftInCharge: 'u11'
+          };
          if (staff.adhocFlights === undefined) {
            staff.adhocFlights = [];
          }

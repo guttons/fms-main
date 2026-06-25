@@ -251,8 +251,15 @@ export const TankerDischarge: React.FC = () => {
     ]);
   }, []);
 
-  // Filter tanks dynamically by fuel type
-  const matchingTanks = (tanks || []).filter(t => t && t.type === product);
+  // Filter tanks dynamically by fuel type, showing only NFF tanks for JET A-1 (excluding recovery tanks)
+  const matchingTanks = (tanks || []).filter(t => {
+    if (!t) return false;
+    if (t.type !== product) return false;
+    if (product === FuelType.JET_A1) {
+      return t.name.toUpperCase().includes('NFF') && !t.name.toUpperCase().includes('RECOVERY');
+    }
+    return true;
+  });
 
   // Auto-select first matching tank when fuel type changes
   useEffect(() => {

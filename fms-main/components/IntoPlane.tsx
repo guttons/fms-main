@@ -1325,7 +1325,66 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     };
   }, []);
 
+  const activeFlightRef = React.useRef(activeFlight);
+  const selectedVehicleIdRef = React.useRef(selectedVehicleId);
+  const flightJobsRef = React.useRef(flightJobs);
+  const updateEquipmentStatusRef = React.useRef(updateEquipmentStatus);
+  const updateFlightJobRef = React.useRef(updateFlightJob);
+
+  useEffect(() => {
+    activeFlightRef.current = activeFlight;
+  }, [activeFlight]);
+
+  useEffect(() => {
+    selectedVehicleIdRef.current = selectedVehicleId;
+  }, [selectedVehicleId]);
+
+  useEffect(() => {
+    flightJobsRef.current = flightJobs;
+  }, [flightJobs]);
+
+  useEffect(() => {
+    updateEquipmentStatusRef.current = updateEquipmentStatus;
+  }, [updateEquipmentStatus]);
+
+  useEffect(() => {
+    updateFlightJobRef.current = updateFlightJob;
+  }, [updateFlightJob]);
+
+  useEffect(() => {
+    return () => {
+      const activeFl = activeFlightRef.current;
+      const vehicleId = activeFl?.vehicleId || selectedVehicleIdRef.current;
+      const jobs = flightJobsRef.current;
+
+      if (activeFl && vehicleId && !isSubmittingOrCompletingRef.current) {
+        // Release equipment status
+        updateEquipmentStatusRef.current(vehicleId, EquipmentStatus.AVAILABLE);
+
+        // Revert flight job back to PENDING so it can be re-started
+        const cancelledJob = (jobs || []).find(j => j.flightNumber === activeFl.flightNumber && j.status === 'IN_PROGRESS');
+        if (cancelledJob) {
+          updateFlightJobRef.current(cancelledJob.id, { status: 'PENDING', vehicleId: undefined });
+        }
+      }
+    };
+  }, []);
+
   const startJob = (job: FlightJob) => {
+    const isRfJob = job.equipmentUsage?.toUpperCase() === 'REFUELLER';
+    const isHdJob = job.equipmentUsage?.toUpperCase() === 'HYDRANT';
+    const isSelectedRf = selectedVehicleId?.toUpperCase().startsWith('RF');
+    const isSelectedHd = selectedVehicleId?.toUpperCase().startsWith('HD');
+
+    if (isRfJob && !isSelectedRf) {
+      notify(`This job is assigned as REFUELLER (RF). You must select an RF equipment in the header to start it.`, 'error');
+      return;
+    }
+    if (isHdJob && !isSelectedHd) {
+      notify(`This job is assigned as HYDRANT (HD). You must select an HD equipment in the header to start it.`, 'error');
+      return;
+    }
+
     // Auto-update Equipment Status to IN_PROGRESS/IN_USE
     updateEquipmentStatus(selectedVehicleId, EquipmentStatus.IN_USE);
 
@@ -1436,12 +1495,14 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   };
 
   const completeOrCancelJobAndExit = (successMessage?: string) => {
+    isSubmittingOrCompletingRef.current = true;
     if (successMessage) {
       notify(successMessage, "success");
     } else {
       // It's a cancel: release equipment and revert flight job status
-      if (activeFlight && selectedVehicleId) {
-        updateEquipmentStatus(selectedVehicleId, EquipmentStatus.AVAILABLE);
+      const vehicleToRelease = activeFlight?.vehicleId || selectedVehicleId;
+      if (vehicleToRelease) {
+        updateEquipmentStatus(vehicleToRelease, EquipmentStatus.AVAILABLE);
       }
       // Revert flight job back to PENDING so it can be re-started
       if (activeFlight) {
@@ -1458,7 +1519,6 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     else if (currentScreen === 'qc') stepsBack = -3;
 
     if (stepsBack < 0) {
-      isSubmittingOrCompletingRef.current = true;
       window.history.go(stepsBack);
     } else {
       setActiveFlight(null);
@@ -1467,9 +1527,11 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   };
 
   const handleBackToDashboard = () => {
+    isSubmittingOrCompletingRef.current = true;
     // If a job was started, release the equipment and revert flight job status
-    if (activeFlight && selectedVehicleId) {
-      updateEquipmentStatus(selectedVehicleId, EquipmentStatus.AVAILABLE);
+    const vehicleToRelease = activeFlight?.vehicleId || selectedVehicleId;
+    if (vehicleToRelease) {
+      updateEquipmentStatus(vehicleToRelease, EquipmentStatus.AVAILABLE);
     }
     if (activeFlight) {
       const cancelledJob = (flightJobs || []).find(j => j.flightNumber === activeFlight.flightNumber && j.status === 'IN_PROGRESS');
@@ -1535,6 +1597,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     }
     
     setLoading(true);
+    isSubmittingOrCompletingRef.current = true;
     try {
       let savedRoute = activeFlight.route || '';
       if (activeFlight.isDomestic && savedRoute) {
@@ -1621,6 +1684,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       completeOrCancelJobAndExit("Job Completed & Synced to Database!");
     } catch (error) {
       console.error('Error saving flight log:', error);
+      isSubmittingOrCompletingRef.current = false;
       notify('Failed to sync. Please check your secure connection.', "error");
     } finally {
       setLoading(false);

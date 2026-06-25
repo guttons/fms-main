@@ -43,7 +43,7 @@ interface LogHistoryProps {
 }
 
 export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
-  const { staff, equipment } = useOperationalData();
+  const { staff, equipment, flightJobs, updateFlightJob } = useOperationalData();
   const activeOperators = (staff || []).filter(s => [UserRole.DEPOT_OPERATOR, UserRole.ITP_OPERATOR, UserRole.ITP_SUPERVISOR].includes(s.role));
   const activeOfficers = (staff || []).filter(s => [UserRole.DEPOT_MANAGER, UserRole.ITP_MANAGER, UserRole.ADMIN].includes(s.role));
   const [logs, setLogs] = useState<FlightLog[]>([]);
@@ -53,6 +53,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
+  const [filterFlightCategory, setFilterFlightCategory] = useState('ALL');
   const [filterFuelType, setFilterFuelType] = useState('ALL');
   const [filterEquipment, setFilterEquipment] = useState('ALL');
   const [filterStation, setFilterStation] = useState('ALL');
@@ -131,6 +132,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     timePosition: '',
     timeStart: '',
     timeEnd: '',
+    isDomestic: false,
 
     // Seaplane specific
     seaplaneOperator: 'TMA',
@@ -382,7 +384,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           timestampArrived: combineDateAndTime(editForm.date, editForm.timeArrived),
           timestampPosition: combineDateAndTime(editForm.date, editForm.timePosition),
           timestampStart: combineDateAndTime(editForm.date, editForm.timeStart),
-          timestampInitialEnd: combineDateAndTime(editForm.date, editForm.timeEnd)
+          timestampInitialEnd: combineDateAndTime(editForm.date, editForm.timeEnd),
+          isDomestic: editForm.isDomestic
         });
       }
       setEditingLog(null);
@@ -399,6 +402,14 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
     setSaving(true);
     try {
+      // Find matching flight job and reset its status back to PENDING in Supabase
+      const matchingJob = (flightJobs || []).find(
+        job => job.flightNumber === editingLog.flightNumber && job.status === 'COMPLETED'
+      );
+      if (matchingJob) {
+        await updateFlightJob(matchingJob.id, { status: 'PENDING', vehicleId: undefined });
+      }
+
       await supabaseService.deleteFlightLog(editingLog.id);
       setEditingLog(null);
       setShowConfirmDelete(false);
@@ -458,7 +469,17 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
       matchesEquipment = log.vehicleId === filterEquipment;
     }
 
-    return matchesType && matchesSearch && matchesDate && matchesFuelType && matchesStation && matchesEquipment;
+    let matchesFlightCategory = true;
+    if (selectedLogType === 'FLIGHT' && filterFlightCategory !== 'ALL') {
+      const isLogDomestic = log.isDomestic ?? false;
+      if (filterFlightCategory === 'DOM') {
+        matchesFlightCategory = isLogDomestic === true;
+      } else if (filterFlightCategory === 'INT') {
+        matchesFlightCategory = isLogDomestic === false;
+      }
+    }
+
+    return matchesType && matchesSearch && matchesDate && matchesFuelType && matchesStation && matchesEquipment && matchesFlightCategory;
   });
 
   const sortedLogs = [...filteredLogs].sort((a, b) => {
@@ -554,6 +575,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
               key={tab.id}
               onClick={() => {
                 setSelectedLogType(tab.id);
+                setFilterFlightCategory('ALL');
                 setFilterFuelType('ALL');
                 setFilterEquipment('ALL');
                 setFilterStation('ALL');
@@ -616,6 +638,22 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                  </div>
               </div>
 
+               {/* Flight Category Dropdown (only on FLIGHT) */}
+               {selectedLogType === 'FLIGHT' && (
+                  <div className="flex flex-col">
+                     <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2">Category</label>
+                     <select
+                        value={filterFlightCategory}
+                        onChange={(e) => setFilterFlightCategory(e.target.value)}
+                        className="w-full px-4 py-3 bg-surface-lowest border border-outline rounded-xl text-[12px] font-bold text-on-surface focus:border-primary outline-none cursor-pointer"
+                     >
+                        <option value="ALL">ALL CATEGORIES</option>
+                        <option value="INT">INTERNATIONAL (INT)</option>
+                        <option value="DOM">DOMESTIC (DOM)</option>
+                     </select>
+                  </div>
+               )}
+
               {/* Fuel Type Dropdown (only on FILLING_STATION) */}
               {selectedLogType === 'FILLING_STATION' && (
                  <div className="flex flex-col">
@@ -667,11 +705,12 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
               {/* Clear Filters / Volume Summary */}
               <div className={`flex items-end justify-between sm:col-span-2 lg:col-span-1 gap-4 ${selectedLogType === 'FILLING_STATION' ? 'lg:col-start-5' : 'lg:col-start-4'}`}>
-                 {(filterStartDate || filterEndDate || (selectedLogType === 'FILLING_STATION' && (filterFuelType !== 'ALL' || filterStation !== 'ALL')) || (selectedLogType === 'BRIDGING' && filterEquipment !== 'ALL')) && (
+                 {(filterStartDate || filterEndDate || (selectedLogType === 'FLIGHT' && filterFlightCategory !== 'ALL') || (selectedLogType === 'FILLING_STATION' && (filterFuelType !== 'ALL' || filterStation !== 'ALL')) || (selectedLogType === 'BRIDGING' && filterEquipment !== 'ALL')) && (
                     <button 
                        onClick={() => {
                           setFilterStartDate('');
                           setFilterEndDate('');
+                          setFilterFlightCategory('ALL');
                           setFilterFuelType('ALL');
                           setFilterEquipment('ALL');
                           setFilterStation('ALL');
@@ -707,6 +746,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                     <>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Timestamp</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Flight No</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Type</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Aircraft Reg / Type</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Stand</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Equipment</th>
@@ -763,7 +803,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
               <tbody className="divide-y divide-outline">
                 {sortedLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={selectedLogType === 'FLIGHT' || selectedLogType === 'MARINE' ? 8 : (selectedLogType === 'FILLING_STATION' ? 7 : 6)} className="px-10 py-20 text-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 italic">Zero matches in historical database</td>
+                    <td colSpan={selectedLogType === 'FLIGHT' ? 9 : (selectedLogType === 'MARINE' ? 8 : (selectedLogType === 'FILLING_STATION' ? 7 : 6))} className="px-10 py-20 text-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 italic">Zero matches in historical database</td>
                   </tr>
                 ) : (
                   sortedLogs.map((log) => {
@@ -776,7 +816,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                       const groundData = parseGroundLog(log);
                       const marineData = parseMarineLog(log);
                       
-                      const colSpanCount = selectedLogType === 'FLIGHT' || selectedLogType === 'MARINE' ? 8 : (selectedLogType === 'FILLING_STATION' ? 7 : 6);
+                      const colSpanCount = selectedLogType === 'FLIGHT' ? 9 : (selectedLogType === 'MARINE' ? 8 : (selectedLogType === 'FILLING_STATION' ? 7 : 6));
 
                       return (
                         <React.Fragment key={log.id}>
@@ -797,6 +837,15 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                   {log.route && (
                                       <div className="text-[9px] font-black text-on-surface-dim opacity-50 uppercase tracking-widest mt-0.5">{log.route}</div>
                                   )}
+                              </td>
+                              <td className="px-10 py-6">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black tracking-widest uppercase ${
+                                    log.isDomestic 
+                                      ? 'bg-success/15 text-success border border-success/20' 
+                                      : 'bg-primary/15 text-primary border border-primary/20'
+                                  }`}>
+                                      {log.isDomestic ? 'DOM' : 'INT'}
+                                  </span>
                               </td>
                               <td className="px-10 py-6">
                                   <div className="text-xs font-black text-on-surface uppercase tracking-widest">{log.aircraftReg}</div>
@@ -941,6 +990,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                        timePosition: getLocalTimePart(log.timestampPosition),
                                        timeStart: getLocalTimePart(log.timestampStart),
                                        timeEnd: getLocalTimePart(log.timestampFinalEnd || log.timestampInitialEnd),
+                                       isDomestic: log.isDomestic ?? false,
 
                                        // Seaplane specific
                                        seaplaneOperator: seaplaneOp,
@@ -1217,7 +1267,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                   {/* Flight Info Grid */}
                   <div>
                     <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Flight & Aircraft Details</h4>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
                       <div>
                         <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Flight Number</label>
                         <input 
@@ -1226,6 +1276,17 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                           onChange={e => setEditForm({...editForm, flightNumber: e.target.value})}
                           className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
                         />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Category</label>
+                        <select 
+                          value={editForm.isDomestic ? 'DOMESTIC' : 'INTERNATIONAL'}
+                          onChange={e => setEditForm({...editForm, isDomestic: e.target.value === 'DOMESTIC'})}
+                          className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none cursor-pointer"
+                        >
+                          <option value="INTERNATIONAL">INT</option>
+                          <option value="DOMESTIC">DOM</option>
+                        </select>
                       </div>
                       <div>
                         <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Aircraft Reg</label>

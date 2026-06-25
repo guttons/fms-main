@@ -263,10 +263,10 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
 
   const [staffAssignments, setStaffAssignments] = useState<StaffAssignments>(briefingInfo?.staffAssignments || {
     activeOperators: ['u3b'],
-    activeOfficers: ['u1'],
+    activeOfficers: ['u3'],
     hydrantOpsOfficers: ['u7'],
     dutySupervisor: 'u2',
-    shiftInCharge: 'u2b'
+    shiftInCharge: 'u11'
   });
 
   const [attendees, setAttendees] = useState<string[]>(briefingInfo?.staffAssignments?.attendees || []);
@@ -1023,7 +1023,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
               </div>
               {!isOperatorsCollapsed && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                  {renderStaffSelectArray(staffAssignments.activeOperators, [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.DEPOT_OPERATOR, UserRole.ITP_SUPERVISOR], "Operators", "bg-success shadow-[0_0_10px_rgba(34,197,94,0.4)]", 'success', (newVals) => setStaffAssignments(prev => ({...prev, activeOperators: newVals})))}
+                  {renderStaffSelectArray(staffAssignments.activeOperators, [UserRole.ITP_OPERATOR], "Operators", "bg-success shadow-[0_0_10px_rgba(34,197,94,0.4)]", 'success', (newVals) => setStaffAssignments(prev => ({...prev, activeOperators: newVals})))}
                 </div>
               )}
             </div>
@@ -1045,7 +1045,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
               </div>
               {!isOfficersCollapsed && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                  {renderStaffSelectArray(staffAssignments.activeOfficers, [UserRole.ITP_OFFICER, UserRole.ADMIN], "Officers", "bg-primary shadow-[0_0_10px_rgba(14,165,233,0.4)]", 'primary', (newVals) => setStaffAssignments(prev => ({...prev, activeOfficers: newVals})))}
+                  {renderStaffSelectArray(staffAssignments.activeOfficers, [UserRole.ITP_OFFICER], "Officers", "bg-primary shadow-[0_0_10px_rgba(14,165,233,0.4)]", 'primary', (newVals) => setStaffAssignments(prev => ({...prev, activeOfficers: newVals})))}
                 </div>
               )}
             </div>
@@ -1067,7 +1067,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
               </div>
               {!isHydrantCollapsed && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                  {renderStaffSelectArray(staffAssignments.hydrantOpsOfficers, [UserRole.ITP_OFFICER, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OPERATOR, UserRole.ITP_SUPERVISOR], "Hydrant Officers", "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]", 'warning', (newVals) => setStaffAssignments(prev => ({...prev, hydrantOpsOfficers: newVals})))}
+                  {renderStaffSelectArray(staffAssignments.hydrantOpsOfficers, [UserRole.ITP_HD_OPERATOR], "Hydrant Officers", "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]", 'warning', (newVals) => setStaffAssignments(prev => ({...prev, hydrantOpsOfficers: newVals})))}
                 </div>
               )}
             </div>
@@ -1089,9 +1089,9 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
               </div>
               {!isStaffingCollapsed && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-200">
-                  {renderStaffSelect(staffAssignments.dutySupervisor, [UserRole.ITP_SUPERVISOR], "Duty Supervisor", (id) => setStaffAssignments(prev => ({ ...prev, dutySupervisor: id })))}
+                  {renderStaffSelect(staffAssignments.dutySupervisor, [UserRole.ITP_MANAGER, UserRole.ITP_SUPERVISOR], "Duty Supervisor", (id) => setStaffAssignments(prev => ({ ...prev, dutySupervisor: id })))}
                   {/* Manager or Shift In-Charge selection - using ITP_MANAGER role */}
-                  {renderStaffSelect(staffAssignments.shiftInCharge, [UserRole.ITP_MANAGER], "Shift In-Charge", (id) => setStaffAssignments(prev => ({ ...prev, shiftInCharge: id })))}
+                  {renderStaffSelect(staffAssignments.shiftInCharge, [UserRole.ITP_MANAGER, UserRole.ITP_SUPERVISOR], "Shift In-Charge", (id) => setStaffAssignments(prev => ({ ...prev, shiftInCharge: id })))}
                 </div>
               )}
             </div>

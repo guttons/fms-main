@@ -327,8 +327,43 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
     (rfHdEquipment || []).map(eq => ({ id: eq.id, eqNumber: eq.id, op1: '', op2: '', shift_type: currentShiftLabel, eqType: eq.type }))
   );
 
-  // Modal removed — replaced by shift selector
-  const operators = (staff && staff.length > 0 ? staff : MOCK_USERS).filter(u => [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_SUPERVISOR].includes(u.role));
+  // Filter operators by those marked present (attendees) in the selected briefing shift
+  const briefingAttendees = briefingInfo?.staffAssignments?.attendees || [];
+
+  const operators = (() => {
+    const allStaff = (staff && staff.length > 0 ? staff : MOCK_USERS);
+    if (briefingAttendees.length > 0) {
+      return briefingAttendees
+        .map(id => allStaff.find(u => u.id === id))
+        .filter((u): u is typeof allStaff[0] => !!u)
+        .filter(u => u.role.startsWith('ITP_'));
+    }
+    
+    // Fallback if no attendees are marked present yet: show all assigned staff in the briefing
+    const briefingStaffIds = briefingInfo?.staffAssignments ? Array.from(new Set([
+      ...(briefingInfo.staffAssignments.activeOperators || []),
+      ...(briefingInfo.staffAssignments.activeOfficers || []),
+      ...(briefingInfo.staffAssignments.hydrantOpsOfficers || []),
+      briefingInfo.staffAssignments.dutySupervisor,
+      briefingInfo.staffAssignments.shiftInCharge
+    ].filter(Boolean))) : [];
+
+    if (briefingStaffIds.length > 0) {
+      return briefingStaffIds
+        .map(id => allStaff.find(u => u.id === id))
+        .filter((u): u is typeof allStaff[0] => !!u)
+        .filter(u => u.role.startsWith('ITP_'));
+    }
+
+    // Secondary fallback: all ITP staff roles
+    return allStaff.filter(u => [
+      UserRole.ITP_OPERATOR,
+      UserRole.ITP_HD_OPERATOR,
+      UserRole.ITP_SUPERVISOR,
+      UserRole.ITP_OFFICER,
+      UserRole.ITP_MANAGER
+    ].includes(u.role));
+  })();
 
   useEffect(() => {
     if (briefingInfo?.dieselNeeds) {

@@ -651,8 +651,11 @@ const AppContextContent: React.FC<any> = ({
           <Dashboard 
             user={currentUser} 
             setActiveView={setActiveView} 
-            onStartJob={(job: FlightJob) => {
+            onStartJob={(job: FlightJob, vehicleId?: string) => {
               setPendingJob(job);
+              if (vehicleId) {
+                setPendingVehicleId(vehicleId);
+              }
               setActiveView('intoplane');
             }}
             onSelectEquipment={(eqId: string) => {

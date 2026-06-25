@@ -42,6 +42,7 @@ const OPERATIONS_LOG_SCHEMA: TableSchema = {
     { name: 'tactical_operator',    type: 'STRING',    mode: 'NULLABLE'  },
     { name: 'route',                type: 'STRING',    mode: 'NULLABLE'  },
     { name: 'co',                   type: 'STRING',    mode: 'NULLABLE'  },
+    { name: 'is_domestic',          type: 'BOOL',      mode: 'NULLABLE'  },
     { name: 'is_deleted',           type: 'BOOL',      mode: 'NULLABLE'  },
     { name: 'created_at',           type: 'TIMESTAMP', mode: 'NULLABLE'  },
     { name: 'updated_at',           type: 'TIMESTAMP', mode: 'NULLABLE'  },
@@ -72,6 +73,9 @@ async function ensureSchema(): Promise<void> {
       const alterSqlCo = `ALTER TABLE ${TABLE_REF} ADD COLUMN IF NOT EXISTS co STRING`;
       console.log(`[BigQuery] Schema migration: ${alterSqlCo}`);
       await bigquery.query({ query: alterSqlCo, location: 'US' });
+      const alterSqlDom = `ALTER TABLE ${TABLE_REF} ADD COLUMN IF NOT EXISTS is_domestic BOOL`;
+      console.log(`[BigQuery] Schema migration: ${alterSqlDom}`);
+      await bigquery.query({ query: alterSqlDom, location: 'US' });
     } catch (e: any) {
       console.error('[BigQuery] Migration failed:', e.message);
     }
@@ -109,6 +113,7 @@ function rowToLog(row: Record<string, any>) {
     tacticalOperator:    row.tactical_operator,
     route:               row.route,
     co:                  row.co,
+    isDomestic:          row.is_domestic,
   };
 }
 
@@ -143,6 +148,7 @@ function logToRow(log: Record<string, any>, id: string): Record<string, any> {
     tactical_operator:     log.tacticalOperator    ?? null,
     route:                 log.route               ?? null,
     co:                    log.co                  ?? null,
+    is_domestic:           log.isDomestic          ?? null,
     is_deleted:            false,
     created_at:            now,
     updated_at:            now,
@@ -342,10 +348,18 @@ app.get('/external-flights', async (_req: Request, res: Response) => {
 // GET /operations-log   — list all (non-deleted) entries
 // ═══════════════════════════════════════════════════════════════════════════
 app.get('/operations-log', requireAuth, async (_req: Request, res: Response) => {
+  // Deduplicate by id, keeping the row with the latest updated_at.
+  // This ensures tombstone rows (is_deleted=TRUE) override streaming-buffered originals.
   const sql = `
-    SELECT *
-    FROM ${TABLE_REF}
-    WHERE (is_deleted IS NULL OR is_deleted = FALSE)
+    SELECT * EXCEPT(rn)
+    FROM (
+      SELECT *, ROW_NUMBER() OVER (
+        PARTITION BY id
+        ORDER BY COALESCE(updated_at, created_at, TIMESTAMP('1970-01-01')) DESC
+      ) AS rn
+      FROM ${TABLE_REF}
+    )
+    WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE)
     ORDER BY delivery_number DESC
   `;
   console.log(`[BigQuery SQL]\n${sql.trim()}`);
@@ -364,11 +378,21 @@ app.get('/operations-log', requireAuth, async (_req: Request, res: Response) => 
 app.post('/operations-log', requireAuth, async (req: Request, res: Response) => {
   const newId = `op-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const row = logToRow(req.body, newId);
-  const sql = `INSERT INTO ${TABLE_REF} (id, delivery_number, log_type) VALUES ('${newId}', '${row.delivery_number}', '${row.log_type}') [+ all fields]`;
   console.log(`[BigQuery SQL] INSERT → id=${newId}, delivery_number=${row.delivery_number}`);
+
+  // Build column list and parameter map from the row object, filtering out null/undefined values
+  const activeEntries = Object.entries(row).filter(([_, val]) => val !== null && val !== undefined);
+  const columns = activeEntries.map(([k]) => k);
+  const paramRefs = columns.map(c => `@${c}`).join(', ');
+  const columnList = columns.join(', ');
+
+  // Build typed params for BigQuery parameterized query (only non-null fields)
+  const params = Object.fromEntries(activeEntries);
+
+  const sql = `INSERT INTO ${TABLE_REF} (${columnList}) VALUES (${paramRefs})`;
+
   try {
-    const table = bigquery.dataset(DATASET_ID).table(TABLE_ID);
-    await table.insert([row]);
+    await bigquery.query({ query: sql, params, location: 'US' });
     res.status(201).json({ id: newId, message: 'Log entry created.' });
   } catch (err: any) {
     console.error('[BigQuery] POST error:', err.message, err.errors);
@@ -379,6 +403,36 @@ app.post('/operations-log', requireAuth, async (req: Request, res: Response) => 
 // ═══════════════════════════════════════════════════════════════════════════
 // PATCH /operations-log/:id  — update fields of an existing entry
 // ═══════════════════════════════════════════════════════════════════════════
+const PARAM_TYPES: Record<string, string> = {
+  record_id: 'STRING',
+  flightNumber: 'STRING',
+  aircraftReg: 'STRING',
+  aircraftType: 'STRING',
+  stand: 'STRING',
+  operatorId: 'STRING',
+  vehicleId: 'STRING',
+  status: 'STRING',
+  deliveryNumber: 'STRING',
+  meterOpen: 'FLOAT64',
+  meterClose: 'FLOAT64',
+  volume: 'FLOAT64',
+  panelCheck: 'BOOL',
+  walkAroundCheck: 'BOOL',
+  appearanceCheck: 'BOOL',
+  waterCheck: 'BOOL',
+  timestampArrived: 'TIMESTAMP',
+  timestampPosition: 'TIMESTAMP',
+  timestampStart: 'TIMESTAMP',
+  timestampInitialEnd: 'TIMESTAMP',
+  timestampFinalEnd: 'TIMESTAMP',
+  timestampClearance: 'TIMESTAMP',
+  remarks: 'STRING',
+  tacticalOperator: 'STRING',
+  logType: 'STRING',
+  route: 'STRING',
+  isDomestic: 'BOOL',
+};
+
 app.patch('/operations-log/:id', requireAuth, async (req: Request, res: Response) => {
   const { id } = req.params;
   const updates = req.body as Record<string, any>;
@@ -410,6 +464,7 @@ app.patch('/operations-log/:id', requireAuth, async (req: Request, res: Response
     tacticalOperator:    'tactical_operator',
     logType:             'log_type',
     route:               'route',
+    isDomestic:          'is_domestic',
   };
 
   const setClauses: string[] = ['updated_at = CURRENT_TIMESTAMP()'];
@@ -433,8 +488,17 @@ app.patch('/operations-log/:id', requireAuth, async (req: Request, res: Response
     WHERE id = @record_id
   `;
   console.log(`[BigQuery SQL] UPDATE id=${id} SET ${setClauses.join(', ')}`);
+
+  // Build the parameter types mapping to handle null values in BigQuery query execution
+  const types: Record<string, string> = {};
+  for (const key of Object.keys(params)) {
+    if (PARAM_TYPES[key]) {
+      types[key] = PARAM_TYPES[key];
+    }
+  }
+
   try {
-    await bigquery.query({ query: sql, params, location: 'US' });
+    await bigquery.query({ query: sql, params, location: 'US', types });
     res.json({ message: 'Log entry updated.' });
   } catch (err: any) {
     console.error('[BigQuery] PATCH error:', err.message);
@@ -447,18 +511,36 @@ app.patch('/operations-log/:id', requireAuth, async (req: Request, res: Response
 // ═══════════════════════════════════════════════════════════════════════════
 app.delete('/operations-log/:id', requireAuth, async (req: Request, res: Response) => {
   const { id } = req.params;
-  const sql = `
+  const updateSql = `
     UPDATE ${TABLE_REF}
     SET is_deleted = TRUE, updated_at = CURRENT_TIMESTAMP()
     WHERE id = @record_id
   `;
   console.log(`[BigQuery SQL] SOFT DELETE id=${id}`);
   try {
-    await bigquery.query({ query: sql, params: { record_id: id }, location: 'US' });
+    await bigquery.query({ query: updateSql, params: { record_id: id }, location: 'US' });
     res.json({ message: 'Log entry deleted.' });
   } catch (err: any) {
-    console.error('[BigQuery] DELETE error:', err.message);
-    res.status(500).json({ error: err.message });
+    // If the row is in the streaming buffer, fall back to inserting a tombstone row.
+    // The GET query deduplicates by id (latest updated_at wins), so this tombstone
+    // will mask the original buffered row.
+    if (err.message && err.message.includes('streaming buffer')) {
+      console.warn(`[BigQuery] Row ${id} is in streaming buffer — inserting tombstone row`);
+      const tombstoneSql = `
+        INSERT INTO ${TABLE_REF} (id, log_type, is_deleted, created_at, updated_at)
+        VALUES (@record_id, 'TOMBSTONE', TRUE, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
+      `;
+      try {
+        await bigquery.query({ query: tombstoneSql, params: { record_id: id }, location: 'US' });
+        res.json({ message: 'Log entry deleted.' });
+      } catch (tombstoneErr: any) {
+        console.error('[BigQuery] Tombstone INSERT error:', tombstoneErr.message);
+        res.status(500).json({ error: tombstoneErr.message });
+      }
+    } else {
+      console.error('[BigQuery] DELETE error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
   }
 });
 
