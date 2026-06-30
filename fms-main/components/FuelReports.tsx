@@ -1,13 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   FileText, Download, Calendar, Search, ShieldCheck, RefreshCw, 
   Layers, TrendingUp, TrendingDown, ClipboardList, Anchor, 
-  Database, User as UserIcon, X, PlusCircle, CheckCircle, BarChart2 
+  Database, User as UserIcon, X, PlusCircle, CheckCircle, BarChart2,
+  Droplet, Fuel, Info
 } from 'lucide-react';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { FuelType, FlightLog, User } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
+import { lookupDipSync, preloadCalibrationData } from '../services/calibrationService';
 
 interface FuelReportsProps {
   user?: User | null;
@@ -33,14 +35,29 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
   const [selectedMonth, setSelectedMonth] = useState<string>('06');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Daily Reconciliation Entry Form States
-  const [reconProduct, setReconProduct] = useState<FuelType>(FuelType.JET_A1);
-  const [physicalDipVal, setPhysicalDipVal] = useState<string>('');
-  const [reconLogs, setReconLogs] = useState<ReconciliationLog[]>([
-    { date: '2026-06-01', product: FuelType.JET_A1, computerStock: 10100000, physicalDip: 10098500, variance: -1500, operator: 'Ali Riza' },
-    { date: '2026-06-01', product: FuelType.DIESEL, computerStock: 143000, physicalDip: 143120, variance: 120, operator: 'Ali Riza' },
-    { date: '2026-05-31', product: FuelType.PETROL, computerStock: 53000, physicalDip: 52980, variance: -20, operator: 'Hussein Manik' }
-  ]);
+  // Selected Facility for Stock Summary breakdown
+  const [selectedFacility, setSelectedFacility] = useState<'NFF' | 'OFF' | 'SP' | 'FS' | 'MOBILE'>('NFF');
+
+  // Selected Report Date for Stock Summary
+  const [stockReportDate, setStockReportDate] = useState<string>('2026-06-30');
+
+  // Fluctuates volume deterministically based on date to simulate historical reports
+  const getHistoricalLevel = (id: string, currentLevel: number, capacity: number, dateStr: string) => {
+    if (dateStr === '2026-06-30') return currentLevel;
+    let hash = 0;
+    const combined = id + dateStr;
+    for (let i = 0; i < combined.length; i++) {
+      hash = combined.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const maxFluctuate = capacity > 0 ? capacity * 0.15 : 10000;
+    const offset = (Math.abs(hash) % (maxFluctuate * 2)) - maxFluctuate;
+    return Math.max(0, Math.min(capacity > 0 ? capacity : 100000, Math.round(currentLevel + offset)));
+  };
+
+  // Preload calibration tables
+  useEffect(() => {
+    preloadCalibrationData();
+  }, []);
 
   // Selected shipment for Figure 1.5 modal view
   const [selectedShipment, setSelectedShipment] = useState<any | null>(null);
@@ -153,18 +170,18 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
   // 3. CONSOLIDATED FUEL SUMMARY (Reconciliation Tab)
   // Summarize across facilities: Tanks, Refuellers, Hydrant dispensers
   const activeTanksTotal = useMemo(() => {
-    const jet = (tanks || []).filter(t => t.type === FuelType.JET_A1).reduce((sum, t) => sum + t.currentLevel, 0);
-    const diesel = (tanks || []).filter(t => t.type === FuelType.DIESEL).reduce((sum, t) => sum + t.currentLevel, 0);
-    const petrol = (tanks || []).filter(t => t.type === FuelType.PETROL).reduce((sum, t) => sum + t.currentLevel, 0);
+    const jet = (tanks || []).filter(t => t.type === FuelType.JET_A1).reduce((sum, t) => sum + getHistoricalLevel(t.id, t.currentLevel, t.capacity, stockReportDate), 0);
+    const diesel = (tanks || []).filter(t => t.type === FuelType.DIESEL).reduce((sum, t) => sum + getHistoricalLevel(t.id, t.currentLevel, t.capacity, stockReportDate), 0);
+    const petrol = (tanks || []).filter(t => t.type === FuelType.PETROL).reduce((sum, t) => sum + getHistoricalLevel(t.id, t.currentLevel, t.capacity, stockReportDate), 0);
     return { jet, diesel, petrol };
-  }, [tanks]);
+  }, [tanks, stockReportDate]);
 
   const activeRefuellersTotal = useMemo(() => {
     // Dynamic sum of all refueller capacities/volumes
     const refuellers = (equipment || []).filter(e => e.type === 'Refueller');
-    const totalVolume = refuellers.reduce((sum, e) => sum + (e.currentVolume || 0), 0);
+    const totalVolume = refuellers.reduce((sum, e) => sum + getHistoricalLevel(e.id, e.currentVolume || 0, e.maxCapacity, stockReportDate), 0);
     return totalVolume;
-  }, [equipment]);
+  }, [equipment, stockReportDate]);
 
   const hydrantVehiclesCount = useMemo(() => {
     return (equipment || []).filter(e => e.type === 'Hydrant Dispenser' || e.type === 'Hydrant Service').length;
@@ -181,32 +198,138 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
     };
   }, [activeTanksTotal, activeRefuellersTotal]);
 
-  // Form handler for Daily reconciliation physical dip entry
-  const handleReconSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const dipVal = parseFloat(physicalDipVal);
-    if (isNaN(dipVal) || dipVal <= 0) return;
+  // Bulk totals by fuel grade (storage + mobile combined)
+  const bulkTotals = useMemo(() => {
+    const jetStorage = activeTanksTotal.jet;
+    const jetMobile = activeRefuellersTotal;
+    const jetTotal = jetStorage + jetMobile;
 
-    // Fetch computerized stock from active totals
-    let computerStock = 0;
-    if (reconProduct === FuelType.JET_A1) computerStock = activeTanksTotal.jet;
-    else if (reconProduct === FuelType.DIESEL) computerStock = activeTanksTotal.diesel;
-    else computerStock = activeTanksTotal.petrol;
+    const dieselStorage = activeTanksTotal.diesel;
+    const dieselMobile = (equipment || [])
+      .filter(e => e.type === 'Diesel Truck')
+      .reduce((sum, e) => sum + getHistoricalLevel(e.id, e.currentVolume || 0, e.maxCapacity, stockReportDate), 0);
+    const dieselTotal = dieselStorage + dieselMobile;
 
-    const variance = dipVal - computerStock;
+    const petrolTotal = activeTanksTotal.petrol;
 
-    const newLog: ReconciliationLog = {
-      date: new Date().toISOString().split('T')[0],
-      product: reconProduct,
-      computerStock,
-      physicalDip: dipVal,
-      variance,
-      operator: user?.name || 'System Admin'
+    return {
+      jet: jetTotal,
+      diesel: dieselTotal,
+      petrol: petrolTotal
     };
+  }, [activeTanksTotal, activeRefuellersTotal, equipment, stockReportDate]);
 
-    setReconLogs(prev => [newLog, ...prev]);
-    setPhysicalDipVal('');
-  };
+  // Estimated depletion calculations based on daily averages
+  const stockAvailability = useMemo(() => {
+    const today = new Date(stockReportDate);
+    
+    // Jet A-1: 556,176 L/day
+    const jetDays = 556176 > 0 ? Math.max(0, Math.round((bulkTotals.jet - 500000) / 556176)) : 0;
+    const jetDate = new Date(today);
+    jetDate.setDate(today.getDate() + jetDays);
+
+    // Diesel: 15,200 L/day
+    const dieselDays = 15200 > 0 ? Math.max(0, Math.round((bulkTotals.diesel - 5000) / 15200)) : 0;
+    const dieselDate = new Date(today);
+    dieselDate.setDate(today.getDate() + dieselDays);
+
+    // Petrol: 9,800 L/day
+    const petrolDays = 9800 > 0 ? Math.max(0, Math.round((bulkTotals.petrol - 2000) / 9800)) : 0;
+    const petrolDate = new Date(today);
+    petrolDate.setDate(today.getDate() + petrolDays);
+
+    return {
+      jet: { days: jetDays, date: jetDate.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) },
+      diesel: { days: dieselDays, date: dieselDate.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) },
+      petrol: { days: petrolDays, date: petrolDate.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) }
+    };
+  }, [bulkTotals, stockReportDate]);
+
+  // Facility breakdown mapping
+  const facilityItems = useMemo(() => {
+    if (selectedFacility === 'MOBILE') {
+      const items = (equipment || [])
+        .filter(e => e.type === 'Refueller' || e.type === 'Diesel Truck' || e.type === 'Hydrant Service')
+        .map(e => {
+          const historicalVol = getHistoricalLevel(e.id, e.currentVolume || 0, e.maxCapacity, stockReportDate);
+          return {
+            id: e.id,
+            name: e.name,
+            type: e.type === 'Refueller' ? FuelType.JET_A1 : e.type === 'Diesel Truck' ? FuelType.DIESEL : 'Service Asset',
+            capacity: e.maxCapacity,
+            currentLevel: historicalVol,
+            dipHeight: null,
+            status: e.status,
+            lastUpdated: e.lastUpdated
+          };
+        });
+
+      // Sort to have JET A-1 first
+      return items.sort((a, b) => {
+        if (a.type === FuelType.JET_A1 && b.type !== FuelType.JET_A1) return -1;
+        if (a.type !== FuelType.JET_A1 && b.type === FuelType.JET_A1) return 1;
+        return 0;
+      });
+    }
+
+    const matchingTanks = (tanks || []).filter(tank => {
+      const id = tank.id.toLowerCase();
+      if (selectedFacility === 'OFF') {
+        return id.includes('off') || ['tk4', 'tk6', 'tk7', 'tk8', 'tk9'].includes(id);
+      }
+      if (selectedFacility === 'NFF') {
+        return id.includes('nff') || ['tk101', 'tk102', 'tk103', 'tk106', 'tk201', 'tk202', 'tk301', 'tk302'].includes(id);
+      }
+      if (selectedFacility === 'SP') {
+        return id.includes('spf');
+      }
+      if (selectedFacility === 'FS') {
+        return id.includes('lfs') || id.includes('afs');
+      }
+      return false;
+    });
+
+    const mapped = matchingTanks.map(t => {
+      const historicalVol = getHistoricalLevel(t.id, t.currentLevel, t.capacity, stockReportDate);
+      const dip = lookupDipSync(t.id, historicalVol, t.capacity);
+      return {
+        id: t.id,
+        name: t.name,
+        type: t.type,
+        capacity: t.capacity,
+        currentLevel: historicalVol,
+        dipHeight: dip,
+        status: historicalVol === 0 ? 'Empty' : historicalVol >= t.capacity * 0.95 ? 'Full' : 'Active',
+        lastUpdated: t.lastUpdated
+      };
+    });
+
+    if (selectedFacility === 'NFF') {
+      const nffEquipment = (equipment || [])
+        .filter(e => e.id === 'HS-01' || e.id === 'HS-02')
+        .map(e => {
+          const historicalVol = getHistoricalLevel(e.id, e.currentVolume || 0, e.maxCapacity || 0, stockReportDate);
+          return {
+            id: e.id,
+            name: `${e.name} (Hydrant Service)`,
+            type: FuelType.JET_A1,
+            capacity: e.maxCapacity || 0,
+            currentLevel: historicalVol,
+            dipHeight: null,
+            status: e.status,
+            lastUpdated: e.lastUpdated
+          };
+        });
+      mapped.push(...nffEquipment);
+    }
+
+    // Sort to have JET A-1 first
+    return mapped.sort((a, b) => {
+      if (a.type === FuelType.JET_A1 && b.type !== FuelType.JET_A1) return -1;
+      if (a.type !== FuelType.JET_A1 && b.type === FuelType.JET_A1) return 1;
+      return 0;
+    });
+  }, [selectedFacility, tanks, equipment, stockReportDate]);
 
   return (
     <div className="p-4 lg:p-10 space-y-6 lg:space-y-10 pb-32">
@@ -451,6 +574,24 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       {/* ── TAB 3: FUEL STOCK SUMMARY & PHYSICAL RECONCILIATION ── */}
       {activeTab === 'reconciliation' && (
         <div className="space-y-6 lg:space-y-10 animate-in fade-in duration-300">
+
+          {/* Historical Date Selector Banner */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface-dim/20 p-5 rounded-2xl border border-outline/50 shadow-sm shrink-0">
+            <div>
+              <h2 className="text-xs font-black uppercase text-on-surface tracking-[0.2em]">Operational Stock Snapshots</h2>
+              <p className="text-[9px] text-on-surface-dim uppercase tracking-wider opacity-60 mt-1">Select reporting date to view previous days' inventory snapshot</p>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <Calendar className="w-4 h-4 text-primary" />
+              <input 
+                type="date" 
+                value={stockReportDate}
+                onChange={(e) => setStockReportDate(e.target.value)}
+                className="px-4 py-2 bg-surface-dim border border-outline rounded-xl text-xs font-black uppercase tracking-wider focus:ring-2 focus:ring-primary outline-none font-mono text-on-surface select-text cursor-pointer hover:border-primary/50 transition-colors"
+              />
+            </div>
+          </div>
+          
           {/* Consolidated Active Inventory */}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8">
             <div className="card-premium p-6 bg-surface-dim/40 flex flex-col justify-between border-l-4 border-l-primary">
@@ -483,98 +624,188 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-10">
-            {/* Daily Dip Reconciliation entry form */}
-            <div className="xl:col-span-1 card-premium p-6 lg:p-8 flex flex-col justify-between">
-              <form onSubmit={handleReconSubmit} className="space-y-6">
-                <h3 className="text-xs font-black text-on-surface uppercase tracking-[0.2em] flex items-center border-b border-outline pb-4">
-                  <PlusCircle className="w-5 h-5 mr-3 text-primary" />
-                  Daily Dip Reconciliation
-                </h3>
+          {/* Bulk Totals by Fuel Grade */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
+            {/* Jet A-1 Bulk */}
+            <div className="card-premium p-6 bg-surface-dim/20 border border-outline/50 flex items-center gap-4">
+              <div className="p-3.5 bg-primary/10 rounded-2xl text-primary shrink-0">
+                <Droplet className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50">Jet A-1 Combined Stock</span>
+                <span className="text-xl font-extrabold text-on-surface font-mono">{bulkTotals.jet.toLocaleString()} L</span>
+              </div>
+            </div>
+            {/* Diesel Bulk */}
+            <div className="card-premium p-6 bg-surface-dim/20 border border-outline/50 flex items-center gap-4">
+              <div className="p-3.5 bg-success/10 rounded-2xl text-success shrink-0">
+                <Fuel className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50">Diesel Combined Stock</span>
+                <span className="text-xl font-extrabold text-on-surface font-mono">{bulkTotals.diesel.toLocaleString()} L</span>
+              </div>
+            </div>
+            {/* Petrol Bulk */}
+            <div className="card-premium p-6 bg-surface-dim/20 border border-outline/50 flex items-center gap-4">
+              <div className="p-3.5 bg-warning/10 rounded-2xl text-warning shrink-0">
+                <Fuel className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider block opacity-50">Petrol Combined Stock</span>
+                <span className="text-xl font-extrabold text-on-surface font-mono">{bulkTotals.petrol.toLocaleString()} L</span>
+              </div>
+            </div>
+          </div>
 
-                <div>
-                  <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-2.5 tracking-widest opacity-45">Fuel Grade</label>
-                  <select 
-                    value={reconProduct}
-                    onChange={(e) => setReconProduct(e.target.value as FuelType)}
-                    className="w-full px-5 py-3.5 bg-surface-dim border border-outline rounded-xl text-xs font-black uppercase tracking-wider focus:ring-2 focus:ring-primary outline-none"
+          {/* Estimated Stock Availability & Depletion Forecasts */}
+          <div className="card-premium p-6 lg:p-8 bg-surface-dim/40 border border-outline/80">
+            <h3 className="text-xs font-black text-on-surface uppercase tracking-[0.2em] mb-6 flex items-center border-b border-outline pb-4">
+              <Info className="w-5 h-5 mr-3 text-primary" />
+              Estimated Stock Availability & Depletion Forecasts
+            </h3>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Jet A-1 Forecast */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-end">
+                  <span className="text-xs font-black text-on-surface uppercase tracking-wider">Jet A-1 (Aviation)</span>
+                  <span className="text-xs font-bold text-primary font-mono">{stockAvailability.jet.days} Days</span>
+                </div>
+                <div className="h-2 w-full bg-outline/25 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all duration-1000 ${stockAvailability.jet.days < 15 ? 'bg-error animate-pulse' : 'bg-primary'}`} style={{ width: `${Math.min(100, (stockAvailability.jet.days / 45) * 100)}%` }} />
+                </div>
+                <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider">Stock will last till: <span className="text-on-surface font-bold font-mono">{stockAvailability.jet.date}</span></p>
+              </div>
+              {/* Diesel Forecast */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-end">
+                  <span className="text-xs font-black text-on-surface uppercase tracking-wider">Diesel (Gasoil)</span>
+                  <span className="text-xs font-bold text-success font-mono">{stockAvailability.diesel.days} Days</span>
+                </div>
+                <div className="h-2 w-full bg-outline/25 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all duration-1000 ${stockAvailability.diesel.days < 10 ? 'bg-error animate-pulse' : 'bg-success'}`} style={{ width: `${Math.min(100, (stockAvailability.diesel.days / 30) * 100)}%` }} />
+                </div>
+                <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider">Stock will last till: <span className="text-on-surface font-bold font-mono">{stockAvailability.diesel.date}</span></p>
+              </div>
+              {/* Petrol Forecast */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-end">
+                  <span className="text-xs font-black text-on-surface uppercase tracking-wider">Petrol (Mogas)</span>
+                  <span className="text-xs font-bold text-warning font-mono">{stockAvailability.petrol.days} Days</span>
+                </div>
+                <div className="h-2 w-full bg-outline/25 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all duration-1000 ${stockAvailability.petrol.days < 10 ? 'bg-error animate-pulse' : 'bg-warning'}`} style={{ width: `${Math.min(100, (stockAvailability.petrol.days / 30) * 100)}%` }} />
+                </div>
+                <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider">Stock will last till: <span className="text-on-surface font-bold font-mono">{stockAvailability.petrol.date}</span></p>
+              </div>
+            </div>
+          </div>
+
+          {/* Facility Breakdown Section */}
+          <div className="card-premium overflow-hidden">
+            {/* Section Header */}
+            <div className="px-6 py-5 border-b border-outline bg-surface-dim/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-xs font-black text-on-surface uppercase tracking-[0.2em]">Facility Inventory Breakdown</h3>
+                <p className="text-[10px] text-on-surface-dim uppercase mt-1 opacity-50 tracking-wider">Derived from Stock Management and Equipment Status</p>
+              </div>
+              
+              {/* Facility Navigation Switcher */}
+              <div className="relative flex bg-surface-dim p-1.5 rounded-2xl border border-outline overflow-hidden w-full max-w-[650px] shadow-inner shrink-0">
+                <div 
+                  className={`absolute top-1.5 bottom-1.5 w-[calc(20%-4px)] rounded-xl kinetic-gradient transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform
+                    ${selectedFacility === 'NFF' ? 'left-1.5 translate-x-[0%]' : ''}
+                    ${selectedFacility === 'OFF' ? 'left-1.5 translate-x-[100%]' : ''}
+                    ${selectedFacility === 'SP' ? 'left-1.5 translate-x-[200%]' : ''}
+                    ${selectedFacility === 'FS' ? 'left-1.5 translate-x-[300%]' : ''}
+                    ${selectedFacility === 'MOBILE' ? 'left-1.5 translate-x-[400%]' : ''}
+                  `}
+                />
+                {(['NFF', 'OFF', 'SP', 'FS', 'MOBILE'] as const).map(fac => (
+                  <button
+                    key={fac}
+                    onClick={() => setSelectedFacility(fac)}
+                    className={`flex-1 flex items-center justify-center py-2.5 text-[9px] font-black uppercase tracking-widest transition-all relative z-10 overflow-hidden ${
+                      selectedFacility === fac ? 'text-white font-black' : 'text-on-surface-dim opacity-50 hover:opacity-85'
+                    }`}
                   >
-                    <option value={FuelType.JET_A1}>JET A-1 (AVIATION)</option>
-                    <option value={FuelType.DIESEL}>DIESEL (GASOIL)</option>
-                    <option value={FuelType.PETROL}>PETROL (MOGAS)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-2.5 tracking-widest opacity-45">Physical static Dip (Liters)</label>
-                  <input 
-                    type="number"
-                    required
-                    value={physicalDipVal}
-                    onChange={(e) => setPhysicalDipVal(e.target.value)}
-                    className="w-full px-5 py-3.5 bg-surface-dim border border-outline rounded-xl text-xs font-black uppercase tracking-wider focus:ring-2 focus:ring-primary outline-none text-right font-mono"
-                    placeholder="Enter physical volume in L"
-                  />
-                </div>
-
-                <button 
-                  type="submit"
-                  className="w-full py-4 kinetic-gradient text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-premium hover:scale-105 active:scale-95 transition-all"
-                >
-                  Engage Audit Entry
-                </button>
-              </form>
-
-              <div className="pt-6 border-t border-outline/40 flex items-center gap-3 mt-6">
-                <ShieldCheck className="w-5 h-5 text-success shrink-0" />
-                <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider leading-relaxed">
-                  Daily static dips reconcile automated meters against physical tank soundings to identify systemic variances.
-                </p>
+                    {fac === 'SP' ? 'SEAPLANE FUEL' : fac === 'FS' ? 'FILLING STATIONS' : fac === 'MOBILE' ? 'MOBILE EQ' : fac}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Reconciliation Variance History log list */}
-            <div className="xl:col-span-2 card-premium overflow-hidden flex flex-col justify-between">
-              <div>
-                <div className="px-8 py-5 border-b border-outline bg-surface-dim/40">
-                  <h3 className="text-xs font-black text-on-surface uppercase tracking-[0.2em]">Static Dip Audit Logs</h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="bg-surface-dim/60 border-b border-outline">
-                        <th className="px-6 py-4 text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Audit Date</th>
-                        <th className="px-6 py-4 text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Grade</th>
-                        <th className="px-6 py-4 text-right text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">System Stock (L)</th>
-                        <th className="px-6 py-4 text-right text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Physical Dip (L)</th>
-                        <th className="px-6 py-4 text-right text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Material Variance</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline">
-                      {reconLogs.map((log, idx) => (
-                        <tr key={idx} className="hover:bg-primary/[0.01] transition-colors">
-                          <td className="px-6 py-4 text-xs font-bold opacity-60 whitespace-nowrap">{log.date}</td>
-                          <td className="px-6 py-4 text-xs font-black uppercase text-on-surface">{log.product}</td>
-                          <td className="px-6 py-4 text-right font-mono text-xs text-on-surface">{log.computerStock.toLocaleString()} L</td>
-                          <td className="px-6 py-4 text-right font-mono text-xs text-on-surface">{log.physicalDip.toLocaleString()} L</td>
-                          <td className="px-6 py-4 text-right">
-                            <span className={`text-[10px] font-black px-3 py-1 rounded-md uppercase tracking-wider ${
-                              log.variance === 0 ? 'bg-success/10 text-success' :
-                              Math.abs(log.variance) <= 1000 ? 'bg-success/10 text-success' : 'bg-error/10 text-error animate-pulse'
-                            }`}>
-                              {log.variance >= 0 ? '+' : ''}{log.variance.toLocaleString()} L
-                            </span>
+            {/* Details Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-surface-dim/60 border-b border-outline">
+                    <th className="px-6 py-4 text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Asset / Tank ID</th>
+                    <th className="px-6 py-4 text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Fuel Grade</th>
+                    <th className="px-6 py-4 text-right text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Capacity (L)</th>
+                    <th className="px-6 py-4 text-right text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Current Level (L)</th>
+                    {selectedFacility !== 'MOBILE' && (
+                      <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Dip Sounding (mm)</th>
+                    )}
+                    <th className="px-6 py-4 text-right text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Ullage (L)</th>
+                    <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline">
+                  {facilityItems.map((item) => {
+                    const ullage = Math.max(0, item.capacity - item.currentLevel);
+                    const cleanName = item.name.replace(/\s*\(NFF\)/gi, '').replace(/\s*\(OFF\)/gi, '');
+                    return (
+                      <tr key={item.id} className="hover:bg-primary/[0.01] transition-colors">
+                        <td className="px-6 py-4 text-xs font-black uppercase text-on-surface">{cleanName}</td>
+                        <td className="px-6 py-4 text-xs">
+                          <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${
+                            item.type === FuelType.JET_A1 ? 'bg-primary/10 text-primary' :
+                            item.type === FuelType.DIESEL ? 'bg-success/10 text-success' :
+                            item.type === FuelType.PETROL ? 'bg-warning/10 text-warning' : 'bg-outline/20 text-on-surface-dim'
+                          }`}>
+                            {item.type}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right font-mono text-xs font-bold text-on-surface">
+                          {item.capacity > 0 ? item.capacity.toLocaleString() : 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 text-right font-mono text-xs font-bold text-on-surface">
+                          {item.currentLevel.toLocaleString()}
+                        </td>
+                        {selectedFacility !== 'MOBILE' && (
+                          <td className="px-6 py-4 text-center font-mono text-xs text-on-surface">
+                            {item.dipHeight !== null ? (
+                              <span className="font-bold text-primary">{item.dipHeight.toLocaleString()}</span>
+                            ) : (
+                              <span className="text-on-surface-dim opacity-40 italic">-</span>
+                            )}
                           </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                        )}
+                        <td className="px-6 py-4 text-right font-mono text-xs text-on-surface-dim">
+                          {item.capacity > 0 ? ullage.toLocaleString() : 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span className={`text-[9px] font-black px-3 py-1 rounded-md uppercase ${
+                            item.status === 'Active' || item.status === 'Available' || item.status === 'Full'
+                              ? 'bg-success/10 text-success' 
+                              : item.status === 'Maintenance' || item.status === 'In Use' || item.status === 'Refuelling'
+                              ? 'bg-warning/10 text-warning'
+                              : 'bg-error/10 text-error'
+                          }`}>
+                            {item.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       )}
+
 
       {/* ── HIGH FIDELITY MACL Figure 1.5 TEMPLATE POPUP MODAL ── */}
       {/* ── HIGH FIDELITY MACL Figure 1.5 TEMPLATE POPUP MODAL ── */}

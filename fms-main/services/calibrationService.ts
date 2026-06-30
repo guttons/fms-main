@@ -93,3 +93,43 @@ export function getMaxDipMm(tankId: string): number {
   const tankData = calibrationCache[tankId];
   return tankData ? tankData.length - 1 : 0;
 }
+
+/**
+ * Look up the dip height in mm for a given tank and volume in liters.
+ * Performs a binary search on the cached calibration array to find the closest match.
+ * Fallback to linear calculation if no calibration data is cached or available.
+ */
+export function lookupDipSync(tankId: string, volumeLiters: number, capacity: number): number {
+  if (calibrationCache && CALIBRATED_TANK_IDS.has(tankId)) {
+    const tankData = calibrationCache[tankId];
+    if (tankData && tankData.length > 0) {
+      let low = 0;
+      let high = tankData.length - 1;
+      let closestIndex = 0;
+      let minDiff = Math.abs(tankData[0] - volumeLiters);
+      
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        const val = tankData[mid];
+        const diff = Math.abs(val - volumeLiters);
+        
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestIndex = mid;
+        }
+        
+        if (val === volumeLiters) {
+          return mid;
+        } else if (val < volumeLiters) {
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+      return closestIndex;
+    }
+  }
+  // Fallback linear calculation: assumes max dip of 4000mm at full capacity
+  return capacity > 0 ? Math.round((volumeLiters / capacity) * 4000) : 0;
+}
+

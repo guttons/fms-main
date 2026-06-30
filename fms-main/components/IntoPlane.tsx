@@ -1281,21 +1281,36 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     }
   };
   
+  const hasStartedRef = React.useRef(false);
+
   // Auto-start if job passed from dashboard
   useEffect(() => {
-    if (initialJob) {
-      startJob(initialJob);
+    if (initialJob && !hasStartedRef.current) {
+      hasStartedRef.current = true;
+      const vehicleToUse = initialJob.vehicleId || initialVehicleId || selectedVehicleId;
+      startJob(initialJob, vehicleToUse);
       if (onClearInitialJob) onClearInitialJob();
+      if (onClearInitialVehicleId) onClearInitialVehicleId();
     }
-  }, [initialJob]);
+  }, [initialJob, initialVehicleId]);
 
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>(() => {
     if (initialJob?.vehicleId) return initialJob.vehicleId;
     if (initialVehicleId) return initialVehicleId;
+    const saved = localStorage.getItem(`fms_last_selected_vehicle_${user.id}`);
+    if (saved) return saved;
     const available = equipment.find(eq => eq.status === EquipmentStatus.AVAILABLE && (eq.id.startsWith('RF') || eq.id.startsWith('HD')));
     return available ? available.id : 'RF-04';
   });
+
+  const changeSelectedVehicleId = (id: string) => {
+    setSelectedVehicleId(id);
+    localStorage.setItem(`fms_last_selected_vehicle_${user.id}`, id);
+  };
+
   const [showTopUp, setShowTopUp] = useState(false);
+  const [equipPickerJob, setEquipPickerJob] = useState<FlightJob | null>(null);
+  const [equipPickerSelected, setEquipPickerSelected] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
 
@@ -1308,7 +1323,6 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   useEffect(() => {
     if (initialVehicleId) {
       setSelectedVehicleId(initialVehicleId);
-      if (onClearInitialVehicleId) onClearInitialVehicleId();
     }
   }, [initialVehicleId]);
 
@@ -1370,39 +1384,58 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     };
   }, []);
 
-  const startJob = (job: FlightJob) => {
+  const startJob = (job: FlightJob, vehicleIdOverride?: string) => {
+    const activeVehicleId = vehicleIdOverride || selectedVehicleId;
     const isRfJob = job.equipmentUsage?.toUpperCase() === 'REFUELLER';
     const isHdJob = job.equipmentUsage?.toUpperCase() === 'HYDRANT';
-    const isSelectedRf = selectedVehicleId?.toUpperCase().startsWith('RF');
-    const isSelectedHd = selectedVehicleId?.toUpperCase().startsWith('HD');
+    const isSelectedRf = activeVehicleId?.toUpperCase().startsWith('RF');
+    const isSelectedHd = activeVehicleId?.toUpperCase().startsWith('HD');
 
     if (isRfJob && !isSelectedRf) {
-      notify(`This job is assigned as REFUELLER (RF). You must select an RF equipment in the header to start it.`, 'error');
+      notify(`This job is assigned as REFUELLER (RF). You must select an RF equipment to start it.`, 'error');
+      const rfEquip = (equipment || []).filter(eq => eq.id.startsWith('RF') && eq.status === EquipmentStatus.AVAILABLE);
+      const saved = localStorage.getItem(`fms_last_selected_vehicle_${user.id}`);
+      const defaultSelected = (saved && rfEquip.some(e => e.id === saved)) ? saved : (rfEquip[0]?.id || '');
+      setEquipPickerSelected(defaultSelected);
+      setEquipPickerJob(job);
       return;
     }
     if (isHdJob && !isSelectedHd) {
-      notify(`This job is assigned as HYDRANT (HD). You must select an HD equipment in the header to start it.`, 'error');
+      notify(`This job is assigned as HYDRANT (HD). You must select an HD equipment to start it.`, 'error');
+      const hdEquip = (equipment || []).filter(eq => eq.id.startsWith('HD') && eq.status === EquipmentStatus.AVAILABLE);
+      const saved = localStorage.getItem(`fms_last_selected_vehicle_${user.id}`);
+      const defaultSelected = (saved && hdEquip.some(e => e.id === saved)) ? saved : (hdEquip[0]?.id || '');
+      setEquipPickerSelected(defaultSelected);
+      setEquipPickerJob(job);
       return;
     }
 
     // Auto-update Equipment Status to IN_PROGRESS/IN_USE
-    updateEquipmentStatus(selectedVehicleId, EquipmentStatus.IN_USE);
+    updateEquipmentStatus(activeVehicleId, EquipmentStatus.IN_USE);
 
     // Update flight job status to IN_PROGRESS so Operator Oversight reflects active tasks
     const matchingJob = (flightJobs || []).find(j => j.flightNumber === job.flightNumber && j.status === 'PENDING');
     if (matchingJob) {
-      updateFlightJob(matchingJob.id, { status: 'IN_PROGRESS', vehicleId: selectedVehicleId, assignedTo: user.id });
+      updateFlightJob(matchingJob.id, { status: 'IN_PROGRESS', vehicleId: activeVehicleId, assignedTo: user.id });
     }
 
     // Fetch last meterClose for this vehicle
-    const vehicleLogs = (flightLogs || []).filter(log => log.vehicleId === selectedVehicleId && log.status === 'COMPLETED');
+    // Use parseFloat to handle both string and number values from BigQuery API
+    const parseMeterClose = (v: any) => { const n = parseFloat(String(v)); return isNaN(n) ? 0 : n; };
+    const vehicleLogs = (flightLogs || []).filter(log => 
+      log.vehicleId?.toUpperCase() === activeVehicleId?.toUpperCase() && 
+      log.status?.toUpperCase() === 'COMPLETED' &&
+      parseMeterClose(log.meterClose) > 0
+    );
     const lastLog = [...vehicleLogs].sort((a, b) => {
-       const timeA = a.timestampFinalEnd ? new Date(a.timestampFinalEnd).getTime() : 0;
-       const timeB = b.timestampFinalEnd ? new Date(b.timestampFinalEnd).getTime() : 0;
+       const timeA = a.timestampFinalEnd ? new Date(a.timestampFinalEnd).getTime() : (a.timestampClearance ? new Date(a.timestampClearance).getTime() : 0);
+       const timeB = b.timestampFinalEnd ? new Date(b.timestampFinalEnd).getTime() : (b.timestampClearance ? new Date(b.timestampClearance).getTime() : 0);
        return timeB - timeA;
     })[0];
     
-    const initialMeter = lastLog?.meterClose || undefined;
+    const initialMeter = lastLog ? parseMeterClose(lastLog.meterClose) : undefined;
+
+    setSelectedVehicleId(activeVehicleId);
 
     setActiveFlight({
       flightNumber: job.flightNumber,
@@ -1699,7 +1732,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
           isOnline={isOnline} 
           activeFlight={activeFlight} 
           selectedVehicleId={selectedVehicleId}
-          setSelectedVehicleId={setSelectedVehicleId}
+          setSelectedVehicleId={changeSelectedVehicleId}
           equipment={equipment}
           paymentType={paymentType}
           setPaymentType={(v) => setPaymentType(v as any)}
@@ -1965,7 +1998,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 user={user} 
                 onStartJob={startJob} 
                 selectedVehicleId={selectedVehicleId}
-                setSelectedVehicleId={setSelectedVehicleId}
+                setSelectedVehicleId={changeSelectedVehicleId}
                 flightLogs={flightLogs}
                 activeFlight={activeFlight}
               />
@@ -2017,10 +2050,142 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
             }
           }
         `}</style>
+
+        {/* Equipment Picker Modal for IntoPlane Startup Errors */}
+        {equipPickerJob && createPortal(
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+            style={{ backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}
+            onClick={() => setEquipPickerJob(null)}
+          >
+            <div
+              className="bg-surface border border-outline rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-outline">
+                <div>
+                  <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] opacity-70 mb-1">Select Equipment</p>
+                  <h3 className="text-lg font-black text-on-surface tracking-tight">{equipPickerJob.flightNumber}</h3>
+                  <p className="text-[11px] text-on-surface-dim font-bold mt-0.5">{equipPickerJob.aircraftReg} • Stand {equipPickerJob.stand}</p>
+                </div>
+                <button
+                  onClick={() => setEquipPickerJob(null)}
+                  className="w-9 h-9 rounded-xl bg-surface-dim hover:bg-error/10 hover:text-error flex items-center justify-center transition-colors text-on-surface-dim"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Equipment List */}
+              <div className="p-4 space-y-2 max-h-64 overflow-y-auto">
+                {(equipment || [])
+                  .filter(eq => {
+                    const isRf = eq.id.startsWith('RF');
+                    const isHd = eq.id.startsWith('HD');
+                    const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER';
+                    const isHdJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'HYDRANT';
+                    
+                    if (isRfJob) {
+                      return isRf && (eq.status === EquipmentStatus.AVAILABLE || eq.id === equipPickerSelected);
+                    }
+                    if (isHdJob) {
+                      return isHd;
+                    }
+                    return false;
+                  })
+                  .map(eq => {
+                    const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER';
+                    const activeJob = (flightJobs || []).find(fj => fj.status === 'IN_PROGRESS' && fj.vehicleId?.toUpperCase() === eq.id.toUpperCase());
+                    const isSelected = equipPickerSelected === eq.id;
+                    const isDisabled = !isRfJob && !!activeJob;
+
+                    return (
+                      <button
+                        key={eq.id}
+                        disabled={isDisabled}
+                        onClick={() => setEquipPickerSelected(eq.id)}
+                        className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all text-left ${
+                          isSelected
+                            ? 'border-primary bg-primary/10 shadow-sm'
+                            : isDisabled
+                              ? 'opacity-40 cursor-not-allowed border-outline bg-surface-dim'
+                              : 'border-outline bg-surface-dim hover:border-primary/40'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isSelected ? 'bg-primary text-white' : 'bg-surface border border-outline text-on-surface-dim'}`}>
+                            <Truck className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className={`text-sm font-black ${isSelected ? 'text-primary' : 'text-on-surface'}`}>{eq.id}</p>
+                            <p className="text-[10px] text-on-surface-dim font-bold uppercase tracking-widest">{eq.id.startsWith('RF') ? 'Refueller' : 'Hydrant'}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          {isRfJob ? (
+                            <>
+                              <p className="text-[10px] text-on-surface-dim font-bold opacity-60 uppercase tracking-widest">Fuel Level</p>
+                              <p className={`text-sm font-black font-mono text-on-surface`}>
+                                {eq.currentVolume ? `${eq.currentVolume.toLocaleString()} L` : '0 L'}
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-[10px] text-on-surface-dim font-bold opacity-60 uppercase tracking-widest">Status</p>
+                              <p className={`text-sm font-black font-mono ${activeJob ? 'text-error animate-pulse' : 'text-success'}`}>
+                                {activeJob ? `In Use: ${activeJob.flightNumber}` : 'Available'}
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                {(() => {
+                  const list = (equipment || []).filter(eq => {
+                    const isRf = eq.id.startsWith('RF');
+                    const isHd = eq.id.startsWith('HD');
+                    const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER';
+                    const isHdJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'HYDRANT';
+                    if (isRfJob) return isRf && (eq.status === EquipmentStatus.AVAILABLE || eq.id === equipPickerSelected);
+                    if (isHdJob) return isHd;
+                    return false;
+                  });
+                  return list.length === 0 ? (
+                    <div className="p-6 text-center">
+                      <p className="text-on-surface-dim font-bold text-sm">No matching equipment found.</p>
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-outline flex gap-3">
+                <button
+                  onClick={() => setEquipPickerJob(null)}
+                  className="flex-1 py-3 rounded-2xl border border-outline text-on-surface-dim font-black text-sm hover:bg-surface-dim transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={!equipPickerSelected}
+                  onClick={() => {
+                    if (equipPickerSelected && equipPickerJob) {
+                      localStorage.setItem(`fms_last_selected_vehicle_${user.id}`, equipPickerSelected);
+                      startJob(equipPickerJob, equipPickerSelected);
+                      setEquipPickerJob(null);
+                    }
+                  }}
+                  className="flex-1 py-3 rounded-2xl kinetic-gradient text-white font-black text-sm shadow-premium hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+                >
+                  Start Job
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
-
-
-
-

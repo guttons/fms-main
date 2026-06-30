@@ -325,14 +325,14 @@ export const supabaseService = {
     if ('aircraftReg' in updates) row.aircraft_reg = updates.aircraftReg;
     if ('aircraftType' in updates) row.aircraft_type = updates.aircraftType;
     if ('stand' in updates) row.stand = updates.stand;
-    if ('sta' in updates) row.sta = updates.sta;
-    if ('eta' in updates) row.eta = updates.eta;
-    if ('std' in updates) row.std = updates.std;
-    if ('assignedTo' in updates) row.assigned_to = updates.assignedTo;
-    if ('assignedOfficer' in updates) row.assigned_officer = updates.assignedOfficer;
+    if ('sta' in updates) row.sta = updates.sta === undefined ? null : updates.sta;
+    if ('eta' in updates) row.eta = updates.eta === undefined ? null : updates.eta;
+    if ('std' in updates) row.std = updates.std === undefined ? null : updates.std;
+    if ('assignedTo' in updates) row.assigned_to = updates.assignedTo === undefined ? null : updates.assignedTo;
+    if ('assignedOfficer' in updates) row.assigned_officer = updates.assignedOfficer === undefined ? null : updates.assignedOfficer;
     if ('equipmentUsage' in updates) row.equipment_usage = updates.equipmentUsage;
     if ('status' in updates) row.status = updates.status;
-    if ('vehicleId' in updates) row.vehicle_id = updates.vehicleId;
+    if ('vehicleId' in updates) row.vehicle_id = updates.vehicleId === undefined ? null : updates.vehicleId;
     if ('remarks' in updates || 'date' in updates || 'route' in updates || 'isDomestic' in updates || 'isAdhoc' in updates || 'type' in updates) {
       const metaString = JSON.stringify({
         _fms_meta: true,
@@ -345,8 +345,8 @@ export const supabaseService = {
       });
       row.remarks = metaString;
     }
-    if ('deliveryNumber' in updates) row.delivery_number = updates.deliveryNumber;
-    if ('pitNumber' in updates) row.pit_number = updates.pitNumber;
+    if ('deliveryNumber' in updates) row.delivery_number = updates.deliveryNumber === undefined ? null : updates.deliveryNumber;
+    if ('pitNumber' in updates) row.pit_number = updates.pitNumber === undefined ? null : updates.pitNumber;
 
     const { error } = await supabase.from('flight_jobs').update(row).eq('id', id);
     if (error) {
@@ -483,6 +483,15 @@ export const supabaseService = {
 
   async deleteFlightLog(id: string): Promise<void> {
     console.log(`[BigQuery API] DELETE /operations-log/${id}`);
+    
+    // Check if it's a local/mock bridging log first
+    const localIdx = localBridgingLogs.findIndex(log => log.id === id);
+    if (localIdx > -1) {
+      localBridgingLogs.splice(localIdx, 1);
+      console.log(`[Local] Deleted local bridging log: ${id}`);
+      return;
+    }
+
     try {
       const headers = await this._bqAuthHeaders();
       const res = await fetch(`${this._bqBase()}/operations-log/${id}`, {

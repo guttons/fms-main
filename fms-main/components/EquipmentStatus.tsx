@@ -19,7 +19,10 @@ import {
   ChevronDown,
   FileText,
   Download,
-  X
+  X,
+  Edit2,
+  Droplet,
+  Layers
 } from 'lucide-react';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { useNotification } from '../context/NotificationContext';
@@ -34,7 +37,22 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
   const { equipment, updateEquipmentStatus, updateEquipment, createAlert, alerts } = useOperationalData();
   const [searchTerm, setSearchTerm] = useState('');
   const [editingMaintEq, setEditingMaintEq] = useState<Equipment | null>(null);
+  const [editingVolumeEqId, setEditingVolumeEqId] = useState<string | null>(null);
+  const [tempVolumeVal, setTempVolumeVal] = useState<string>('');
   
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+  const tooltipTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const triggerTooltip = (tabKey: string) => {
+    setActiveTooltip(tabKey);
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+    }
+    tooltipTimeoutRef.current = setTimeout(() => {
+      setActiveTooltip(null);
+    }, 2000);
+  };
+
   useEffect(() => {
     if (editingMaintEq) {
       document.documentElement.classList.add('modal-open');
@@ -43,6 +61,9 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
     }
     return () => {
       document.documentElement.classList.remove('modal-open');
+      if (tooltipTimeoutRef.current) {
+        clearTimeout(tooltipTimeoutRef.current);
+      }
     };
   }, [editingMaintEq]);
 
@@ -71,6 +92,25 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
       updateEquipment(id, { status: newStatus, maintenanceDetails: undefined });
     } else {
       updateEquipmentStatus(id, newStatus);
+    }
+  };
+
+  const handleVolumeSave = async (id: string, value: string, maxCapacity: number) => {
+    const parsed = parseInt(value, 10);
+    if (isNaN(parsed) || parsed < 0 || parsed > maxCapacity) {
+      notify(`Please enter a valid volume between 0 and ${maxCapacity.toLocaleString()} L`, 'error');
+      setEditingVolumeEqId(null);
+      return;
+    }
+    
+    try {
+      await updateEquipment(id, { currentVolume: parsed });
+      notify(`Successfully updated payload level to ${parsed.toLocaleString()} L`, 'success');
+    } catch (err) {
+      console.error("Failed to update equipment volume:", err);
+      notify("Failed to update payload level", "error");
+    } finally {
+      setEditingVolumeEqId(null);
     }
   };
 
@@ -132,6 +172,24 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
       case EqStatus.OUT_OF_SERVICE: return 'bg-error/10 text-error border-error/20';
       case EqStatus.REFUELLING: return 'bg-warning/10 text-warning border-warning/20';
       default: return 'bg-surface-dim text-on-surface-dim border-outline';
+    }
+  };
+
+  const getStatusDropdownPillClass = (status: EqStatus) => {
+    const base = "relative flex items-center px-2.5 py-1 rounded-full text-[9px] font-black border uppercase tracking-widest transition-all duration-300 hover:scale-[1.02] status-dropdown-pill";
+    switch (status) {
+      case EqStatus.AVAILABLE:
+        return `${base} status-dropdown-pill-available`;
+      case EqStatus.IN_USE:
+        return `${base} status-dropdown-pill-in_use`;
+      case EqStatus.MAINTENANCE:
+        return `${base} status-dropdown-pill-maintenance`;
+      case EqStatus.OUT_OF_SERVICE:
+        return `${base} status-dropdown-pill-out_of_service`;
+      case EqStatus.REFUELLING:
+        return `${base} status-dropdown-pill-refuelling`;
+      default:
+        return `${base} border-outline text-on-surface bg-surface-dim hover:bg-surface-lowest`;
     }
   };
 
@@ -517,39 +575,77 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
             )}
           </div>
           
-          <div className="bg-surface-dim p-1 rounded-2xl border border-outline relative flex w-fit max-w-full sm:w-auto overflow-x-auto no-scrollbar shadow-inner">
+          <div className="bg-surface-dim p-1 rounded-2xl border border-outline relative flex w-fit max-w-full sm:w-auto overflow-x-visible md:overflow-x-auto no-scrollbar shadow-inner">
             <div 
               className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient-no-glow transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
-                ${filterType === 'All' ? 'left-1 w-[70px] translate-x-0' : ''}
-                ${filterType === EquipmentType.REFUELLER ? 'left-1 w-[100px] translate-x-[70px]' : ''}
-                ${filterType === EquipmentType.HYDRANT_DISPENSER ? 'left-1 w-[150px] translate-x-[170px]' : ''}
-                ${filterType === EquipmentType.DIESEL_TRUCK ? 'left-1 w-[110px] translate-x-[320px]' : ''}
-                ${filterType === EquipmentType.HYDRANT_SERVICE ? 'left-1 w-[140px] translate-x-[430px]' : ''}
+                ${filterType === 'All' ? 'left-1 w-[48px] translate-x-0 md:w-[70px] md:translate-x-0' : ''}
+                ${filterType === EquipmentType.REFUELLER ? 'left-1 w-[48px] translate-x-[48px] md:w-[100px] md:translate-x-[70px]' : ''}
+                ${filterType === EquipmentType.HYDRANT_DISPENSER ? 'left-1 w-[48px] translate-x-[96px] md:w-[150px] md:translate-x-[170px]' : ''}
+                ${filterType === EquipmentType.DIESEL_TRUCK ? 'left-1 w-[48px] translate-x-[144px] md:w-[110px] md:translate-x-[320px]' : ''}
+                ${filterType === EquipmentType.HYDRANT_SERVICE ? 'left-1 w-[48px] translate-x-[192px] md:w-[140px] md:translate-x-[430px]' : ''}
               `}
             />
             <button
-              onClick={() => setFilterType('All')}
-              className={`w-[70px] flex-shrink-0 flex items-center justify-center py-2 text-[8px] font-black uppercase tracking-widest transition-all relative z-10 ${
+              onClick={() => {
+                setFilterType('All');
+                triggerTooltip('All');
+              }}
+              className={`w-[48px] md:w-[70px] flex-shrink-0 flex items-center justify-center py-2 text-[8px] md:text-[9px] font-black uppercase tracking-widest transition-all relative z-10 ${
                 filterType === 'All' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
               }`}
             >
-              ALL
+              {activeTooltip === 'All' && (
+                <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[9px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-200 md:hidden">
+                  All Vehicles
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-outline -z-10 mt-[1px]" />
+                </div>
+              )}
+              <Layers className="w-3.5 h-3.5 md:hidden" />
+              <span className="hidden md:inline">ALL</span>
             </button>
             {Object.values(EquipmentType)
               .filter(type => !isItpStaff || (type !== EquipmentType.DIESEL_TRUCK && type !== EquipmentType.HYDRANT_SERVICE))
-              .map((type, idx) => {
-                const width = type === EquipmentType.REFUELLER ? 'w-[100px]' : 
-                             type === EquipmentType.HYDRANT_DISPENSER ? 'w-[150px]' :
-                             type === EquipmentType.DIESEL_TRUCK ? 'w-[110px]' : 'w-[140px]';
+              .map((type) => {
+                const widthClass = type === EquipmentType.REFUELLER ? 'w-[48px] md:w-[100px]' : 
+                                   type === EquipmentType.HYDRANT_DISPENSER ? 'w-[48px] md:w-[150px]' :
+                                   type === EquipmentType.DIESEL_TRUCK ? 'w-[48px] md:w-[110px]' : 'w-[48px] md:w-[140px]';
+                
+                const getTabIcon = (t: EquipmentType) => {
+                  switch (t) {
+                    case EquipmentType.REFUELLER:
+                      return <Truck className="w-3.5 h-3.5" />;
+                    case EquipmentType.HYDRANT_DISPENSER:
+                      return <Droplet className="w-3.5 h-3.5" />;
+                    case EquipmentType.DIESEL_TRUCK:
+                      return <Fuel className="w-3.5 h-3.5" />;
+                    case EquipmentType.HYDRANT_SERVICE:
+                      return <Wrench className="w-3.5 h-3.5" />;
+                    default:
+                      return null;
+                  }
+                };
+
                 return (
                   <button
                     key={type}
-                    onClick={() => setFilterType(type)}
-                    className={`${width} flex-shrink-0 flex items-center justify-center py-2 text-[8px] font-black uppercase tracking-widest transition-all relative z-10 ${
+                    onClick={() => {
+                      setFilterType(type);
+                      triggerTooltip(type);
+                    }}
+                    className={`${widthClass} flex-shrink-0 flex items-center justify-center py-2 text-[8px] md:text-[9px] font-black uppercase tracking-widest transition-all relative z-10 ${
                       filterType === type ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
                     }`}
                   >
-                    {type.replace('_', ' ')}
+                    {activeTooltip === type && (
+                      <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[9px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-200 md:hidden">
+                        {type.replace('_', ' ')}
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-outline -z-10 mt-[1px]" />
+                      </div>
+                    )}
+                    <span className="md:hidden">{getTabIcon(type)}</span>
+                    <span className="hidden md:inline">{type.replace('_', ' ')}</span>
                   </button>
                 );
               })}
@@ -567,8 +663,13 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
               onClick={() => toggleCategory(type)}
             >
               <div className="flex items-center">
-                <div className="p-2 lg:p-3 bg-surface-dim rounded-xl border border-outline mr-3 lg:mr-4 group-hover/header:border-primary transition-all shadow-sm active:scale-95">
-                  {expandedCategories[type] ? <ChevronDown className="w-4 h-4 lg:w-5 lg:h-5 text-on-surface" /> : <ChevronRight className="w-4 h-4 lg:w-5 lg:h-5 text-on-surface" />}
+                <div className={`p-2 lg:p-3 bg-surface-dim rounded-xl border transition-all shadow-sm active:scale-95 mr-3 lg:mr-4 group-hover/header:border-primary ${
+                  expandedCategories[type] ? 'border-primary/50 bg-primary/5' : 'border-outline'
+                }`}>
+                  {type === EquipmentType.REFUELLER && <Truck className={`w-4 h-4 lg:w-5 lg:h-5 transition-all duration-300 ${expandedCategories[type] ? 'text-primary scale-110' : 'text-on-surface-dim opacity-70'}`} />}
+                  {type === EquipmentType.HYDRANT_DISPENSER && <Droplet className={`w-4 h-4 lg:w-5 lg:h-5 transition-all duration-300 ${expandedCategories[type] ? 'text-primary scale-110' : 'text-on-surface-dim opacity-70'}`} />}
+                  {type === EquipmentType.DIESEL_TRUCK && <Fuel className={`w-4 h-4 lg:w-5 lg:h-5 transition-all duration-300 ${expandedCategories[type] ? 'text-primary scale-110' : 'text-on-surface-dim opacity-70'}`} />}
+                  {type === EquipmentType.HYDRANT_SERVICE && <Wrench className={`w-4 h-4 lg:w-5 lg:h-5 transition-all duration-300 ${expandedCategories[type] ? 'text-primary scale-110' : 'text-on-surface-dim opacity-70'}`} />}
                 </div>
                 <div>
                   <h3 className="text-xl lg:text-2xl font-[900] text-on-surface tracking-tighter uppercase italic">{type} FLEET</h3>
@@ -606,17 +707,72 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                                 <h3 className="text-xl font-[900] text-on-surface group-hover:text-primary transition-colors tracking-tighter italic">{eq.name}</h3>
                                 <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">{eq.type}</p>
                               </div>
-                              <div className={`flex items-center space-x-2 px-2.5 py-1 rounded-full text-[9px] font-black border uppercase tracking-widest ${getStatusColor(eq.status)}`}>
-                                {getStatusIcon(eq.status)}
-                                <span className="ml-1">{eq.status}</span>
-                              </div>
+                              {canEdit ? (
+                                <div className={getStatusDropdownPillClass(eq.status)}>
+                                  {getStatusIcon(eq.status)}
+                                  <select
+                                    value={eq.status}
+                                    onChange={(e) => handleStatusChange(eq.id, e.target.value as EqStatus)}
+                                    className="bg-transparent border-none text-[9px] font-black uppercase tracking-widest outline-none cursor-pointer appearance-none pl-1 pr-1 text-center w-full text-current select-custom-reset"
+                                    style={{ WebkitAppearance: 'none', MozAppearance: 'none', textAlignLast: 'center' }}
+                                  >
+                                    {Object.values(EqStatus).map(status => (
+                                      <option key={status} value={status} className="bg-surface-dim text-on-surface uppercase font-black">
+                                        {status.toUpperCase().replace('_', ' ')}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              ) : (
+                                <div className={`flex items-center space-x-2 px-2.5 py-1 rounded-full text-[9px] font-black border uppercase tracking-widest ${getStatusColor(eq.status)}`}>
+                                  {getStatusIcon(eq.status)}
+                                  <span className="ml-1">{eq.status}</span>
+                                </div>
+                              )}
                             </div>
 
                             {eq.maxCapacity > 0 && (
                               <div className="mb-6 bg-surface-lowest border border-outline p-4 rounded-2xl shadow-inner">
                                 <div className="flex justify-between items-end mb-2">
                                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Payload Sync</span>
-                                  <span className="text-xs font-black text-on-surface tracking-tighter">{eq.currentVolume.toLocaleString()} / {eq.maxCapacity.toLocaleString()} L</span>
+                                  {editingVolumeEqId === eq.id ? (
+                                    <div className="flex items-center space-x-1">
+                                      <input
+                                        type="number"
+                                        value={tempVolumeVal}
+                                        min="0"
+                                        max={eq.maxCapacity}
+                                        onChange={(e) => setTempVolumeVal(e.target.value)}
+                                        className="w-20 bg-surface-dim border border-primary rounded-lg px-2 py-0.5 text-xs text-on-surface font-bold focus:outline-none"
+                                        autoFocus
+                                        onBlur={() => handleVolumeSave(eq.id, tempVolumeVal, eq.maxCapacity)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            handleVolumeSave(eq.id, tempVolumeVal, eq.maxCapacity);
+                                          } else if (e.key === 'Escape') {
+                                            setEditingVolumeEqId(null);
+                                          }
+                                        }}
+                                      />
+                                      <span className="text-xs font-black text-on-surface-dim">/ {eq.maxCapacity.toLocaleString()} L</span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center space-x-1.5">
+                                      <span className="text-xs font-black text-on-surface tracking-tighter">{eq.currentVolume.toLocaleString()} / {eq.maxCapacity.toLocaleString()} L</span>
+                                      {canEdit && (eq.type === EquipmentType.REFUELLER || eq.type === EquipmentType.DIESEL_TRUCK) && (
+                                        <button 
+                                          onClick={() => {
+                                            setEditingVolumeEqId(eq.id);
+                                            setTempVolumeVal(eq.currentVolume.toString());
+                                          }}
+                                          className="text-on-surface-dim hover:text-primary transition-colors p-0.5 rounded hover:bg-surface-dim"
+                                          title="Adjust fuel level"
+                                        >
+                                          <Edit2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="w-full bg-surface-dim h-1.5 rounded-full overflow-hidden shadow-inner">
                                   <div 
@@ -627,26 +783,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                               </div>
                             )}
 
-                            {canEdit && (
-                              <div className="mt-6 pt-5 border-t border-outline">
-                                <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-[0.2em] opacity-30">Status Override</label>
-                                <div className="flex flex-wrap gap-2">
-                                  {Object.values(EqStatus).map(status => (
-                                    <button
-                                      key={status}
-                                      onClick={() => handleStatusChange(eq.id, status)}
-                                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all border uppercase tracking-tight ${
-                                        eq.status === status 
-                                          ? `${getStatusGradient(status)} text-white border-transparent shadow-sm scale-[1.02]` 
-                                          : 'bg-surface-dim text-on-surface-dim border-outline hover:text-primary hover:border-primary/30'
-                                      }`}
-                                    >
-                                      {status}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
+                            {/* Status Override removed from bottom, integrated into top-right status badge */}
                           </div>
 
                           <div className="bg-surface-dim/40 p-4 border-t border-outline flex justify-between items-center group-hover:bg-primary/5 transition-colors">
@@ -693,30 +830,32 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                                 <h3 className="text-xl font-[900] text-on-surface-dim tracking-tighter italic uppercase">{eq.name}</h3>
                                 <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">{eq.type}</p>
                               </div>
-                              <div className={`flex items-center space-x-2 px-2.5 py-1 rounded-full text-[9px] font-black border uppercase tracking-widest ${getStatusColor(eq.status)}`}>
-                                {getStatusIcon(eq.status)}
-                                <span className="ml-1">{eq.status}</span>
-                              </div>
+                              {canEdit ? (
+                                <div className={getStatusDropdownPillClass(eq.status)}>
+                                  {getStatusIcon(eq.status)}
+                                  <select
+                                    value={eq.status}
+                                    onChange={(e) => handleStatusChange(eq.id, e.target.value as EqStatus)}
+                                    className="bg-transparent border-none text-[9px] font-black uppercase tracking-widest outline-none cursor-pointer appearance-none pl-1 pr-1 text-center w-full text-current select-custom-reset"
+                                    style={{ WebkitAppearance: 'none', MozAppearance: 'none', textAlignLast: 'center' }}
+                                  >
+                                    {Object.values(EqStatus).map(status => (
+                                      <option key={status} value={status} className="bg-surface-dim text-on-surface uppercase font-black">
+                                        {status.toUpperCase().replace('_', ' ')}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              ) : (
+                                <div className={`flex items-center space-x-2 px-2.5 py-1 rounded-full text-[9px] font-black border uppercase tracking-widest ${getStatusColor(eq.status)}`}>
+                                  {getStatusIcon(eq.status)}
+                                  <span className="ml-1">{eq.status}</span>
+                                </div>
+                              )}
                             </div>
 
                             {canEdit && (
                               <div className="mt-6 pt-5 border-t border-error/5">
-                                <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-[0.2em] opacity-30">Fleet Recovery</label>
-                                <div className="flex flex-wrap gap-2">
-                                  {Object.values(EqStatus).map(status => (
-                                    <button
-                                      key={status}
-                                      onClick={() => handleStatusChange(eq.id, status)}
-                                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all border uppercase tracking-tight ${
-                                        eq.status === status 
-                                          ? `${getStatusGradient(status)} text-white border-transparent shadow-sm scale-[1.02]` 
-                                          : 'bg-surface-lowest text-on-surface-dim border-outline hover:border-error/30 hover:text-error'
-                                      }`}
-                                    >
-                                      {status}
-                                    </button>
-                                  ))}
-                                </div>
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -729,7 +868,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                                       expectedReturnDate: eq.maintenanceDetails?.expectedReturnDate || ''
                                     });
                                   }}
-                                  className="w-full mt-4 py-2.5 rounded-xl text-[9px] font-black transition-all border uppercase tracking-[0.2em] bg-surface-lowest text-on-surface-dim border-outline hover:border-warning/30 hover:text-warning flex items-center justify-center group/btn"
+                                  className="w-full py-2.5 rounded-xl text-[9px] font-black transition-all border uppercase tracking-[0.2em] bg-surface-lowest text-on-surface-dim border-outline hover:border-warning/30 hover:text-warning flex items-center justify-center group/btn"
                                 >
                                   <FileText className="w-3.5 h-3.5 mr-2 group-hover/btn:scale-110 transition-transform" />
                                   Edit Maint. Details
