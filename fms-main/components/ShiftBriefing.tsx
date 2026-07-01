@@ -30,9 +30,10 @@ import { useOperationalData, BriefingShift } from '../context/OperationalDataCon
 
 interface ShiftBriefingProps {
   user?: any;
+  isSidebarCollapsed?: boolean;
 }
 
-export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
+export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCollapsed }) => {
   const { notify } = useNotification();
   const { 
     equipment, 
@@ -844,7 +845,9 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
                   >
                     <Plane className="w-6 h-6" />
                   </button>
-                  <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">International Ops</h3>
+                  <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">
+                    {isSidebarCollapsed ? 'International Ops' : 'INT OPS'}
+                  </h3>
                 </div>
                 <div className="flex flex-col items-center space-y-1.5">
                   <div className="flex items-center space-x-2">
@@ -902,7 +905,9 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user }) => {
                   >
                     <Activity className="w-6 h-6" />
                   </button>
-                  <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Domestic Ops</h3>
+                  <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">
+                    {isSidebarCollapsed ? 'Domestic Ops' : 'DOM OPS'}
+                  </h3>
                 </div>
                 <div className="flex flex-col items-center space-y-1.5">
                   <div className="flex items-center space-x-2">

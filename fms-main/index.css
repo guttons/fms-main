@@ -61,12 +61,113 @@
   --color-warning-rgb: 245, 158, 11;
 }
 
+/* Pitch Black Theme (Extra Dark — OLED / High Contrast) */
+[data-theme='black'] {
+  --color-surface: #0E0E0E;
+  --color-surface-dim: #121212;
+  --color-surface-container-low: #161616;
+  --color-surface-container-lowest: #0E0E0E;
+  --color-surface-container-highest: #1B1B1B;
+  --color-primary: #e0e0e0;
+  --color-primary-rgb: 224, 224, 224;
+  --color-primary-container: #262626;
+  --color-on-surface: #f5f5f5;
+  --color-on-surface-dim: rgba(245, 245, 245, 0.6);
+  --color-outline-variant: rgba(255, 255, 255, 0.04);
+  --color-outline: rgba(255, 255, 255, 0.08);
+  --color-error: #ef4444;
+  --color-tertiary: #d97706;
+  
+  --color-success: #22c55e;
+  --color-success-rgb: 34, 197, 94;
+  --color-warning: #f59e0b;
+  --color-warning-rgb: 245, 158, 11;
+
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5), 0 2px 6px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.4);
+  --shadow-premium: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Pitch Black — gradient overrides for action buttons & badges */
+[data-theme='black'] .btn-command,
+[data-theme='black'] .kinetic-gradient,
+[data-theme='black'] .gradient-primary {
+  background: linear-gradient(135deg, #e0e0e0 0%, #9e9e9e 100%) !important;
+  color: #000000 !important;
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.08);
+}
+
+[data-theme='black'] .kinetic-gradient-no-glow,
+[data-theme='black'] .gradient-primary-no-glow {
+  background: linear-gradient(135deg, #e0e0e0 0%, #9e9e9e 100%) !important;
+  color: #000000 !important;
+  box-shadow: none !important;
+}
+
+[data-theme='black'] .btn-command:hover,
+[data-theme='black'] .kinetic-gradient:hover {
+  filter: brightness(1.15);
+}
+
+[data-theme='black'] .hover-kinetic-gradient:hover {
+  background: linear-gradient(135deg, #e0e0e0 0%, #9e9e9e 100%) !important;
+  color: #000000 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+[data-theme='black'] .btn-replenish-hover:hover {
+  background: linear-gradient(135deg, #e0e0e0 0%, #9e9e9e 100%) !important;
+  color: #000000 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Selected tab buttons inside tab lists in Black Theme */
+[data-theme='black'] [class*="kinetic-gradient"] ~ button.text-white,
+[data-theme='black'] [class*="kinetic-gradient-no-glow"] ~ button.text-white,
+[data-theme='black'] [class*="kinetic-gradient"] ~ button[class*="text-white"],
+[data-theme='black'] [class*="kinetic-gradient-no-glow"] ~ button[class*="text-white"] {
+  color: #000000 !important;
+}
+
+[data-theme='black'] [class*="kinetic-gradient"] ~ button.text-white svg,
+[data-theme='black'] [class*="kinetic-gradient-no-glow"] ~ button.text-white svg,
+[data-theme='black'] [class*="kinetic-gradient"] ~ button[class*="text-white"] svg,
+[data-theme='black'] [class*="kinetic-gradient-no-glow"] ~ button[class*="text-white"] svg {
+  stroke: #000000 !important;
+  color: #000000 !important;
+}
+
+.btn-add-delivery {
+  background-color: rgba(var(--color-primary-rgb), 0.15);
+  color: var(--color-primary);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.25);
+  transition: all 0.2s ease;
+}
+.btn-add-delivery:hover {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%) !important;
+  color: white !important;
+  border-color: transparent !important;
+}
+[data-theme='black'] .btn-add-delivery:hover {
+  background: linear-gradient(135deg, #e0e0e0 0%, #9e9e9e 100%) !important;
+  color: #000000 !important;
+  border-color: transparent !important;
+}
+
 /* Logo Theme Handling */
 .logo-light { display: block; }
 .logo-dark { display: none; }
 
 [data-theme='dark'] .logo-light { display: none; }
 [data-theme='dark'] .logo-dark { display: block; }
+
+[data-theme='black'] .logo-light { display: none; }
+[data-theme='black'] .logo-dark { display: block; }
 
 /* Global Reset */
 html, body {
@@ -99,6 +200,9 @@ html, body {
 }
 [data-theme='dark'] .glass-surface {
   background-color: rgba(5, 8, 15, 0.8);
+}
+[data-theme='black'] .glass-surface {
+  background-color: rgba(14, 14, 14, 0.85);
 }
 
 .card-premium {
@@ -537,6 +641,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 [data-theme='dark'] .receipt-modal-header-footer {
   background-color: #070e1b; /* Deep midnight blue */
+}
+[data-theme='black'] .receipt-modal-header-footer {
+  background-color: #121212;
 }
 
 /* Status dropdown pill styles */

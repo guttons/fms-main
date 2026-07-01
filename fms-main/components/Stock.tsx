@@ -43,10 +43,10 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
       case FuelType.JET_A1:
         return {
           icon: Plane,
-          color: 'text-primary',
-          bg: 'bg-primary/5',
-          border: 'border-primary/20',
-          accent: 'bg-primary'
+          color: 'text-sky-400',
+          bg: 'bg-sky-500/10',
+          border: 'border-sky-500/30',
+          accent: 'bg-sky-500'
         };
       case FuelType.DIESEL:
         return {

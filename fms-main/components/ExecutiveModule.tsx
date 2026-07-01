@@ -9,6 +9,7 @@ import {
   Plus, Trash2, Sliders
 } from 'lucide-react';
 import { User } from '../types';
+import { useOperationalData } from '../context/OperationalDataContext';
 
 interface ExecutiveModuleProps {
   user?: User | null;
@@ -186,9 +187,21 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
     return parseFloat((snapshot.daysRemaining - snapshot.daysToShipment).toFixed(1));
   }, [snapshot]);
 
+  const { tanks = [] } = useOperationalData();
+  const nffTanks = useMemo(() => tanks.filter(t => ['tk101', 'tk102', 'tk103'].includes(t.id)), [tanks]);
+  const maxCapacity = useMemo(() => nffTanks.reduce((acc, t) => acc + t.capacity, 0) || 43500000, [nffTanks]);
+  const tanksCurrentLevel = useMemo(() => nffTanks.reduce((acc, t) => acc + t.currentLevel, 0) || 33765840, [nffTanks]);
+
   const [activeTab, setActiveTab] = useState<'daily' | 'shipment'>('daily');
-  const [currentDate, setCurrentDate] = useState<string>('2026-06-07');
-  const [initialStock, setInitialStock] = useState<number>(33765840);
+  const [currentDate, setCurrentDate] = useState<string>(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+  const [initialStock, setInitialStock] = useState<number | null>(null);
+  const activeInitialStock = initialStock !== null ? initialStock : tanksCurrentLevel;
   
   const [shipments, setShipments] = useState<ShipmentData[]>([
     {
@@ -259,33 +272,53 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
 
   const calculatedShipments = useMemo(() => {
     let prevDate = currentDate;
-    let prevClosingStock = initialStock;
+    let prevClosingStock = activeInitialStock;
     
     return shipments.map((shipment, index) => {
-      let days = getDaysBetween(prevDate, shipment.arrivalDate);
-      if (index === 0) {
-        days = Math.max(0, days - 1);
+      // Check if shipment arrival date is in the past relative to the Forecast Base Date
+      const isPast = shipment.arrivalDate < currentDate;
+      
+      let days = 0;
+      if (!isPast) {
+        days = getDaysBetween(prevDate, shipment.arrivalDate);
+        if (prevDate === currentDate && index === 0) {
+          days = Math.max(0, days - 1);
+        }
       }
       
-      const estimatedSales = days * shipment.averageSales;
+      // Auto-confirm logic: automatically confirm if date of arrival is less than 31 days from the Forecast Base Date (today)
+      const daysFromBase = getDaysBetween(currentDate, shipment.arrivalDate);
+      const autoConfirmed = !shipment.isCancelled && (shipment.isConfirmed || daysFromBase < 31);
+      
+      const estimatedSales = isPast ? 0 : days * shipment.averageSales;
       const orderQtyLiters = shipment.orderQtyMt * 1270;
-      const openingStock = index === 0 ? initialStock : prevClosingStock;
-      const availableUllageAtArrival = Math.max(0, 45000000 - openingStock);
-      // If the shipment is cancelled, no fuel receipt is added
-      const receiptQty = shipment.isCancelled ? 0 : orderQtyLiters;
-      const closingStock = openingStock - estimatedSales + receiptQty;
-      const remainingUllageAfterReceipt = 45000000 - closingStock;
-      const stockAvailableAtVesselArrival = openingStock - estimatedSales - shipment.deadStock;
+      const openingStock = isPast ? activeInitialStock : (index === 0 ? activeInitialStock : prevClosingStock);
+      const availableUllageAtArrival = Math.max(0, maxCapacity - openingStock);
+      
+      // If the shipment is cancelled or in the past, no future fuel receipt is added to the forecast calculations
+      const receiptQty = (shipment.isCancelled || isPast) ? 0 : orderQtyLiters;
+      const closingStock = isPast ? openingStock : (openingStock - estimatedSales + receiptQty);
+      const remainingUllageAfterReceipt = maxCapacity - closingStock;
+      const stockAvailableAtVesselArrival = isPast 
+        ? openingStock - shipment.deadStock
+        : openingStock - estimatedSales - shipment.deadStock;
       
       const stockDaysAtArrival = shipment.averageSales > 0 
         ? parseFloat(((stockAvailableAtVesselArrival / shipment.averageSales) - 1).toFixed(2))
         : 0;
         
-      prevDate = shipment.arrivalDate;
-      prevClosingStock = closingStock;
+      if (isPast) {
+        // If this shipment is in the past, the next shipment's calculation timeline starts from currentDate
+        prevDate = currentDate;
+        prevClosingStock = activeInitialStock;
+      } else {
+        prevDate = shipment.arrivalDate;
+        prevClosingStock = closingStock;
+      }
       
       return {
         ...shipment,
+        isConfirmed: autoConfirmed,
         daysBetween: days,
         openingStock,
         orderQtyLiters,
@@ -298,7 +331,7 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
         stockDaysAtArrival
       };
     });
-  }, [shipments, currentDate, initialStock]);
+  }, [shipments, currentDate, activeInitialStock, maxCapacity]);
 
   const visibleShipments = useMemo(() => {
     return calculatedShipments.slice(-6);
@@ -719,7 +752,7 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                   <Ship className="w-4 h-4 mr-2.5 text-primary opacity-60" /> Shipment Forecast Strategy Board
                 </h3>
                 <p className="text-[10px] font-bold text-on-surface-dim opacity-60 mt-1.5 uppercase tracking-wider">
-                  Operational Window: Summer 2026 • Max Capacity: 45,000,000 L (3 Tanks at NFF)
+                  Operational Window: Summer 2026 • Max Capacity: {maxCapacity.toLocaleString()} L ({nffTanks.length || 3} Tanks at NFF)
                 </p>
               </div>
               
@@ -746,7 +779,7 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                   <input 
                     type="text" 
                     inputMode="numeric"
-                    value={initialStock.toLocaleString()}
+                    value={activeInitialStock.toLocaleString()}
                     onChange={(e) => {
                       const clean = e.target.value.replace(/,/g, '').replace(/\D/g, '');
                       const num = clean === '' ? 0 : parseInt(clean, 10);
@@ -760,7 +793,7 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                 <div className="flex items-center justify-center gap-2 pt-2 sm:pt-4 w-full sm:w-auto">
                   <button 
                     onClick={handleAddShipment}
-                    className="bg-primary/15 text-primary border border-primary/25 hover:bg-gradient-to-br hover:from-[#0ea5e9] hover:to-[#0369a1] hover:text-white hover:border-transparent px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 h-[38px] shadow-premium"
+                    className="btn-add-delivery px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 h-[38px] shadow-premium border-none"
                   >
                     <Plus className="w-4 h-4" /> Add Delivery
                   </button>

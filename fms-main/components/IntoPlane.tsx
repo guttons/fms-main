@@ -22,6 +22,34 @@ interface IntoPlaneProps {
 
 const isOperator = (role: UserRole) => role === UserRole.ITP_OPERATOR || role === UserRole.ITP_SUPERVISOR;
 
+const getFuelColorClass = (volume: number | undefined, maxCapacity: number): string => {
+  if (volume === undefined) return 'text-primary';
+  
+  // Rule for 16K (16000) or 19K (19000)
+  if (maxCapacity === 16000 || maxCapacity === 19000) {
+    if (volume < 5000) return 'text-error';
+    if (volume <= 10000) return 'text-warning';
+    return 'text-primary';
+  }
+  
+  // Rule for 58K (58000)
+  if (maxCapacity === 58000) {
+    if (volume < 10000) return 'text-error';
+    if (volume < 20000) return 'text-warning';
+    return 'text-primary';
+  }
+  
+  // Default/Fallback logic using percentage
+  if (maxCapacity > 0) {
+    const pct = (volume / maxCapacity) * 100;
+    if (pct < 15) return 'text-error';
+    if (pct < 30) return 'text-warning';
+    return 'text-primary';
+  }
+  
+  return 'text-primary';
+};
+
 
 const MobileHeader: React.FC<{ 
     user: User, 
@@ -2114,7 +2142,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isSelected ? 'bg-primary text-white' : 'bg-surface border border-outline text-on-surface-dim'}`}>
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isSelected ? 'kinetic-gradient border-none text-white' : 'bg-surface border border-outline text-on-surface-dim'}`}>
                             <Truck className="w-4 h-4" />
                           </div>
                           <div>
@@ -2126,7 +2154,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                           {isRfJob ? (
                             <>
                               <p className="text-[10px] text-on-surface-dim font-bold opacity-60 uppercase tracking-widest">Fuel Level</p>
-                              <p className={`text-sm font-black font-mono text-on-surface`}>
+                              <p className={`text-sm font-black font-mono ${getFuelColorClass(eq.currentVolume, eq.maxCapacity)}`}>
                                 {eq.currentVolume ? `${eq.currentVolume.toLocaleString()} L` : '0 L'}
                               </p>
                             </>

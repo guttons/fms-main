@@ -39,6 +39,8 @@ interface SidebarProps {
   isMobileMenuOpen: boolean;
   onSettingsClick: () => void;
   onCloseMobileMenu?: () => void;
+  isCollapsed: boolean;
+  toggleCollapse: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
@@ -48,16 +50,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout, 
   isMobileMenuOpen,
   onSettingsClick,
-  onCloseMobileMenu
+  onCloseMobileMenu,
+  isCollapsed,
+  toggleCollapse
 }) => {
-  const [isCollapsed, setIsCollapsed] = React.useState(() => {
-    try {
-      return localStorage.getItem('sidebar-collapsed') === 'true';
-    } catch {
-      return false;
-    }
-  });
-
   const [isSpinning, setIsSpinning] = React.useState(false);
   const [hoveredTooltip, setHoveredTooltip] = React.useState<{ top: number; label: string; left?: string; isError?: boolean } | null>(null);
 
@@ -68,16 +64,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       return () => clearTimeout(timer);
     }
   }, [isMobileMenuOpen]);
-
-  const toggleCollapse = () => {
-    setIsCollapsed(prev => {
-      const next = !prev;
-      try {
-        localStorage.setItem('sidebar-collapsed', String(next));
-      } catch {}
-      return next;
-    });
-  };
 
   const getMenuItems = () => {
     if (!user || !user.role) return [];

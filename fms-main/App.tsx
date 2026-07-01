@@ -28,7 +28,7 @@ import { CustomerPortal } from './components/CustomerPortal';
 import { ExecutiveModule } from './components/ExecutiveModule';
 import { MOCK_USERS } from './constants';
 import { User, UserRole, FlightJob, Alert, EquipmentStatus as EqStatusEnum } from './types';
-import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, CheckCircle, Share2, Smartphone, Trash2, Download, Laptop, Globe } from 'lucide-react';
+import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, Eclipse, CheckCircle, Share2, Smartphone, Trash2, Download, Laptop, Globe } from 'lucide-react';
 import { updatePWAManifestAndTheme, requestNotificationPermission, sendNativeNotification } from './utils/pwa';
 
 const App: React.FC = () => {
@@ -50,12 +50,31 @@ const App: React.FC = () => {
   const [showAlertsPanel, setShowAlertsPanel] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    const saved = localStorage.getItem('theme');
-    return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const [theme, setTheme] = useState<'light' | 'dark' | 'black'>(() => {
+    const saved = localStorage.getItem('theme') as 'light' | 'dark' | 'black' | null;
+    if (saved === 'light' || saved === 'dark' || saved === 'black') return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
   const [showHeader, setShowHeader] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('sidebar-collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebarCollapse = () => {
+    setIsSidebarCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('sidebar-collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   const scrollRef = React.useRef<HTMLElement>(null);
   const [pendingJob, setPendingJob] = useState<FlightJob | null>(null);
   const [pendingVehicleId, setPendingVehicleId] = useState<string | null>(null);
@@ -67,10 +86,10 @@ const App: React.FC = () => {
 
   // Theme management
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
-    localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-    updatePWAManifestAndTheme(isDarkMode);
-  }, [isDarkMode]);
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+    updatePWAManifestAndTheme(theme);
+  }, [theme]);
   
   // Splash screen fadeout
   useEffect(() => {
@@ -136,8 +155,8 @@ const App: React.FC = () => {
               setActiveView={setActiveView}
               isMobileMenuOpen={isMobileMenuOpen}
               setIsMobileMenuOpen={setIsMobileMenuOpen}
-              isDarkMode={isDarkMode}
-              setIsDarkMode={setIsDarkMode}
+              theme={theme}
+              setTheme={setTheme}
               showHeader={showHeader}
               setShowHeader={setShowHeader}
               scrollRef={scrollRef}
@@ -150,6 +169,8 @@ const App: React.FC = () => {
               isSettingsOpen={isSettingsOpen}
               setIsSettingsOpen={setIsSettingsOpen}
               handleLogout={handleLogout}
+              isSidebarCollapsed={isSidebarCollapsed}
+              toggleSidebarCollapse={toggleSidebarCollapse}
             />
           </OperationalDataProvider>
         )}
@@ -191,9 +212,10 @@ const LoginWrapper: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) 
 
 const AppContextContent: React.FC<any> = ({ 
   currentUser, activeView, setActiveView, isMobileMenuOpen, setIsMobileMenuOpen,
-  isDarkMode, setIsDarkMode, showHeader, setShowHeader, scrollRef, pendingJob, setPendingJob,
+  theme, setTheme, showHeader, setShowHeader, scrollRef, pendingJob, setPendingJob,
   pendingVehicleId, setPendingVehicleId,
-  showAlertsPanel, setShowAlertsPanel, isSettingsOpen, setIsSettingsOpen, handleLogout
+  showAlertsPanel, setShowAlertsPanel, isSettingsOpen, setIsSettingsOpen, handleLogout,
+  isSidebarCollapsed, toggleSidebarCollapse
 }) => {
   const { alerts, acknowledgeAlert, acknowledgeAllAlerts, clearAllAlerts, equipment, flightJobs, refreshData, domesticFlights, domesticAssignments, updateEquipmentStatus, updateFlightJob } = useOperationalData();
   const { notify, notifyWithAction, dismiss } = useNotification();
@@ -704,7 +726,7 @@ const AppContextContent: React.FC<any> = ({
       case 'schedule':
         return <Schedule user={currentUser} />;
       case 'briefing':
-        return <ShiftBriefing user={currentUser} />;
+        return <ShiftBriefing user={currentUser} isSidebarCollapsed={isSidebarCollapsed} />;
       case 'admin':
         return currentUser.role === UserRole.ADMIN ? <SystemAdmin currentUser={currentUser} /> : <Dashboard user={currentUser} setActiveView={setActiveView} onStartJob={() => {}} onSelectEquipment={(eqId: string) => { setPendingVehicleId(eqId); setActiveView('intoplane'); }} />;
       case 'depot-reports':
@@ -775,7 +797,6 @@ const AppContextContent: React.FC<any> = ({
 
   return (
     <div className="flex h-screen bg-surface overflow-hidden text-on-surface transition-colors duration-500">
-        {/* Sidebar */}
         <Sidebar 
           user={currentUser} 
           activeView={activeView} 
@@ -794,6 +815,8 @@ const AppContextContent: React.FC<any> = ({
             setIsMobileMenuOpen(false);
           }}
           onCloseMobileMenu={() => setIsMobileMenuOpen(false)}
+          isCollapsed={isSidebarCollapsed}
+          toggleCollapse={toggleSidebarCollapse}
         />
 
         {/* Content Area */}
@@ -1156,22 +1179,41 @@ const AppContextContent: React.FC<any> = ({
                           
                           <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5">
                             {/* Appearance Section */}
-                            <div className="p-4 bg-surface-dim/40 rounded-[32px] font-[900] text-sm uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-20 disabled:scale-100 disabled:grayscale flex items-center justify-between">
-                                <div className="flex items-center space-x-3">
-                                  <div className={`p-2.5 rounded-lg transition-all ${isDarkMode ? 'bg-primary/10 text-primary' : 'bg-warning/10 text-warning'}`}>
-                                    {isDarkMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-                                  </div>
-                                  <div>
-                                    <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight">Appearance</h4>
-                                    <p className="text-[9px] font-bold text-on-surface-dim opacity-50">Toggle dark mode</p>
-                                  </div>
+                            <div className="p-4 bg-surface-dim/40 rounded-[32px] transition-all flex flex-col space-y-3">
+                              <div className="flex items-center space-x-3">
+                                <div className={`p-2.5 rounded-lg transition-all ${theme === 'light' ? 'bg-warning/10 text-warning' : theme === 'black' ? 'bg-primary/10 text-on-surface' : 'bg-primary/10 text-primary'}`}>
+                                  {theme === 'light' && <Sun className="w-4 h-4" />}
+                                  {theme === 'dark' && <Moon className="w-4 h-4" />}
+                                  {theme === 'black' && <Eclipse className="w-4 h-4" />}
                                 </div>
-                                <button 
-                                  onClick={() => setIsDarkMode(!isDarkMode)}
-                                  className={`relative w-12 h-6 rounded-full transition-all duration-500 overflow-hidden group-active:scale-90 border border-outline/50 ${isDarkMode ? 'kinetic-gradient' : 'bg-surface-container-high'}`}
+                                <div>
+                                  <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight">Appearance</h4>
+                                  <p className="text-[9px] font-bold text-on-surface-dim opacity-50">Select application theme</p>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2 bg-surface-container-low p-1 rounded-2xl border border-outline/30">
+                                <button
+                                  onClick={() => setTheme('light')}
+                                  className={`py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center space-x-1.5 ${theme === 'light' ? 'bg-surface-container-lowest text-on-surface shadow-sm border border-outline/30' : 'text-on-surface-dim hover:text-on-surface'}`}
                                 >
-                                  <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-all duration-500 shadow-lg ${isDarkMode ? 'translate-x-6' : 'translate-x-0'}`} />
+                                  <Sun className="w-3.5 h-3.5" />
+                                  <span>Light</span>
                                 </button>
+                                <button
+                                  onClick={() => setTheme('dark')}
+                                  className={`py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center space-x-1.5 ${theme === 'dark' ? 'bg-surface-container-lowest text-on-surface shadow-sm border border-outline/30' : 'text-on-surface-dim hover:text-on-surface'}`}
+                                >
+                                  <Moon className="w-3.5 h-3.5" />
+                                  <span>Dark</span>
+                                </button>
+                                <button
+                                  onClick={() => setTheme('black')}
+                                  className={`py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center space-x-1.5 ${theme === 'black' ? 'bg-surface-container-lowest text-on-surface shadow-sm border border-outline/30' : 'text-on-surface-dim hover:text-on-surface'}`}
+                                >
+                                  <Eclipse className="w-3.5 h-3.5" />
+                                  <span>Black</span>
+                                </button>
+                              </div>
                             </div>
 
                             {/* Native Notifications Section */}

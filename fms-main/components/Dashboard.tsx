@@ -14,6 +14,12 @@ import { useNotification } from '../context/NotificationContext';
 import { equipmentBadgeClass, equipmentDotClass, equipmentBadgeSoftClass } from '../utils/equipmentColors';
 import { TankStatusGrid } from './TankStatusGrid';
 
+const fmtVol = (n: number) => {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}ML`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}KL`;
+  return `${n}L`;
+};
+
 // Mock Data for Charts
 const HOURLY_DATA_INT = [
   { hour: '06:00', flights: 2, volume: 15000 },
@@ -50,6 +56,41 @@ const FLIGHT_PERFORMANCE = [
   { name: 'Delayed', value: 10, color: '#f59e0b' },
   { name: 'Critical', value: 5, color: '#ef4444' },
 ];
+
+const getFuelColorClass = (volume: number | undefined, maxCapacity: number): string => {
+  if (volume === undefined) return 'text-primary';
+  
+  // Rule for 16K (16000) or 19K (19000)
+  if (maxCapacity === 16000 || maxCapacity === 19000) {
+    if (volume < 5000) return 'text-error';
+    if (volume <= 10000) return 'text-warning';
+    return 'text-primary';
+  }
+  
+  // Rule for 58K (58000)
+  if (maxCapacity === 58000) {
+    if (volume < 10000) return 'text-error';
+    if (volume < 20000) return 'text-warning';
+    return 'text-primary';
+  }
+  
+  // Default/Fallback logic using percentage
+  if (maxCapacity > 0) {
+    const pct = (volume / maxCapacity) * 100;
+    if (pct < 15) return 'text-error';
+    if (pct < 30) return 'text-warning';
+    return 'text-primary';
+  }
+  
+  return 'text-primary';
+};
+
+const getFuelBadgeColorClass = (volume: number | undefined, maxCapacity: number): string => {
+  const color = getFuelColorClass(volume, maxCapacity);
+  if (color === 'text-error') return 'bg-error/10 text-error';
+  if (color === 'text-warning') return 'bg-warning/10 text-warning';
+  return 'bg-primary/10 text-primary';
+};
 
 interface DashboardProps {
   user: User;
@@ -332,8 +373,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0 ml-3">
-                          <span className="text-[11px] font-black text-primary font-mono">{eq.currentVolume?.toLocaleString() || '0'} L</span>
-                          <p className="text-[7px] font-black text-on-surface-dim uppercase tracking-wider opacity-40">Fuel Level</p>
+                          <span className={`text-[11px] font-black font-mono ${getFuelColorClass(eq.currentVolume, eq.maxCapacity)}`}>
+                            {(eq.currentVolume || 0).toLocaleString()} L
+                          </span>
+                          <p className="text-[7px] font-black text-on-surface-dim uppercase tracking-wider opacity-40">Volume</p>
                         </div>
                       </div>
                     ))}
@@ -1121,13 +1164,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                         return (
                           <div key={eq.id} className="bg-surface-dim/40 border border-outline p-3 sm:p-4 rounded-2xl flex items-center justify-between group hover:border-primary/30 transition-all">
                             <div className="flex items-center space-x-2.5 flex-1 min-w-0 mr-2">
-                              {/* Truck Badge */}
-                              <div className="flex flex-col items-center bg-primary/10 rounded-lg pt-1.5 pb-1 px-1.5 transition-transform group-hover:scale-110 min-w-[32px] shrink-0">
-                                <Truck className="w-3.5 h-3.5 text-primary mb-0.5" />
-                                <span className="text-[7.5px] font-black text-primary font-mono leading-none">
-                                  {Math.round(eq.maxCapacity / 1000)}K
-                                </span>
-                              </div>
+                              {(() => {
+                                const badgeColorClass = getFuelBadgeColorClass(eq.currentVolume, eq.maxCapacity);
+                                return (
+                                  <div className={`flex flex-col items-center rounded-lg pt-1.5 pb-1 px-1.5 transition-transform group-hover:scale-110 min-w-[32px] shrink-0 ${badgeColorClass}`}>
+                                    <Truck className="w-3.5 h-3.5 mb-0.5 text-current" />
+                                    <span className="text-[7.5px] font-black font-mono leading-none text-current">
+                                      {Math.round(eq.maxCapacity / 1000)}K
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                               {/* Text Info */}
                               <div className="min-w-0 flex-1">
                                 <p className="text-[11px] font-[900] text-on-surface tracking-tighter truncate">{eq.name}</p>
@@ -1136,8 +1183,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                     {getStatusLabel(eq.status)}
                                   </span>
                                   {eq.currentVolume !== undefined && (
-                                    <span className="text-[13px] font-black text-primary font-mono mt-0.5">
-                                      {eq.currentVolume.toLocaleString()}
+                                    <span className={`text-[13px] font-black font-mono mt-0.5 ${getFuelColorClass(eq.currentVolume, eq.maxCapacity)}`}>
+                                      {eq.currentVolume.toLocaleString()} L
                                     </span>
                                   )}
                                 </div>
@@ -1569,7 +1616,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isSelected ? 'bg-primary text-white' : 'bg-surface border border-outline text-on-surface-dim'}`}>
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isSelected ? 'kinetic-gradient border-none text-white' : 'bg-surface border border-outline text-on-surface-dim'}`}>
                           <Truck className="w-4 h-4" />
                         </div>
                         <div>
@@ -1580,9 +1627,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                       <div className="text-right">
                         {isRfJob ? (
                           <>
-                            <p className="text-[10px] text-on-surface-dim font-bold opacity-60 uppercase tracking-widest">Fuel Level</p>
-                            <p className={`text-sm font-black font-mono text-on-surface`}>
-                              {eq.currentVolume ? `${eq.currentVolume.toLocaleString()} L` : '0 L'}
+                            <p className="text-[10px] text-on-surface-dim font-bold opacity-60 uppercase tracking-widest">Volume</p>
+                            <p className={`text-sm font-black font-mono ${getFuelColorClass(eq.currentVolume, eq.maxCapacity)}`}>
+                              {(eq.currentVolume || 0).toLocaleString()} L
                             </p>
                           </>
                         ) : (

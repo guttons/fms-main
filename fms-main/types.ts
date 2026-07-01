@@ -179,3 +179,12 @@ export interface Alert {
   acknowledged: boolean;
   targetRole?: UserRole;
 }
+
+export interface Vessel {
+  id: string;
+  name: string;
+  imo?: string;
+  flag?: string;
+  status: 'active' | 'inactive';
+  created_at?: string;
+}

@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightLog, StaffMember, UserRole } from '../types';
+import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightLog, StaffMember, UserRole, Vessel } from '../types';
 import { EQUIPMENT, TANKS, MOCK_ALERTS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
 import { supabase } from '../supabase';
@@ -70,6 +70,10 @@ interface OperationalDataContextType {
   addStaff: (member: Omit<StaffMember, 'id'>) => Promise<void>;
   updateStaff: (id: string, updates: Partial<Omit<StaffMember, 'id'>>) => Promise<void>;
   deleteStaff: (id: string) => Promise<void>;
+  vessels: Vessel[];
+  addVessel: (vessel: Omit<Vessel, 'id' | 'created_at'>) => Promise<void>;
+  updateVessel: (id: string, updates: Partial<Omit<Vessel, 'id'>>) => Promise<void>;
+  deleteVessel: (id: string) => Promise<void>;
   serviceTankId: string;
   setServiceTankId: (tankId: string) => Promise<void>;
 }
@@ -477,6 +481,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   const [flightLogs, setFlightLogs] = useState<FlightLog[]>([]);
   const [domesticAssignments, setDomesticAssignments] = useState<any[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [vessels, setVessels] = useState<Vessel[]>([]);
   const [isAlertsLoading, setIsAlertsLoading] = useState(false);
 
   const [serviceTankId, setServiceTankIdState] = useState<string>(() => {
@@ -763,6 +768,13 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       }
     });
 
+    const unsubscribeVessels = supabaseService.subscribeToVessels((updatedVessels) => {
+      console.log("SYNC: Vessels received from Supabase. Count:", updatedVessels.length);
+      if (updatedVessels) {
+        setVessels(updatedVessels);
+      }
+    });
+
     const channelDomAssign = supabase
       .channel('public:domestic_assignments')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'domestic_assignments' }, () => {
@@ -781,6 +793,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       if (unsubscribeTanks) unsubscribeTanks();
       if (unsubscribeStaff) unsubscribeStaff();
       if (unsubscribeFlightJobs) unsubscribeFlightJobs();
+      if (unsubscribeVessels) unsubscribeVessels();
       if (channelDomAssign) channelDomAssign.unsubscribe();
     };
   }, [appUser, selectedBriefingDate]);
@@ -1174,6 +1187,18 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     await supabaseService.deleteTank(id);
   };
 
+  const addVessel = async (vessel: Omit<Vessel, 'id' | 'created_at'>) => {
+    await supabaseService.addVessel(vessel);
+  };
+
+  const updateVessel = async (id: string, updates: Partial<Omit<Vessel, 'id'>>) => {
+    await supabaseService.updateVessel(id, updates);
+  };
+
+  const deleteVessel = async (id: string) => {
+    await supabaseService.deleteVessel(id);
+  };
+
   return (
     <OperationalDataContext.Provider value={{
       equipment: equipment || [],
@@ -1217,6 +1242,10 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       addTank,
       updateTank,
       deleteTank,
+      vessels: vessels || [],
+      addVessel,
+      updateVessel,
+      deleteVessel,
       serviceTankId,
       setServiceTankId
     }}>

@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { User, Tank, FlightLog, BridgingLog, Alert, FlightJob, Equipment, StaffMember, UserRole, EquipmentStatus } from '../types';
+import { User, Tank, FlightLog, BridgingLog, Alert, FlightJob, Equipment, StaffMember, UserRole, EquipmentStatus, Vessel } from '../types';
 import { CustomerAccount, UpcomingPayment, Invoice, Receipt, ProformaRecord, FuelRequest, MonthEndVariance, ProcurementPR, SurchargeRecord, MpdSale, CustomsShipment } from '../context/FinanceDataContext';
 import { TANKS, MOCK_USERS, EQUIPMENT } from '../constants';
 
@@ -37,10 +37,19 @@ const localBridgingLogs: BridgingLog[] = [
 let localStaff: StaffMember[] = [];
 let localEquipment: Equipment[] = [];
 let localTanks: Tank[] = [];
+let localVessels: Vessel[] = [];
 
 const staffCallbacks = new Set<(staff: StaffMember[]) => void>();
 const equipmentCallbacks = new Set<(eq: Equipment[]) => void>();
 const tanksCallbacks = new Set<(tanks: Tank[]) => void>();
+const vesselCallbacks = new Set<(vessels: Vessel[]) => void>();
+
+const triggerVesselCallbacks = () => {
+  const list = [...localVessels];
+  vesselCallbacks.forEach(cb => {
+    try { cb(list); } catch (e) { console.error('Error in vessel callback:', e); }
+  });
+};
 
 const triggerStaffCallbacks = () => {
   const list = [...localStaff];
@@ -1723,5 +1732,118 @@ export const supabaseService = {
     return () => {
       supabase.removeChannel(channel);
     };
+  },
+
+  // ── Vessels (CRUD, Admin Panel) ──────────────────────────────────────────────
+  subscribeToVessels(callback: (vessels: Vessel[]) => void) {
+    const channel = supabase
+      .channel('vessels-changes-' + Date.now() + '-' + Math.floor(Math.random() * 1000))
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'vessels' },
+        async () => {
+          const vessels = await supabaseService.getVessels();
+          callback(vessels);
+        }
+      )
+      .subscribe();
+
+    supabaseService.getVessels().then(callback);
+    vesselCallbacks.add(callback);
+
+    return () => {
+      supabase.removeChannel(channel);
+      vesselCallbacks.delete(callback);
+    };
+  },
+
+  async getVessels(): Promise<Vessel[]> {
+    const { data, error } = await supabase.from('vessels').select('*').order('name');
+    if (error) {
+      console.warn('[Supabase] getVessels failed:', error);
+      return localVessels;
+    }
+    if (!data || data.length === 0) {
+      return localVessels;
+    }
+    localVessels = data.map(row => ({
+      id: row.id,
+      name: row.name,
+      imo: row.imo,
+      flag: row.flag,
+      status: row.status as 'active' | 'inactive',
+      created_at: row.created_at
+    }));
+    return localVessels;
+  },
+
+  async addVessel(vessel: Omit<Vessel, 'id' | 'created_at'>): Promise<void> {
+    const newId = `vessel-${Date.now()}`;
+    const newVessel: Vessel = {
+      id: newId,
+      ...vessel,
+    };
+    localVessels.push(newVessel);
+    triggerVesselCallbacks();
+
+    const row = {
+      name: vessel.name,
+      imo: vessel.imo || null,
+      flag: vessel.flag || null,
+      status: vessel.status,
+    };
+    const { error } = await supabase.from('vessels').insert([row]);
+    if (error) {
+      localVessels = localVessels.filter(v => v.id !== newId);
+      triggerVesselCallbacks();
+      console.error('[Supabase] addVessel failed:', error);
+      throw error;
+    }
+  },
+
+  async updateVessel(id: string, updates: Partial<Omit<Vessel, 'id'>>): Promise<void> {
+    const index = localVessels.findIndex(v => v.id === id);
+    let original: Vessel | null = null;
+    if (index !== -1) {
+      original = { ...localVessels[index] };
+      localVessels[index] = { ...localVessels[index], ...updates };
+      triggerVesselCallbacks();
+    }
+
+    const row: Record<string, any> = {};
+    if ('name' in updates) row.name = updates.name;
+    if ('imo' in updates) row.imo = updates.imo;
+    if ('flag' in updates) row.flag = updates.flag;
+    if ('status' in updates) row.status = updates.status;
+
+    const { error } = await supabase.from('vessels').update(row).eq('id', id);
+    if (error) {
+      if (index !== -1 && original) {
+        localVessels[index] = original;
+        triggerVesselCallbacks();
+      }
+      console.error('[Supabase] updateVessel failed:', error);
+      throw error;
+    }
+  },
+
+  async deleteVessel(id: string): Promise<void> {
+    const index = localVessels.findIndex(v => v.id === id);
+    let original: Vessel | null = null;
+    if (index !== -1) {
+      original = { ...localVessels[index] };
+      localVessels.splice(index, 1);
+      triggerVesselCallbacks();
+    }
+
+    const { error } = await supabase.from('vessels').delete().eq('id', id);
+    if (error) {
+      if (index !== -1 && original) {
+        localVessels.splice(index, 0, original);
+        triggerVesselCallbacks();
+      }
+      console.error('[Supabase] deleteVessel failed:', error);
+      throw error;
+    }
   }
 };

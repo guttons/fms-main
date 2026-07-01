@@ -223,7 +223,7 @@ const ReceiptModal: React.FC<{ data: ReceiptData; onClose: () => void }> = ({ da
 
 export const TankerDischarge: React.FC = () => {
   const { notify } = useNotification();
-  const { tanks, updateTankLevel, createAlert } = useOperationalData();
+  const { tanks, updateTankLevel, createAlert, vessels } = useOperationalData();
 
   // Form states
   const [vessel, setVessel] = useState('');
@@ -397,14 +397,20 @@ export const TankerDischarge: React.FC = () => {
                         <div className="space-y-6">
                             <div>
                                 <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Tactical Vessel Identity</label>
-                                <input 
-                                  type="text" 
-                                  className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all text-on-surface" 
-                                  placeholder="E.G. MT OCEAN PRIDE" 
-                                  value={vessel}
-                                  onChange={(e) => setVessel(e.target.value)}
-                                  required 
-                                />
+                                <div className="relative">
+                                  <select 
+                                    className="w-full px-6 py-4 bg-surface-container-low border-transparent rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all text-on-surface appearance-none cursor-pointer" 
+                                    value={vessel}
+                                    onChange={(e) => setVessel(e.target.value)}
+                                    required 
+                                  >
+                                    <option value="">SELECT VESSEL</option>
+                                    {(vessels || []).filter(v => v.status === 'active').map(v => (
+                                      <option key={v.id} value={v.name}>{v.name}</option>
+                                    ))}
+                                  </select>
+                                  <svg className="w-4 h-4 text-on-surface-dim opacity-40 absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-5">
                                 <div>

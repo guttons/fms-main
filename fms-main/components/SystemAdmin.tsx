@@ -4,10 +4,10 @@ import {
   Users, Server, ShieldCheck, Activity, Database,
   Plus, Pencil, Trash2, X, Check, AlertTriangle,
   Truck, Fuel, ChevronDown, Phone, Mail, IdCard, UserCheck, UserX,
-  RefreshCw
+  RefreshCw, Anchor
 } from 'lucide-react';
 import { UserRole, EquipmentType, EquipmentStatus, FuelType } from '../types';
-import type { StaffMember, Equipment, Tank } from '../types';
+import type { StaffMember, Equipment, Tank, Vessel } from '../types';
 import { MOCK_USERS } from '../constants';
 import { Logo } from './Logo';
 import { useNotification, NotificationType } from '../context/NotificationContext';
@@ -15,7 +15,7 @@ import { seedingService } from '../services/seedingService';
 import { useOperationalData } from '../context/OperationalDataContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Tab = 'staff' | 'equipment' | 'tanks';
+type Tab = 'staff' | 'equipment' | 'tanks' | 'vessels';
 
 interface ConfirmState { open: boolean; message: string; onConfirm: () => void; }
 
@@ -877,12 +877,224 @@ const TanksTab: React.FC<{ push: (msg: string, type?: NotificationType) => void;
   );
 };
 
+// ─── VESSELS TAB ───────────────────────────────────────────────────────────────
+const VesselsTab: React.FC<{ push: (msg: string, type?: NotificationType) => void; confirm: (msg: string, cb: () => void) => void }> = ({ push, confirm }) => {
+  const { vessels, addVessel, updateVessel, deleteVessel, isLoading } = useOperationalData();
+  const loading = isLoading;
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState<Vessel | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<string>('ALL');
+
+  const emptyForm: Omit<Vessel, 'id' | 'created_at'> = { name: '', imo: '', flag: '', status: 'active' };
+  const [form, setForm] = useState<Omit<Vessel, 'id' | 'created_at'>>(emptyForm);
+
+  const openAdd = () => { setEditing(null); setForm(emptyForm); setShowModal(true); };
+  const openEdit = (v: Vessel) => {
+    setEditing(v);
+    setForm({ name: v.name, imo: v.imo || '', flag: v.flag || '', status: v.status });
+    setShowModal(true);
+  };
+
+  const handleSave = async () => {
+    const trimmedName = form.name.trim();
+    if (!trimmedName) { push('Vessel name is required', 'error'); return; }
+    if (trimmedName.length < 2) { push('Vessel name must be at least 2 characters long', 'error'); return; }
+
+    const trimmedImo = (form.imo || '').trim();
+    if (trimmedImo && !/^\d{7}$/.test(trimmedImo)) {
+      push('IMO number must be exactly 7 digits (e.g. 9876543)', 'error');
+      return;
+    }
+
+    if (!editing) {
+      const exists = vessels.some(v => v.name.toUpperCase().trim() === trimmedName.toUpperCase());
+      if (exists) {
+        push(`Vessel "${trimmedName}" is already registered in the system.`, 'error');
+        return;
+      }
+    }
+
+    setSaving(true);
+    try {
+      const finalForm = {
+        name: trimmedName.toUpperCase(),
+        imo: trimmedImo || undefined,
+        flag: (form.flag || '').trim() || undefined,
+        status: form.status,
+      };
+      if (editing) {
+        await updateVessel(editing.id, finalForm);
+        push('Vessel updated successfully', 'success');
+      } else {
+        await addVessel(finalForm as Omit<Vessel, 'id' | 'created_at'>);
+        push('Vessel added successfully', 'success');
+      }
+      setShowModal(false);
+    } catch (e: any) {
+      const msg = e?.message?.includes('permission') ? 'Permission Denied: Unauthorized to modify vessels.' : 'Failed to save. Check Supabase connection and database permissions.';
+      push(msg, 'error');
+    }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = (v: Vessel) => {
+    confirm(`Remove vessel "${v.name}" from the registry?`, async () => {
+      try { await deleteVessel(v.id); push('Vessel removed', 'success'); }
+      catch (e: any) {
+        const msg = e?.message?.includes('permission') ? 'Permission Denied: Unauthorized to delete records.' : 'Failed to remove vessel.';
+        push(msg, 'error');
+      }
+    });
+  };
+
+  const filtered = vessels.filter(v => filterStatus === 'ALL' || v.status === filterStatus);
+
+  return (
+    <>
+      <div className="flex flex-col sm:flex-row gap-4 mb-6 items-start sm:items-center justify-between">
+        <div className="relative">
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="text-[10px] font-black uppercase tracking-widest bg-surface-container-low border-transparent rounded-xl pl-4 pr-8 py-2 text-on-surface-dim appearance-none cursor-pointer focus:border-primary outline-none transition-all">
+            <option value="ALL">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          <ChevronDown className="w-3 h-3 text-on-surface-dim absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+        </div>
+        <button onClick={openAdd} className="flex items-center gap-2 px-5 py-2.5 kinetic-gradient rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/90 active:scale-95 transition-all shadow-premium whitespace-nowrap">
+          <Plus className="w-4 h-4" /> Add Vessel
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20"><Logo className="w-12 h-12 text-primary animate-pulse drop-shadow-[0_0_15px_rgba(1,155,201,0.5)]" /></div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-on-surface-dim opacity-40">
+          <Anchor className="w-12 h-12 mb-4" />
+          <p className="text-sm font-black uppercase tracking-widest">No vessel records found</p>
+          <p className="text-[10px] mt-1 uppercase tracking-widest">Add your first vessel above</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border-transparent">
+          <table className="min-w-full divide-y divide-outline">
+            <thead className="bg-surface-container-low">
+              <tr>
+                {['Vessel Name', 'IMO Number', 'Flag State', 'Status', 'Actions'].map(h => (
+                  <th key={h} className="px-6 py-4 text-left text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em]">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="bg-surface-container-lowest divide-y divide-outline">
+              {filtered.map(v => (
+                <tr key={v.id} className="hover:bg-primary/[0.02] transition-colors group">
+                  <td className="px-6 py-5 whitespace-nowrap">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                        <Anchor className="w-4 h-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-on-surface uppercase tracking-tight">{v.name}</p>
+                        <p className="text-[10px] text-on-surface-dim opacity-40 uppercase tracking-widest">{v.id}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-5 whitespace-nowrap">
+                    <span className="text-sm font-bold text-on-surface font-mono">{v.imo || '—'}</span>
+                  </td>
+                  <td className="px-6 py-5 whitespace-nowrap">
+                    <span className="text-sm font-bold text-on-surface-dim">{v.flag || '—'}</span>
+                  </td>
+                  <td className="px-6 py-5 whitespace-nowrap">
+                    <span className={`px-3 py-1 text-[9px] font-black rounded-xl border uppercase tracking-widest
+                      ${v.status === 'active' 
+                        ? 'bg-success/10 text-success border-success/20' 
+                        : 'bg-on-surface-dim/10 text-on-surface-dim border-on-surface-dim/20'}`}>
+                      {v.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-5 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => openEdit(v)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-primary/10 text-primary text-[9px] font-black uppercase tracking-widest transition-all">
+                        <Pencil className="w-3.5 h-3.5" /> Edit
+                      </button>
+                      <button onClick={() => handleDelete(v)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-error/10 text-error text-[9px] font-black uppercase tracking-widest transition-all">
+                        <Trash2 className="w-3.5 h-3.5" /> Remove
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <p className="text-[10px] font-black text-on-surface-dim opacity-30 uppercase tracking-widest mt-4">{filtered.length} vessel records • {vessels.length} total</p>
+
+      {showModal && (
+        <Modal title={editing ? 'Edit Vessel' : 'Add Vessel'} onClose={() => setShowModal(false)}>
+          <div className="space-y-5">
+            <Field label="Vessel Name" required>
+              <input className={inputCls} placeholder="e.g. MT OCEAN PRIDE" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="IMO Number">
+                <input className={inputCls} placeholder="e.g. 9876543" maxLength={7} value={form.imo || ''} onChange={e => setForm(p => ({ ...p, imo: e.target.value.replace(/\D/g, '').slice(0, 7) }))} />
+              </Field>
+              <Field label="Flag State">
+                <input className={inputCls} placeholder="e.g. Panama" value={form.flag || ''} onChange={e => setForm(p => ({ ...p, flag: e.target.value }))} />
+              </Field>
+            </div>
+            <Field label="Status" required>
+              <div className="relative">
+                <select className={selectCls} value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value as 'active' | 'inactive' }))}>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+                <ChevronDown className="w-4 h-4 text-on-surface-dim absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            </Field>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 rounded-xl border-transparent text-[11px] font-black uppercase tracking-widest text-on-surface-dim hover:bg-surface-container-low transition-all">Cancel</button>
+              <button onClick={handleSave} disabled={saving} className="flex-1 px-4 py-3 rounded-xl kinetic-gradient text-[11px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+                {saving && <Logo className="w-4 h-4 animate-pulse" />}
+                {editing ? 'Save Changes' : 'Add Vessel'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+};
+
 // ─── MAIN COMPONENT ────────────────────────────────────────────────────────────
 export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) => {
   const [activeTab, setActiveTab] = useState<Tab>('staff');
   const { notify } = useNotification();
   const [confirm, setConfirm] = useState<ConfirmState>({ open: false, message: '', onConfirm: () => {} });
   const [isLive, setIsLive] = useState(true);
+
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+  const tooltipTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const triggerTooltip = (tabKey: string) => {
+    setActiveTooltip(tabKey);
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+    }
+    tooltipTimeoutRef.current = setTimeout(() => {
+      setActiveTooltip(null);
+    }, 2000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (tooltipTimeoutRef.current) {
+        clearTimeout(tooltipTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const confirmAction = useCallback((message: string, onConfirm: () => void) => {
     setConfirm({ open: true, message, onConfirm });
@@ -898,6 +1110,7 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
     { key: 'staff', label: 'Staff Management', icon: <Users className="w-4 h-4" /> },
     { key: 'equipment', label: 'Fleet Registry', icon: <Truck className="w-4 h-4" /> },
     { key: 'tanks', label: 'Tank Inventory', icon: <Fuel className="w-4 h-4" /> },
+    { key: 'vessels', label: 'Vessel Registry', icon: <Anchor className="w-4 h-4" /> },
   ];
 
   const [isSeeding, setIsSeeding] = useState(false);
@@ -991,26 +1204,36 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
       </div>
 
       {/* Tab Navigation */}
-      <div className="bg-surface-container-lowest rounded-3xl border-transparent overflow-hidden shadow-sm">
+      <div className="bg-surface-container-lowest rounded-3xl border-transparent overflow-visible shadow-sm">
         <div className="border-b border-outline p-4 bg-surface-container-low/30 flex justify-center">
-          <div className="bg-surface-container-low p-1.5 rounded-2xl border-transparent relative grid grid-cols-3 w-full max-w-[600px] shadow-inner">
+          <div className="bg-surface-container-low p-1.5 rounded-2xl border-transparent relative grid grid-cols-4 w-full max-w-[800px] shadow-inner">
             <div 
-              className={`absolute top-1.5 bottom-1.5 w-[calc(33.333%-4px)] rounded-xl kinetic-gradient transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform
+              className={`absolute top-1.5 bottom-1.5 w-[calc(25%-4px)] rounded-xl kinetic-gradient transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform
                 ${activeTab === 'staff' ? 'left-1.5 translate-x-[0%]' : ''}
                 ${activeTab === 'equipment' ? 'left-1.5 translate-x-[100%]' : ''}
                 ${activeTab === 'tanks' ? 'left-1.5 translate-x-[200%]' : ''}
+                ${activeTab === 'vessels' ? 'left-1.5 translate-x-[300%]' : ''}
               `}
             />
             {tabs.map(tab => (
               <button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center justify-center gap-1.5 sm:gap-2.5 px-1 sm:px-6 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest sm:tracking-[0.2em] transition-all relative z-10 overflow-hidden
+                onClick={() => {
+                  setActiveTab(tab.key);
+                  triggerTooltip(tab.key);
+                }}
+                className={`flex items-center justify-center gap-1.5 sm:gap-2.5 px-1 sm:px-6 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest sm:tracking-[0.2em] transition-all relative z-10 overflow-visible
                   ${activeTab === tab.key ? 'text-white' : 'text-on-surface-dim opacity-50 hover:opacity-100'}`}
               >
+                {activeTooltip === tab.key && (
+                  <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[9px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-200 sm:hidden">
+                    {tab.label}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-outline -z-10 mt-[1px]" />
+                  </div>
+                )}
                 {tab.icon}
                 <span className="hidden sm:inline truncate">{tab.label}</span>
-                <span className="inline sm:hidden truncate">{tab.key.toUpperCase()}</span>
               </button>
             ))}
           </div>
@@ -1031,6 +1254,11 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
           {activeTab === 'tanks' && (
             <div key="tanks" className="animate-in fade-in slide-in-from-right-4 duration-500">
               <TanksTab push={notify} confirm={confirmAction} />
+            </div>
+          )}
+          {activeTab === 'vessels' && (
+            <div key="vessels" className="animate-in fade-in slide-in-from-right-4 duration-500">
+              <VesselsTab push={notify} confirm={confirmAction} />
             </div>
           )}
         </div>

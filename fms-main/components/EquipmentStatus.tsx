@@ -35,6 +35,47 @@ interface EquipmentStatusProps {
 export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
   const { notify } = useNotification();
   const { equipment, updateEquipmentStatus, updateEquipment, createAlert, alerts } = useOperationalData();
+
+  const fuelFillColor = (volume: number | undefined, maxCapacity: number): string => {
+    if (volume === undefined) return 'bg-primary';
+    
+    // Rule for 16K (16000) or 19K (19000)
+    if (maxCapacity === 16000 || maxCapacity === 19000) {
+      if (volume < 5000) return 'bg-error';
+      if (volume <= 10000) return 'bg-warning';
+      return 'bg-primary';
+    }
+    
+    // Rule for 58K (58000)
+    if (maxCapacity === 58000) {
+      if (volume < 10000) return 'bg-error';
+      if (volume < 20000) return 'bg-warning';
+      return 'bg-primary';
+    }
+    
+    // Default/Fallback logic using percentage
+    if (maxCapacity > 0) {
+      const pct = (volume / maxCapacity) * 100;
+      if (pct < 15) return 'bg-error';
+      if (pct < 30) return 'bg-warning';
+      return 'bg-primary';
+    }
+    
+    return 'bg-primary';
+  };
+
+  const fuelTextColor = (volume: number | undefined, maxCapacity: number): string => {
+    const fill = fuelFillColor(volume, maxCapacity);
+    if (fill === 'bg-error') return 'text-error';
+    if (fill === 'bg-warning') return 'text-warning';
+    return 'text-primary';
+  };
+
+  const fmtVol = (n: number) => {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}ML`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(0)}KL`;
+    return `${n}L`;
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [editingMaintEq, setEditingMaintEq] = useState<Equipment | null>(null);
   const [editingVolumeEqId, setEditingVolumeEqId] = useState<string | null>(null);
@@ -550,106 +591,130 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
           </div>
         </div>
         
-        <div className="flex flex-col sm:flex-row items-center gap-3 lg:gap-4 w-full sm:w-auto">
-          <div className="flex w-full sm:w-auto items-center gap-2">
-            <div className="relative group flex-1 sm:flex-none">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim opacity-40 group-focus-within:text-primary transition-colors" />
-              <input 
-                type="text" 
-                placeholder="ID SEARCH..."
-                className="pl-12 pr-6 py-2 lg:py-2.5 bg-surface-dim border border-outline rounded-xl text-[10px] font-black uppercase tracking-widest placeholder:opacity-20 focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none w-full sm:w-48 lg:w-56 transition-all"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            
-            {user && ![UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER, UserRole.ITP_SUPERVISOR].includes(user.role) && (
-              <button
-                onClick={exportToPDF}
-                className="flex items-center justify-center p-2 lg:px-4 lg:py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl hover-kinetic-gradient transition-all active:scale-95 flex-shrink-0"
-                title="Export Status (PDF)"
-              >
-                <FileText className="w-5 h-5 lg:w-4 lg:h-4 lg:mr-2" />
-                <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">Export Status (PDF)</span>
-              </button>
-            )}
-          </div>
+        <div className="flex flex-row items-center justify-between sm:justify-end gap-3 lg:gap-4 w-full sm:w-auto">
+          {user && ![UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER, UserRole.ITP_SUPERVISOR].includes(user.role) && (
+            <button
+              onClick={exportToPDF}
+              className="hidden sm:flex items-center justify-center p-2.5 lg:px-4 lg:py-2 bg-primary/10 text-primary border border-primary rounded-xl hover-kinetic-gradient transition-all active:scale-95 flex-shrink-0"
+              title="Export Status (PDF)"
+            >
+              <FileText className="w-5 h-5 lg:w-4 lg:h-4 lg:mr-2" />
+              <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">Export Status (PDF)</span>
+            </button>
+          )}
           
-          <div className="bg-surface-dim p-1 rounded-2xl border border-outline relative flex w-fit max-w-full sm:w-auto overflow-x-visible md:overflow-x-auto no-scrollbar shadow-inner">
+          {/* Desktop Filter Tabs */}
+          <div className="bg-surface-dim p-1 rounded-2xl border border-outline relative hidden lg:flex w-fit overflow-x-auto no-scrollbar shadow-inner">
             <div 
-              className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient-no-glow transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
-                ${filterType === 'All' ? 'left-1 w-[48px] translate-x-0 md:w-[70px] md:translate-x-0' : ''}
-                ${filterType === EquipmentType.REFUELLER ? 'left-1 w-[48px] translate-x-[48px] md:w-[100px] md:translate-x-[70px]' : ''}
-                ${filterType === EquipmentType.HYDRANT_DISPENSER ? 'left-1 w-[48px] translate-x-[96px] md:w-[150px] md:translate-x-[170px]' : ''}
-                ${filterType === EquipmentType.DIESEL_TRUCK ? 'left-1 w-[48px] translate-x-[144px] md:w-[110px] md:translate-x-[320px]' : ''}
-                ${filterType === EquipmentType.HYDRANT_SERVICE ? 'left-1 w-[48px] translate-x-[192px] md:w-[140px] md:translate-x-[430px]' : ''}
+              className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient-no-glow transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform left-1
+                ${filterType === 'All' ? 'w-[70px] translate-x-0' : ''}
+                ${filterType === EquipmentType.REFUELLER ? 'w-[100px] translate-x-[70px]' : ''}
+                ${filterType === EquipmentType.HYDRANT_DISPENSER ? 'w-[150px] translate-x-[170px]' : ''}
+                ${filterType === EquipmentType.DIESEL_TRUCK ? 'w-[110px] translate-x-[320px]' : ''}
+                ${filterType === EquipmentType.HYDRANT_SERVICE ? 'w-[140px] translate-x-[430px]' : ''}
               `}
             />
             <button
-              onClick={() => {
-                setFilterType('All');
-                triggerTooltip('All');
-              }}
-              className={`w-[48px] md:w-[70px] flex-shrink-0 flex items-center justify-center py-2 text-[8px] md:text-[9px] font-black uppercase tracking-widest transition-all relative z-10 ${
+              onClick={() => setFilterType('All')}
+              className={`w-[70px] flex-shrink-0 flex items-center justify-center py-2 text-[8px] md:text-[9px] font-black uppercase tracking-widest transition-all relative z-10 ${
                 filterType === 'All' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
               }`}
             >
-              {activeTooltip === 'All' && (
-                <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[9px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-200 md:hidden">
-                  All Vehicles
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-outline -z-10 mt-[1px]" />
-                </div>
-              )}
-              <Layers className="w-3.5 h-3.5 md:hidden" />
-              <span className="hidden md:inline">ALL</span>
+              ALL
             </button>
             {Object.values(EquipmentType)
               .filter(type => !isItpStaff || (type !== EquipmentType.DIESEL_TRUCK && type !== EquipmentType.HYDRANT_SERVICE))
               .map((type) => {
-                const widthClass = type === EquipmentType.REFUELLER ? 'w-[48px] md:w-[100px]' : 
-                                   type === EquipmentType.HYDRANT_DISPENSER ? 'w-[48px] md:w-[150px]' :
-                                   type === EquipmentType.DIESEL_TRUCK ? 'w-[48px] md:w-[110px]' : 'w-[48px] md:w-[140px]';
-                
-                const getTabIcon = (t: EquipmentType) => {
-                  switch (t) {
-                    case EquipmentType.REFUELLER:
-                      return <Truck className="w-3.5 h-3.5" />;
-                    case EquipmentType.HYDRANT_DISPENSER:
-                      return <Droplet className="w-3.5 h-3.5" />;
-                    case EquipmentType.DIESEL_TRUCK:
-                      return <Fuel className="w-3.5 h-3.5" />;
-                    case EquipmentType.HYDRANT_SERVICE:
-                      return <Wrench className="w-3.5 h-3.5" />;
-                    default:
-                      return null;
-                  }
-                };
-
+                const widthClass = type === EquipmentType.REFUELLER ? 'w-[100px]' : 
+                                   type === EquipmentType.HYDRANT_DISPENSER ? 'w-[150px]' :
+                                   type === EquipmentType.DIESEL_TRUCK ? 'w-[110px]' : 'w-[140px]';
                 return (
                   <button
                     key={type}
-                    onClick={() => {
-                      setFilterType(type);
-                      triggerTooltip(type);
-                    }}
+                    onClick={() => setFilterType(type)}
                     className={`${widthClass} flex-shrink-0 flex items-center justify-center py-2 text-[8px] md:text-[9px] font-black uppercase tracking-widest transition-all relative z-10 ${
                       filterType === type ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
                     }`}
                   >
-                    {activeTooltip === type && (
-                      <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[9px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-200 md:hidden">
-                        {type.replace('_', ' ')}
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-outline -z-10 mt-[1px]" />
-                      </div>
-                    )}
-                    <span className="md:hidden">{getTabIcon(type)}</span>
-                    <span className="hidden md:inline">{type.replace('_', ' ')}</span>
+                    {type.replace('_', ' ')}
                   </button>
                 );
               })}
           </div>
+        </div>
+      </div>
+
+      {/* Mobile Filter Tabs (Rendered below the horizontal divider line) */}
+      <div className="flex lg:hidden w-full">
+        <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline relative flex w-full overflow-x-visible no-scrollbar shadow-inner">
+          <div 
+            className={`absolute top-1.5 bottom-1.5 rounded-xl kinetic-gradient-no-glow transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform left-1.5
+              ${isItpStaff ? 'w-[calc(33.333%-3px)]' : 'w-[calc(20%-3px)]'}
+              ${filterType === 'All' ? 'translate-x-[0%]' : ''}
+              ${filterType === EquipmentType.REFUELLER ? 'translate-x-[100%]' : ''}
+              ${filterType === EquipmentType.HYDRANT_DISPENSER ? 'translate-x-[200%]' : ''}
+              ${filterType === EquipmentType.DIESEL_TRUCK ? 'translate-x-[300%]' : ''}
+              ${filterType === EquipmentType.HYDRANT_SERVICE ? 'translate-x-[400%]' : ''}
+            `}
+          />
+          <button
+            onClick={() => {
+              setFilterType('All');
+              triggerTooltip('All');
+            }}
+            className={`flex-1 flex-shrink-0 flex items-center justify-center py-3 text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+              filterType === 'All' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+            }`}
+          >
+            {activeTooltip === 'All' && (
+              <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[9px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-200">
+                All Vehicles
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-outline -z-10 mt-[1px]" />
+              </div>
+            )}
+            <Layers className="w-3.5 h-3.5" />
+          </button>
+          {Object.values(EquipmentType)
+            .filter(type => !isItpStaff || (type !== EquipmentType.DIESEL_TRUCK && type !== EquipmentType.HYDRANT_SERVICE))
+            .map((type) => {
+              const getTabIcon = (t: EquipmentType) => {
+                switch (t) {
+                  case EquipmentType.REFUELLER:
+                    return <Truck className="w-3.5 h-3.5" />;
+                  case EquipmentType.HYDRANT_DISPENSER:
+                    return <Droplet className="w-3.5 h-3.5" />;
+                  case EquipmentType.DIESEL_TRUCK:
+                    return <Fuel className="w-3.5 h-3.5" />;
+                  case EquipmentType.HYDRANT_SERVICE:
+                    return <Wrench className="w-3.5 h-3.5" />;
+                  default:
+                    return null;
+                }
+              };
+
+              return (
+                <button
+                  key={type}
+                  onClick={() => {
+                    setFilterType(type);
+                    triggerTooltip(type);
+                  }}
+                  className={`flex-1 flex-shrink-0 flex items-center justify-center py-3 text-[10px] font-black uppercase tracking-widest transition-all relative z-10 ${
+                    filterType === type ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+                  }`}
+                >
+                  {activeTooltip === type && (
+                    <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[9px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-200">
+                      {type.replace('_', ' ')}
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-outline -z-10 mt-[1px]" />
+                    </div>
+                  )}
+                  {getTabIcon(type)}
+                </button>
+              );
+            })}
         </div>
       </div>
 
@@ -663,13 +728,16 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
               onClick={() => toggleCategory(type)}
             >
               <div className="flex items-center">
-                <div className={`p-2 lg:p-3 bg-surface-dim rounded-xl border transition-all shadow-sm active:scale-95 mr-3 lg:mr-4 group-hover/header:border-primary ${
-                  expandedCategories[type] ? 'border-primary/50 bg-primary/5' : 'border-outline'
+                <div className={`p-2 lg:p-3 rounded-xl border transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-sm active:scale-95 mr-3 lg:mr-4 group-hover/header:scale-110 ${
+                  type === EquipmentType.REFUELLER ? 'bg-sky-500/10 border-sky-500/30 text-sky-400 group-hover/header:border-sky-500' :
+                  type === EquipmentType.HYDRANT_DISPENSER ? 'bg-cyan-400/10 border-cyan-400/30 text-cyan-400 group-hover/header:border-cyan-400' :
+                  type === EquipmentType.DIESEL_TRUCK ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 group-hover/header:border-amber-500' :
+                  'bg-emerald-500/10 border-emerald-500/30 text-emerald-500 group-hover/header:border-emerald-500'
                 }`}>
-                  {type === EquipmentType.REFUELLER && <Truck className={`w-4 h-4 lg:w-5 lg:h-5 transition-all duration-300 ${expandedCategories[type] ? 'text-primary scale-110' : 'text-on-surface-dim opacity-70'}`} />}
-                  {type === EquipmentType.HYDRANT_DISPENSER && <Droplet className={`w-4 h-4 lg:w-5 lg:h-5 transition-all duration-300 ${expandedCategories[type] ? 'text-primary scale-110' : 'text-on-surface-dim opacity-70'}`} />}
-                  {type === EquipmentType.DIESEL_TRUCK && <Fuel className={`w-4 h-4 lg:w-5 lg:h-5 transition-all duration-300 ${expandedCategories[type] ? 'text-primary scale-110' : 'text-on-surface-dim opacity-70'}`} />}
-                  {type === EquipmentType.HYDRANT_SERVICE && <Wrench className={`w-4 h-4 lg:w-5 lg:h-5 transition-all duration-300 ${expandedCategories[type] ? 'text-primary scale-110' : 'text-on-surface-dim opacity-70'}`} />}
+                  {type === EquipmentType.REFUELLER && <Truck className="w-4 h-4 lg:w-5 lg:h-5 text-current" />}
+                  {type === EquipmentType.HYDRANT_DISPENSER && <Droplet className="w-4 h-4 lg:w-5 lg:h-5 text-current" />}
+                  {type === EquipmentType.DIESEL_TRUCK && <Fuel className="w-4 h-4 lg:w-5 lg:h-5 text-current" />}
+                  {type === EquipmentType.HYDRANT_SERVICE && <Wrench className="w-4 h-4 lg:w-5 lg:h-5 text-current" />}
                 </div>
                 <div>
                   <h3 className="text-xl lg:text-2xl font-[900] text-on-surface tracking-tighter uppercase italic">{type} FLEET</h3>
@@ -734,7 +802,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                             {eq.maxCapacity > 0 && (
                               <div className="mb-6 bg-surface-lowest border border-outline p-4 rounded-2xl shadow-inner">
                                 <div className="flex justify-between items-end mb-2">
-                                  <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Payload Sync</span>
+                                  <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Volume</span>
                                   {editingVolumeEqId === eq.id ? (
                                     <div className="flex items-center space-x-1">
                                       <input
@@ -754,11 +822,11 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                                           }
                                         }}
                                       />
-                                      <span className="text-xs font-black text-on-surface-dim">/ {eq.maxCapacity.toLocaleString()} L</span>
+                                      <span className="text-xs font-black text-on-surface-dim">/ {fmtVol(eq.maxCapacity)}</span>
                                     </div>
                                   ) : (
                                     <div className="flex items-center space-x-1.5">
-                                      <span className="text-xs font-black text-on-surface tracking-tighter">{eq.currentVolume.toLocaleString()} / {eq.maxCapacity.toLocaleString()} L</span>
+                                      <span className={`text-xs font-black tracking-tighter ${fuelTextColor(eq.currentVolume, eq.maxCapacity)}`}>{fmtVol(eq.currentVolume)} / {fmtVol(eq.maxCapacity)}</span>
                                       {canEdit && (eq.type === EquipmentType.REFUELLER || eq.type === EquipmentType.DIESEL_TRUCK) && (
                                         <button 
                                           onClick={() => {
@@ -776,7 +844,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                                 </div>
                                 <div className="w-full bg-surface-dim h-1.5 rounded-full overflow-hidden shadow-inner">
                                   <div 
-                                    className="bg-primary h-full transition-all duration-1000 ease-out shadow-premium"
+                                    className={`h-full transition-all duration-1000 ease-out shadow-premium ${fuelFillColor(eq.currentVolume, eq.maxCapacity)}`}
                                     style={{ width: `${(eq.currentVolume / eq.maxCapacity) * 100}%` }}
                                   />
                                 </div>
@@ -822,9 +890,6 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                         {statusGroups.outOfService.map(eq => (
                           <div key={eq.id} className="bg-surface-dim/60 border border-white/5 rounded-[24px] overflow-hidden flex flex-col opacity-75 grayscale-[0.6] hover:opacity-100 hover:grayscale-0 transition-all duration-500 hover:border-error/30 shadow-premium">
                           <div className="p-5 md:p-6 flex-1 relative">
-                            <div className="absolute top-0 right-0 p-5 w-full flex justify-end">
-                              <AlertCircle className="w-6 h-6 text-error opacity-10" />
-                            </div>
                             <div className="flex justify-between items-start mb-6">
                               <div>
                                 <h3 className="text-xl font-[900] text-on-surface-dim tracking-tighter italic uppercase">{eq.name}</h3>
@@ -876,8 +941,11 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                               </div>
                             )}
                           </div>
-                          <div className="bg-error/[0.03] p-4 border-t border-error/5 flex justify-between items-center text-error opacity-60">
-                            <span className="text-[9px] font-black uppercase tracking-widest italic">Operations Restriction Active</span>
+                          <div className="bg-error/[0.03] p-4 border-t border-error/5 flex justify-between items-center text-error opacity-80">
+                            <div className="flex items-center gap-1.5">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span className="text-[9px] font-black uppercase tracking-widest italic">Operations Restriction Active</span>
+                            </div>
                             <Wrench className="w-3.5 h-3.5" />
                           </div>
                         </div>

@@ -3,9 +3,10 @@
  * the current app theme (light/dark). Also switches the home-screen icon
  * between icon-light.svg and icon-dark.svg.
  */
-export const updatePWAManifestAndTheme = async (isDark: boolean) => {
-  const themeColor      = isDark ? '#0b121f' : '#f7f9fb';
-  const backgroundColor = isDark ? '#0b121f' : '#f7f9fb';
+export const updatePWAManifestAndTheme = async (theme: 'light' | 'dark' | 'black') => {
+  const isDark          = theme !== 'light';
+  const themeColor      = theme === 'black' ? '#0E0E0E' : (theme === 'dark' ? '#0b121f' : '#f7f9fb');
+  const backgroundColor = theme === 'black' ? '#0E0E0E' : (theme === 'dark' ? '#0b121f' : '#f7f9fb');
   const iconSrc         = isDark ? '/icon-dark.svg' : '/icon-light.svg';
 
   // ── 1. meta[name="theme-color"] ─────────────────────────────────────────
