@@ -13,8 +13,10 @@ interface ShiftBriefingInfo {
     activeOperators: string[];
     activeOfficers: string[];
     hydrantOpsOfficers: string[];
-    dutySupervisor: string;
-    shiftInCharge: string;
+    dutySupervisor?: string;
+    shiftInCharge?: string;
+    dutySupervisors?: string[];
+    shiftInCharges?: string[];
     attendees?: string[];
     dailyCompleted?: string[];
     frozenFlights?: {
@@ -23,6 +25,7 @@ interface ShiftBriefingInfo {
       adhoc?: any[];
     } | null;
     adhocFlights?: any[];
+    staffStatuses?: Record<string, string>;
   };
 }
 
@@ -206,6 +209,30 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     return bestMatch;
   };
 
+  const getMergedFidsStatus = (f: any, liveFlightsList: any[]) => {
+    let resolvedFidsStatus = f.status || 'PENDING';
+    if (f.type === 'departure') {
+      const related = findRelatedArrival(f, liveFlightsList);
+      if (related && related.status) {
+        const arrStatus = (related.status || '').toUpperCase();
+        const depStatus = (f.status || '').toUpperCase();
+        if (arrStatus.includes('LAND') || arrStatus.includes('ARRIV')) {
+          const isGateOrOnTime = 
+            depStatus.includes('GATE') || 
+            depStatus.includes('CLOSE') || 
+            depStatus.includes('TIME') || 
+            depStatus.includes('SCH') || 
+            depStatus.includes('PENDING') ||
+            !depStatus;
+          if (isGateOrOnTime) {
+            resolvedFidsStatus = related.status;
+          }
+        }
+      }
+    }
+    return resolvedFidsStatus;
+  };
+
   const mergedFlightJobs = useMemo(() => {
     if (!externalFlights || externalFlights.length === 0) {
       return flightJobs;
@@ -259,9 +286,11 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         }
       }
 
+      const resolvedFids = getMergedFidsStatus(lf, liveIntl);
+
       if (existingJobIdx !== -1) {
         const currentStatus = merged[existingJobIdx].status;
-        const newStatus = getStatusFromFids(lf.status, currentStatus);
+        const newStatus = getStatusFromFids(resolvedFids, currentStatus);
 
         merged[existingJobIdx] = {
           ...merged[existingJobIdx],
@@ -272,10 +301,11 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           route: routeStr || merged[existingJobIdx].route,
           date: lf.date || merged[existingJobIdx].date,
           type: lf.type || merged[existingJobIdx].type,
-          status: newStatus
+          status: newStatus,
+          fidsStatus: resolvedFids
         };
       } else {
-        const newStatus = getStatusFromFids(lf.status, 'PENDING');
+        const newStatus = getStatusFromFids(resolvedFids, 'PENDING');
         merged.push({
           id: lf.id || `fj-live-${lf.flightNumber}-${lf.scheduledTime}`,
           flightNumber: lf.flightNumber,
@@ -292,7 +322,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           route: routeStr,
           isVirtual: true,
           date: lf.date,
-          type: lf.type
+          type: lf.type,
+          fidsStatus: resolvedFids
         });
       }
     });
@@ -333,15 +364,14 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         (!j.date || j.date === f.date)
       );
 
+      const resolvedFids = getMergedFidsStatus(f, liveDom);
       let status = 'PENDING';
       const currentStatus = matchingJob?.status;
 
       if (currentStatus === 'IN_PROGRESS' || currentStatus === 'COMPLETED') {
         status = currentStatus;
       } else {
-        if (f.status) {
-          status = f.status.toUpperCase();
-        }
+        status = resolvedFids.toUpperCase();
       }
 
       return {
@@ -352,6 +382,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         stand: f.gate || 'D01',
         assignedTeam: `Team ${(idx % 3) + 1}`,
         status,
+        fidsStatus: resolvedFids,
         sta: staVal,
         eta: etaVal,
         std: stdVal,

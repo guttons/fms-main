@@ -693,3 +693,54 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: white !important;
   border-color: transparent !important;
 }
+
+@keyframes delayed-blink {
+  0%, 100% {
+    opacity: 1;
+    border-color: rgba(239, 68, 68, 0.8) !important;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+  }
+  50% {
+    opacity: 0.65;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    box-shadow: none;
+  }
+}
+.animate-delayed-blink {
+  animation: delayed-blink 1.5s infinite ease-in-out;
+}
+
+/* Custom Tooltip that works on touch and hover */
+.custom-tooltip {
+  position: relative;
+}
+.custom-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%) scale(0.9);
+  background-color: #0c1220;
+  color: #ffffff;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+}
+.custom-tooltip:hover::after,
+.custom-tooltip:focus-within::after,
+.custom-tooltip:active::after {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+

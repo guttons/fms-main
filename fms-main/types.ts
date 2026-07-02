@@ -106,6 +106,7 @@ export interface FlightJob {
   date?: string;
   isVirtual?: boolean;
   type?: 'arrival' | 'departure';
+  fidsStatus?: string;
 }
 
 export interface FlightLog {
@@ -146,6 +147,7 @@ export interface FlightLog {
   isAdhoc?: boolean;
   route?: string;
   isDomestic?: boolean;
+  airline?: string;
 }
 
 export interface BridgingLog {

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FlightLog, User, FlightJob, Equipment, EquipmentStatus, UserRole } from '../types';
 import { MOCK_USERS, MOCK_ADHOC_FLIGHTS, PIT_MAPPING } from '../constants';
-import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Users, Lock, Calendar, X, CreditCard, Ban, Eye, Zap, Bell, Droplet } from 'lucide-react';
+import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Users, Lock, Calendar, X, CreditCard, Ban, Eye, Zap, Bell, Droplet, PlaneLanding, PlaneTakeoff, ArrowRightCircle, Check } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { equipmentBadgeClass, equipmentDotClass, getEquipmentHexColor } from '../utils/equipmentColors';
 import { useNotification } from '../context/NotificationContext';
@@ -18,7 +18,36 @@ interface IntoPlaneProps {
 }
 
 
-// --- UI Components ---
+const getAirlineName = (flightNumber: string, externalFlights: any[]) => {
+  const cleanNo = (flightNumber || '').replace(/\s+/g, '').toLowerCase();
+  const matched = (externalFlights || []).find(f => (f.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+  if (matched?.airline) return matched.airline;
+  
+  // Fallback common mapping
+  const code = cleanNo.slice(0, 2).toUpperCase();
+  const airlineCodes: Record<string, string> = {
+    'EK': 'Emirates',
+    'UL': 'SriLankan Airlines',
+    'QR': 'Qatar Airways',
+    'EY': 'Etihad Airways',
+    '6E': 'Indigo',
+    'GF': 'Gulf Air',
+    'TK': 'Turkish Airlines',
+    'FZ': 'Flydubai',
+    'SQ': 'Singapore Airlines',
+    'SV': 'Saudia',
+    'AI': 'Air India',
+    'UK': 'Vistara',
+    'WY': 'Oman Air',
+    'BA': 'British Airways',
+    'QTR': 'Qatar Airways',
+    'UAE': 'Emirates',
+    'Q2': 'Maldivian',
+    'NR': 'Manta Air',
+    'VP': 'Villa Air'
+  };
+  return airlineCodes[code] || '';
+};
 
 const isOperator = (role: UserRole) => role === UserRole.ITP_OPERATOR || role === UserRole.ITP_SUPERVISOR;
 
@@ -202,10 +231,60 @@ const ScreenDashboard: React.FC<{
     briefingInfo,
     selectedBriefingShift,
     selectedBriefingDate,
-    domesticAssignments
+    domesticAssignments,
+    externalFlights
   } = useOperationalData();
   const [viewMode, setViewMode] = useState<'INT' | 'DOM' | 'ADHOC'>('INT');
   const [filterMyTasks, setFilterMyTasks] = useState(false);
+
+  const renderStatusBadge = (status?: string) => {
+    if (!status) return null;
+    const s = status.toUpperCase().replace('_', ' ');
+
+    let badgeClass = 'bg-slate-500/10 text-slate-400 border-slate-500/30';
+    let IconComponent: React.ComponentType<any> = Clock;
+
+    if (s === 'COMPLETED' || s.includes('COMPLETED') || s.includes('DONE')) {
+      badgeClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.1)]';
+      IconComponent = CheckCircle;
+    } else if (s === 'IN_PROGRESS' || s === 'IN PROGRESS') {
+      badgeClass = 'bg-orange-500/10 text-orange-500 border-orange-500/30';
+      IconComponent = Play;
+    } else if (s.includes('DELAY')) {
+      badgeClass = 'bg-red-500/10 text-red-500 border-red-500/30 animate-delayed-blink';
+      IconComponent = AlertTriangle;
+    } else if (s.includes('CANCEL') || s.includes('CNL')) {
+      badgeClass = 'bg-red-500/10 text-red-500 border-red-500/20 opacity-70';
+      IconComponent = Ban;
+    } else if (s.includes('LANDED') || s.includes('ARRIV')) {
+      badgeClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+      IconComponent = PlaneLanding;
+    } else if (s.includes('DEPART')) {
+      badgeClass = 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30';
+      IconComponent = PlaneTakeoff;
+    } else if (s.includes('BOARDING')) {
+      badgeClass = 'bg-amber-500/10 text-amber-500 border-amber-500/30';
+      IconComponent = ArrowRightCircle;
+    } else if (s.includes('GATE') || s.includes('FINAL') || s.includes('CLOSED')) {
+      if (s.includes('CHECK-IN CLOSED') || s.includes('CLOSED')) {
+        badgeClass = 'bg-pink-500/10 text-pink-500 border-pink-500/30';
+        IconComponent = Lock;
+      } else {
+        badgeClass = 'bg-amber-500/10 text-amber-500 border-amber-500/30';
+        IconComponent = Clock;
+      }
+    } else if (s.includes('ON TIME') || s.includes('ON-TIME') || s.includes('SCH') || s.includes('SCHEDULED') || s.includes('PENDING')) {
+      badgeClass = 'bg-sky-500/10 text-sky-400 border-sky-500/30';
+      IconComponent = Check;
+    }
+
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0 ${badgeClass}`}>
+        <IconComponent className="w-3.5 h-3.5" />
+        <span className="leading-none">{s}</span>
+      </span>
+    );
+  };
   const [activeMenuJobId, setActiveMenuJobId] = useState<string | null>(null);
   
   const shiftRanges: Record<string, { start: string; end: string; crossesMidnight: boolean }> = {
@@ -386,44 +465,62 @@ const ScreenDashboard: React.FC<{
       }
 
       const activeEquipmentUsage = job.equipmentUsage || 'HYDRANT';
+      const airlineName = getAirlineName(job.flightNumber, externalFlights);
 
       return (
           <div key={job.id} className={`bg-surface-container-lowest p-6 rounded-2xl relative overflow-hidden transition-all shrink-0 border ${isAssignedToMe ? 'border-primary border-l-[6px] shadow-sm' : 'border-outline opacity-80'}`}>
               <div className="relative z-10">
                   <div className="flex justify-between items-center mb-6 gap-4 w-full relative">
                       <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                               {/* Yellow gradient stand badge next to flight number on desktop view */}
-                               <div className="hidden md:block bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider">
-                                   {job.stand}
-                               </div>
-                               <h3 className="text-2xl sm:text-3xl font-[900] text-on-surface tracking-tighter leading-none">{job.flightNumber}</h3>
-                               {/* Logo + Equipment badge — grouped so they never split on mobile */}
-                               <div className="flex items-center flex-shrink-0">
-                                 {logoUrl && (
-                                   <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
-                                     <img
-                                       src={logoUrl}
-                                       alt=""
-                                       aria-hidden="true"
-                                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                       className="w-full h-full object-contain select-none flex-shrink-0"
-                                     />
-                                   </div>
-                                 )}
-                               {/* Desktop-only details: type, reg, and route on the same row as flight number after logo */}
-                               <div className="hidden md:flex items-center gap-2.5 text-[11px] sm:text-[12px] font-bold text-on-surface-dim">
-                                   <span className="opacity-20">|</span>
-                                   <span className="opacity-60">{job.aircraftType}</span>
-                                   <span className="opacity-20">|</span>
-                                   <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black text-on-surface-dim border-transparent uppercase tracking-wider">{job.aircraftReg}</span>
-                                   {job.route && (
-                                     <>
-                                       <span className="opacity-20">|</span>
-                                       {renderRoute(job.route, "text-primary text-[10px]", job.isDomestic)}
-                                     </>
-                                   )}
-                               </div>
+                          <div className="flex flex-col">
+                              <div className="flex flex-wrap items-center gap-2">
+                                  {/* Yellow gradient stand badge next to flight number on desktop view */}
+                                  <div className="hidden md:block bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider">
+                                      {job.stand}
+                                  </div>
+                                  <h3 className="text-2xl sm:text-3xl font-[900] text-on-surface tracking-tighter leading-none">{job.flightNumber}</h3>
+                                  
+                                  {/* Logo */}
+                                  {logoUrl && (
+                                      <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                                          <img
+                                              src={logoUrl}
+                                              alt=""
+                                              aria-hidden="true"
+                                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                              className="w-full h-full object-contain select-none flex-shrink-0"
+                                          />
+                                      </div>
+                                  )}
+
+                                  {/* Mobile-only Airline Name (after logo & flight number) */}
+                                  {airlineName && (
+                                      <span className="md:hidden text-[11px] font-black text-on-surface-dim opacity-50 uppercase tracking-wider ml-1 self-center">
+                                          {airlineName}
+                                      </span>
+                                  )}
+
+                                  {/* Desktop-only details: type, reg, and route on the same row as flight number after logo */}
+                                  <div className="hidden md:flex items-center gap-2.5 text-[11px] sm:text-[12px] font-bold text-on-surface-dim">
+                                      <span className="opacity-20">|</span>
+                                      <span className="opacity-60">{job.aircraftType}</span>
+                                      <span className="opacity-20">|</span>
+                                      <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black text-on-surface-dim border-transparent uppercase tracking-wider">{job.aircraftReg}</span>
+                                      {job.route && (
+                                          <>
+                                              <span className="opacity-20">|</span>
+                                              {renderRoute(job.route, "text-primary text-[10px]", job.isDomestic)}
+                                          </>
+                                      )}
+                                  </div>
+                              </div>
+
+                              {/* Desktop-only Airline Name (below flight number and logo) */}
+                              {airlineName && (
+                                  <div className="hidden md:block text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1">
+                                      {airlineName}
+                                  </div>
+                              )}
                           </div>
 
                           {/* Mobile-only details: Stand, type, reg, and route grouped together on the same row */}
@@ -442,7 +539,7 @@ const ScreenDashboard: React.FC<{
                                    {renderRoute(job.route, "text-primary text-[9px] sm:text-[10px] tracking-wide whitespace-nowrap", job.isDomestic)}
                                  </>
                                )}
-                          </div>      </div>
+                          </div>
                       </div>
 
                       {/* Desktop Center-Aligned Timings (Larger Font) */}
@@ -650,13 +747,7 @@ const ScreenDashboard: React.FC<{
                               {displayStatus === 'IN_PROGRESS' && (
                                   <span className="text-[8px] font-black text-warning uppercase tracking-widest animate-pulse">ACTIVE FUELING</span>
                               )}
-                              <span className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border shrink-0 ${
-                                  displayStatus === 'COMPLETED' ? 'bg-success/10 text-success border-success/10' : 
-                                  displayStatus === 'DELAYED' ? 'bg-error/10 text-error border-error/10' :
-                                  displayStatus === 'IN_PROGRESS' ? 'bg-warning/10 text-warning border-warning/10' : 'bg-surface-container-low text-on-surface-dim border-outline'
-                              }`}>
-                                  {displayStatus.replace('_', ' ')}
-                              </span>
+                              {renderStatusBadge(displayStatus)}
                           </div>
                       </div>
                   </div>
@@ -1234,7 +1325,7 @@ const ScreenQC: React.FC<{
 
 export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob, initialVehicleId, onClearInitialVehicleId }) => {
   const { notify } = useNotification();
-  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob } = useOperationalData();
+  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, externalFlights } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(null);
   const [paymentType, setPaymentType] = useState<'CREDIT' | 'CASH' | 'VOID'>('CREDIT');
@@ -1696,6 +1787,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         isAdhoc: activeFlight.isAdhoc,
         route: savedRoute,
         isDomestic: activeFlight.isDomestic,
+        airline: getAirlineName(activeFlight.flightNumber || '', externalFlights)
       };
 
       await supabaseService.createFlightLog(logToSave);

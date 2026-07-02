@@ -20,13 +20,34 @@ import {
   UserCheck,
   Calendar,
   X,
-  Snowflake
+  Snowflake,
+  PlaneLanding,
+  PlaneTakeoff,
+  Check,
+  XCircle,
+  ArrowRightCircle,
+  Lock,
+  Ban,
+  Play,
+  CheckCircle
 } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { MOCK_USERS, MOCK_ADHOC_FLIGHTS, EQUIPMENT } from '../constants';
 import { User, UserRole, EquipmentType, EquipmentStatus } from '../types';
 import { useNotification } from '../context/NotificationContext';
 import { useOperationalData, BriefingShift } from '../context/OperationalDataContext';
+
+const STAFF_STATUS_PRESETS = [
+  { id: 'SL', label: 'SL', color: 'bg-amber-500/10 text-amber-500 border border-amber-500/30' },
+  { id: 'FRL', label: 'FRL', color: 'bg-cyan-500/10 text-cyan-500 border border-cyan-500/30' },
+  { id: 'UNFIT', label: 'UNFIT', color: 'bg-red-500/10 text-red-500 border border-red-500/30' },
+  { id: 'EXTRA', label: 'EXTRA', color: 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/30' },
+  { id: 'OFF', label: 'OFF', color: 'bg-slate-500/10 text-slate-400 border border-slate-500/30' },
+  { id: 'CLASS', label: 'CLASS', color: 'bg-indigo-500/10 text-indigo-400 border border-indigo-400/40' },
+  { id: 'TRAIN', label: 'TRAIN', color: 'bg-blue-500/10 text-blue-400 border border-blue-500/30' },
+  { id: 'AB', label: 'AB', color: 'bg-rose-500/10 text-rose-500 border border-rose-500/30' },
+  { id: 'LATE', label: 'LATE', color: 'bg-orange-500/10 text-orange-500 border border-orange-500/30' }
+];
 
 interface ShiftBriefingProps {
   user?: any;
@@ -168,6 +189,55 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
     return 'bg-surface border border-white/10 text-on-surface-dim';
   };
 
+  const renderStatusBadge = (status?: string) => {
+    if (!status) return null;
+    const s = status.toUpperCase().replace('_', ' ');
+
+    let badgeClass = 'bg-slate-500/10 text-slate-400 border-slate-500/30';
+    let IconComponent: React.ComponentType<any> = Clock;
+
+    if (s === 'COMPLETED' || s.includes('COMPLETED') || s.includes('DONE')) {
+      badgeClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.1)]';
+      IconComponent = CheckCircle;
+    } else if (s === 'IN_PROGRESS' || s === 'IN PROGRESS') {
+      badgeClass = 'bg-orange-500/10 text-orange-500 border-orange-500/30';
+      IconComponent = Play;
+    } else if (s.includes('DELAY')) {
+      badgeClass = 'bg-red-500/10 text-red-500 border-red-500/30 animate-delayed-blink';
+      IconComponent = AlertTriangle;
+    } else if (s.includes('CANCEL') || s.includes('CNL')) {
+      badgeClass = 'bg-red-500/10 text-red-500 border-red-500/20 opacity-70';
+      IconComponent = Ban;
+    } else if (s.includes('LANDED') || s.includes('ARRIV')) {
+      badgeClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+      IconComponent = PlaneLanding;
+    } else if (s.includes('DEPART')) {
+      badgeClass = 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30';
+      IconComponent = PlaneTakeoff;
+    } else if (s.includes('BOARDING')) {
+      badgeClass = 'bg-amber-500/10 text-amber-500 border-amber-500/30';
+      IconComponent = ArrowRightCircle;
+    } else if (s.includes('GATE') || s.includes('FINAL') || s.includes('CLOSED')) {
+      if (s.includes('CHECK-IN CLOSED') || s.includes('CLOSED')) {
+        badgeClass = 'bg-pink-500/10 text-pink-500 border-pink-500/30';
+        IconComponent = Lock;
+      } else {
+        badgeClass = 'bg-amber-500/10 text-amber-500 border-amber-500/30';
+        IconComponent = Clock;
+      }
+    } else if (s.includes('ON TIME') || s.includes('ON-TIME') || s.includes('SCH') || s.includes('SCHEDULED') || s.includes('PENDING')) {
+      badgeClass = 'bg-sky-500/10 text-sky-400 border-sky-500/30';
+      IconComponent = Check;
+    }
+
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0 ${badgeClass}`}>
+        <IconComponent className="w-3.5 h-3.5" />
+        <span className="leading-none">{s}</span>
+      </span>
+    );
+  };
+
   const frozenFlights = briefingInfo?.staffAssignments?.frozenFlights;
 
   const intlFlightsToRender = frozenFlights?.intl 
@@ -245,13 +315,14 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
   const [additionalInfo, setAdditionalInfo] = useState(briefingInfo?.info || []);
   const [dieselNeeds, setDieselNeeds] = useState<string[]>(briefingInfo?.dieselNeeds || []);
   const [dailyCompleted, setDailyCompleted] = useState<string[]>(briefingInfo?.staffAssignments?.dailyCompleted || []);
-
   interface StaffAssignments {
     activeOperators: string[];
     activeOfficers: string[];
     hydrantOpsOfficers: string[];
-    dutySupervisor: string;
-    shiftInCharge: string;
+    dutySupervisor?: string;
+    shiftInCharge?: string;
+    dutySupervisors?: string[];
+    shiftInCharges?: string[];
     attendees?: string[];
     dailyCompleted?: string[];
     frozenFlights?: {
@@ -260,24 +331,63 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
       adhoc?: any[];
     } | null;
     adhocFlights?: any[];
+    staffStatuses?: Record<string, string>;
   }
 
-  const [staffAssignments, setStaffAssignments] = useState<StaffAssignments>(briefingInfo?.staffAssignments || {
-    activeOperators: ['u3b'],
-    activeOfficers: ['u3'],
-    hydrantOpsOfficers: ['u7'],
-    dutySupervisor: 'u2',
-    shiftInCharge: 'u11'
-  });
+  const getInitialStaffAssignments = (): StaffAssignments => {
+    const s = briefingInfo?.staffAssignments;
+    if (!s) {
+      return {
+        activeOperators: ['u3b'],
+        activeOfficers: ['u3'],
+        hydrantOpsOfficers: ['u7'],
+        dutySupervisors: ['u2'],
+        shiftInCharges: ['u11']
+      };
+    }
+    
+    const dutySupervisors = s.dutySupervisors 
+      ? s.dutySupervisors 
+      : s.dutySupervisor 
+        ? [s.dutySupervisor] 
+        : [];
+        
+    const shiftInCharges = s.shiftInCharges 
+      ? s.shiftInCharges 
+      : s.shiftInCharge 
+        ? [s.shiftInCharge] 
+        : [];
+
+    return {
+      ...s,
+      dutySupervisors,
+      shiftInCharges
+    };
+  };
+
+  const [staffAssignments, setStaffAssignments] = useState<StaffAssignments>(getInitialStaffAssignments());
 
   const [attendees, setAttendees] = useState<string[]>(briefingInfo?.staffAssignments?.attendees || []);
+  const [staffStatuses, setStaffStatuses] = useState<Record<string, string>>(briefingInfo?.staffAssignments?.staffStatuses || {});
+  const [activeDropdownStaffId, setActiveDropdownStaffId] = useState<string | null>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleDocumentClick = () => {
+      setActiveDropdownStaffId(null);
+    };
+    document.addEventListener('click', handleDocumentClick);
+    return () => {
+      document.removeEventListener('click', handleDocumentClick);
+    };
+  }, []);
 
   const uniqueStaff = Array.from(new Set([
     ...staffAssignments.activeOperators,
     ...staffAssignments.activeOfficers,
     ...staffAssignments.hydrantOpsOfficers,
-    staffAssignments.dutySupervisor,
-    staffAssignments.shiftInCharge
+    ...(staffAssignments.dutySupervisors || []),
+    ...(staffAssignments.shiftInCharges || [])
   ].filter(Boolean)));
 
   const presentCount = uniqueStaff.filter(id => attendees.includes(id)).length;
@@ -295,12 +405,38 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
       setAdditionalInfo(briefingInfo.info || []);
       setDieselNeeds(briefingInfo.dieselNeeds || []);
       if (briefingInfo.staffAssignments) {
-        setStaffAssignments(briefingInfo.staffAssignments);
-        setAttendees(briefingInfo.staffAssignments.attendees || []);
-        setDailyCompleted(briefingInfo.staffAssignments.dailyCompleted || []);
+        const s = briefingInfo.staffAssignments;
+        const dutySupervisors = s.dutySupervisors 
+          ? s.dutySupervisors 
+          : s.dutySupervisor 
+            ? [s.dutySupervisor] 
+            : [];
+            
+        const shiftInCharges = s.shiftInCharges 
+          ? s.shiftInCharges 
+          : s.shiftInCharge 
+            ? [s.shiftInCharge] 
+            : [];
+
+        setStaffAssignments({
+          ...s,
+          dutySupervisors,
+          shiftInCharges
+        });
+        setAttendees(s.attendees || []);
+        setDailyCompleted(s.dailyCompleted || []);
+        setStaffStatuses(s.staffStatuses || {});
       } else {
+        setStaffAssignments({
+          activeOperators: [],
+          activeOfficers: [],
+          hydrantOpsOfficers: [],
+          dutySupervisors: [],
+          shiftInCharges: []
+        });
         setAttendees([]);
         setDailyCompleted([]);
+        setStaffStatuses({});
       }
     }
   }, [briefingInfo]);
@@ -322,6 +458,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
       await updateBriefingInfo(additionalInfo, dieselNeeds, {
         ...staffAssignments,
         attendees,
+        staffStatuses,
         dailyCompleted,
         frozenFlights: frozenToSave,
         adhocFlights: adhocFlightsToRender
@@ -508,6 +645,67 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   <option key={u.id} value={u.id} className="bg-surface-dim text-on-surface font-normal not-italic">{u.name}</option>
                 ))}
               </select>
+              {val && (
+                <div className="relative inline-block shrink-0">
+                  {(() => {
+                    const currentStatus = staffStatuses[val];
+                    const statusPreset = STAFF_STATUS_PRESETS.find(p => p.id === currentStatus);
+                    const dropdownKey = `${label}-${val}-${idx}`;
+                    return (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveDropdownStaffId(activeDropdownStaffId === dropdownKey ? null : dropdownKey);
+                          }}
+                          className={`px-1.5 py-0.5 rounded-md text-[8.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                            statusPreset 
+                              ? statusPreset.color 
+                              : 'bg-surface-lowest border border-dashed border-outline text-on-surface-dim opacity-40 hover:opacity-100'
+                          }`}
+                        >
+                          {statusPreset ? statusPreset.label : '+ TAG'}
+                        </button>
+                        
+                        {activeDropdownStaffId === dropdownKey && (
+                          <div 
+                            className="absolute right-0 mt-1 bg-surface-lowest border border-outline rounded-2xl p-1 shadow-premium w-24 flex flex-col space-y-0.5 z-[100] animate-in fade-in slide-in-from-top-1 duration-100"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {STAFF_STATUS_PRESETS.map((preset) => (
+                              <button
+                                key={preset.id}
+                                onClick={() => {
+                                  setStaffStatuses(prev => ({ ...prev, [val]: preset.id }));
+                                  setActiveDropdownStaffId(null);
+                                }}
+                                className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider text-center transition-all ${preset.color} hover:brightness-110 active:scale-95`}
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                            {currentStatus && (
+                              <button
+                                onClick={() => {
+                                  setStaffStatuses(prev => {
+                                    const next = { ...prev };
+                                    delete next[val];
+                                    return next;
+                                  });
+                                  setActiveDropdownStaffId(null);
+                                }}
+                                className="px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider text-center text-error hover:bg-error/10 active:scale-95 border border-transparent"
+                              >
+                                Clear
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
               <button 
                 onClick={() => {
                   const newVals = values.filter((_, i) => i !== idx);
@@ -793,14 +991,14 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
               const presentOthers = assignedOthers.filter(u => attendees.includes(u.id)).length;
 
               const summaries = [
-                { label: 'Operators', present: presentOperators, total: assignedOperators.length },
-                { label: 'Officers', present: presentOfficers, total: assignedOfficers.length },
-                { label: 'Hydrant Ops', present: presentHydrantOps, total: assignedHydrantOps.length },
-                { label: 'Management', present: presentManagement, total: assignedManagement.length }
+                { label: 'Operators', present: presentOperators, total: assignedOperators.length, theme: 'success' },
+                { label: 'Officers', present: presentOfficers, total: assignedOfficers.length, theme: 'primary' },
+                { label: 'Hydrant Ops', present: presentHydrantOps, total: assignedHydrantOps.length, theme: 'warning' },
+                { label: 'Management', present: presentManagement, total: assignedManagement.length, theme: 'primary' }
               ];
 
               if (assignedOthers.length > 0) {
-                summaries.push({ label: 'Other Staff', present: presentOthers, total: assignedOthers.length });
+                summaries.push({ label: 'Other Staff', present: presentOthers, total: assignedOthers.length, theme: 'primary' });
               }
 
               return (
@@ -815,13 +1013,13 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                       </span>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-3">
+                  <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-3">
                     {summaries.map(s => {
                       if (s.total === 0) return null;
                       return (
-                        <div key={s.label} className="bg-surface-dim border border-outline rounded-xl p-3 px-4 flex items-center space-x-2.5 shadow-sm">
-                          <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider">{s.label}</span>
-                          <span className="text-xs font-black text-on-surface bg-surface-lowest px-2 py-0.5 rounded-md border border-outline/50">
+                        <div key={s.label} className="bg-surface-dim border border-outline rounded-xl p-2.5 px-3 flex items-center justify-between sm:justify-start sm:space-x-2.5 shadow-sm min-w-0">
+                          <span className="text-[9px] sm:text-[10px] font-black text-on-surface-dim uppercase tracking-wider truncate">{s.label}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-[900] border shrink-0 badge-custom-${s.theme}`}>
                             {s.present} of {s.total}
                           </span>
                         </div>
@@ -881,9 +1079,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                             </button>
                           )}
                         </div>
-                        <div className={`whitespace-nowrap text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${getBriefingStatusStyle(job.status)}`}>
-                          {job.status.replace('_', ' ')}
-                        </div>
+                        {renderStatusBadge(job.status)}
                       </div>
                       <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
                         {getIntlFlightTimeLabel(job)}
@@ -941,9 +1137,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                             </button>
                           )}
                         </div>
-                        <div className={`whitespace-nowrap text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${getBriefingStatusStyle(flight.status)}`}>
-                          {flight.status.replace('_', ' ')}
-                        </div>
+                        {renderStatusBadge(flight.status)}
                       </div>
                       <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
                         {getDomesticFlightTimeLabel(flight)}
@@ -995,9 +1189,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                             </button>
                           )}
                         </div>
-                        <div className={`whitespace-nowrap text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest ${getBriefingStatusStyle(flight.status)}`}>
-                          {flight.status.replace('_', ' ')}
-                        </div>
+                        {renderStatusBadge(flight.status)}
                       </div>
                       <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
                         ETA: {flight.eta} • DEP: {flight.std}
@@ -1012,7 +1204,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
           {/* PERSONNEL SECTOR: Split into 4 Separate Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
             {/* Active Operators Card */}
-            <div className="card-premium p-5 sm:p-8 space-y-4 sm:space-y-6 group max-w-md mx-auto md:max-w-none w-full hover-glow-success">
+            <div className={`card-premium p-5 sm:p-8 space-y-4 sm:space-y-6 group max-w-md mx-auto md:max-w-none w-full hover-glow-success relative ${activeDropdownStaffId?.startsWith('Operators') ? 'z-50' : 'z-10'}`}>
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-4">
                   <button 
@@ -1034,7 +1226,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
             </div>
 
             {/* Active Officers Card */}
-            <div className="card-premium p-5 sm:p-8 space-y-4 sm:space-y-6 group max-w-md mx-auto md:max-w-none w-full hover-glow-primary">
+            <div className={`card-premium p-5 sm:p-8 space-y-4 sm:space-y-6 group max-w-md mx-auto md:max-w-none w-full hover-glow-primary relative ${activeDropdownStaffId?.startsWith('Officers') ? 'z-50' : 'z-10'}`}>
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-4">
                   <button 
@@ -1056,7 +1248,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
             </div>
 
             {/* Hydrant Ops Officers Card */}
-            <div className="card-premium p-5 sm:p-8 space-y-4 sm:space-y-6 group max-w-md mx-auto md:max-w-none w-full hover-glow-warning">
+            <div className={`card-premium p-5 sm:p-8 space-y-4 sm:space-y-6 group max-w-md mx-auto md:max-w-none w-full hover-glow-warning relative ${activeDropdownStaffId?.startsWith('Hydrant Officers') ? 'z-50' : 'z-10'}`}>
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-4">
                   <button 
@@ -1078,7 +1270,9 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
             </div>
 
             {/* Supervisors & Managers Card */}
-            <div className="card-premium p-5 sm:p-8 space-y-4 sm:space-y-6 group max-w-md mx-auto md:max-w-none w-full hover-glow-primary">
+            <div className={`card-premium p-5 sm:p-8 space-y-4 sm:space-y-6 group max-w-md mx-auto md:max-w-none w-full hover-glow-primary relative ${
+              (activeDropdownStaffId?.startsWith('Duty Supervisor') || activeDropdownStaffId?.startsWith('Shift In-Charge')) ? 'z-50' : 'z-10'
+            }`}>
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-4">
                   <button 
@@ -1090,13 +1284,28 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   </button>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Staffing Management</h3>
                 </div>
-                <span className="badge-custom-primary px-3 py-1 rounded-full text-[10px] font-black whitespace-nowrap shrink-0">2 STAFF</span>
+                <span className="badge-custom-primary px-3 py-1 rounded-full text-[10px] font-black whitespace-nowrap shrink-0">
+                  {((staffAssignments.dutySupervisors || []).length + (staffAssignments.shiftInCharges || []).length)} STAFF
+                </span>
               </div>
               {!isStaffingCollapsed && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-200">
-                  {renderStaffSelect(staffAssignments.dutySupervisor, [UserRole.ITP_MANAGER, UserRole.ITP_SUPERVISOR], "Duty Supervisor", (id) => setStaffAssignments(prev => ({ ...prev, dutySupervisor: id })))}
-                  {/* Manager or Shift In-Charge selection - using ITP_MANAGER role */}
-                  {renderStaffSelect(staffAssignments.shiftInCharge, [UserRole.ITP_MANAGER, UserRole.ITP_SUPERVISOR], "Shift In-Charge", (id) => setStaffAssignments(prev => ({ ...prev, shiftInCharge: id })))}
+                  {renderStaffSelectArray(
+                    staffAssignments.dutySupervisors || [],
+                    [UserRole.ITP_MANAGER, UserRole.ITP_SUPERVISOR],
+                    "Duty Supervisor",
+                    "bg-primary shadow-[0_0_10px_rgba(14,165,233,0.4)]",
+                    'primary',
+                    (newVals) => setStaffAssignments(prev => ({ ...prev, dutySupervisors: newVals }))
+                  )}
+                  {renderStaffSelectArray(
+                    staffAssignments.shiftInCharges || [],
+                    [UserRole.ITP_MANAGER, UserRole.ITP_SUPERVISOR],
+                    "Shift In-Charge",
+                    "bg-primary shadow-[0_0_10px_rgba(14,165,233,0.4)]",
+                    'primary',
+                    (newVals) => setStaffAssignments(prev => ({ ...prev, shiftInCharges: newVals }))
+                  )}
                 </div>
               )}
             </div>
@@ -1208,7 +1417,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                               }`}
                             >
                               <UserCheck className="w-3 h-3 shrink-0" />
-                              <span className="text-[9px] font-black uppercase tracking-widest truncate">
+                              <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider truncate">
                                 DAILY: {isDailyCompleted ? 'COMPLETED' : 'PENDING'}
                               </span>
                             </button>
@@ -1383,6 +1592,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   await updateBriefingInfo(additionalInfo, dieselNeeds, {
                     ...staffAssignments,
                     attendees,
+                    staffStatuses,
                     dailyCompleted,
                     frozenFlights: frozenToSave,
                     adhocFlights: adhocFlightsToRender

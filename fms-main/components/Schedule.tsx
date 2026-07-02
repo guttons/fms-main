@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { MOCK_USERS, MOCK_ADHOC_FLIGHTS, EQUIPMENT } from '../constants';
 import { UserRole, EquipmentType, FlightJob } from '../types';
-import { Calendar, Zap, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home, Radio, RefreshCw } from 'lucide-react';
+import { Calendar, Zap, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home, Radio, RefreshCw, PlaneLanding, PlaneTakeoff, Check, XCircle, ArrowRightCircle, AlertTriangle, Lock, Ban, Play, CheckCircle, Globe } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { BriefingShift } from '../context/OperationalDataContext';
@@ -113,6 +113,55 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
       return 'bg-warning/10 text-warning border-warning/20';
     }
     return 'bg-surface-dim text-on-surface-dim border-outline';
+  };
+
+  const renderStatusBadge = (status?: string) => {
+    if (!status) return null;
+    const s = status.toUpperCase().replace('_', ' ');
+
+    let badgeClass = 'bg-slate-500/10 text-slate-400 border-slate-500/30';
+    let IconComponent: React.ComponentType<any> = Clock;
+
+    if (s === 'COMPLETED' || s.includes('COMPLETED') || s.includes('DONE')) {
+      badgeClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.1)]';
+      IconComponent = CheckCircle;
+    } else if (s === 'IN_PROGRESS' || s === 'IN PROGRESS') {
+      badgeClass = 'bg-orange-500/10 text-orange-500 border-orange-500/30';
+      IconComponent = Play;
+    } else if (s.includes('DELAY')) {
+      badgeClass = 'bg-red-500/10 text-red-500 border-red-500/30 animate-delayed-blink';
+      IconComponent = AlertTriangle;
+    } else if (s.includes('CANCEL') || s.includes('CNL')) {
+      badgeClass = 'bg-red-500/10 text-red-500 border-red-500/20 opacity-70';
+      IconComponent = Ban;
+    } else if (s.includes('LANDED') || s.includes('ARRIV')) {
+      badgeClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+      IconComponent = PlaneLanding;
+    } else if (s.includes('DEPART')) {
+      badgeClass = 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30';
+      IconComponent = PlaneTakeoff;
+    } else if (s.includes('BOARDING')) {
+      badgeClass = 'bg-amber-500/10 text-amber-500 border-amber-500/30';
+      IconComponent = ArrowRightCircle;
+    } else if (s.includes('GATE') || s.includes('FINAL') || s.includes('CLOSED')) {
+      if (s.includes('CHECK-IN CLOSED') || s.includes('CLOSED')) {
+        badgeClass = 'bg-pink-500/10 text-pink-500 border-pink-500/30';
+        IconComponent = Lock;
+      } else {
+        badgeClass = 'bg-amber-500/10 text-amber-500 border-amber-500/30';
+        IconComponent = Clock;
+      }
+    } else if (s.includes('ON TIME') || s.includes('ON-TIME') || s.includes('SCH') || s.includes('SCHEDULED') || s.includes('PENDING')) {
+      badgeClass = 'bg-sky-500/10 text-sky-400 border-sky-500/30';
+      IconComponent = Check;
+    }
+
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0 ${badgeClass}`}>
+        <IconComponent className="w-3.5 h-3.5" />
+        <span className="leading-none">{s}</span>
+      </span>
+    );
   };
 
   const handleImportClick = (flight: any) => {
@@ -724,9 +773,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                           </td>
                           <td className="px-4 py-6 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex justify-end items-center gap-3">
-                              <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${getStatusColor(item.status)}`}>
-                                {item.status.replace('_', ' ')}
-                              </span>
+                              {renderStatusBadge(item.status)}
                               <button 
                                 onClick={() => handleAssignFlight(item.id, 'equipmentUsage', activeEquipmentUsage === 'HYDRANT' ? 'REFUELLER' : 'HYDRANT')} 
                                 className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all shrink-0 cursor-pointer ${
@@ -839,9 +886,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                       </div>
                       <div className="flex justify-between items-center mt-4 pt-4 border-t border-outline/30">
                         <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Status</span>
-                        <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border ${getStatusColor(item.status)}`}>
-                          {item.status.replace('_', ' ')}
-                        </span>
+                        {renderStatusBadge(item.status)}
                       </div>
                     </div>
                   );
@@ -939,9 +984,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                             </td>
 
                             <td className="px-4 py-6 whitespace-nowrap">
-                              <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${getStatusColor(flight.status)}`}>
-                                {flight.status.replace('_', ' ')}
-                              </span>
+                              {renderStatusBadge(flight.status)}
                             </td>
                           </tr>
                         );
@@ -1004,9 +1047,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
                       <div className="flex justify-between items-center mt-4 pt-4 border-t border-outline/30">
                         <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Status</span>
-                        <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border ${getStatusColor(flight.status)}`}>
-                          {flight.status.replace('_', ' ')}
-                        </span>
+                        {renderStatusBadge(flight.status)}
                       </div>
                     </div>
                   );
@@ -1080,9 +1121,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                             </td>
 
                             <td className="px-4 py-6 whitespace-nowrap">
-                              <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${getStatusColor(flight.status)}`}>
-                                {flight.status.replace('_', ' ')}
-                              </span>
+                              {renderStatusBadge(flight.status)}
                             </td>
                           </tr>
                         );
@@ -1156,9 +1195,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
                       <div className="flex justify-between items-center mt-4 pt-4 border-t border-outline/30">
                         <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Status</span>
-                        <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border ${getStatusColor(flight.status)}`}>
-                          {flight.status.replace('_', ' ')}
-                        </span>
+                        {renderStatusBadge(flight.status)}
                       </div>
                     </div>
                   );
@@ -1352,43 +1389,47 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
               </div>
             </div>
           )}
-
-          {/* Live Airport Feed */}
+{/* Live Airport Feed */}
           {activeTab === 'live' && (
             <div className="animate-in fade-in slide-in-from-left-4 duration-500 p-4 md:p-8 space-y-6">
               {/* Header controls */}
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-surface-dim p-4 rounded-2xl border border-outline">
-                <div className="relative flex items-center bg-surface p-1 rounded-xl border border-outline w-[200px] h-[38px] select-none overflow-hidden">
-                  <div
-                    className="absolute top-1 bottom-1 rounded-lg kinetic-gradient transition-all duration-300 ease-out"
-                    style={{
-                      left: fidsType === 'arrival' ? '4px' : 'calc(50% + 2px)',
-                      width: 'calc(50% - 6px)',
-                    }}
-                  />
-                  <button
-                    onClick={() => setFidsType('arrival')}
-                    className={`relative z-10 w-1/2 h-full text-center text-[10px] font-black uppercase tracking-wider transition-colors duration-300 ${fidsType === 'arrival'
-                      ? 'text-white'
-                      : 'text-on-surface-dim hover:text-on-surface'
-                      }`}
-                  >
-                    Arrivals
-                  </button>
-                  <button
-                    onClick={() => setFidsType('departure')}
-                    className={`relative z-10 w-1/2 h-full text-center text-[10px] font-black uppercase tracking-wider transition-colors duration-300 ${fidsType === 'departure'
-                      ? 'text-white'
-                      : 'text-on-surface-dim hover:text-on-surface'
-                      }`}
-                  >
-                    Departures
-                  </button>
-                </div>
+                <div className="flex flex-row items-center justify-between w-full lg:w-auto gap-3">
+                  {/* Arrivals / Departures toggle */}
+                  <div className="relative flex items-center bg-surface p-1 rounded-xl border border-outline w-[90px] sm:w-[240px] h-[38px] select-none shrink-0">
+                    <div
+                      className="absolute top-1 bottom-1 rounded-lg kinetic-gradient transition-all duration-300 ease-out"
+                      style={{
+                        left: fidsType === 'arrival' ? '4px' : 'calc(50% + 2px)',
+                        width: 'calc(50% - 6px)',
+                      }}
+                    />
+                    <button
+                      onClick={() => setFidsType('arrival')}
+                      data-tooltip="Arrivals"
+                      className={`custom-tooltip relative z-10 w-1/2 h-full flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider transition-colors duration-300 ${fidsType === 'arrival'
+                        ? 'text-white'
+                        : 'text-on-surface-dim hover:text-on-surface'
+                        }`}
+                    >
+                      <PlaneLanding className="w-4 h-4 shrink-0" />
+                      <span className="hidden sm:inline">Arrivals</span>
+                    </button>
+                    <button
+                      onClick={() => setFidsType('departure')}
+                      data-tooltip="Departures"
+                      className={`custom-tooltip relative z-10 w-1/2 h-full flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider transition-colors duration-300 ${fidsType === 'departure'
+                        ? 'text-white'
+                        : 'text-on-surface-dim hover:text-on-surface'
+                        }`}
+                    >
+                      <PlaneTakeoff className="w-4 h-4 shrink-0" />
+                      <span className="hidden sm:inline">Departures</span>
+                    </button>
+                  </div>
 
-                <div className="flex flex-wrap items-center gap-4">
-                  {/* Category filters */}
-                  <div className="relative flex items-center bg-surface p-1 rounded-xl border border-outline w-[280px] h-[38px] select-none overflow-hidden">
+                  {/* Category filters (MOBILE VERSION: hidden on lg) */}
+                  <div className="lg:hidden relative flex items-center bg-surface p-1 rounded-xl border border-outline w-[130px] h-[38px] select-none shrink-0">
                     <div
                       className="absolute top-1 bottom-1 rounded-lg kinetic-gradient transition-all duration-300 ease-out"
                       style={{
@@ -1400,28 +1441,67 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                         width: 'calc(33.33% - 6px)',
                       }}
                     />
-                    {['all', 'international', 'domestic'].map((cat) => (
-                      <button
-                        key={cat}
-                        onClick={() => setFidsCategory(cat as any)}
-                        className={`relative z-10 w-1/3 h-full text-center text-[9px] font-black uppercase tracking-widest transition-colors duration-300 ${fidsCategory === cat
-                          ? 'text-white'
-                          : 'text-on-surface-dim hover:text-on-surface'
-                          }`}
-                      >
-                        {cat}
-                      </button>
-                    ))}
+                    {['all', 'international', 'domestic'].map((cat) => {
+                      const IconComponent = cat === 'all' ? Globe : cat === 'international' ? Plane : Home;
+                      return (
+                        <button
+                          key={cat}
+                          onClick={() => setFidsCategory(cat as any)}
+                          data-tooltip={cat}
+                          className={`custom-tooltip relative z-10 w-1/3 h-full flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider transition-colors duration-300 ${fidsCategory === cat
+                            ? 'text-white'
+                            : 'text-on-surface-dim hover:text-on-surface'
+                            }`}
+                        >
+                          <IconComponent className="w-4 h-4 shrink-0" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Right container (Desktop toggles + search + refresh) */}
+                <div className="flex flex-row items-center justify-between lg:justify-end gap-4 w-full lg:w-auto">
+                  {/* Category filters (DESKTOP VERSION: hidden on mobile) */}
+                  <div className="hidden lg:flex relative items-center bg-surface p-1 rounded-xl border border-outline w-[420px] h-[38px] select-none shrink-0">
+                    <div
+                      className="absolute top-1 bottom-1 rounded-lg kinetic-gradient transition-all duration-300 ease-out"
+                      style={{
+                        left: fidsCategory === 'all'
+                          ? '4px'
+                          : fidsCategory === 'international'
+                            ? 'calc(33.33% + 2px)'
+                            : 'calc(66.66% + 2px)',
+                        width: 'calc(33.33% - 6px)',
+                      }}
+                    />
+                    {['all', 'international', 'domestic'].map((cat) => {
+                      const IconComponent = cat === 'all' ? Globe : cat === 'international' ? Plane : Home;
+                      return (
+                        <button
+                          key={cat}
+                          onClick={() => setFidsCategory(cat as any)}
+                          data-tooltip={cat}
+                          className={`custom-tooltip relative z-10 w-1/3 h-full flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider transition-colors duration-300 ${fidsCategory === cat
+                            ? 'text-white'
+                            : 'text-on-surface-dim hover:text-on-surface'
+                            }`}
+                        >
+                          <IconComponent className="w-4 h-4 shrink-0" />
+                          <span className="hidden sm:inline">{cat}</span>
+                        </button>
+                      );
+                    })}
                   </div>
 
                   {/* Search */}
-                  <div className="relative">
+                  <div className="relative flex-1 lg:flex-none">
                     <input
                       type="text"
                       value={fidsSearchQuery}
                       onChange={(e) => setFidsSearchQuery(e.target.value)}
                       placeholder="SEARCH FLIGHT..."
-                      className="w-48 pl-4 pr-10 py-2.5 bg-surface border border-outline rounded-xl text-[10px] font-black uppercase tracking-wider outline-none focus:border-primary transition-all"
+                      className="w-full lg:w-48 pl-4 pr-10 py-2.5 bg-surface border border-outline rounded-xl text-[10px] font-black uppercase tracking-wider outline-none focus:border-primary transition-all"
                     />
                     {fidsSearchQuery && (
                       <button
@@ -1433,14 +1513,14 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                     )}
                   </div>
 
-                  {/* Refresh button */}
+                  {/* Refresh */}
                   <button
                     onClick={() => refreshExternalFlights()}
                     disabled={isExternalFlightsLoading}
-                    className="p-2.5 bg-surface border border-outline rounded-xl text-on-surface-dim hover:text-on-surface hover:border-primary disabled:opacity-50 transition-all flex items-center justify-center shrink-0"
+                    className={`p-2.5 bg-surface border border-outline hover:border-primary/30 rounded-xl text-on-surface-dim hover:text-on-surface transition-all ${isExternalFlightsLoading ? 'animate-spin' : ''}`}
                     title="Refresh Live Data"
                   >
-                    <RefreshCw className={`w-4 h-4 ${isExternalFlightsLoading ? 'animate-spin' : ''}`} />
+                    <RefreshCw className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -1544,9 +1624,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                             </td>
                             {/* Status */}
                             <td className="px-6 py-4 whitespace-nowrap text-center">
-                              <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border ${statusColor}`}>
-                                {flight.status || 'Scheduled'}
-                              </span>
+                              {renderStatusBadge(flight.status || 'Scheduled')}
                             </td>
                             {/* Action */}
                             <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -1565,9 +1643,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                                   )}
                                 </div>
                               ) : flight.status && (flight.status.toLowerCase().includes('cancel') || flight.status.toLowerCase().includes('cnl')) ? (
-                                <span className="inline-flex items-center px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-error/10 text-error border border-error/20 select-none">
-                                  Cancelled
-                                </span>
+                                renderStatusBadge('Cancelled')
                               ) : (
                                 <button
                                   onClick={() => handleImportClick(flight)}
