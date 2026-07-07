@@ -9,8 +9,57 @@ const bigquery = new BigQuery({ projectId: 'macl-fms-496808' });
 
 const DATASET_ID  = 'fms_data';
 const TABLE_ID    = 'operations_log';
+const FILLING_STATION_TABLE_ID = 'filling_station_log';
+const REFUELER_LOADING_TABLE_ID = 'refueler_loading_log';
+
 const PROJECT_ID  = 'macl-fms-496808';
 const TABLE_REF   = `\`${PROJECT_ID}.${DATASET_ID}.${TABLE_ID}\``;
+const FILLING_STATION_TABLE_REF = `\`${PROJECT_ID}.${DATASET_ID}.${FILLING_STATION_TABLE_ID}\``;
+const REFUELER_LOADING_TABLE_REF = `\`${PROJECT_ID}.${DATASET_ID}.${REFUELER_LOADING_TABLE_ID}\``;
+
+// ─── filling_station_log schema ──────────────────────────────────────────────
+const FILLING_STATION_SCHEMA: TableSchema = {
+  fields: [
+    { name: 'id',             type: 'STRING',    mode: 'REQUIRED' },
+    { name: 'station',        type: 'STRING',    mode: 'REQUIRED' }, // 'LFS' | 'AFS'
+    { name: 'fuel_type',      type: 'STRING',    mode: 'REQUIRED' }, // 'Diesel' | 'Petrol' | 'Lube Oil' | 'Internal'
+    { name: 'date',           type: 'DATE',      mode: 'REQUIRED' },
+    { name: 'invoice_number', type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'vehicle_reg',    type: 'STRING',    mode: 'REQUIRED' },
+    { name: 'driver_name',    type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'volume',         type: 'FLOAT64',   mode: 'REQUIRED' },
+    { name: 'payment_mode',   type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'received_by',    type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'equipment_name', type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'operator_id',    type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'remarks',        type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'is_deleted',     type: 'BOOL',      mode: 'NULLABLE' },
+    { name: 'created_at',     type: 'TIMESTAMP', mode: 'NULLABLE' },
+    { name: 'updated_at',     type: 'TIMESTAMP', mode: 'NULLABLE' },
+  ],
+};
+
+// ─── refueler_loading_log schema ─────────────────────────────────────────────
+const REFUELER_LOADING_SCHEMA: TableSchema = {
+  fields: [
+    { name: 'id',                  type: 'STRING',    mode: 'REQUIRED' },
+    { name: 'source_tank_id',      type: 'STRING',    mode: 'REQUIRED' },
+    { name: 'vehicle_id',          type: 'STRING',    mode: 'REQUIRED' },
+    { name: 'volume',              type: 'FLOAT64',   mode: 'REQUIRED' },
+    { name: 'start_time',          type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'end_time',            type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'date',                type: 'DATE',      mode: 'REQUIRED' },
+    { name: 'visual_check_passed', type: 'BOOL',      mode: 'REQUIRED' },
+    { name: 'cwd_check_passed',    type: 'BOOL',      mode: 'REQUIRED' },
+    { name: 'density',             type: 'FLOAT64',   mode: 'NULLABLE' },
+    { name: 'temperature',         type: 'FLOAT64',   mode: 'NULLABLE' },
+    { name: 'operator_name',       type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'supervisor_name',     type: 'STRING',    mode: 'NULLABLE' },
+    { name: 'is_deleted',          type: 'BOOL',      mode: 'NULLABLE' },
+    { name: 'created_at',          type: 'TIMESTAMP', mode: 'NULLABLE' },
+    { name: 'updated_at',          type: 'TIMESTAMP', mode: 'NULLABLE' },
+  ],
+};
 
 // ─── operations_log schema ───────────────────────────────────────────────────
 const OPERATIONS_LOG_SCHEMA: TableSchema = {
@@ -36,6 +85,7 @@ const OPERATIONS_LOG_SCHEMA: TableSchema = {
     { name: 'timestamp_position',   type: 'TIMESTAMP', mode: 'NULLABLE'  },
     { name: 'timestamp_start',      type: 'TIMESTAMP', mode: 'NULLABLE'  },
     { name: 'timestamp_initial_end',type: 'TIMESTAMP', mode: 'NULLABLE'  },
+    { name: 'timestamp_final_start',type: 'TIMESTAMP', mode: 'NULLABLE'  },
     { name: 'timestamp_final_end',  type: 'TIMESTAMP', mode: 'NULLABLE'  },
     { name: 'timestamp_clearance',  type: 'TIMESTAMP', mode: 'NULLABLE'  },
     { name: 'remarks',              type: 'STRING',    mode: 'NULLABLE'  },
@@ -43,6 +93,16 @@ const OPERATIONS_LOG_SCHEMA: TableSchema = {
     { name: 'route',                type: 'STRING',    mode: 'NULLABLE'  },
     { name: 'co',                   type: 'STRING',    mode: 'NULLABLE'  },
     { name: 'is_domestic',          type: 'BOOL',      mode: 'NULLABLE'  },
+    { name: 'airline',              type: 'STRING',    mode: 'NULLABLE'  },
+    { name: 'operational_date',     type: 'DATE',      mode: 'NULLABLE'  },
+    { name: 'pit_number',           type: 'STRING',    mode: 'NULLABLE'  },
+    { name: 'is_adhoc',             type: 'BOOL',      mode: 'NULLABLE'  },
+    { name: 'psi',                  type: 'FLOAT64',   mode: 'NULLABLE'  },
+    { name: 'lpm',                  type: 'FLOAT64',   mode: 'NULLABLE'  },
+    { name: 'officer',              type: 'STRING',    mode: 'NULLABLE'  },
+    { name: 'operator_name',        type: 'STRING',    mode: 'NULLABLE'  },
+    { name: 'destination',          type: 'STRING',    mode: 'NULLABLE'  },
+    { name: 'payment_type',         type: 'STRING',    mode: 'NULLABLE'  },
     { name: 'is_deleted',           type: 'BOOL',      mode: 'NULLABLE'  },
     { name: 'created_at',           type: 'TIMESTAMP', mode: 'NULLABLE'  },
     { name: 'updated_at',           type: 'TIMESTAMP', mode: 'NULLABLE'  },
@@ -67,24 +127,53 @@ async function ensureSchema(): Promise<void> {
     console.log(`[BigQuery] Created table: ${DATASET_ID}.${TABLE_ID}`);
   } else {
     try {
-      const alterSql = `ALTER TABLE ${TABLE_REF} ADD COLUMN IF NOT EXISTS route STRING`;
-      console.log(`[BigQuery] Schema migration: ${alterSql}`);
-      await bigquery.query({ query: alterSql, location: 'US' });
-      const alterSqlCo = `ALTER TABLE ${TABLE_REF} ADD COLUMN IF NOT EXISTS co STRING`;
-      console.log(`[BigQuery] Schema migration: ${alterSqlCo}`);
-      await bigquery.query({ query: alterSqlCo, location: 'US' });
-      const alterSqlDom = `ALTER TABLE ${TABLE_REF} ADD COLUMN IF NOT EXISTS is_domestic BOOL`;
-      console.log(`[BigQuery] Schema migration: ${alterSqlDom}`);
-      await bigquery.query({ query: alterSqlDom, location: 'US' });
+      const columnsToAdd = [
+        'route STRING',
+        'co STRING',
+        'is_domestic BOOL',
+        'airline STRING',
+        'operational_date DATE',
+        'pit_number STRING',
+        'is_adhoc BOOL',
+        'timestamp_final_start TIMESTAMP',
+        'psi FLOAT64',
+        'lpm FLOAT64',
+        'officer STRING',
+        'operator_name STRING',
+        'destination STRING',
+        'payment_type STRING',
+      ];
+      for (const colDef of columnsToAdd) {
+        const alterSql = `ALTER TABLE ${TABLE_REF} ADD COLUMN IF NOT EXISTS ${colDef}`;
+        console.log(`[BigQuery] Schema migration: ${alterSql}`);
+        await bigquery.query({ query: alterSql, location: 'US' });
+      }
     } catch (e: any) {
       console.error('[BigQuery] Migration failed:', e.message);
     }
+  }
+
+  // New Table: filling_station_log
+  const fsTable = dataset.table(FILLING_STATION_TABLE_ID);
+  const [fsTableExists] = await fsTable.exists();
+  if (!fsTableExists) {
+    await dataset.createTable(FILLING_STATION_TABLE_ID, { schema: FILLING_STATION_SCHEMA });
+    console.log(`[BigQuery] Created table: ${DATASET_ID}.${FILLING_STATION_TABLE_ID}`);
+  }
+
+  // New Table: refueler_loading_log
+  const rlTable = dataset.table(REFUELER_LOADING_TABLE_ID);
+  const [rlTableExists] = await rlTable.exists();
+  if (!rlTableExists) {
+    await dataset.createTable(REFUELER_LOADING_TABLE_ID, { schema: REFUELER_LOADING_SCHEMA });
+    console.log(`[BigQuery] Created table: ${DATASET_ID}.${REFUELER_LOADING_TABLE_ID}`);
   }
 }
 
 // ─── Row mappers ─────────────────────────────────────────────────────────────
 function rowToLog(row: Record<string, any>) {
   const ts = (v: any) => v?.value ?? v ?? null;
+  const dt = (v: any) => v?.value ?? v ?? null;
   return {
     id:                  row.id,
     logType:             row.log_type,
@@ -107,6 +196,7 @@ function rowToLog(row: Record<string, any>) {
     timestampPosition:   ts(row.timestamp_position),
     timestampStart:      ts(row.timestamp_start),
     timestampInitialEnd: ts(row.timestamp_initial_end),
+    timestampFinalStart: ts(row.timestamp_final_start),
     timestampFinalEnd:   ts(row.timestamp_final_end),
     timestampClearance:  ts(row.timestamp_clearance),
     remarks:             row.remarks,
@@ -114,6 +204,16 @@ function rowToLog(row: Record<string, any>) {
     route:               row.route,
     co:                  row.co,
     isDomestic:          row.is_domestic,
+    airline:             row.airline,
+    operationalDate:     dt(row.operational_date),
+    pitNumber:           row.pit_number,
+    isAdhoc:             row.is_adhoc,
+    psi:                 row.psi,
+    lpm:                 row.lpm,
+    officer:             row.officer,
+    operatorName:        row.operator_name,
+    destination:         row.destination,
+    paymentType:         row.payment_type,
   };
 }
 
@@ -142,6 +242,7 @@ function logToRow(log: Record<string, any>, id: string): Record<string, any> {
     timestamp_position:    log.timestampPosition  ?? null,
     timestamp_start:       log.timestampStart     ?? null,
     timestamp_initial_end: log.timestampInitialEnd ?? null,
+    timestamp_final_start: log.timestampFinalStart ?? null,
     timestamp_final_end:   log.timestampFinalEnd  ?? null,
     timestamp_clearance:   log.timestampClearance ?? null,
     remarks:               log.remarks             ?? null,
@@ -149,6 +250,16 @@ function logToRow(log: Record<string, any>, id: string): Record<string, any> {
     route:                 log.route               ?? null,
     co:                    log.co                  ?? null,
     is_domestic:           log.isDomestic          ?? null,
+    airline:               log.airline             ?? null,
+    operational_date:      log.operationalDate     ?? null,
+    pit_number:            log.pitNumber           ?? null,
+    is_adhoc:              log.isAdhoc             ?? null,
+    psi:                   log.psi                 ?? null,
+    lpm:                   log.lpm                 ?? null,
+    officer:               log.officer             ?? null,
+    operator_name:         log.operatorName        ?? null,
+    destination:           log.destination         ?? null,
+    payment_type:          log.paymentType         ?? null,
     is_deleted:            false,
     created_at:            now,
     updated_at:            now,
@@ -171,10 +282,21 @@ const allowedOrigins = [
   ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()) : [])
 ];
 
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, apikey');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
+
 app.use(cors({
   origin: '*',
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'apikey'],
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
 }));
 
 app.use(express.json());
@@ -345,6 +467,230 @@ app.get('/external-flights', async (_req: Request, res: Response) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// filling_station_log Endpoints
+// ═══════════════════════════════════════════════════════════════════════════
+app.get('/filling-station-log', requireAuth, async (_req: Request, res: Response) => {
+  const sql = `
+    SELECT * EXCEPT(rn)
+    FROM (
+      SELECT *, ROW_NUMBER() OVER (
+        PARTITION BY id
+        ORDER BY COALESCE(updated_at, created_at, TIMESTAMP('1970-01-01')) DESC
+      ) AS rn
+      FROM ${FILLING_STATION_TABLE_REF}
+    )
+    WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE)
+    ORDER BY date DESC, created_at DESC
+  `;
+  try {
+    const [rows] = await bigquery.query({ query: sql, location: 'US' });
+    res.json({ logs: rows });
+  } catch (err: any) {
+    console.error('[BigQuery] GET filling-station-log error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/filling-station-log', requireAuth, async (req: Request, res: Response) => {
+  const newId = `fs-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const now = new Date().toISOString();
+  const row = {
+    id: newId,
+    station: req.body.station,
+    fuel_type: req.body.fuelType,
+    date: req.body.date,
+    invoice_number: req.body.invoiceNumber || null,
+    vehicle_reg: req.body.vehicleReg,
+    driver_name: req.body.driverName || null,
+    volume: parseFloat(req.body.volume) || 0,
+    payment_mode: req.body.paymentMode || null,
+    received_by: req.body.receivedBy || null,
+    equipment_name: req.body.equipmentName || null,
+    operator_id: req.body.operatorId || null,
+    remarks: req.body.remarks || null,
+    is_deleted: false,
+    created_at: now,
+    updated_at: now,
+  };
+  const activeEntries = Object.entries(row).filter(([_, val]) => val !== null && val !== undefined);
+  const columns = activeEntries.map(([k]) => k);
+  const paramRefs = columns.map(c => `@${c}`).join(', ');
+  const columnList = columns.join(', ');
+  const params = Object.fromEntries(activeEntries);
+  const sql = `INSERT INTO ${FILLING_STATION_TABLE_REF} (${columnList}) VALUES (${paramRefs})`;
+  try {
+    await bigquery.query({ query: sql, params, location: 'US' });
+    res.status(201).json({ id: newId, message: 'Filling station log entry created.' });
+  } catch (err: any) {
+    console.error('[BigQuery] POST filling-station-log error:', err.message, err.errors);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/filling-station-log/:id', requireAuth, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const updates = req.body as Record<string, any>;
+  const fieldMap: Record<string, string> = {
+    station: 'station',
+    fuelType: 'fuel_type',
+    date: 'date',
+    invoiceNumber: 'invoice_number',
+    vehicleReg: 'vehicle_reg',
+    driverName: 'driver_name',
+    volume: 'volume',
+    paymentMode: 'payment_mode',
+    receivedBy: 'received_by',
+    equipmentName: 'equipment_name',
+    operatorId: 'operator_id',
+    remarks: 'remarks',
+  };
+  const setClauses: string[] = ['updated_at = CURRENT_TIMESTAMP()'];
+  const params: Record<string, any> = { record_id: id };
+  for (const [js, bq] of Object.entries(fieldMap)) {
+    if (js in updates) {
+      setClauses.push(`${bq} = @${js}`);
+      params[js] = updates[js] ?? null;
+    }
+  }
+  if (setClauses.length === 1) {
+    res.status(400).json({ error: 'No valid fields to update.' });
+    return;
+  }
+  const sql = `UPDATE ${FILLING_STATION_TABLE_REF} SET ${setClauses.join(', ')} WHERE id = @record_id`;
+  try {
+    await bigquery.query({ query: sql, params, location: 'US' });
+    res.json({ message: 'Filling station log updated.' });
+  } catch (err: any) {
+    console.error('[BigQuery] PATCH filling-station-log error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/filling-station-log/:id', requireAuth, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const sql = `UPDATE ${FILLING_STATION_TABLE_REF} SET is_deleted = TRUE, updated_at = CURRENT_TIMESTAMP() WHERE id = @record_id`;
+  try {
+    await bigquery.query({ query: sql, params: { record_id: id }, location: 'US' });
+    res.json({ message: 'Filling station log deleted.' });
+  } catch (err: any) {
+    console.error('[BigQuery] DELETE filling-station-log error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// refueler_loading_log Endpoints
+// ═══════════════════════════════════════════════════════════════════════════
+app.get('/refueler-loading-log', requireAuth, async (_req: Request, res: Response) => {
+  const sql = `
+    SELECT * EXCEPT(rn)
+    FROM (
+      SELECT *, ROW_NUMBER() OVER (
+        PARTITION BY id
+        ORDER BY COALESCE(updated_at, created_at, TIMESTAMP('1970-01-01')) DESC
+      ) AS rn
+      FROM ${REFUELER_LOADING_TABLE_REF}
+    )
+    WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE)
+    ORDER BY date DESC, created_at DESC
+  `;
+  try {
+    const [rows] = await bigquery.query({ query: sql, location: 'US' });
+    res.json({ logs: rows });
+  } catch (err: any) {
+    console.error('[BigQuery] GET refueler-loading-log error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/refueler-loading-log', requireAuth, async (req: Request, res: Response) => {
+  const newId = `rl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const now = new Date().toISOString();
+  const row = {
+    id: newId,
+    source_tank_id: req.body.sourceTankId,
+    vehicle_id: req.body.vehicleId,
+    volume: parseFloat(req.body.volume) || 0,
+    start_time: req.body.startTime || null,
+    end_time: req.body.endTime || null,
+    date: req.body.date,
+    visual_check_passed: !!req.body.visualCheckPassed,
+    cwd_check_passed: !!req.body.cwdCheckPassed,
+    density: req.body.density ? parseFloat(req.body.density) : null,
+    temperature: req.body.temperature ? parseFloat(req.body.temperature) : null,
+    operator_name: req.body.operatorName || null,
+    supervisor_name: req.body.supervisorName || null,
+    is_deleted: false,
+    created_at: now,
+    updated_at: now,
+  };
+  const activeEntries = Object.entries(row).filter(([_, val]) => val !== null && val !== undefined);
+  const columns = activeEntries.map(([k]) => k);
+  const paramRefs = columns.map(c => `@${c}`).join(', ');
+  const columnList = columns.join(', ');
+  const params = Object.fromEntries(activeEntries);
+  const sql = `INSERT INTO ${REFUELER_LOADING_TABLE_REF} (${columnList}) VALUES (${paramRefs})`;
+  try {
+    await bigquery.query({ query: sql, params, location: 'US' });
+    res.status(201).json({ id: newId, message: 'Refueler loading log entry created.' });
+  } catch (err: any) {
+    console.error('[BigQuery] POST refueler-loading-log error:', err.message, err.errors);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/refueler-loading-log/:id', requireAuth, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const updates = req.body as Record<string, any>;
+  const fieldMap: Record<string, string> = {
+    sourceTankId: 'source_tank_id',
+    vehicleId: 'vehicle_id',
+    volume: 'volume',
+    startTime: 'start_time',
+    endTime: 'end_time',
+    date: 'date',
+    visualCheckPassed: 'visual_check_passed',
+    cwdCheckPassed: 'cwd_check_passed',
+    density: 'density',
+    temperature: 'temperature',
+    operatorName: 'operator_name',
+    supervisorName: 'supervisor_name',
+  };
+  const setClauses: string[] = ['updated_at = CURRENT_TIMESTAMP()'];
+  const params: Record<string, any> = { record_id: id };
+  for (const [js, bq] of Object.entries(fieldMap)) {
+    if (js in updates) {
+      setClauses.push(`${bq} = @${js}`);
+      params[js] = updates[js] ?? null;
+    }
+  }
+  if (setClauses.length === 1) {
+    res.status(400).json({ error: 'No valid fields to update.' });
+    return;
+  }
+  const sql = `UPDATE ${REFUELER_LOADING_TABLE_REF} SET ${setClauses.join(', ')} WHERE id = @record_id`;
+  try {
+    await bigquery.query({ query: sql, params, location: 'US' });
+    res.json({ message: 'Refueler loading log updated.' });
+  } catch (err: any) {
+    console.error('[BigQuery] PATCH refueler-loading-log error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/refueler-loading-log/:id', requireAuth, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const sql = `UPDATE ${REFUELER_LOADING_TABLE_REF} SET is_deleted = TRUE, updated_at = CURRENT_TIMESTAMP() WHERE id = @record_id`;
+  try {
+    await bigquery.query({ query: sql, params: { record_id: id }, location: 'US' });
+    res.json({ message: 'Refueler loading log deleted.' });
+  } catch (err: any) {
+    console.error('[BigQuery] DELETE refueler-loading-log error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // GET /operations-log   — list all (non-deleted) entries
 // ═══════════════════════════════════════════════════════════════════════════
 app.get('/operations-log', requireAuth, async (_req: Request, res: Response) => {
@@ -424,13 +770,25 @@ const PARAM_TYPES: Record<string, string> = {
   timestampPosition: 'TIMESTAMP',
   timestampStart: 'TIMESTAMP',
   timestampInitialEnd: 'TIMESTAMP',
+  timestampFinalStart: 'TIMESTAMP',
   timestampFinalEnd: 'TIMESTAMP',
   timestampClearance: 'TIMESTAMP',
   remarks: 'STRING',
   tacticalOperator: 'STRING',
   logType: 'STRING',
   route: 'STRING',
+  co: 'STRING',
   isDomestic: 'BOOL',
+  airline: 'STRING',
+  operationalDate: 'STRING',
+  pitNumber: 'STRING',
+  isAdhoc: 'BOOL',
+  psi: 'FLOAT64',
+  lpm: 'FLOAT64',
+  officer: 'STRING',
+  operatorName: 'STRING',
+  destination: 'STRING',
+  paymentType: 'STRING',
 };
 
 app.patch('/operations-log/:id', requireAuth, async (req: Request, res: Response) => {
@@ -458,13 +816,25 @@ app.patch('/operations-log/:id', requireAuth, async (req: Request, res: Response
     timestampPosition:   'timestamp_position',
     timestampStart:      'timestamp_start',
     timestampInitialEnd: 'timestamp_initial_end',
+    timestampFinalStart: 'timestamp_final_start',
     timestampFinalEnd:   'timestamp_final_end',
     timestampClearance:  'timestamp_clearance',
     remarks:             'remarks',
     tacticalOperator:    'tactical_operator',
     logType:             'log_type',
     route:               'route',
+    co:                  'co',
     isDomestic:          'is_domestic',
+    airline:             'airline',
+    operationalDate:     'operational_date',
+    pitNumber:           'pit_number',
+    isAdhoc:             'is_adhoc',
+    psi:                 'psi',
+    lpm:                 'lpm',
+    officer:             'officer',
+    operatorName:        'operator_name',
+    destination:         'destination',
+    paymentType:         'payment_type',
   };
 
   const setClauses: string[] = ['updated_at = CURRENT_TIMESTAMP()'];
@@ -544,19 +914,123 @@ app.delete('/operations-log/:id', requireAuth, async (req: Request, res: Respons
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// POST /migrate-legacy-data — import batch of legacy flight records
+// ═══════════════════════════════════════════════════════════════════════════
+app.post('/migrate-legacy-data', requireAuth, async (req: Request, res: Response) => {
+  const records = req.body?.records;
+  if (!Array.isArray(records) || records.length === 0) {
+    res.status(400).json({ error: 'Payload must contain a non-empty "records" array.' });
+    return;
+  }
+
+  console.log(`[Migration] Starting import for ${records.length} legacy records...`);
+
+  const parseTime = (dateStr?: string | null, timeStr?: string | null): string | null => {
+    if (!dateStr || !timeStr || !timeStr.trim() || timeStr.trim() === '-') return null;
+    const cleanTime = timeStr.trim();
+    const match = cleanTime.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (!match) return null;
+    const h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    const s = match[3] ? parseInt(match[3], 10) : 0;
+    if (h < 0 || h > 23 || m < 0 || m > 59 || s < 0 || s > 59) return null;
+    const hh = String(h).padStart(2, '0');
+    const mm = String(m).padStart(2, '0');
+    const ss = String(s).padStart(2, '0');
+    return `${dateStr}T${hh}:${mm}:${ss}.000Z`;
+  };
+
+  const rowsToInsert = records.map((rec: any) => {
+    const deliveryNo = rec.DELIVERY_NO !== undefined && rec.DELIVERY_NO !== null ? String(rec.DELIVERY_NO) : '';
+    const id = deliveryNo ? `hist-${deliveryNo}` : `hist-gen-${Math.random().toString(36).slice(2, 10)}`;
+    const dateStr = rec.DATE ? String(rec.DATE).split('T')[0] : null;
+    const intDomRaw = String(rec.INT_DOM || '').toUpperCase();
+    const isDomestic = intDomRaw.includes('DOM');
+
+    return {
+      id,
+      log_type:              'FLIGHT',
+      flight_number:         rec.FLIGHT || null,
+      aircraft_reg:          rec.AIRCRAFT_REG || null,
+      aircraft_type:         rec.AIRCRAFT_TYPE || null,
+      stand:                 rec.STAND || null,
+      operator_id:           null,
+      vehicle_id:            rec.RF_NO || null,
+      status:                'COMPLETED',
+      delivery_number:       deliveryNo || null,
+      meter_open:            null,
+      meter_close:           null,
+      volume:                rec.VOLUME !== null && rec.VOLUME !== undefined ? parseFloat(rec.VOLUME) : null,
+      panel_check:           true,
+      walk_around_check:     true,
+      appearance_check:      true,
+      water_check:           true,
+      timestamp_arrived:     parseTime(dateStr, rec.ARRIVED),
+      timestamp_position:    parseTime(dateStr, rec.ARRIVED),
+      timestamp_start:       parseTime(dateStr, rec.STARTED),
+      timestamp_initial_end: null,
+      timestamp_final_start: null,
+      timestamp_final_end:   parseTime(dateStr, rec.ENDED),
+      timestamp_clearance:   parseTime(dateStr, rec.ENDED),
+      remarks:               rec.CUSTOMER_NAME ? `Customer: ${rec.CUSTOMER_NAME}` : null,
+      tactical_operator:     rec.RF_OPERATOR || null,
+      route:                 null,
+      co:                    rec.CUSTOMER_NAME || null,
+      is_domestic:           isDomestic,
+      airline:               rec.CUSTOMER_NAME || null,
+      operational_date:      dateStr,
+      pit_number:            rec.PIT_NO || null,
+      is_adhoc:              false,
+      psi:                   rec.Psi !== null && rec.Psi !== undefined ? parseFloat(rec.Psi) : null,
+      lpm:                   rec.LPM !== null && rec.LPM !== undefined ? parseFloat(rec.LPM) : null,
+      officer:               rec.OFFICER || null,
+      operator_name:         rec.OPERATOR_NAME || null,
+      destination:           null,
+      payment_type:          rec.OR_CREDIT || null,
+      is_deleted:            false,
+      created_at:            dateStr ? `${dateStr}T00:00:00.000Z` : new Date().toISOString(),
+      updated_at:            new Date().toISOString(),
+    };
+  });
+
+  // Batch insert into BigQuery (chunks of 500)
+  const BATCH_SIZE = 500;
+  let insertedCount = 0;
+  let errorCount = 0;
+
+  try {
+    for (let i = 0; i < rowsToInsert.length; i += BATCH_SIZE) {
+      const chunk = rowsToInsert.slice(i, i + BATCH_SIZE);
+      const dataset = bigquery.dataset(DATASET_ID);
+      const table = dataset.table(TABLE_ID);
+      
+      try {
+        await table.insert(chunk, { skipInvalidRows: true, ignoreUnknownValues: true });
+        insertedCount += chunk.length;
+        console.log(`[Migration] Inserted chunk ${i / BATCH_SIZE + 1} (${insertedCount}/${rowsToInsert.length})`);
+      } catch (err: any) {
+        console.error(`[Migration] Chunk ${i / BATCH_SIZE + 1} insert error:`, err.message, err.errors);
+        errorCount += chunk.length;
+      }
+    }
+    res.json({ message: `Migration complete. Inserted: ${insertedCount}, Errors: ${errorCount}` });
+  } catch (err: any) {
+    console.error('[Migration] Fatal error:', err.message);
+    res.status(500).json({ error: err.message, insertedCount, errorCount });
+  }
+});
+
 // ─── Start server ─────────────────────────────────────────────────────────────
 const PORT = parseInt(process.env.PORT ?? '8080', 10);
 
-(async () => {
-  try {
-    console.log('[Bootstrap] Verifying BigQuery schema...');
-    await ensureSchema();
-    console.log(`[Bootstrap] Schema OK — ${DATASET_ID}.${TABLE_ID} ready.`);
-  } catch (err) {
-    console.error('[Bootstrap] Schema check failed (will continue):', err);
-  }
+// Start listening FIRST so Cloud Run health checks pass immediately,
+// then run the slow BigQuery schema migration in the background.
+app.listen(PORT, () => {
+  console.log(`[Server] MACL FMS BigQuery API listening on port ${PORT}`);
 
-  app.listen(PORT, () => {
-    console.log(`[Server] MACL FMS BigQuery API listening on port ${PORT}`);
-  });
-})();
+  // Run schema check in background — non-blocking, non-fatal
+  ensureSchema()
+    .then(() => console.log(`[Bootstrap] Schema OK — ${DATASET_ID}.${TABLE_ID} ready.`))
+    .catch((err) => console.error('[Bootstrap] Schema check failed (non-fatal):', err));
+});
