@@ -61,6 +61,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   const [totalizerSortField, setTotalizerSortField] = useState<'meterOpen' | 'meterClose'>('meterOpen');
   const [totalizerSortOrder, setTotalizerSortOrder] = useState<'asc' | 'desc'>('desc');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [archiveSortField, setArchiveSortField] = useState<'date' | 'ticket'>('date');
+  const [archiveSortOrder, setArchiveSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedLogType, setSelectedLogType] = useState<string>(() => {
     const defaultTab = localStorage.getItem('fms_log_history_default_tab');
     if (defaultTab) {
@@ -89,6 +91,52 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     if (num.startsWith('GROUND-')) return 'FILLING_STATION';
     if (num.startsWith('VESSEL-')) return 'MARINE';
     return 'FLIGHT';
+  };
+
+  const getDisplayOperationalDate = (log: FlightLog): string => {
+    if (log.operationalDate) {
+      try {
+        const d = new Date(log.operationalDate);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString([], { dateStyle: 'short' });
+        }
+      } catch {}
+      return log.operationalDate;
+    }
+    if (log.timestampStart) {
+      try {
+        const d = new Date(log.timestampStart);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString([], { dateStyle: 'short' });
+        }
+      } catch {}
+    }
+    return 'PENDING';
+  };
+
+  const renderSortableHeader = (field: 'date' | 'ticket', label: string, className = '') => {
+    const isSorted = archiveSortField === field;
+    const isRight = className.includes('text-right');
+    return (
+      <th 
+        onClick={() => {
+          if (isSorted) {
+            setArchiveSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+          } else {
+            setArchiveSortField(field);
+            setArchiveSortOrder('desc');
+          }
+        }}
+        className={`py-5 text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] cursor-pointer hover:text-primary transition-colors select-none ${className}`}
+      >
+        <div className={`flex items-center gap-1.5 ${isRight ? 'justify-end' : ''}`}>
+          {label}
+          <span className="text-[9px] opacity-60">
+            {isSorted ? (archiveSortOrder === 'asc' ? '▲' : '▼') : '↕'}
+          </span>
+        </div>
+      </th>
+    );
   };
 
   const renderTicketCell = (deliveryNumber?: string) => {
@@ -532,12 +580,36 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
       const valB = getVal(b, totalizerSortField);
       return totalizerSortOrder === 'asc' ? valA - valB : valB - valA;
     }
-    const aVal = a.deliveryNumber || '';
-    const bVal = b.deliveryNumber || '';
-    if (!aVal && !bVal) return 0;
-    if (!aVal) return 1;
-    if (!bVal) return -1;
-    return bVal.localeCompare(aVal, undefined, { numeric: true, sensitivity: 'base' });
+
+    if (archiveSortField === 'date') {
+      const getLogSortDate = (log: FlightLog): number => {
+        if (log.operationalDate) {
+          const d = new Date(log.operationalDate);
+          if (!isNaN(d.getTime())) return d.getTime();
+        }
+        if (log.timestampStart) {
+          const d = new Date(log.timestampStart);
+          if (!isNaN(d.getTime())) return d.getTime();
+        }
+        return 0;
+      };
+      const dateA = getLogSortDate(a);
+      const dateB = getLogSortDate(b);
+      return archiveSortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+    }
+
+    if (archiveSortField === 'ticket') {
+      const ticketA = a.deliveryNumber || '';
+      const ticketB = b.deliveryNumber || '';
+      if (!ticketA && !ticketB) return 0;
+      if (!ticketA) return archiveSortOrder === 'asc' ? 1 : -1;
+      if (!ticketB) return archiveSortOrder === 'asc' ? -1 : 1;
+      return archiveSortOrder === 'asc' 
+        ? ticketA.localeCompare(ticketB, undefined, { numeric: true, sensitivity: 'base' })
+        : ticketB.localeCompare(ticketA, undefined, { numeric: true, sensitivity: 'base' });
+    }
+
+    return 0;
   });
 
   const totalVolume = sortedLogs.reduce((sum, log) => sum + (log.volume || 0), 0);
@@ -813,53 +885,53 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                 <tr className="bg-surface-dim/50 border-b border-outline">
                   {selectedLogType === 'FLIGHT' && (
                     <>
-                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Timestamp</th>
+                      {renderSortableHeader('date', 'Operational Date', 'px-10')}
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Flight No</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Type</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Aircraft Reg / Type</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Stand</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Equipment</th>
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
-                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Ticket</th>
+                      {renderSortableHeader('ticket', 'Ticket', 'px-10')}
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
                     </>
                   )}
                   {selectedLogType === 'SEAPLANE' && (
                     <>
-                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Date</th>
+                      {renderSortableHeader('date', 'Date', 'px-10')}
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Operator</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Pump ID</th>
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
-                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Ticket</th>
+                      {renderSortableHeader('ticket', 'Ticket', 'px-10')}
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
                     </>
                   )}
                   {selectedLogType === 'FILLING_STATION' && (
                     <>
-                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Date</th>
+                      {renderSortableHeader('date', 'Date', 'px-10')}
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Station</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Product</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Vehicle Reg</th>
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
-                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Invoice</th>
+                      {renderSortableHeader('ticket', 'Invoice', 'px-10')}
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
                     </>
                   )}
                   {selectedLogType === 'MARINE' && (
                     <>
-                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Date</th>
+                      {renderSortableHeader('date', 'Date', 'px-10')}
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Vessel Name</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Source RF</th>
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Meter Open</th>
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Meter Close</th>
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
-                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Ticket</th>
+                      {renderSortableHeader('ticket', 'Ticket', 'px-10')}
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
                     </>
                   )}
                   {selectedLogType === 'BRIDGING' && (
                     <>
-                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Date</th>
+                      {renderSortableHeader('date', 'Date', 'px-10')}
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Source Tank</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Refueller</th>
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
@@ -933,7 +1005,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                           {selectedLogType === 'FLIGHT' && (
                             <>
                               <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
-                                  {log.timestampStart ? new Date(log.timestampStart).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: false }) : 'PENDING'}
+                                  {getDisplayOperationalDate(log)}
                               </td>
                               <td className="px-10 py-6">
                                   <div className="text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">
@@ -975,7 +1047,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                           {selectedLogType === 'SEAPLANE' && (
                             <>
                               <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
-                                  {log.timestampStart ? new Date(log.timestampStart).toLocaleDateString([], { dateStyle: 'short' }) : 'PENDING'}
+                                  {getDisplayOperationalDate(log)}
                               </td>
                               <td className="px-10 py-6 text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">
                                   {seaplaneOp}
@@ -996,7 +1068,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                           {selectedLogType === 'FILLING_STATION' && (
                             <>
                               <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
-                                  {log.timestampStart ? new Date(log.timestampStart).toLocaleDateString([], { dateStyle: 'short' }) : 'PENDING'}
+                                  {getDisplayOperationalDate(log)}
                               </td>
                               <td className="px-10 py-6 text-xs font-black text-on-surface uppercase tracking-widest">
                                   {groundData.station}
@@ -1020,7 +1092,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                           {selectedLogType === 'MARINE' && (
                             <>
                               <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
-                                  {log.timestampStart ? new Date(log.timestampStart).toLocaleDateString([], { dateStyle: 'short' }) : 'PENDING'}
+                                  {getDisplayOperationalDate(log)}
                               </td>
                               <td className="px-10 py-6 text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">
                                   {marineData.vesselName}
@@ -1047,7 +1119,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                           {selectedLogType === 'BRIDGING' && (
                             <>
                               <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
-                                  {log.operationalDate ? new Date(log.operationalDate).toLocaleDateString([], { dateStyle: 'short' }) : 'PENDING'}
+                                  {getDisplayOperationalDate(log)}
                               </td>
                               <td className="px-10 py-6 text-xs font-black text-on-surface uppercase tracking-widest">
                                   {log.aircraftReg /* sourceTankId */}
@@ -1068,7 +1140,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                           {selectedLogType === 'TOTALIZER_READINGS' && (
                             <>
                               <td className="px-6 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
-                                  {log.operationalDate || (log as any).created_at?.split('T')[0] || (log.timestampStart ? new Date(log.timestampStart).toLocaleDateString([], { dateStyle: 'short' }) : 'N/A')}
+                                  {getDisplayOperationalDate(log)}
                               </td>
                               <td className="px-6 py-6 text-xs font-black text-on-surface uppercase tracking-widest">
                                   {log.airline || log.flightNumber || log.co || 'N/A'}
@@ -1260,6 +1332,10 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Infrastructure Registry</span>
                                          <span className="text-[11px] font-mono text-on-surface">PUMP-{pumpId}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Airline / Customer</span>
+                                         <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.co || log.airline || 'N/A'}</span>
                                       </div>
                                       <div className="flex flex-col gap-1">
                                           <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Verifying Officer Name</span>

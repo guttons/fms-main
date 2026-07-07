@@ -1437,7 +1437,7 @@ const ScreenQC: React.FC<{
 
 export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob, initialVehicleId, onClearInitialVehicleId }) => {
   const { notify } = useNotification();
-  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, externalFlights, staff } = useOperationalData();
+  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, externalFlights, staff, refreshData } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(null);
   const [paymentType, setPaymentType] = useState<'CREDIT' | 'CASH' | 'VOID'>('CREDIT');
@@ -1853,10 +1853,21 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     if (!activeFlight) return;
     
     if (activeFlight.deliveryNumber) {
-      const isDuplicate = (flightLogs || []).some(log => log && log.deliveryNumber === activeFlight.deliveryNumber);
-      if (isDuplicate) {
-        notify(`Delivery ticket number ${activeFlight.deliveryNumber} is already used. Please enter a unique ticket number.`, 'error');
-        return;
+      try {
+        // Fetch fresh logs directly from BigQuery to perform a live uniqueness check
+        const latestLogs = await supabaseService.getFlightLogs();
+        const isDuplicate = (latestLogs || []).some(log => log && log.deliveryNumber === activeFlight.deliveryNumber);
+        if (isDuplicate) {
+          notify(`Delivery ticket number ${activeFlight.deliveryNumber} is already used. Please enter a unique ticket number.`, 'error');
+          return;
+        }
+      } catch (err) {
+        console.warn('Failed to verify ticket uniqueness live, falling back to local check:', err);
+        const isDuplicate = (flightLogs || []).some(log => log && log.deliveryNumber === activeFlight.deliveryNumber);
+        if (isDuplicate) {
+          notify(`Delivery ticket number ${activeFlight.deliveryNumber} is already used. Please enter a unique ticket number.`, 'error');
+          return;
+        }
       }
     }
     
@@ -1954,6 +1965,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         await updateFlightJob(matchingJob.id, { status: 'COMPLETED' });
       }
 
+      await refreshData();
       completeOrCancelJobAndExit("Job Completed & Synced to Database!");
     } catch (error) {
       console.error('Error saving flight log:', error);
