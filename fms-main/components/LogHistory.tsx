@@ -1251,7 +1251,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-in fade-in duration-300">
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Airline / Customer</span>
-                                         <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.airline || 'N/A'}</span>
+                                         <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.co || log.airline || 'N/A'}</span>
                                       </div>
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Operational Date</span>
@@ -1307,7 +1307,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                       </div>
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">C/O (Account)</span>
-                                         <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.co || 'N/A'}</span>
+                                         <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.airline || 'N/A'}</span>
                                       </div>
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC Compliance</span>
