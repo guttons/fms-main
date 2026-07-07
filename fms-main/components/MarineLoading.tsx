@@ -22,41 +22,6 @@ interface MarineLoadingLog {
     deliveryNumber?: string;
 }
 
-const MOCK_MARINE_LOGS: MarineLoadingLog[] = [
-    {
-        id: 'ml1',
-        refuellerId: 'RF-10',
-        vesselName: 'MV Sea Breeze',
-        volume: 12500,
-        meterOpen: 100000,
-        meterClose: 112500,
-        product: 'Jet A-1',
-        startTime: '10:30',
-        endTime: '11:15',
-        visualCheck: true,
-        waterCheck: true,
-        operatorId: 'u4',
-        timestamp: new Date().toISOString().split('T')[0],
-        deliveryNumber: 'MLE-881202'
-    },
-    {
-        id: 'ml2',
-        refuellerId: 'RF-14',
-        vesselName: 'MT Navigator',
-        volume: 8000,
-        meterOpen: 92000,
-        meterClose: 100000,
-        product: 'Jet A-1',
-        startTime: '08:15',
-        endTime: '08:45',
-        visualCheck: true,
-        waterCheck: true,
-        operatorId: 'u4',
-        timestamp: new Date().toISOString().split('T')[0],
-        deliveryNumber: 'MLE-881203'
-    }
-];
-
 interface MarineLoadingProps {
   user?: User | null;
 }
@@ -67,7 +32,55 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
-  const [logs, setLogs] = useState<MarineLoadingLog[]>(MOCK_MARINE_LOGS);
+  const [logs, setLogs] = useState<MarineLoadingLog[]>([]);
+
+  // Load real logs from database context dynamically
+  useEffect(() => {
+    const parseTime = (tString?: string) => {
+      if (!tString) return '';
+      try {
+        const d = new Date(tString);
+        if (isNaN(d.getTime())) return '';
+        const h = d.getHours().toString().padStart(2, '0');
+        const m = d.getMinutes().toString().padStart(2, '0');
+        return `${h}:${m}`;
+      } catch {
+        return '';
+      }
+    };
+
+    const dbLogs = (flightLogs || [])
+      .filter(log => log && log.logType === 'MARINE')
+      .map(log => {
+        const vesselName = (log.flightNumber || '').replace('VESSEL-', '');
+        return {
+          id: log.id,
+          refuellerId: log.vehicleId,
+          vesselName: vesselName || 'MARINE VESSEL',
+          volume: log.volume,
+          meterOpen: log.meterOpen,
+          meterClose: log.meterClose,
+          product: 'Jet A-1',
+          startTime: parseTime(log.timestampStart),
+          endTime: parseTime(log.timestampFinalEnd),
+          visualCheck: log.appearanceCheck,
+          waterCheck: log.waterCheck,
+          operatorId: log.operatorId,
+          timestamp: log.timestampStart ? log.timestampStart.split('T')[0] : '',
+          deliveryNumber: log.deliveryNumber
+        } as MarineLoadingLog;
+      });
+
+    // Sort by timestamp desc to show latest first
+    const sortedLogs = [...dbLogs].sort((a, b) => {
+      const timeA = a.id.replace('ml-', '');
+      const timeB = b.id.replace('ml-', '');
+      // If IDs are standard timestamp-based, sort by them, otherwise fallback to date string comparison
+      return b.timestamp.localeCompare(a.timestamp) || b.startTime.localeCompare(a.startTime);
+    });
+
+    setLogs(sortedLogs);
+  }, [flightLogs]);
 
   const isOperator = user?.role === UserRole.DEPOT_OPERATOR;
 
