@@ -963,7 +963,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                   {log.vehicleId}
                               </td>
                               <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
-                                  {log.volume.toLocaleString()}
+                                  {(log.volume || 0).toLocaleString()}
                               </td>
                               <td className="px-10 py-6 text-left font-mono">
                                   {renderTicketCell(log.deliveryNumber)}
@@ -984,7 +984,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                   {pumpId}
                               </td>
                               <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
-                                  {log.volume.toLocaleString()}
+                                  {(log.volume || 0).toLocaleString()}
                               </td>
                               <td className="px-10 py-6 text-left font-mono">
                                   {renderTicketCell(log.deliveryNumber)}
@@ -1008,7 +1008,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                   {log.aircraftReg}
                               </td>
                               <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
-                                  {log.volume.toLocaleString()}
+                                  {(log.volume || 0).toLocaleString()}
                               </td>
                               <td className="px-10 py-6 text-left font-mono">
                                   {renderTicketCell(log.deliveryNumber)}
@@ -1035,7 +1035,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                   {(log.meterClose || 0).toLocaleString()}
                               </td>
                               <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
-                                  {log.volume.toLocaleString()}
+                                  {(log.volume || 0).toLocaleString()}
                               </td>
                               <td className="px-10 py-6 text-left font-mono">
                                   {renderTicketCell(log.deliveryNumber)}
@@ -1056,7 +1056,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                   {log.vehicleId}
                               </td>
                               <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
-                                  {log.volume.toLocaleString()}
+                                  {(log.volume || 0).toLocaleString()}
                               </td>
                               <td className="px-10 py-6 text-left text-[11px] font-black text-on-surface-dim font-mono tracking-widest">
                                   {log.timestampStart ? formatTime(log.timestampStart) : '--:--'} / {log.timestampFinalEnd ? formatTime(log.timestampFinalEnd) : '--:--'}
