@@ -442,8 +442,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           cwdCheckPassed: editForm.bridgingCwdCheck,
           density: editForm.bridgingDensity ? Number(editForm.bridgingDensity) : undefined,
           temperature: editForm.bridgingTemperature ? Number(editForm.bridgingTemperature) : undefined,
-          operatorName: editForm.bridgingOperatorId,
-          supervisorName: editForm.bridgingSupervisor
+          operatorId: editForm.bridgingOperatorId,
+          co: editForm.bridgingSupervisor
         });
       } else {
         await supabaseService.updateFlightLog(editingLog.id, {
@@ -507,7 +507,15 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     
     const logType = resolveLogType(log);
     const matchesType = selectedLogType === 'TOTALIZER_READINGS' 
-      ? (log.meterOpen !== undefined || log.meterClose !== undefined || (typeof log.volume === 'number' && log.volume > 0))
+      ? (
+          logType !== 'SEAPLANE' &&
+          !(log.flightNumber || '').startsWith('SEAPLANE-') &&
+          log.vehicleId &&
+          log.vehicleId !== 'N/A' &&
+          !log.vehicleId.toUpperCase().includes('SCADA') &&
+          !log.vehicleId.toUpperCase().startsWith('PUMP') &&
+          (log.meterOpen !== undefined || log.meterClose !== undefined || (typeof log.volume === 'number' && log.volume > 0))
+        )
       : logType === selectedLogType;
 
     const searchLower = searchTerm.toLowerCase();
