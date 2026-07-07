@@ -411,10 +411,6 @@ export const supabaseService = {
 
   // ── BigQuery Cloud Run API Helper & Operations Logs ────────────────────────
   _bqBase(): string {
-    // In development, use Vite's proxy to avoid CORS issues with Cloud Run
-    if (import.meta.env.DEV) {
-      return '/api/bq';
-    }
     return (
       import.meta.env.VITE_BIGQUERY_API_URL ||
       'https://fms-bigquery-api-808402455416.us-central1.run.app'
