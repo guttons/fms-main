@@ -481,6 +481,7 @@ app.get('/filling-station-log', requireAuth, async (_req: Request, res: Response
     )
     WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE)
     ORDER BY date DESC, created_at DESC
+    LIMIT 1000
   `;
   try {
     const [rows] = await bigquery.query({ query: sql, location: 'US' });
@@ -593,6 +594,7 @@ app.get('/refueler-loading-log', requireAuth, async (_req: Request, res: Respons
     )
     WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE)
     ORDER BY date DESC, created_at DESC
+    LIMIT 1000
   `;
   try {
     const [rows] = await bigquery.query({ query: sql, location: 'US' });
@@ -706,7 +708,8 @@ app.get('/operations-log', requireAuth, async (_req: Request, res: Response) => 
       FROM ${TABLE_REF}
     )
     WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE)
-    ORDER BY delivery_number DESC
+    ORDER BY COALESCE(operational_date, date(created_at)) DESC, created_at DESC
+    LIMIT 1000
   `;
   console.log(`[BigQuery SQL]\n${sql.trim()}`);
   try {
