@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { MOCK_USERS } from '../constants';
-import { FileText, Search, Download, Filter, X, Calendar, Plane, Anchor, Droplet, Fuel, Truck, Sailboat, AlertTriangle } from 'lucide-react';
+import { FileText, Search, Download, Filter, X, Calendar, Plane, Anchor, Droplet, Fuel, Truck, Sailboat, AlertTriangle, Gauge } from 'lucide-react';
 import { Logo } from './Logo';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { supabaseService } from '../services/supabaseService';
@@ -57,6 +57,9 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   const [filterFuelType, setFilterFuelType] = useState('ALL');
   const [filterEquipment, setFilterEquipment] = useState('ALL');
   const [filterStation, setFilterStation] = useState('ALL');
+  const [totalizerEquipment, setTotalizerEquipment] = useState<string>('ALL');
+  const [totalizerSortField, setTotalizerSortField] = useState<'meterOpen' | 'meterClose'>('meterOpen');
+  const [totalizerSortOrder, setTotalizerSortOrder] = useState<'asc' | 'desc'>('desc');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [selectedLogType, setSelectedLogType] = useState<string>(() => {
     const defaultTab = localStorage.getItem('fms_log_history_default_tab');
@@ -240,12 +243,13 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   const fetchLogs = async () => {
     try {
       setLoading(true);
-      const [fetchedFlightLogs, fetchedBridgingLogs] = await Promise.all([
+      const [fetchedFlightLogs, fetchedFillingLogs, fetchedBridgingLogs] = await Promise.all([
         supabaseService.getFlightLogs(),
+        supabaseService.getFillingStationLogs(),
         supabaseService.getBridgingLogs()
       ]);
 
-      const mappedBridgingLogs: FlightLog[] = (fetchedBridgingLogs || []).map(blog => ({
+      const dbBridgingLogs: FlightLog[] = (fetchedBridgingLogs || []).map(blog => ({
         id: blog.id,
         flightNumber: `LOAD-${blog.vehicleId}`,
         aircraftReg: blog.sourceTankId,
@@ -268,11 +272,36 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
         co: blog.co
       } as any));
 
-      const filteredFlightLogs = (fetchedFlightLogs || []).filter(
-        log => log && log.logType !== 'BRIDGING' && !(log.flightNumber || '').startsWith('LOAD-')
-      );
+      // Separate legacy/historical records still residing in operations_log
+      const legacyFillingLogs: FlightLog[] = [];
+      const legacyBridgingLogs: FlightLog[] = [];
+      const primaryFlightLogs: FlightLog[] = [];
 
-      setLogs([...filteredFlightLogs, ...mappedBridgingLogs]);
+      for (const log of (fetchedFlightLogs || [])) {
+        if (!log) continue;
+        const logType = resolveLogType(log);
+        if (logType === 'BRIDGING' || (log.flightNumber || '').startsWith('LOAD-')) {
+          const isDup = dbBridgingLogs.some(dl => dl.vehicleId === log.vehicleId && dl.volume === log.volume && getLocalDatePart(dl.timestampStart) === getLocalDatePart(log.timestampStart));
+          if (!isDup) {
+            legacyBridgingLogs.push(log);
+          }
+        } else if (logType === 'FILLING_STATION' || (log.flightNumber || '').startsWith('GROUND-')) {
+          const isDup = (fetchedFillingLogs || []).some(fl => fl.vehicleId === log.vehicleId && fl.volume === log.volume && getLocalDatePart(fl.timestampStart) === getLocalDatePart(log.timestampStart));
+          if (!isDup) {
+            legacyFillingLogs.push(log);
+          }
+        } else {
+          primaryFlightLogs.push(log);
+        }
+      }
+
+      setLogs([
+        ...primaryFlightLogs,
+        ...fetchedFillingLogs,
+        ...legacyFillingLogs,
+        ...dbBridgingLogs,
+        ...legacyBridgingLogs
+      ]);
     } catch (error) {
       console.error('Error fetching logs from Firebase:', error);
     } finally {
@@ -340,36 +369,34 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
         } as any);
       } else if (type === 'FILLING_STATION') {
         const remarksStr = `Ground support refuel: ${editForm.fillingVehicleReg} loaded with ${editForm.volume}L ${editForm.fillingFuelType} (On account of: ${editForm.fillingDriverName}, Payment: ${editForm.fillingPaymentMode}, Received by: ${editForm.fillingReceivedBy}, Equipment: ${editForm.fillingEquipmentName})`;
-        await supabaseService.updateFlightLog(editingLog.id, {
-          flightNumber: `GROUND-${editForm.fillingStation}-${editForm.fillingFuelType.toUpperCase()}`,
-          aircraftReg: editForm.fillingVehicleReg.toUpperCase(),
-          vehicleId: editForm.fillingVehicleReg.toUpperCase(),
-          stand: editForm.fillingStation === 'LFS' ? 'LANDSIDE STATION' : 'AIRSIDE STATION',
-          deliveryNumber: editForm.deliveryNumber ? `MLE-${cleanTicket}` : undefined,
+        await supabaseService.updateFillingStationLog(editingLog.id, {
+          station: editForm.fillingStation,
+          fuelType: editForm.fillingFuelType,
+          date: editForm.date,
+          invoiceNumber: cleanTicket,
+          vehicleReg: editForm.fillingVehicleReg.toUpperCase(),
+          driverName: editForm.fillingDriverName,
           volume: Number(editForm.volume),
-          meterOpen: 0,
-          meterClose: Number(editForm.volume),
-          timestampStart: `${editForm.date}T08:00:00.000Z`,
-          timestampFinalEnd: `${editForm.date}T16:00:00.000Z`,
+          paymentMode: editForm.fillingPaymentMode,
+          receivedBy: editForm.fillingReceivedBy,
+          equipmentName: editForm.fillingEquipmentName,
           remarks: remarksStr
-        } as any);
+        });
       } else if (type === 'BRIDGING') {
-        const remarksStr = `QC Visual: ${editForm.bridgingVisualCheck ? 'PASS' : 'FAIL'}, CWD: ${editForm.bridgingCwdCheck ? 'PASS' : 'FAIL'}` +
-          (editForm.bridgingDensity ? `, Density: ${editForm.bridgingDensity}` : '') +
-          (editForm.bridgingTemperature ? `, Temp: ${editForm.bridgingTemperature}` : '');
-        await supabaseService.updateFlightLog(editingLog.id, {
-          flightNumber: `LOAD-${editForm.bridgingVehicleId}`,
-          aircraftReg: editForm.bridgingSourceTankId,
+        await supabaseService.updateBridgingLog(editingLog.id, {
+          sourceTankId: editForm.bridgingSourceTankId,
           vehicleId: editForm.bridgingVehicleId,
           volume: Number(editForm.volume),
-          panelCheck: editForm.bridgingVisualCheck,
-          waterCheck: editForm.bridgingCwdCheck,
-          timestampStart: combineDateAndTime(editForm.date, editForm.timeStart),
-          timestampFinalEnd: combineDateAndTime(editForm.date, editForm.timeEnd),
-          remarks: remarksStr,
-          operatorId: editForm.bridgingOperatorId,
-          co: editForm.bridgingSupervisor
-        } as any);
+          startTime: editForm.timeStart,
+          endTime: editForm.timeEnd,
+          date: editForm.date,
+          visualCheckPassed: editForm.bridgingVisualCheck,
+          cwdCheckPassed: editForm.bridgingCwdCheck,
+          density: editForm.bridgingDensity ? Number(editForm.bridgingDensity) : undefined,
+          temperature: editForm.bridgingTemperature ? Number(editForm.bridgingTemperature) : undefined,
+          operatorName: editForm.bridgingOperatorId,
+          supervisorName: editForm.bridgingSupervisor
+        });
       } else {
         await supabaseService.updateFlightLog(editingLog.id, {
           flightNumber: editForm.flightNumber,
@@ -410,7 +437,13 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
         await updateFlightJob(matchingJob.id, { status: 'PENDING', vehicleId: undefined });
       }
 
-      await supabaseService.deleteFlightLog(editingLog.id);
+      if (editingLog.logType === 'BRIDGING' || resolveLogType(editingLog) === 'BRIDGING') {
+        await supabaseService.deleteBridgingLog(editingLog.id);
+      } else if (editingLog.logType === 'FILLING_STATION' || resolveLogType(editingLog) === 'FILLING_STATION') {
+        await supabaseService.deleteFillingStationLog(editingLog.id);
+      } else {
+        await supabaseService.deleteFlightLog(editingLog.id);
+      }
       setEditingLog(null);
       setShowConfirmDelete(false);
       await fetchLogs();
@@ -425,11 +458,16 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     if (!log) return false;
     
     const logType = resolveLogType(log);
-    const matchesType = logType === selectedLogType;
+    const matchesType = selectedLogType === 'TOTALIZER_READINGS' 
+      ? (log.meterOpen !== undefined || log.meterClose !== undefined || (typeof log.volume === 'number' && log.volume > 0))
+      : logType === selectedLogType;
 
+    const searchLower = searchTerm.toLowerCase();
     const matchesSearch = (
-      log.flightNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.aircraftReg.toLowerCase().includes(searchTerm.toLowerCase())
+      (log.flightNumber || '').toLowerCase().includes(searchLower) ||
+      (log.aircraftReg || '').toLowerCase().includes(searchLower) ||
+      (log.airline || '').toLowerCase().includes(searchLower) ||
+      (log.vehicleId || '').toLowerCase().includes(searchLower)
     );
 
     let logDateStr = '';
@@ -467,6 +505,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     let matchesEquipment = true;
     if (selectedLogType === 'BRIDGING' && filterEquipment !== 'ALL') {
       matchesEquipment = log.vehicleId === filterEquipment;
+    } else if (selectedLogType === 'TOTALIZER_READINGS' && totalizerEquipment !== 'ALL') {
+      matchesEquipment = log.vehicleId === totalizerEquipment;
     }
 
     let matchesFlightCategory = true;
@@ -483,6 +523,15 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   });
 
   const sortedLogs = [...filteredLogs].sort((a, b) => {
+    if (selectedLogType === 'TOTALIZER_READINGS') {
+      const getVal = (log: FlightLog, field: 'meterOpen' | 'meterClose') => {
+        if (field === 'meterOpen') return log.meterOpen ?? 0;
+        return log.meterClose ?? ((log.meterOpen || 0) + (log.volume || 0));
+      };
+      const valA = getVal(a, totalizerSortField);
+      const valB = getVal(b, totalizerSortField);
+      return totalizerSortOrder === 'asc' ? valA - valB : valB - valA;
+    }
     const aVal = a.deliveryNumber || '';
     const bVal = b.deliveryNumber || '';
     if (!aVal && !bVal) return 0;
@@ -543,30 +592,33 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
       <div className="bg-surface-dim p-1.5 rounded-[22px] border border-outline relative flex w-full overflow-x-visible md:overflow-x-auto no-scrollbar shadow-inner max-w-fit mx-auto md:mx-0">
         {/* Mobile/tablet sliding indicator */}
         <div
-          className={`absolute top-1.5 bottom-1.5 rounded-[18px] kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium md:hidden will-change-transform w-[60px]
-            ${selectedLogType === 'FLIGHT'          ? 'left-1.5 translate-x-0' : ''}
-            ${selectedLogType === 'SEAPLANE'        ? 'left-1.5 translate-x-[60px]' : ''}
-            ${selectedLogType === 'MARINE'          ? 'left-1.5 translate-x-[120px]' : ''}
-            ${selectedLogType === 'FILLING_STATION' ? 'left-1.5 translate-x-[180px]' : ''}
-            ${selectedLogType === 'BRIDGING'        ? 'left-1.5 translate-x-[240px]' : ''}
+          className={`absolute top-1.5 bottom-1.5 rounded-[18px] kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium md:hidden will-change-transform w-[50px]
+            ${selectedLogType === 'FLIGHT'             ? 'left-1.5 translate-x-0' : ''}
+            ${selectedLogType === 'SEAPLANE'           ? 'left-1.5 translate-x-[50px]' : ''}
+            ${selectedLogType === 'MARINE'             ? 'left-1.5 translate-x-[100px]' : ''}
+            ${selectedLogType === 'FILLING_STATION'    ? 'left-1.5 translate-x-[150px]' : ''}
+            ${selectedLogType === 'BRIDGING'           ? 'left-1.5 translate-x-[200px]' : ''}
+            ${selectedLogType === 'TOTALIZER_READINGS' ? 'left-1.5 translate-x-[250px]' : ''}
           `}
         />
         {/* Desktop sliding indicator */}
         <div
-          className={`absolute top-1.5 bottom-1.5 rounded-[18px] kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium hidden md:block w-[calc(20%-2.4px)] will-change-transform
-            ${selectedLogType === 'FLIGHT'          ? 'translate-x-0' : ''}
-            ${selectedLogType === 'SEAPLANE'        ? 'translate-x-[100%]' : ''}
-            ${selectedLogType === 'MARINE'          ? 'translate-x-[200%]' : ''}
-            ${selectedLogType === 'FILLING_STATION' ? 'translate-x-[300%]' : ''}
-            ${selectedLogType === 'BRIDGING'        ? 'translate-x-[400%]' : ''}
+          className={`absolute top-1.5 bottom-1.5 rounded-[18px] kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium hidden md:block w-[160px] will-change-transform left-1.5
+            ${selectedLogType === 'FLIGHT'             ? 'translate-x-0' : ''}
+            ${selectedLogType === 'SEAPLANE'           ? 'translate-x-[160px]' : ''}
+            ${selectedLogType === 'MARINE'             ? 'translate-x-[320px]' : ''}
+            ${selectedLogType === 'FILLING_STATION'    ? 'translate-x-[480px]' : ''}
+            ${selectedLogType === 'BRIDGING'           ? 'translate-x-[640px]' : ''}
+            ${selectedLogType === 'TOTALIZER_READINGS' ? 'translate-x-[800px]' : ''}
           `}
         />
         {[
-          { id: 'FLIGHT', label: 'Into-Plane', icon: Plane, w: 'w-[60px] md:w-[160px]' },
-          { id: 'SEAPLANE', label: 'Seaplane', icon: Sailboat, w: 'w-[60px] md:w-[160px]' },
-          { id: 'MARINE', label: 'Marine Loading', icon: Anchor, w: 'w-[60px] md:w-[160px]' },
-          { id: 'FILLING_STATION', label: 'Filling Stations', icon: Fuel, w: 'w-[60px] md:w-[160px]' },
-          { id: 'BRIDGING', label: 'Refueller Loading', icon: Truck, w: 'w-[60px] md:w-[160px]' },
+          { id: 'FLIGHT', label: 'Into-Plane', icon: Plane, w: 'w-[50px] md:w-[160px]' },
+          { id: 'SEAPLANE', label: 'Seaplane', icon: Sailboat, w: 'w-[50px] md:w-[160px]' },
+          { id: 'MARINE', label: 'Marine Loading', icon: Anchor, w: 'w-[50px] md:w-[160px]' },
+          { id: 'FILLING_STATION', label: 'Filling Stations', icon: Fuel, w: 'w-[50px] md:w-[160px]' },
+          { id: 'BRIDGING', label: 'Refueller Loading', icon: Truck, w: 'w-[50px] md:w-[160px]' },
+          { id: 'TOTALIZER_READINGS', label: 'Totalizer Readings', icon: Gauge, w: 'w-[50px] md:w-[160px]' },
         ].map((tab) => {
           const isActive = selectedLogType === tab.id;
           const Icon = tab.icon;
@@ -596,7 +648,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                 </div>
               )}
 
-              <Icon className="w-4 h-4 md:hidden" />
+              <Icon className="w-4 h-4 shrink-0 md:mr-2" />
               <span className="hidden md:inline">
                 {tab.label}
               </span>
@@ -703,6 +755,23 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                  </div>
               )}
 
+              {/* Totalizer Equipment Dropdown */}
+              {selectedLogType === 'TOTALIZER_READINGS' && (
+                 <div className="flex flex-col">
+                    <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 font-mono">Equipment Filter</label>
+                    <select
+                       value={totalizerEquipment}
+                       onChange={(e) => setTotalizerEquipment(e.target.value)}
+                       className="w-full px-4 py-3 bg-surface-lowest border border-outline rounded-xl text-[12px] font-bold text-on-surface focus:border-primary outline-none cursor-pointer"
+                    >
+                       <option value="ALL">ALL EQUIPMENT (RF & HD)</option>
+                       {Array.from(new Set((logs || []).map(l => l.vehicleId).filter(Boolean))).sort().map(eqId => (
+                          <option key={eqId} value={eqId}>{eqId}</option>
+                       ))}
+                    </select>
+                 </div>
+              )}
+
               {/* Clear Filters / Volume Summary */}
               <div className={`flex items-end justify-between sm:col-span-2 lg:col-span-1 gap-4 ${selectedLogType === 'FILLING_STATION' ? 'lg:col-start-5' : 'lg:col-start-4'}`}>
                  {(filterStartDate || filterEndDate || (selectedLogType === 'FLIGHT' && filterFlightCategory !== 'ALL') || (selectedLogType === 'FILLING_STATION' && (filterFuelType !== 'ALL' || filterStation !== 'ALL')) || (selectedLogType === 'BRIDGING' && filterEquipment !== 'ALL')) && (
@@ -798,12 +867,48 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
                     </>
                   )}
+                  {selectedLogType === 'TOTALIZER_READINGS' && (
+                    <>
+                      <th className="px-6 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Date</th>
+                      <th className="px-6 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Customer / Task</th>
+                      <th className="px-6 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Meter Number</th>
+                      <th 
+                        onClick={() => {
+                          if (totalizerSortField === 'meterOpen') {
+                            setTotalizerSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setTotalizerSortField('meterOpen');
+                            setTotalizerSortOrder('desc');
+                          }
+                        }}
+                        className="px-6 py-5 text-right text-[10px] font-black text-primary uppercase tracking-[0.2em] cursor-pointer hover:underline"
+                      >
+                        Opening Reading {totalizerSortField === 'meterOpen' ? (totalizerSortOrder === 'asc' ? '↑' : '↓') : '↕'}
+                      </th>
+                      <th 
+                        onClick={() => {
+                          if (totalizerSortField === 'meterClose') {
+                            setTotalizerSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setTotalizerSortField('meterClose');
+                            setTotalizerSortOrder('desc');
+                          }
+                        }}
+                        className="px-6 py-5 text-right text-[10px] font-black text-primary uppercase tracking-[0.2em] cursor-pointer hover:underline"
+                      >
+                        Closing Reading {totalizerSortField === 'meterClose' ? (totalizerSortOrder === 'asc' ? '↑' : '↓') : '↕'}
+                      </th>
+                      <th className="px-6 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Total Volume</th>
+                      <th className="px-6 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Delivery Number</th>
+                      <th className="px-6 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Reading By</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline">
                 {sortedLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={selectedLogType === 'FLIGHT' ? 9 : (selectedLogType === 'MARINE' ? 8 : (selectedLogType === 'FILLING_STATION' ? 7 : 6))} className="px-10 py-20 text-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 italic">Zero matches in historical database</td>
+                    <td colSpan={selectedLogType === 'TOTALIZER_READINGS' ? 8 : (selectedLogType === 'FLIGHT' ? 9 : (selectedLogType === 'MARINE' ? 8 : (selectedLogType === 'FILLING_STATION' ? 7 : 6)))} className="px-10 py-20 text-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 italic">Zero matches in historical database</td>
                   </tr>
                 ) : (
                   sortedLogs.map((log) => {
@@ -816,7 +921,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                       const groundData = parseGroundLog(log);
                       const marineData = parseMarineLog(log);
                       
-                      const colSpanCount = selectedLogType === 'FLIGHT' ? 9 : (selectedLogType === 'MARINE' ? 8 : (selectedLogType === 'FILLING_STATION' ? 7 : 6));
+                      const colSpanCount = selectedLogType === 'TOTALIZER_READINGS' ? 8 : (selectedLogType === 'FLIGHT' ? 9 : (selectedLogType === 'MARINE' ? 8 : (selectedLogType === 'FILLING_STATION' ? 7 : 6)));
 
                       return (
                         <React.Fragment key={log.id}>
@@ -959,6 +1064,36 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                             </>
                           )}
 
+                          {/* TOTALIZER_READINGS View */}
+                          {selectedLogType === 'TOTALIZER_READINGS' && (
+                            <>
+                              <td className="px-6 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
+                                  {log.operationalDate || (log as any).created_at?.split('T')[0] || (log.timestampStart ? new Date(log.timestampStart).toLocaleDateString([], { dateStyle: 'short' }) : 'N/A')}
+                              </td>
+                              <td className="px-6 py-6 text-xs font-black text-on-surface uppercase tracking-widest">
+                                  {log.airline || log.flightNumber || log.co || 'N/A'}
+                              </td>
+                              <td className="px-6 py-6 text-[11px] font-black text-primary font-mono tracking-widest uppercase">
+                                  {log.vehicleId || 'N/A'}
+                              </td>
+                              <td className="px-6 py-6 text-right text-xs font-bold text-on-surface font-mono">
+                                  {log.meterOpen !== undefined && log.meterOpen !== null ? log.meterOpen.toLocaleString() : 'N/A'}
+                              </td>
+                              <td className="px-6 py-6 text-right text-xs font-bold text-on-surface font-mono">
+                                  {log.meterClose !== undefined && log.meterClose !== null ? log.meterClose.toLocaleString() : (log.meterOpen !== undefined && log.volume ? (log.meterOpen + log.volume).toLocaleString() : 'N/A')}
+                              </td>
+                              <td className="px-6 py-6 text-right text-sm font-black text-primary font-mono tracking-tighter">
+                                  {(log.volume || 0).toLocaleString()} L
+                              </td>
+                              <td className="px-6 py-6 text-left font-mono text-xs">
+                                  {renderTicketCell(log.deliveryNumber)}
+                              </td>
+                              <td className="px-6 py-6 text-left text-[11px] font-black text-on-surface-dim uppercase tracking-widest">
+                                  {log.officer || log.operatorName || (log as any).tacticalOperator || operatorName || 'N/A'}
+                              </td>
+                            </>
+                          )}
+
                            {/* Edit / Details Action Cell (always the last column) */}
                            <td className="px-10 py-6 text-right">
                                {canEditLog(log) ? (
@@ -1034,7 +1169,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                   {isExpanded ? 'HIDE' : 'DETAILS'}
                                 </button>
                               )}
-                          </td>
+</td>
                         </tr>
                         {isExpanded && (
                            <tr className="bg-surface-dim/30 border-b border-outline">
@@ -1042,6 +1177,22 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                  {/* Into-Plane details */}
                                  {selectedLogType === 'FLIGHT' && (
                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-in fade-in duration-300">
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Airline / Customer</span>
+                                         <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.airline || 'N/A'}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Operational Date</span>
+                                         <span className="text-[11px] font-mono text-on-surface">{log.operationalDate || (log as any).created_at?.split('T')[0] || 'N/A'}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Payment Type</span>
+                                         <span className="text-[11px] font-black text-warning uppercase tracking-widest">{log.paymentType || 'CREDIT'}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Pit Number</span>
+                                         <span className="text-[11px] font-mono text-on-surface">{log.pitNumber || 'N/A'}</span>
+                                      </div>
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Arrived</span>
                                          <span className="text-[11px] font-mono text-on-surface">{formatTime(log.timestampArrived)}</span>
@@ -1056,23 +1207,41 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                       </div>
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Dispense End</span>
-                                         <span className="text-[11px] font-mono text-error">{formatTime(log.timestampInitialEnd)}</span>
+                                         <span className="text-[11px] font-mono text-error">{formatTime(log.timestampFinalEnd || log.timestampInitialEnd)}</span>
                                       </div>
                                       <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC Panel check</span>
-                                         <span className={`text-[11px] font-black uppercase tracking-widest ${log.panelCheck ? 'text-success' : 'text-error'}`}>{log.panelCheck ? 'CLOSED' : 'OPEN'}</span>
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Opening Meter</span>
+                                         <span className="text-[11px] font-mono text-on-surface">{log.meterOpen !== undefined && log.meterOpen !== null ? log.meterOpen.toLocaleString() : 'N/A'}</span>
                                       </div>
                                       <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC Appearance</span>
-                                         <span className={`text-[11px] font-black uppercase tracking-widest ${log.appearanceCheck ? 'text-success' : 'text-error'}`}>{log.appearanceCheck ? 'CLEAR & BRIGHT' : 'FAIL'}</span>
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Closing Meter</span>
+                                         <span className="text-[11px] font-mono text-on-surface">{log.meterClose !== undefined && log.meterClose !== null ? log.meterClose.toLocaleString() : (log.meterOpen !== undefined && log.volume ? (log.meterOpen + log.volume).toLocaleString() : 'N/A')}</span>
                                       </div>
                                       <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC Water Check</span>
-                                         <span className={`text-[11px] font-black uppercase tracking-widest ${log.waterCheck ? 'text-success' : 'text-error'}`}>{log.waterCheck ? 'FREE' : 'FAIL'}</span>
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Pressure (PSI)</span>
+                                         <span className="text-[11px] font-mono text-on-surface">{log.psi !== undefined && log.psi !== null ? log.psi : 'N/A'}</span>
                                       </div>
                                       <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Tactical Operator</span>
-                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{operatorName}</span>
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Flow Rate (LPM)</span>
+                                         <span className="text-[11px] font-mono text-on-surface">{log.lpm !== undefined && log.lpm !== null ? log.lpm : 'N/A'}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Officer</span>
+                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.officer || 'N/A'}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Operator Name</span>
+                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.operatorName || operatorName || 'N/A'}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">C/O (Account)</span>
+                                         <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.co || 'N/A'}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC Compliance</span>
+                                         <span className="text-[11px] font-black text-success uppercase tracking-widest">
+                                            P:{log.panelCheck ? 'PASS' : 'FAIL'} | A:{log.appearanceCheck ? 'PASS' : 'FAIL'} | W:{log.waterCheck ? 'PASS' : 'FAIL'}
+                                         </span>
                                       </div>
                                       <div className="flex flex-col gap-1 col-span-2 md:col-span-4">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Remarks</span>

@@ -8,6 +8,14 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        proxy: {
+          '/api/bq': {
+            target: env.VITE_BIGQUERY_API_URL || 'https://fms-bigquery-api-808402455416.us-central1.run.app',
+            changeOrigin: true,
+            rewrite: (p: string) => p.replace(/^\/api\/bq/, ''),
+            secure: false,
+          },
+        },
       },
       plugins: [react()],
       define: {

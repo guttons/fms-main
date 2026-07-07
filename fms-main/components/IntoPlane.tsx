@@ -305,41 +305,68 @@ const ScreenDashboard: React.FC<{
 
   const frozenFlights = briefingInfo?.staffAssignments?.frozenFlights;
 
-  const intlJobs = (frozenFlights?.intl 
-    ? frozenFlights.intl.map((ff: any) => {
-        const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-        const dbJob = (rawFlightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
-        const liveJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
-        const status = dbJob ? dbJob.status : 'PENDING';
-        return { ...ff, status, fidsStatus: liveJob?.status };
-      })
-    : (flightJobs || []).filter(f => {
-        const isDep = f.type ? f.type === 'departure' : !!f.std;
-        return isDep && isFlightInShift(f.std) && f.date === selectedBriefingDate;
-      }).map(f => {
-        const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-        const dbJob = (rawFlightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
-        const status = dbJob ? dbJob.status : 'PENDING';
-        return { ...f, status, fidsStatus: f.status };
-      })
-  ).filter((f: any) => f.fidsStatus?.toUpperCase() !== 'CANCELLED')
-   .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+  const liveIntlList = (flightJobs || []).filter(f => {
+    const isDep = f.type ? f.type === 'departure' : !!f.std;
+    return isDep && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate);
+  });
+
+  const intlJobsMap = new Map<string, any>();
+  liveIntlList.forEach(f => {
+    const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+    const dbJob = (rawFlightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+    intlJobsMap.set(cleanNo, {
+      ...f,
+      status: dbJob ? dbJob.status : (f.status || 'PENDING'),
+      fidsStatus: f.status
+    });
+  });
+
+  if (frozenFlights?.intl) {
+    frozenFlights.intl.forEach((ff: any) => {
+      const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      const existing = intlJobsMap.get(cleanNo);
+      const dbJob = (rawFlightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+      intlJobsMap.set(cleanNo, {
+        ...(existing || {}),
+        ...ff,
+        status: dbJob ? dbJob.status : (ff.status || 'PENDING'),
+        fidsStatus: existing?.fidsStatus || ff.status
+      });
+    });
+  }
+
+  const intlJobs = Array.from(intlJobsMap.values())
+    .filter((f: any) => f.fidsStatus?.toUpperCase() !== 'CANCELLED')
+    .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
   
-  const domesticJobsRaw = (frozenFlights?.domestic 
-    ? frozenFlights.domestic.map((ff: any) => {
-        const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-        const dbJob = (rawFlightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
-        const liveJob = (domesticFlights || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
-        const status = dbJob ? dbJob.status : 'PENDING';
-        return { ...ff, status, fidsStatus: liveJob?.status };
-      })
-    : (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && f.date === selectedBriefingDate).map(f => {
-        const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-        const dbJob = (rawFlightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
-        const status = dbJob ? dbJob.status : 'PENDING';
-        return { ...f, status, fidsStatus: f.status };
-      })
-  ).filter((f: any) => f.fidsStatus?.toUpperCase() !== 'CANCELLED');
+  const liveDomList = (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate));
+  const domJobsMap = new Map<string, any>();
+  liveDomList.forEach(f => {
+    const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+    const dbJob = (rawFlightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+    domJobsMap.set(cleanNo, {
+      ...f,
+      status: dbJob ? dbJob.status : (f.status || 'PENDING'),
+      fidsStatus: f.status
+    });
+  });
+
+  if (frozenFlights?.domestic) {
+    frozenFlights.domestic.forEach((ff: any) => {
+      const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      const existing = domJobsMap.get(cleanNo);
+      const dbJob = (rawFlightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+      domJobsMap.set(cleanNo, {
+        ...(existing || {}),
+        ...ff,
+        status: dbJob ? dbJob.status : (ff.status || 'PENDING'),
+        fidsStatus: existing?.fidsStatus || ff.status
+      });
+    });
+  }
+
+  const domesticJobsRaw = Array.from(domJobsMap.values())
+    .filter((f: any) => f.fidsStatus?.toUpperCase() !== 'CANCELLED');
 
   const domesticJobs = domesticJobsRaw.map((df: any) => {
       const assignment = (domesticAssignments || []).find(da => da.team_name === df.assignedTeam);
@@ -355,6 +382,7 @@ const ScreenDashboard: React.FC<{
           assignedTo: assignment?.op1 || '',
           assignedOfficer: assignment?.op2 || '',
           status: df.status as any,
+          fidsStatus: df.fidsStatus,
           assignedTeam: df.assignedTeam,
           vehicleId: df.vehicleId,
           route: df.route,
@@ -378,14 +406,52 @@ const ScreenDashboard: React.FC<{
       assignedTo: f.id === 'ah1' ? user.id : 'u3b',
       assignedOfficer: undefined,
       status: f.status as any,
+      fidsStatus: f.status,
       route: f.route,
       isAdhoc: true,
       vehicleId: f.vehicleId,
   })).sort((a: any, b: any) => (a.std || a.sta || '').localeCompare(b.std || b.sta || ''));
 
-  const filteredIntlJobs = filterMyTasks ? intlJobs.filter(j => j.assignedTo === user.id || j.assignedOfficer === user.id) : intlJobs;
-  const filteredDomesticJobs = filterMyTasks ? domesticJobs.filter(j => j.assignedTo === user.id || j.assignedOfficer === user.id) : domesticJobs;
-  const filteredAdhocJobs = filterMyTasks ? adhocJobs.filter(j => j.assignedTo === user.id || j.assignedOfficer === user.id) : adhocJobs;
+  const isJobAssignedToUser = (job: FlightJob) => {
+    if (!job || !user) return false;
+    
+    const userTokens = new Set<string>();
+    if (user.id) userTokens.add(user.id.toLowerCase());
+    if (user.name) userTokens.add(user.name.toLowerCase());
+
+    const staffList = (staff && staff.length > 0 ? staff : MOCK_USERS);
+    staffList.forEach(s => {
+      if (s.id.toLowerCase() === (user.id || '').toLowerCase() || s.name.toLowerCase() === (user.name || '').toLowerCase()) {
+        userTokens.add(s.id.toLowerCase());
+        userTokens.add(s.name.toLowerCase());
+      }
+    });
+
+    const assignedToVal = (job.assignedTo || '').toLowerCase();
+    const assignedOfficerVal = (job.assignedOfficer || '').toLowerCase();
+
+    if (!assignedToVal && !assignedOfficerVal) return false;
+
+    if (userTokens.has(assignedToVal) || userTokens.has(assignedOfficerVal)) {
+      return true;
+    }
+
+    const targetAssignee = staffList.find(s => s.id.toLowerCase() === assignedToVal || s.name.toLowerCase() === assignedToVal);
+    if (targetAssignee && (userTokens.has(targetAssignee.id.toLowerCase()) || userTokens.has(targetAssignee.name.toLowerCase()))) {
+      return true;
+    }
+
+    const targetOfficer = staffList.find(s => s.id.toLowerCase() === assignedOfficerVal || s.name.toLowerCase() === assignedOfficerVal);
+    if (targetOfficer && (userTokens.has(targetOfficer.id.toLowerCase()) || userTokens.has(targetOfficer.name.toLowerCase()))) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const filteredIntlJobs = filterMyTasks ? intlJobs.filter(isJobAssignedToUser) : intlJobs;
+  const filteredDomesticJobs = filterMyTasks ? domesticJobs.filter(isJobAssignedToUser) : domesticJobs;
+  const filteredAdhocJobs = filterMyTasks ? adhocJobs.filter(isJobAssignedToUser) : adhocJobs;
 
   const activeJobs = 
       viewMode === 'INT' ? filteredIntlJobs : 
@@ -429,17 +495,24 @@ const ScreenDashboard: React.FC<{
   };
 
   const renderJobCard = (job: FlightJob) => {
-      const isAssignedToMe = job.isDomestic 
-        ? job.assignedOfficer === user.id 
-        : (job.assignedTo === user.id || job.assignedOfficer === user.id);
+      const isAssignedToMe = isJobAssignedToUser(job);
       const usersList = staff && staff.length > 0 ? staff : MOCK_USERS;
-      const assignee = usersList.find(u => u.id === job.assignedTo);
-      const assigneeName = assignee?.name || 'Unassigned';
-      const officer = job.assignedOfficer ? usersList.find(u => u.id === job.assignedOfficer) : null;
-      const officerName = officer?.name || null;
+      const assignee = usersList.find(u => u.id === job.assignedTo || u.name.toLowerCase() === (job.assignedTo || '').toLowerCase());
+      const assigneeName = assignee?.name || job.assignedTo || 'Unassigned';
+      const officer = job.assignedOfficer ? usersList.find(u => u.id === job.assignedOfficer || u.name.toLowerCase() === (job.assignedOfficer || '').toLowerCase()) : null;
+      const officerName = officer?.name || job.assignedOfficer || null;
       const delayed = isDelayed(job.sta, job.eta);
       
-      const displayStatus = (delayed && job.status === 'PENDING') ? 'DELAYED' : job.status;
+      let displayStatus = 'PENDING';
+      if (job.status === 'IN_PROGRESS' || job.status === 'COMPLETED') {
+          displayStatus = job.status;
+      } else if (delayed) {
+          displayStatus = 'DELAYED';
+      } else if ((job as any).fidsStatus) {
+          displayStatus = (job as any).fidsStatus;
+      } else if (job.status) {
+          displayStatus = job.status;
+      }
 
       const airlineCode = (job.flightNumber || '').replace(/\s+/g, '').slice(0, 2).toLowerCase();
       const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/tail/${airlineCode.toUpperCase()}.png` : null;
@@ -943,6 +1016,7 @@ const ScreenTimestamps: React.FC<{
                 </div>
             </div>
           )}
+
           <button 
               onClick={() => onTimestamp('timestampArrived')}
               disabled={isOperator(user.role)}
@@ -1124,6 +1198,44 @@ const ScreenMetering: React.FC<{
               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Calculated Closing Totalizer</label>
               <div className="text-4xl sm:text-6xl font-mono font-black py-4 text-on-surface-dim tracking-tight">
                   {((typeof activeFlight?.meterOpen === 'number' ? activeFlight.meterOpen : 0) + (typeof activeFlight?.volume === 'number' ? activeFlight.volume : 0)).toLocaleString()}
+              </div>
+          </div>
+
+          {/* Metering Metrics: PSI & LPM */}
+          <div className="grid grid-cols-2 gap-4">
+              <div className="p-6 border border-outline rounded-3xl bg-surface-dim/20">
+                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-3 opacity-40">Pressure (PSI)</label>
+                  <input
+                      type="text"
+                      inputMode="numeric"
+                      disabled={isOperator(user.role)}
+                      className="w-full text-2xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-20"
+                      placeholder="0"
+                      value={activeFlight?.psi !== undefined && activeFlight?.psi !== null ? activeFlight.psi : ''}
+                      onChange={(e) => {
+                          const val = e.target.value.replace(/,/g, '');
+                          if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                              onInputChange('psi' as any, val === '' ? undefined : parseFloat(val));
+                          }
+                      }}
+                  />
+              </div>
+              <div className="p-6 border border-outline rounded-3xl bg-surface-dim/20">
+                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-3 opacity-40">Flow Rate (LPM)</label>
+                  <input
+                      type="text"
+                      inputMode="numeric"
+                      disabled={isOperator(user.role)}
+                      className="w-full text-2xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-20"
+                      placeholder="0"
+                      value={activeFlight?.lpm !== undefined && activeFlight?.lpm !== null ? activeFlight.lpm : ''}
+                      onChange={(e) => {
+                          const val = e.target.value.replace(/,/g, '');
+                          if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                              onInputChange('lpm' as any, val === '' ? undefined : parseFloat(val));
+                          }
+                      }}
+                  />
               </div>
           </div>
        </div>
@@ -1325,7 +1437,7 @@ const ScreenQC: React.FC<{
 
 export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob, initialVehicleId, onClearInitialVehicleId }) => {
   const { notify } = useNotification();
-  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, externalFlights } = useOperationalData();
+  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, externalFlights, staff } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(null);
   const [paymentType, setPaymentType] = useState<'CREDIT' | 'CASH' | 'VOID'>('CREDIT');
@@ -1787,7 +1899,15 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         isAdhoc: activeFlight.isAdhoc,
         route: savedRoute,
         isDomestic: activeFlight.isDomestic,
-        airline: getAirlineName(activeFlight.flightNumber || '', externalFlights)
+        airline: getAirlineName(activeFlight.flightNumber || '', externalFlights),
+        operationalDate: activeFlight.operationalDate || new Date().toISOString().split('T')[0],
+        psi: activeFlight.psi,
+        lpm: activeFlight.lpm,
+        officer: activeFlight.officer || (user.role === UserRole.ITP_OPERATOR ? 'ITP Officer' : user.name),
+        operatorName: activeFlight.operatorName || (staff && staff.find(s => s.id === activeFlight.operatorId)?.name) || user.name,
+        tacticalOperator: (staff && staff.find(s => s.id === activeFlight.operatorId)?.name) || user.name,
+        destination: activeFlight.destination,
+        paymentType: paymentType || activeFlight.paymentType || 'CREDIT',
       };
 
       await supabaseService.createFlightLog(logToSave);
@@ -1882,6 +2002,10 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                     <span className="text-[12px] font-black text-on-surface uppercase">{activeFlight.flightNumber || 'N/A'}</span>
                   </div>
                   <div>
+                    <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">Airline / Customer</span>
+                    <span className="text-[12px] font-black text-primary uppercase">{activeFlight.airline || getAirlineName(activeFlight.flightNumber || '', externalFlights) || 'N/A'}</span>
+                  </div>
+                  <div>
                     <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">Reg / Type</span>
                     <span className="text-[12px] font-black text-on-surface uppercase">
                       {(activeFlight.aircraftReg || 'N/A')} / {(activeFlight.aircraftType || 'N/A')}
@@ -1891,30 +2015,38 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                     <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">Parking Stand</span>
                     <span className="text-[12px] font-black text-on-surface uppercase">{activeFlight.stand || 'N/A'}</span>
                   </div>
-                  <div>
-                    <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">ITP Equipment</span>
-                    <span className="text-[12px] font-black text-primary uppercase">{selectedVehicleId || 'N/A'}</span>
-                  </div>
                 </div>
 
                 {/* Metering & Delivery Info */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                  <div className="card-premium p-5 border-outline/30">
-                    <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-2">Opening Meter</span>
-                    <span className="text-2xl font-mono font-black text-on-surface">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                  <div className="card-premium p-4 border-outline/30">
+                    <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">Opening Meter</span>
+                    <span className="text-lg font-mono font-black text-on-surface">
                       {activeFlight.meterOpen?.toLocaleString() || '0'}
                     </span>
                   </div>
-                  <div className="card-premium p-5 border-outline/30">
-                    <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-2">Totalizer Volume</span>
-                    <span className="text-2xl font-mono font-black text-primary">
+                  <div className="card-premium p-4 border-outline/30">
+                    <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">Totalizer Volume</span>
+                    <span className="text-lg font-mono font-black text-primary">
                       {activeFlight.volume?.toLocaleString() || '0'} L
                     </span>
                   </div>
-                  <div className="card-premium p-5 border-outline/30">
-                    <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-2">Closing Meter</span>
-                    <span className="text-2xl font-mono font-black text-on-surface">
+                  <div className="card-premium p-4 border-outline/30">
+                    <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">Closing Meter</span>
+                    <span className="text-lg font-mono font-black text-on-surface">
                       {((activeFlight.meterOpen || 0) + (activeFlight.volume || 0)).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="card-premium p-4 border-outline/30">
+                    <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">PSI</span>
+                    <span className="text-lg font-mono font-black text-on-surface">
+                      {activeFlight.psi !== undefined && activeFlight.psi !== null ? activeFlight.psi : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="card-premium p-4 border-outline/30">
+                    <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">LPM</span>
+                    <span className="text-lg font-mono font-black text-on-surface">
+                      {activeFlight.lpm !== undefined && activeFlight.lpm !== null ? activeFlight.lpm : 'N/A'}
                     </span>
                   </div>
                 </div>
@@ -1971,7 +2103,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                   </div>
                   
                   <div className="p-5 bg-surface-dim/40 border border-outline/20 rounded-2xl space-y-3">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-on-surface-dim opacity-55">Log Billing Details</h4>
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-on-surface-dim opacity-55">Log Billing & Personnel</h4>
                     <div className="space-y-1.5 text-[10px] font-black uppercase">
                       <div>
                         <span className="opacity-40 tracking-wider">Ticket:</span>{' '}
@@ -1988,6 +2120,12 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                           return <span className="text-on-surface font-black">{ticket || 'PENDING'}</span>;
                         })()}
                       </div>
+                      {activeFlight.paymentType && (
+                        <div>
+                          <span className="opacity-40 tracking-wider">Payment Mode:</span>{' '}
+                          <span className="text-warning font-black">{activeFlight.paymentType}</span>
+                        </div>
+                      )}
                       {activeFlight.co && (
                         <div>
                           <span className="opacity-40 tracking-wider">C/O (Account):</span>{' '}
@@ -1998,6 +2136,18 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                         <div>
                           <span className="opacity-40 tracking-wider">PIT Number:</span>{' '}
                           <span className="text-on-surface">{activeFlight.pitNumber}</span>
+                        </div>
+                      )}
+                      {activeFlight.officer && (
+                        <div>
+                          <span className="opacity-40 tracking-wider">Officer:</span>{' '}
+                          <span className="text-on-surface">{activeFlight.officer}</span>
+                        </div>
+                      )}
+                      {activeFlight.operatorName && (
+                        <div>
+                          <span className="opacity-40 tracking-wider">Operator Name:</span>{' '}
+                          <span className="text-on-surface">{activeFlight.operatorName}</span>
                         </div>
                       )}
                     </div>

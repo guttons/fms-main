@@ -65,29 +65,21 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
             }
 
             const logToSave = {
-                flightNumber: `GROUND-${formData.station}-${formData.fuelType.toUpperCase()}`,
-                aircraftReg: formData.vehicleReg.toUpperCase(),
-                aircraftType: 'GROUND VEHICLE',
-                stand: formData.station === 'LFS' ? 'LANDSIDE STATION' : 'AIRSIDE STATION',
-                operatorId: user?.id || 'System Admin',
-                vehicleId: formData.vehicleReg.toUpperCase(),
-                status: 'COMPLETED' as const,
-                logType: 'FILLING_STATION' as const,
-                deliveryNumber: formData.invoiceNumber ? `MLE-${formData.invoiceNumber}` : undefined,
-                timestampStart: `${formData.date}T08:00:00.000Z`,
-                timestampFinalEnd: `${formData.date}T16:00:00.000Z`,
-                timestampClearance: new Date().toISOString(),
-                meterOpen: 0,
-                meterClose: parsedVolume,
+                station: formData.station,
+                fuelType: formData.fuelType,
+                date: formData.date,
+                invoiceNumber: formData.invoiceNumber,
+                vehicleReg: formData.vehicleReg.toUpperCase(),
+                driverName: formData.driverName,
                 volume: parsedVolume,
-                panelCheck: true,
-                walkAroundCheck: true,
-                appearanceCheck: true,
-                waterCheck: true,
+                paymentMode: formData.paymentMode,
+                receivedBy: formData.receivedBy,
+                equipmentName: formData.equipmentName,
+                operatorId: user?.name || user?.id || 'System Admin',
                 remarks: `Ground support refuel: ${formData.vehicleReg} loaded with ${parsedVolume}L ${formData.fuelType} (On account of: ${formData.driverName}, Payment: ${formData.paymentMode}, Received by: ${formData.receivedBy}, Equipment: ${formData.equipmentName})`
             };
 
-            await supabaseService.createFlightLog(logToSave);
+            await supabaseService.createFillingStationLog(logToSave);
             setLoading(false);
             setSuccess(true);
             setFormData({

@@ -411,6 +411,10 @@ export const supabaseService = {
 
   // ── BigQuery Cloud Run API Helper & Operations Logs ────────────────────────
   _bqBase(): string {
+    // In development, use Vite's proxy to avoid CORS issues with Cloud Run
+    if (import.meta.env.DEV) {
+      return '/api/bq';
+    }
     return (
       import.meta.env.VITE_BIGQUERY_API_URL ||
       'https://fms-bigquery-api-808402455416.us-central1.run.app'
@@ -448,12 +452,12 @@ export const supabaseService = {
     console.log('[BigQuery API] GET /operations-log');
     try {
       const headers = await this._bqAuthHeaders();
-      const res = await fetch(`${this._bqBase()}/operations-log`, { headers });
-      if (!res.ok) throw new Error(`BigQuery GET failed: ${res.status} ${await res.text()}`);
+      const res = await fetch(`${this._bqBase()}/operations-log`, { headers, cache: 'no-store' });
+      if (!res.ok) throw new Error(`BigQuery GET failed: ${res.status}`);
       const data = await res.json();
       return data.logs as FlightLog[];
     } catch (error) {
-      console.error('[BigQuery] getFlightLogs error:', error);
+      console.warn('[BigQuery] getFlightLogs unavailable – returning cached/empty data.', (error as Error)?.message || '');
       return [];
     }
   },
@@ -516,59 +520,28 @@ export const supabaseService = {
 
   // ── Bridging Logs ──────────────────────────────────────────────────────────
   async getBridgingLogs(): Promise<BridgingLog[]> {
-    console.log('[BigQuery API] GET /operations-log (filtering for BRIDGING)');
+    console.log('[BigQuery API] GET /refueler-loading-log');
     try {
-      const flightLogs = await this.getFlightLogs();
-      const bridgingFlightLogs = (flightLogs || []).filter(log => log && log.logType === 'BRIDGING');
-      
-      if (bridgingFlightLogs.length === 0) {
-        return localBridgingLogs;
-      }
-      
-      return bridgingFlightLogs.map(log => {
-        const remarks = log.remarks || '';
-        const densityMatch = remarks.match(/Density:\s*([0-9.]+)/);
-        const tempMatch = remarks.match(/Temp:\s*([0-9.]+)/);
-        const visualMatch = remarks.match(/QC Visual:\s*(PASS|FAIL)/);
-        const cwdMatch = remarks.match(/CWD:\s*(PASS|FAIL)/);
-
-        const getLocalTime = (isoString?: string) => {
-          if (!isoString) return '';
-          try {
-            const d = new Date(isoString);
-            const pad = (n: number) => n.toString().padStart(2, '0');
-            return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-          } catch {
-            return '';
-          }
-        };
-
-        const getLocalDate = (isoString?: string) => {
-          if (!isoString) return '';
-          try {
-            const d = new Date(isoString);
-            return d.toLocaleDateString('en-CA'); // YYYY-MM-DD
-          } catch {
-            return '';
-          }
-        };
-
-        return {
-          id: log.id,
-          sourceTankId: log.aircraftReg,
-          vehicleId: log.vehicleId,
-          volume: log.volume,
-          startTime: getLocalTime(log.timestampStart),
-          endTime: getLocalTime(log.timestampFinalEnd),
-          visualCheckPassed: visualMatch ? visualMatch[1] === 'PASS' : (log.panelCheck ?? true),
-          cwdCheckPassed: cwdMatch ? cwdMatch[1] === 'PASS' : (log.waterCheck ?? true),
-          density: densityMatch ? parseFloat(densityMatch[1]) : undefined,
-          temperature: tempMatch ? parseFloat(tempMatch[1]) : undefined,
-          operatorId: log.operatorId,
-          date: getLocalDate(log.timestampStart || log.timestampClearance),
-          co: log.co
-        } as BridgingLog;
-      });
+      const headers = await this._bqAuthHeaders();
+      const res = await fetch(`${this._bqBase()}/refueler-loading-log`, { headers, cache: 'no-store' });
+      if (!res.ok) throw new Error(`BigQuery GET refueler-loading-log failed: ${res.status}`);
+      const data = await res.json();
+      const dbLogs = (data.logs || []).map((row: any) => ({
+        id: row.id,
+        sourceTankId: row.source_tank_id,
+        vehicleId: row.vehicle_id,
+        volume: Number(row.volume),
+        startTime: row.start_time || '',
+        endTime: row.end_time || '',
+        date: row.date,
+        visualCheckPassed: !!row.visual_check_passed,
+        cwdCheckPassed: !!row.cwd_check_passed,
+        density: row.density ? Number(row.density) : undefined,
+        temperature: row.temperature ? Number(row.temperature) : undefined,
+        operatorId: row.operator_name || '',
+        co: row.supervisor_name || ''
+      }));
+      return [...dbLogs, ...localBridgingLogs];
     } catch (error) {
       console.warn('[BigQuery] getBridgingLogs failed, falling back to localBridgingLogs:', error);
       return localBridgingLogs;
@@ -576,38 +549,132 @@ export const supabaseService = {
   },
 
   async createBridgingLog(log: Omit<BridgingLog, 'id'>): Promise<void> {
-    const remarksStr = `QC Visual: ${log.visualCheckPassed ? 'PASS' : 'FAIL'}, CWD: ${log.cwdCheckPassed ? 'PASS' : 'FAIL'}` + 
-      (log.density ? `, Density: ${log.density}` : '') + 
-      (log.temperature ? `, Temp: ${log.temperature}` : '');
-
-    const logToSave = {
-      flightNumber: `LOAD-${log.vehicleId}`,
-      aircraftReg: log.sourceTankId,
-      aircraftType: 'REFUELLER LOADING',
-      stand: 'DEPOT',
-      operatorId: log.operatorId,
-      vehicleId: log.vehicleId,
-      status: 'COMPLETED' as const,
-      logType: 'BRIDGING' as const,
-      deliveryNumber: `BRG-${Date.now()}`,
-      timestampStart: log.startTime ? `${log.date}T${log.startTime}:00.000Z` : undefined,
-      timestampFinalEnd: log.endTime ? `${log.date}T${log.endTime}:00.000Z` : undefined,
-      timestampClearance: new Date().toISOString(),
-      volume: log.volume,
-      panelCheck: log.visualCheckPassed,
-      waterCheck: log.cwdCheckPassed,
-      co: log.co,
-      remarks: remarksStr
-    };
-
-    const id = `bl-${Date.now()}`;
-    localBridgingLogs.unshift({ id, ...log });
-
     try {
-      await this.createFlightLog(logToSave);
+      const headers = await this._bqAuthHeaders();
+      const res = await fetch(`${this._bqBase()}/refueler-loading-log`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(log),
+      });
+      if (!res.ok) throw new Error(`BigQuery POST failed: ${res.status} ${await res.text()}`);
       console.log('[BigQuery] createBridgingLog saved successfully.');
     } catch (error) {
       console.error('[BigQuery] createBridgingLog failed:', error);
+      throw error;
+    }
+  },
+
+  async updateBridgingLog(id: string, updates: Partial<BridgingLog>): Promise<void> {
+    try {
+      const headers = await this._bqAuthHeaders();
+      const res = await fetch(`${this._bqBase()}/refueler-loading-log/${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error(`BigQuery PATCH failed: ${res.status} ${await res.text()}`);
+      console.log('[BigQuery] updateBridgingLog saved successfully.');
+    } catch (error) {
+      console.error('[BigQuery] updateBridgingLog failed:', error);
+      throw error;
+    }
+  },
+
+  async deleteBridgingLog(id: string): Promise<void> {
+    try {
+      const headers = await this._bqAuthHeaders();
+      const res = await fetch(`${this._bqBase()}/refueler-loading-log/${id}`, {
+        method: 'DELETE',
+        headers,
+      });
+      if (!res.ok) throw new Error(`BigQuery DELETE failed: ${res.status} ${await res.text()}`);
+      console.log('[BigQuery] deleteBridgingLog completed.');
+    } catch (error) {
+      console.error('[BigQuery] deleteBridgingLog failed:', error);
+      throw error;
+    }
+  },
+
+  // ── Filling Station Logs ───────────────────────────────────────────────────
+  async getFillingStationLogs(): Promise<FlightLog[]> {
+    console.log('[BigQuery API] GET /filling-station-log');
+    try {
+      const headers = await this._bqAuthHeaders();
+      const res = await fetch(`${this._bqBase()}/filling-station-log`, { headers, cache: 'no-store' });
+      if (!res.ok) throw new Error(`BigQuery GET filling-station-log failed: ${res.status}`);
+      const data = await res.json();
+      return (data.logs || []).map((row: any) => ({
+        id: row.id,
+        flightNumber: `GROUND-${row.station}-${row.fuel_type.toUpperCase()}`,
+        aircraftReg: row.vehicle_reg.toUpperCase(),
+        aircraftType: 'GROUND VEHICLE',
+        stand: row.station === 'LFS' ? 'LANDSIDE STATION' : 'AIRSIDE STATION',
+        operatorId: row.operator_id || 'System Admin',
+        vehicleId: row.vehicle_reg.toUpperCase(),
+        status: 'COMPLETED',
+        logType: 'FILLING_STATION' as any,
+        deliveryNumber: row.invoice_number ? `MLE-${row.invoice_number}` : undefined,
+        timestampStart: `${row.date}T08:00:00.000Z`,
+        timestampFinalEnd: `${row.date}T16:00:00.000Z`,
+        timestampClearance: row.created_at || new Date().toISOString(),
+        meterOpen: 0,
+        meterClose: Number(row.volume),
+        volume: Number(row.volume),
+        panelCheck: true,
+        walkAroundCheck: true,
+        appearanceCheck: true,
+        waterCheck: true,
+        remarks: `Ground support refuel: ${row.vehicle_reg} loaded with ${row.volume}L ${row.fuel_type} (On account of: ${row.driver_name || 'N/A'}, Payment: ${row.payment_mode || 'Credit'}, Received by: ${row.received_by || 'N/A'}, Equipment: ${row.equipment_name || 'N/A'})`
+      }));
+    } catch (error) {
+      console.warn('[BigQuery] getFillingStationLogs failed:', error);
+      return [];
+    }
+  },
+
+  async createFillingStationLog(log: any): Promise<void> {
+    try {
+      const headers = await this._bqAuthHeaders();
+      const res = await fetch(`${this._bqBase()}/filling-station-log`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(log),
+      });
+      if (!res.ok) throw new Error(`BigQuery POST failed: ${res.status} ${await res.text()}`);
+      console.log('[BigQuery] createFillingStationLog saved successfully.');
+    } catch (error) {
+      console.error('[BigQuery] createFillingStationLog failed:', error);
+      throw error;
+    }
+  },
+
+  async updateFillingStationLog(id: string, updates: any): Promise<void> {
+    try {
+      const headers = await this._bqAuthHeaders();
+      const res = await fetch(`${this._bqBase()}/filling-station-log/${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error(`BigQuery PATCH failed: ${res.status} ${await res.text()}`);
+      console.log('[BigQuery] updateFillingStationLog saved successfully.');
+    } catch (error) {
+      console.error('[BigQuery] updateFillingStationLog failed:', error);
+      throw error;
+    }
+  },
+
+  async deleteFillingStationLog(id: string): Promise<void> {
+    try {
+      const headers = await this._bqAuthHeaders();
+      const res = await fetch(`${this._bqBase()}/filling-station-log/${id}`, {
+        method: 'DELETE',
+        headers,
+      });
+      if (!res.ok) throw new Error(`BigQuery DELETE failed: ${res.status} ${await res.text()}`);
+      console.log('[BigQuery] deleteFillingStationLog completed.');
+    } catch (error) {
+      console.error('[BigQuery] deleteFillingStationLog failed:', error);
       throw error;
     }
   },
@@ -1672,14 +1739,14 @@ export const supabaseService = {
   async getExternalFlights(): Promise<any[]> {
     try {
       const headers = await this._bqAuthHeaders();
-      const res = await fetch(`${this._bqBase()}/external-flights`, { headers });
+      const res = await fetch(`${this._bqBase()}/external-flights`, { headers, cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         return data.flights || [];
       }
       throw new Error(`BigQuery API proxy returned status ${res.status}`);
     } catch (error) {
-      console.warn('[BigQuery] getExternalFlights failed:', error);
+      console.warn('[BigQuery] getExternalFlights unavailable –', (error as Error)?.message || '');
       return [];
     }
   },
