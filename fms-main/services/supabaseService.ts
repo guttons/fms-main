@@ -444,11 +444,19 @@ export const supabaseService = {
     return headers;
   },
 
-  async getFlightLogs(): Promise<FlightLog[]> {
+  async getFlightLogs(filters?: { startDate?: string; endDate?: string; searchTerm?: string }): Promise<FlightLog[]> {
     console.log('[BigQuery API] GET /operations-log');
     try {
       const headers = await this._bqAuthHeaders();
-      const res = await fetch(`${this._bqBase()}/operations-log`, { headers, cache: 'no-store' });
+      const queryParams = new URLSearchParams();
+      if (filters?.startDate) queryParams.append('startDate', filters.startDate);
+      if (filters?.endDate) queryParams.append('endDate', filters.endDate);
+      if (filters?.searchTerm) queryParams.append('searchTerm', filters.searchTerm);
+      
+      const queryString = queryParams.toString();
+      const url = `${this._bqBase()}/operations-log${queryString ? `?${queryString}` : ''}`;
+
+      const res = await fetch(url, { headers, cache: 'no-store' });
       if (!res.ok) throw new Error(`BigQuery GET failed: ${res.status}`);
       const data = await res.json();
       return data.logs as FlightLog[];
@@ -515,11 +523,19 @@ export const supabaseService = {
   },
 
   // ── Bridging Logs ──────────────────────────────────────────────────────────
-  async getBridgingLogs(): Promise<BridgingLog[]> {
+  async getBridgingLogs(filters?: { startDate?: string; endDate?: string; searchTerm?: string }): Promise<BridgingLog[]> {
     console.log('[BigQuery API] GET /refueler-loading-log');
     try {
       const headers = await this._bqAuthHeaders();
-      const res = await fetch(`${this._bqBase()}/refueler-loading-log`, { headers, cache: 'no-store' });
+      const queryParams = new URLSearchParams();
+      if (filters?.startDate) queryParams.append('startDate', filters.startDate);
+      if (filters?.endDate) queryParams.append('endDate', filters.endDate);
+      if (filters?.searchTerm) queryParams.append('searchTerm', filters.searchTerm);
+
+      const queryString = queryParams.toString();
+      const url = `${this._bqBase()}/refueler-loading-log${queryString ? `?${queryString}` : ''}`;
+
+      const res = await fetch(url, { headers, cache: 'no-store' });
       if (!res.ok) throw new Error(`BigQuery GET refueler-loading-log failed: ${res.status}`);
       const data = await res.json();
       const dbLogs = (data.logs || []).map((row: any) => ({
@@ -592,11 +608,19 @@ export const supabaseService = {
   },
 
   // ── Filling Station Logs ───────────────────────────────────────────────────
-  async getFillingStationLogs(): Promise<FlightLog[]> {
+  async getFillingStationLogs(filters?: { startDate?: string; endDate?: string; searchTerm?: string }): Promise<FlightLog[]> {
     console.log('[BigQuery API] GET /filling-station-log');
     try {
       const headers = await this._bqAuthHeaders();
-      const res = await fetch(`${this._bqBase()}/filling-station-log`, { headers, cache: 'no-store' });
+      const queryParams = new URLSearchParams();
+      if (filters?.startDate) queryParams.append('startDate', filters.startDate);
+      if (filters?.endDate) queryParams.append('endDate', filters.endDate);
+      if (filters?.searchTerm) queryParams.append('searchTerm', filters.searchTerm);
+
+      const queryString = queryParams.toString();
+      const url = `${this._bqBase()}/filling-station-log${queryString ? `?${queryString}` : ''}`;
+
+      const res = await fetch(url, { headers, cache: 'no-store' });
       if (!res.ok) throw new Error(`BigQuery GET filling-station-log failed: ${res.status}`);
       const data = await res.json();
       return (data.logs || []).map((row: any) => ({

@@ -291,10 +291,15 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   const fetchLogs = async () => {
     try {
       setLoading(true);
+      const filters = {
+        startDate: filterStartDate,
+        endDate: filterEndDate,
+        searchTerm
+      };
       const [fetchedFlightLogs, fetchedFillingLogs, fetchedBridgingLogs] = await Promise.all([
-        supabaseService.getFlightLogs(),
-        supabaseService.getFillingStationLogs(),
-        supabaseService.getBridgingLogs()
+        supabaseService.getFlightLogs(filters),
+        supabaseService.getFillingStationLogs(filters),
+        supabaseService.getBridgingLogs(filters)
       ]);
 
       const dbBridgingLogs: FlightLog[] = (fetchedBridgingLogs || []).map(blog => ({
@@ -351,15 +356,19 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
         ...legacyBridgingLogs
       ]);
     } catch (error) {
-      console.error('Error fetching logs from Firebase:', error);
+      console.error('Error fetching logs:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  // Re-fetch logs when any filters change (debounced for search term changes)
   useEffect(() => {
-    fetchLogs();
-  }, []);
+    const timer = setTimeout(() => {
+      fetchLogs();
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [filterStartDate, filterEndDate, searchTerm]);
 
   useEffect(() => {
     if (editingLog) {
@@ -895,10 +904,10 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                   {selectedLogType === 'FLIGHT' && (
                     <>
                       {renderSortableHeader('date', 'Operational Date', 'px-10')}
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Airline / Customer</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Flight No</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Type</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Aircraft Reg / Type</th>
-                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Airline / Customer</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Equipment</th>
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
                       {renderSortableHeader('ticket', 'Ticket', 'px-10')}
@@ -993,8 +1002,17 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                   </tr>
                 ) : (
                   sortedLogs.map((log) => {
-                      const operatorName = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => u.id === log.operatorId)?.name || 'Unknown';
-                      const officerName = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => u.id === log.officer || u.name === log.officer)?.name || log.officer || 'N/A';
+                      const operatorName = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => 
+                         u.id === log.operatorId || 
+                         u.id.toLowerCase() === (log.tacticalOperator || '').toLowerCase() ||
+                         u.name.toLowerCase() === (log.tacticalOperator || '').toLowerCase() ||
+                         u.name.toLowerCase() === (log.operatorName || '').toLowerCase()
+                       )?.name || log.tacticalOperator || log.operatorName || 'Unknown';
+                      const officerName = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => 
+                         u.id === log.officer || 
+                         u.id.toLowerCase() === (log.officer || '').toLowerCase() ||
+                         u.name.toLowerCase() === (log.officer || '').toLowerCase()
+                       )?.name || log.officer || 'N/A';
                       const isExpanded = expandedLogId === log.id;
                       
                       const seaplaneOp = log.flightNumber.replace('SEAPLANE-', '');
@@ -1017,6 +1035,9 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                               <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
                                   {getDisplayOperationalDate(log)}
                               </td>
+                              <td className="px-10 py-6 text-xs font-black text-primary uppercase tracking-widest">
+                                  {log.co || log.airline || 'N/A'}
+                              </td>
                               <td className="px-10 py-6">
                                   <div className="text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">
                                       {log.flightNumber}
@@ -1038,10 +1059,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                   <div className="text-xs font-black text-on-surface uppercase tracking-widest">{log.aircraftReg}</div>
                                   <div className="text-[9px] font-black text-on-surface-dim opacity-30 uppercase tracking-widest mt-0.5">{log.aircraftType}</div>
                               </td>
-                              <td className="px-10 py-6 text-xs font-black text-primary uppercase tracking-widest">
-                                  {log.co || log.airline || 'N/A'}
-                              </td>
-                              <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest font-mono">
+                              <td className="px-10 py-6 text-xs font-black text-on-surface tracking-wider font-mono">
                                   {log.vehicleId}
                               </td>
                               <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
@@ -1062,7 +1080,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                               <td className="px-10 py-6 text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">
                                   {seaplaneOp}
                               </td>
-                              <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest font-mono">
+                              <td className="px-10 py-6 text-xs font-black text-on-surface tracking-wider font-mono">
                                   {pumpId}
                               </td>
                               <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
@@ -1086,7 +1104,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                               <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest">
                                   {groundData.fuelType}
                               </td>
-                              <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest font-mono">
+                              <td className="px-10 py-6 text-xs font-black text-on-surface tracking-wider font-mono">
                                   {log.aircraftReg}
                               </td>
                               <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
@@ -1107,7 +1125,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                               <td className="px-10 py-6 text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">
                                   {marineData.vesselName}
                               </td>
-                              <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest font-mono">
+                              <td className="px-10 py-6 text-xs font-black text-on-surface tracking-wider font-mono">
                                   {log.vehicleId}
                               </td>
                               <td className="px-10 py-6 text-right text-xs font-bold text-on-surface-dim font-mono">
@@ -1134,7 +1152,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                               <td className="px-10 py-6 text-xs font-black text-on-surface uppercase tracking-widest">
                                   {log.aircraftReg /* sourceTankId */}
                               </td>
-                              <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest font-mono">
+                              <td className="px-10 py-6 text-xs font-black text-on-surface tracking-wider font-mono">
                                   {log.vehicleId}
                               </td>
                               <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
@@ -1155,7 +1173,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                               <td className="px-6 py-6 text-xs font-black text-on-surface uppercase tracking-widest">
                                   {log.airline || log.flightNumber || log.co || 'N/A'}
                               </td>
-                              <td className="px-6 py-6 text-[11px] font-black text-primary font-mono tracking-widest uppercase">
+                              <td className="px-6 py-6 text-xs font-black text-primary font-mono tracking-wider uppercase">
                                   {log.vehicleId || 'N/A'}
                               </td>
                               <td className="px-6 py-6 text-right text-xs font-bold text-on-surface font-mono">

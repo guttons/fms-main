@@ -469,7 +469,31 @@ app.get('/external-flights', async (_req: Request, res: Response) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // filling_station_log Endpoints
 // ═══════════════════════════════════════════════════════════════════════════
-app.get('/filling-station-log', requireAuth, async (_req: Request, res: Response) => {
+app.get('/filling-station-log', requireAuth, async (req: Request, res: Response) => {
+  const { startDate, endDate, searchTerm } = req.query;
+
+  let filterClauses = [];
+  const queryParams: Record<string, any> = {};
+
+  if (startDate) {
+    filterClauses.push("date >= @startDate");
+    queryParams.startDate = startDate;
+  }
+  if (endDate) {
+    filterClauses.push("date <= @endDate");
+    queryParams.endDate = endDate;
+  }
+  if (searchTerm) {
+    filterClauses.push("(LOWER(vehicle_reg) LIKE @searchTerm OR LOWER(driver_name) LIKE @searchTerm OR LOWER(invoice_number) LIKE @searchTerm OR LOWER(station) LIKE @searchTerm OR LOWER(fuel_type) LIKE @searchTerm)");
+    queryParams.searchTerm = `%${String(searchTerm).toLowerCase()}%`;
+  }
+
+  const whereClause = filterClauses.length > 0
+    ? `WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE) AND ${filterClauses.join(' AND ')}`
+    : `WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE)`;
+
+  const limitCount = (startDate || endDate || searchTerm) ? 10000 : 1000;
+
   const sql = `
     SELECT * EXCEPT(rn)
     FROM (
@@ -479,12 +503,16 @@ app.get('/filling-station-log', requireAuth, async (_req: Request, res: Response
       ) AS rn
       FROM ${FILLING_STATION_TABLE_REF}
     )
-    WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE)
+    ${whereClause}
     ORDER BY date DESC, created_at DESC
-    LIMIT 1000
+    LIMIT ${limitCount}
   `;
   try {
-    const [rows] = await bigquery.query({ query: sql, location: 'US' });
+    const [rows] = await bigquery.query({ 
+      query: sql, 
+      params: queryParams,
+      location: 'US' 
+    });
     res.json({ logs: rows });
   } catch (err: any) {
     console.error('[BigQuery] GET filling-station-log error:', err.message);
@@ -582,7 +610,31 @@ app.delete('/filling-station-log/:id', requireAuth, async (req: Request, res: Re
 // ═══════════════════════════════════════════════════════════════════════════
 // refueler_loading_log Endpoints
 // ═══════════════════════════════════════════════════════════════════════════
-app.get('/refueler-loading-log', requireAuth, async (_req: Request, res: Response) => {
+app.get('/refueler-loading-log', requireAuth, async (req: Request, res: Response) => {
+  const { startDate, endDate, searchTerm } = req.query;
+
+  let filterClauses = [];
+  const queryParams: Record<string, any> = {};
+
+  if (startDate) {
+    filterClauses.push("date >= @startDate");
+    queryParams.startDate = startDate;
+  }
+  if (endDate) {
+    filterClauses.push("date <= @endDate");
+    queryParams.endDate = endDate;
+  }
+  if (searchTerm) {
+    filterClauses.push("(LOWER(vehicle_id) LIKE @searchTerm OR LOWER(source_tank_id) LIKE @searchTerm OR LOWER(operator_id) LIKE @searchTerm)");
+    queryParams.searchTerm = `%${String(searchTerm).toLowerCase()}%`;
+  }
+
+  const whereClause = filterClauses.length > 0
+    ? `WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE) AND ${filterClauses.join(' AND ')}`
+    : `WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE)`;
+
+  const limitCount = (startDate || endDate || searchTerm) ? 10000 : 1000;
+
   const sql = `
     SELECT * EXCEPT(rn)
     FROM (
@@ -592,12 +644,16 @@ app.get('/refueler-loading-log', requireAuth, async (_req: Request, res: Respons
       ) AS rn
       FROM ${REFUELER_LOADING_TABLE_REF}
     )
-    WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE)
+    ${whereClause}
     ORDER BY date DESC, created_at DESC
-    LIMIT 1000
+    LIMIT ${limitCount}
   `;
   try {
-    const [rows] = await bigquery.query({ query: sql, location: 'US' });
+    const [rows] = await bigquery.query({ 
+      query: sql, 
+      params: queryParams,
+      location: 'US' 
+    });
     res.json({ logs: rows });
   } catch (err: any) {
     console.error('[BigQuery] GET refueler-loading-log error:', err.message);
@@ -695,7 +751,31 @@ app.delete('/refueler-loading-log/:id', requireAuth, async (req: Request, res: R
 // ═══════════════════════════════════════════════════════════════════════════
 // GET /operations-log   — list all (non-deleted) entries
 // ═══════════════════════════════════════════════════════════════════════════
-app.get('/operations-log', requireAuth, async (_req: Request, res: Response) => {
+app.get('/operations-log', requireAuth, async (req: Request, res: Response) => {
+  const { startDate, endDate, searchTerm } = req.query;
+
+  let filterClauses = [];
+  const queryParams: Record<string, any> = {};
+
+  if (startDate) {
+    filterClauses.push("COALESCE(operational_date, date(created_at)) >= @startDate");
+    queryParams.startDate = startDate;
+  }
+  if (endDate) {
+    filterClauses.push("COALESCE(operational_date, date(created_at)) <= @endDate");
+    queryParams.endDate = endDate;
+  }
+  if (searchTerm) {
+    filterClauses.push("(LOWER(flight_number) LIKE @searchTerm OR LOWER(aircraft_reg) LIKE @searchTerm OR LOWER(airline) LIKE @searchTerm OR LOWER(vehicle_id) LIKE @searchTerm OR LOWER(delivery_number) LIKE @searchTerm OR LOWER(remarks) LIKE @searchTerm)");
+    queryParams.searchTerm = `%${String(searchTerm).toLowerCase()}%`;
+  }
+
+  const whereClause = filterClauses.length > 0
+    ? `WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE) AND ${filterClauses.join(' AND ')}`
+    : `WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE)`;
+
+  const limitCount = (startDate || endDate || searchTerm) ? 10000 : 1000;
+
   // Deduplicate by id, keeping the row with the latest updated_at.
   // This ensures tombstone rows (is_deleted=TRUE) override streaming-buffered originals.
   const sql = `
@@ -707,13 +787,17 @@ app.get('/operations-log', requireAuth, async (_req: Request, res: Response) => 
       ) AS rn
       FROM ${TABLE_REF}
     )
-    WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE)
+    ${whereClause}
     ORDER BY COALESCE(operational_date, date(created_at)) DESC, created_at DESC
-    LIMIT 1000
+    LIMIT ${limitCount}
   `;
   console.log(`[BigQuery SQL]\n${sql.trim()}`);
   try {
-    const [rows] = await bigquery.query({ query: sql, location: 'US' });
+    const [rows] = await bigquery.query({ 
+      query: sql, 
+      params: queryParams,
+      location: 'US' 
+    });
     res.json({ logs: rows.map(rowToLog), count: rows.length });
   } catch (err: any) {
     console.error('[BigQuery] GET error:', err.message);

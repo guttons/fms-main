@@ -1698,6 +1698,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       isAdhoc: job.isAdhoc,
       route: job.route,
       isDomestic: job.isDomestic,
+      officer: job.assignedOfficer || '',
     });
     navigateToScreen('timestamps');
   };

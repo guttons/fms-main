@@ -390,25 +390,38 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                     Refuellers (RF) — {rfUnits.length} units
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {rfUnits.map((eq) => (
-                      <div key={eq.id} onClick={() => onSelectEquipment?.(eq.id)} className="bg-surface-dim border border-white/10 p-4 lg:p-5 rounded-2xl flex items-center justify-between group hover:border-primary/50 transition-all cursor-pointer shadow-premium hover:shadow-glow">
-                        <div className="flex items-center space-x-3 min-w-0 flex-1">
-                          <div className="p-2 bg-primary/10 rounded-lg group-hover:scale-110 transition-transform flex-shrink-0">
-                            <Truck className="w-4 h-4 text-primary" />
+                    {rfUnits.map((eq) => {
+                      const isEmpty = (eq.currentVolume || 0) <= 0;
+                      return (
+                        <div 
+                          key={eq.id} 
+                          onClick={isEmpty ? undefined : () => onSelectEquipment?.(eq.id)} 
+                          className={`border p-4 lg:p-5 rounded-2xl flex items-center justify-between group transition-all shadow-premium ${
+                            isEmpty 
+                              ? 'opacity-40 cursor-not-allowed border-outline bg-surface-dim/40' 
+                              : 'bg-surface-dim border-white/10 hover:border-primary/50 cursor-pointer hover:shadow-glow'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-3 min-w-0 flex-1">
+                            <div className={`p-2 rounded-lg flex-shrink-0 transition-transform ${isEmpty ? 'bg-outline/20 text-on-surface-dim opacity-50' : 'bg-primary/10 group-hover:scale-110 text-primary'}`}>
+                              <Truck className="w-4 h-4 text-current" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[11px] font-[900] text-on-surface tracking-tighter truncate">{eq.name}</p>
+                              <p className={`text-[8px] font-black uppercase tracking-widest ${isEmpty ? 'text-on-surface-dim opacity-55' : 'text-success opacity-60'}`}>
+                                {isEmpty ? 'Empty' : 'Available'}
+                              </p>
+                            </div>
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-[900] text-on-surface tracking-tighter truncate">{eq.name}</p>
-                            <p className="text-[8px] font-black text-success opacity-60 uppercase tracking-widest">Available</p>
+                          <div className="text-right flex-shrink-0 ml-3">
+                            <span className={`text-[11px] font-black font-mono ${isEmpty ? 'text-error' : getFuelColorClass(eq.currentVolume, eq.maxCapacity)}`}>
+                              {(eq.currentVolume || 0).toLocaleString()} L
+                            </span>
+                            <p className="text-[7px] font-black text-on-surface-dim uppercase tracking-wider opacity-40">Volume</p>
                           </div>
                         </div>
-                        <div className="text-right flex-shrink-0 ml-3">
-                          <span className={`text-[11px] font-black font-mono ${getFuelColorClass(eq.currentVolume, eq.maxCapacity)}`}>
-                            {(eq.currentVolume || 0).toLocaleString()} L
-                          </span>
-                          <p className="text-[7px] font-black text-on-surface-dim uppercase tracking-wider opacity-40">Volume</p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
