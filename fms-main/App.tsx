@@ -218,7 +218,7 @@ const AppContextContent: React.FC<any> = ({
   isSidebarCollapsed, toggleSidebarCollapse
 }) => {
   const { alerts, acknowledgeAlert, acknowledgeAllAlerts, clearAllAlerts, equipment, flightJobs, refreshData, domesticFlights, domesticAssignments, updateEquipmentStatus, updateFlightJob } = useOperationalData();
-  const { notify, notifyWithAction, dismiss } = useNotification();
+  const { notify, notifyWithAction, dismiss, clear } = useNotification();
 
   // Wrapped logout: release any IN_USE equipment and revert IN_PROGRESS jobs for this user before signing out
   const wrappedLogout = () => {
@@ -233,6 +233,7 @@ const AppContextContent: React.FC<any> = ({
         }
       });
     }
+    clear();
     handleLogout();
   };
   const [searchQuery, setSearchQuery] = useState('');
@@ -425,7 +426,7 @@ const AppContextContent: React.FC<any> = ({
           label: needsGuide ? 'Show Guide' : 'Install Now',
           onClick: () => handleInstallApp()
         },
-        0 // persist until user dismisses
+        8000 // auto hide after 8 seconds
       );
       installToastIdRef.current = toastId;
     }, 4000);

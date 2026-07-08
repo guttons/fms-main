@@ -675,23 +675,27 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                     const currentStatus = staffStatuses[val];
                     const statusPreset = STAFF_STATUS_PRESETS.find(p => p.id === currentStatus);
                     const dropdownKey = `${label}-${val}-${idx}`;
+                    
+                    if (!statusPreset && !canEdit) return null;
+                    
                     return (
                       <>
                         <button
+                          disabled={!canEdit}
                           onClick={(e) => {
                             e.stopPropagation();
                             setActiveDropdownStaffId(activeDropdownStaffId === dropdownKey ? null : dropdownKey);
                           }}
-                          className={`px-1.5 py-0.5 rounded-md text-[8.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                          className={`px-1.5 py-0.5 rounded-md text-[8.5px] font-black uppercase tracking-wider transition-all ${
                             statusPreset 
                               ? statusPreset.color 
-                              : 'bg-surface-lowest border border-dashed border-outline text-on-surface-dim opacity-40 hover:opacity-100'
-                          }`}
+                              : 'bg-surface-lowest border border-dashed border-outline text-on-surface-dim opacity-40 ' + (canEdit ? 'hover:opacity-100' : '')
+                          } ${!canEdit ? 'cursor-default' : 'cursor-pointer'}`}
                         >
                           {statusPreset ? statusPreset.label : '+ TAG'}
                         </button>
                         
-                        {activeDropdownStaffId === dropdownKey && (
+                        {canEdit && activeDropdownStaffId === dropdownKey && (
                           <div 
                             className="absolute right-0 mt-1 bg-surface-lowest border border-outline rounded-2xl p-1 shadow-premium w-24 flex flex-col space-y-0.5 z-[100] animate-in fade-in slide-in-from-top-1 duration-100"
                             onClick={(e) => e.stopPropagation()}
@@ -730,16 +734,18 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   })()}
                 </div>
               )}
-              <button 
-                onClick={() => {
-                  const newVals = values.filter((_, i) => i !== idx);
-                  onUpdate(newVals);
-                }}
-                className="p-2 text-error/40 hover:text-error hover:bg-error/10 rounded-lg transition-colors flex-shrink-0"
-                title="Remove Assignment"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {canEdit && (
+                <button 
+                  onClick={() => {
+                    const newVals = values.filter((_, i) => i !== idx);
+                    onUpdate(newVals);
+                  }}
+                  className="p-2 text-error/40 hover:text-error hover:bg-error/10 rounded-lg transition-colors flex-shrink-0"
+                  title="Remove Assignment"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
             {val && roleUsers.some(u => u.id === val) && (() => {
               const hist = staffHistory.find(h => h.staffId === val);
@@ -785,7 +791,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
             </div>
             <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Strategic Briefing Points</h3>
           </div>
-          {!isHistoricalView && (
+          {!isHistoricalView && canEdit && (
             <button 
               onClick={() => setAdditionalInfo([...additionalInfo, { text: '', type: 'standard' }])}
               className="p-2 bg-primary/10 text-primary rounded-xl hover:bg-primary/20 transition-all border border-primary/20 flex items-center space-x-2 px-4 shadow-sm"
@@ -813,17 +819,17 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   type="text"
                   placeholder="Enter briefing directive..."
                   value={info.text}
-                  readOnly={isHistoricalView}
+                  readOnly={isHistoricalView || !canEdit}
                   onChange={(e) => {
-                    if (isHistoricalView) return;
+                    if (isHistoricalView || !canEdit) return;
                     const newInfo = [...additionalInfo];
                     newInfo[i].text = e.target.value;
                     setAdditionalInfo(newInfo);
                   }}
-                  className={`bg-transparent border-none focus:ring-0 p-0 m-0 w-full text-base font-bold placeholder:opacity-20 selection:bg-primary/20 text-on-surface ${isHistoricalView ? 'cursor-default' : ''}`}
+                  className={`bg-transparent border-none focus:ring-0 p-0 m-0 w-full text-base font-bold placeholder:opacity-20 selection:bg-primary/20 text-on-surface ${isHistoricalView || !canEdit ? 'cursor-default' : ''}`}
                 />
               </div>
-              {!isHistoricalView && (
+              {!isHistoricalView && canEdit && (
                 <div className="flex items-center space-x-2">
                   <button 
                     onClick={() => {
@@ -975,11 +981,16 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
             <div className="flex justify-between items-center gap-4">
               <div className="flex items-center space-x-4 min-w-0">
                 <button
+                  disabled={!canEdit}
                   onClick={() => {
                     setIsAttendanceModalOpen(true);
                   }}
-                  className="p-3 badge-custom-primary rounded-xl transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center shrink-0"
-                  title="Mark Attendance"
+                  className={`p-3 rounded-xl transition-all flex items-center justify-center shrink-0 ${
+                    !canEdit 
+                      ? 'badge-custom-primary opacity-50 cursor-default' 
+                      : 'badge-custom-primary hover:scale-105 active:scale-95 cursor-pointer'
+                  }`}
+                  title={canEdit ? "Mark Attendance" : "Attendance View Only"}
                 >
                   <UserCheck className="w-6 h-6" />
                 </button>
@@ -1079,7 +1090,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                 <div className="flex flex-col items-center space-y-1.5">
                   <div className="flex items-center space-x-2">
                     <span className="badge-custom-primary px-4 py-1.5 rounded-full text-[10px] font-black">{intlFlightsToRender.length}</span>
-                    {frozenFlights && (
+                    {frozenFlights && canEdit && (
                       <button
                         onClick={handleResetFlights}
                         className="p-1.5 bg-error/10 text-error border border-error rounded-full hover:bg-error hover:text-white transition-all shrink-0 flex items-center justify-center cursor-pointer"
@@ -1137,7 +1148,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                 <div className="flex flex-col items-center space-y-1.5">
                   <div className="flex items-center space-x-2">
                     <span className="badge-custom-primary px-4 py-1.5 rounded-full text-[10px] font-black">{domesticFlightsToRender.length}</span>
-                    {frozenFlights && (
+                    {frozenFlights && canEdit && (
                       <button
                         onClick={handleResetFlights}
                         className="p-1.5 bg-error/10 text-error border border-error rounded-full hover:bg-error hover:text-white transition-all shrink-0 flex items-center justify-center cursor-pointer"
@@ -1191,13 +1202,15 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Ad-Hoc Flights</h3>
                 </div>
                 <div className="flex items-center space-x-2.5">
-                  <button
-                    onClick={() => setIsAddAdhocModalOpen(true)}
-                    className="transition-all p-1 flex items-center justify-center rounded-md px-2.5 badge-custom-warning hover:opacity-80 cursor-pointer shrink-0"
-                    title="Add Ad-Hoc Flight"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
+                  {canEdit && (
+                    <button
+                      onClick={() => setIsAddAdhocModalOpen(true)}
+                      className="transition-all p-1 flex items-center justify-center rounded-md px-2.5 badge-custom-warning hover:opacity-80 cursor-pointer shrink-0"
+                      title="Add Ad-Hoc Flight"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   <span className="badge-custom-warning px-4 py-1.5 rounded-full text-[10px] font-black">{adhocFlightsToRender.length}</span>
                 </div>
               </div>
@@ -1389,7 +1402,9 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                       
                       {selectedBriefingShift === 'Evening' ? (
                         <button 
+                          disabled={!canEdit}
                           onClick={() => {
+                            if (!canEdit) return;
                             const newDieselNeeds = dieselNeeds.includes(eq.id) 
                               ? dieselNeeds.filter(id => id !== eq.id) 
                               : [...dieselNeeds, eq.id];
@@ -1410,7 +1425,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                           className={`flex items-center justify-center space-x-2 py-2 rounded-xl border transition-all ${
                             needsDiesel 
                             ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white border-transparent' 
-                            : 'bg-surface border-outline text-on-surface-dim opacity-40 hover:opacity-100 hover:border-amber-500/30'
+                            : 'bg-surface border-outline text-on-surface-dim opacity-40 ' + (canEdit ? 'hover:opacity-100 hover:border-amber-500/30' : 'cursor-default')
                           }`}
                         >
                           <Droplet className={`w-3 h-3 ${needsDiesel ? 'animate-bounce' : ''}`} />
@@ -1421,7 +1436,9 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                           const isDailyCompleted = dailyCompleted.includes(eq.id);
                           return (
                             <button 
+                              disabled={!canEdit}
                               onClick={() => {
+                                if (!canEdit) return;
                                 const newDailyCompleted = dailyCompleted.includes(eq.id) 
                                   ? dailyCompleted.filter(id => id !== eq.id) 
                                   : [...dailyCompleted, eq.id];
@@ -1442,7 +1459,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                               className={`flex items-center justify-center space-x-2 py-2 rounded-xl border transition-all ${
                                 isDailyCompleted 
                                 ? 'bg-gradient-to-r from-green-500 to-green-600 text-white border-transparent' 
-                                : 'bg-surface border-outline text-on-surface-dim opacity-40 hover:opacity-100 hover:border-warning/30'
+                                : 'bg-surface border-outline text-on-surface-dim opacity-40 ' + (canEdit ? 'hover:opacity-100 hover:border-warning/30' : 'cursor-default')
                               }`}
                             >
                               <UserCheck className="w-3 h-3 shrink-0" />
@@ -1475,8 +1492,11 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
             </div>
             <textarea 
               value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-              className="w-full bg-surface-dim border border-outline rounded-2xl sm:rounded-[32px] p-4 sm:p-8 text-[15px] font-bold text-on-surface opacity-80 focus:border-primary focus:bg-surface-container outline-none min-h-[220px] resize-none transition-all shadow-inner focus:shadow-md"
+              readOnly={!canEdit}
+              onChange={(e) => {
+                if (canEdit) setRemarks(e.target.value);
+              }}
+              className={`w-full bg-surface-dim border border-outline rounded-2xl sm:rounded-[32px] p-4 sm:p-8 text-[15px] font-bold text-on-surface opacity-80 focus:border-primary focus:bg-surface-container outline-none min-h-[220px] resize-none transition-all shadow-inner focus:shadow-md ${!canEdit ? 'cursor-default focus:border-outline' : ''}`}
               placeholder="Enter comprehensive shift remarks here..."
             />
           </div>
