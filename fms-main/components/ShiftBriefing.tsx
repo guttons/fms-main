@@ -69,7 +69,6 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
     domesticFlights
   } = useOperationalData();
   const activeStaff = staff && staff.length > 0 ? staff : MOCK_USERS;
-  const canDelete = user?.role && [UserRole.ITP_MANAGER, UserRole.ADMIN].includes(user.role);
 
   const staffHistory = [
     { staffId: 'u3', lastDomestic: { date: '2026-06-09', shift: 'Morning', team: 'Team 1' }, lastDaily: { date: '2026-06-09', shift: 'Morning' }},
@@ -295,14 +294,32 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
   // Add Ad-Hoc Flight modal states
   const [isAddAdhocModalOpen, setIsAddAdhocModalOpen] = useState(false);
   const [adhocFlightNumber, setAdhocFlightNumber] = useState('');
-  const [adhocEta, setAdhocEta] = useState('');
   const [adhocStd, setAdhocStd] = useState('');
-  const [adhocStand, setAdhocStand] = useState('F10');
+  const [adhocDestination, setAdhocDestination] = useState('MLE');
   const [adhocReg, setAdhocReg] = useState('8Q-ADH');
   const [adhocType, setAdhocType] = useState('B737');
+  const [adhocCo, setAdhocCo] = useState('');
+  const [adhocOperatorName, setAdhocOperatorName] = useState('');
 
   const todayStr = new Date().toISOString().split('T')[0];
   const isHistoricalView = selectedBriefingDate < todayStr;
+
+  const userRoleStr = (user?.role || '').toUpperCase();
+  const isItpStaffRole = [
+    UserRole.ITP_OFFICER,
+    UserRole.ITP_OPERATOR,
+    UserRole.ITP_SUPERVISOR,
+    UserRole.ITP_HD_OPERATOR,
+    'ITP_OFFICER',
+    'ITP_OPERATOR',
+    'ITP_SUPERVISOR',
+    'ITP_HD_OPERATOR'
+  ].includes(userRoleStr as any);
+
+  const isManagerOrAdmin = [UserRole.ITP_MANAGER, UserRole.ADMIN, 'ITP_MANAGER', 'ADMIN'].includes(userRoleStr);
+  const canEdit = isManagerOrAdmin && !isItpStaffRole && !isHistoricalView;
+  const canDelete = canEdit;
+  const isViewOnly = !canEdit;
 
   const formattedBriefingDate = new Date(selectedBriefingDate + 'T00:00:00').toLocaleDateString('en-GB', { 
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' 
@@ -552,15 +569,17 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
     const newAdhoc = {
       id: `ah-custom-${Date.now()}`,
       flightNumber: adhocFlightNumber.trim(),
-      eta: adhocEta || '---',
       std: adhocStd || '---',
-      sta: adhocEta || '---',
-      route: 'MLE',
-      stand: adhocStand || '---',
+      sta: '---',
+      route: adhocDestination || 'MLE',
+      destination: adhocDestination || 'MLE',
+      stand: '---',
       status: 'PENDING',
       isAdhoc: true,
       aircraftReg: adhocReg || '---',
       aircraftType: adhocType || '---',
+      co: adhocCo.trim() || undefined,
+      operatorName: adhocOperatorName.trim() || undefined,
       date: selectedBriefingDate
     };
 
@@ -577,11 +596,12 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
       notify('Ad-hoc flight added successfully!', 'success');
       setIsAddAdhocModalOpen(false);
       setAdhocFlightNumber('');
-      setAdhocEta('');
       setAdhocStd('');
-      setAdhocStand('F10');
+      setAdhocDestination('MLE');
       setAdhocReg('8Q-ADH');
       setAdhocType('B737');
+      setAdhocCo('');
+      setAdhocOperatorName('');
     } catch (err) {
       console.error('Failed to add ad-hoc flight:', err);
       notify('Failed to add ad-hoc flight.', 'error');
@@ -602,8 +622,9 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
         <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">{label}</label>
         <select 
           value={value}
+          disabled={!canEdit}
           onChange={(e) => onSelect(e.target.value)}
-          className="bg-surface-dim border border-outline rounded-xl p-3 text-[13px] font-bold text-on-surface outline-none focus:border-primary transition-colors cursor-pointer appearance-none shadow-sm"
+          className={`bg-surface-dim border border-outline rounded-xl p-3 text-[13px] font-bold text-on-surface outline-none transition-colors appearance-none shadow-sm ${!canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer focus:border-primary'}`}
         >
           <option value="" className="bg-surface-dim text-on-surface">-- Unassigned --</option>
           {roleUsers.map(u => (
@@ -620,10 +641,12 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
       <div className="flex flex-col space-y-3">
         <div className="flex justify-between items-center mb-1">
            <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">{label}</label>
-           <button onClick={() => onUpdate([...values, ''])} className={`transition-all p-1 flex items-center space-x-1 rounded-md px-2 badge-custom-${themeType} hover:opacity-80`}>
-             <Plus className="w-3 h-3" />
-             <span className="text-[9px] font-bold uppercase tracking-wider">Add</span>
-           </button>
+           {canEdit && (
+             <button onClick={() => onUpdate([...values, ''])} className={`transition-all p-1 flex items-center space-x-1 rounded-md px-2 badge-custom-${themeType} hover:opacity-80`}>
+               <Plus className="w-3 h-3" />
+               <span className="text-[9px] font-bold uppercase tracking-wider">Add</span>
+             </button>
+           )}
          </div>
         {values.length === 0 ? (
           <div className="text-[10px] font-bold opacity-20 uppercase italic text-center py-4 border border-dashed border-outline rounded-xl">No {label.toLowerCase()} assigned</div>
@@ -633,12 +656,13 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
               <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`}></div>
               <select 
                 value={val}
+                disabled={!canEdit}
                 onChange={(e) => {
                   const newVals = [...values];
                   newVals[idx] = e.target.value;
                   onUpdate(newVals);
                 }}
-                className="bg-transparent text-[13px] font-bold text-on-surface outline-none cursor-pointer appearance-none flex-1 py-2"
+                className={`bg-transparent text-[13px] font-bold text-on-surface outline-none appearance-none flex-1 py-2 ${!canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
               >
                 <option value="" className="bg-surface-dim text-on-surface-dim italic">Select Staff...</option>
                 {roleUsers.map(u => (
@@ -863,6 +887,11 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   <div className="flex items-center space-x-2 px-3 py-1.5 bg-amber-500/10 rounded-full border border-amber-500/30">
                     <Calendar className="w-3 h-3 text-amber-400" />
                     <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">HISTORY MODE — READ ONLY</span>
+                  </div>
+                ) : isViewOnly ? (
+                  <div className="flex items-center space-x-2 px-3 py-1.5 bg-amber-500/10 rounded-full border border-amber-500/30">
+                    <Lock className="w-3 h-3 text-amber-400" />
+                    <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">BRIEFING VIEW ONLY</span>
                   </div>
                 ) : (
                   <div className="flex items-center space-x-2 px-3 py-1 bg-success/10 rounded-full border border-success/20">
@@ -1455,8 +1484,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
         </div>
       </div>
 
-      {/* AUTHORIZE & COMMIT BUTTON — hidden in history mode */}
-      {!isHistoricalView && (
+      {canEdit ? (
         <div className="flex justify-center pt-8 border-t border-outline relative z-10">
           <button 
             onClick={handleSave}
@@ -1467,7 +1495,14 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
             {isSaving ? 'ARCHIVING OPS DATA...' : 'AUTHORIZE & COMMIT'}
           </button>
         </div>
-      )}
+      ) : !isHistoricalView ? (
+        <div className="flex justify-center pt-8 border-t border-outline relative z-10">
+          <div className="flex items-center space-x-3 px-6 py-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl">
+            <Lock className="w-4 h-4 text-amber-400" />
+            <span className="text-[11px] font-black text-amber-400 uppercase tracking-widest">Shift Briefing View Only (ITP Staff)</span>
+          </div>
+        </div>
+      ) : null}
       {isHistoricalView && (
         <div className="flex items-center justify-center gap-4 pt-8 border-t border-outline relative z-10">
           <div className="flex items-center space-x-3 px-6 py-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl">
@@ -1697,16 +1732,6 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">ETA (Time)</label>
-                  <input 
-                    type="text"
-                    placeholder="e.g. 14:30"
-                    value={adhocEta}
-                    onChange={(e) => setAdhocEta(e.target.value)}
-                    className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
-                  />
-                </div>
-                <div>
                   <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">DEP / STD (Time)</label>
                   <input 
                     type="text"
@@ -1716,19 +1741,19 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                     className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Stand</label>
+                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Destination</label>
                   <input 
                     type="text"
-                    placeholder="F10"
-                    value={adhocStand}
-                    onChange={(e) => setAdhocStand(e.target.value)}
+                    placeholder="e.g. MLE"
+                    value={adhocDestination}
+                    onChange={(e) => setAdhocDestination(e.target.value)}
                     className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Reg</label>
                   <input 
@@ -1749,6 +1774,28 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                     className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">C/O (Customer Name)</label>
+                <input 
+                  type="text"
+                  placeholder="e.g. Maldivian Air Taxi"
+                  value={adhocCo}
+                  onChange={(e) => setAdhocCo(e.target.value)}
+                  className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Operator Name</label>
+                <input 
+                  type="text"
+                  placeholder="e.g. Ahmed Ibrahim"
+                  value={adhocOperatorName}
+                  onChange={(e) => setAdhocOperatorName(e.target.value)}
+                  className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
+                />
               </div>
 
               <div className="flex justify-end items-center space-x-3 pt-4">

@@ -27,7 +27,7 @@ interface MarineLoadingProps {
 }
 
 export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
-  const { equipment, createAlert, alerts, flightLogs, staff } = useOperationalData();
+  const { equipment, createAlert, alerts, flightLogs, staff, updateEquipment, refreshData } = useOperationalData();
   const { notify } = useNotification();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -109,13 +109,18 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
   useEffect(() => {
     if (formData.refuellerId) {
       const vehicleLogs = (flightLogs || []).filter(
-        log => log.vehicleId === formData.refuellerId && log.status === 'COMPLETED'
+        log => log && log.vehicleId?.toUpperCase() === formData.refuellerId.toUpperCase() && log.status === 'COMPLETED'
       );
-      const lastLog = [...vehicleLogs].sort((a, b) => {
-         const timeA = a.timestampFinalEnd ? new Date(a.timestampFinalEnd).getTime() : 0;
-         const timeB = b.timestampFinalEnd ? new Date(b.timestampFinalEnd).getTime() : 0;
-         return timeB - timeA;
-      })[0];
+      const getLogTime = (log: any) => {
+        if (log.timestampFinalEnd) return new Date(log.timestampFinalEnd).getTime();
+        if (log.timestampClearance) return new Date(log.timestampClearance).getTime();
+        if (log.timestampInitialEnd) return new Date(log.timestampInitialEnd).getTime();
+        if (log.timestampStart) return new Date(log.timestampStart).getTime();
+        if (log.timestampArrived) return new Date(log.timestampArrived).getTime();
+        if (log.operationalDate) return new Date(log.operationalDate).getTime();
+        return 0;
+      };
+      const lastLog = [...vehicleLogs].sort((a, b) => getLogTime(b) - getLogTime(a))[0];
       
       const initialMeter = lastLog?.meterClose || 0;
       setFormData(prev => {
@@ -136,7 +141,7 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
   }, [formData.refuellerId, flightLogs]);
 
   const availableRefuelers = (equipment || [])
-    .filter(eq => eq.type === EquipmentType.REFUELLER && eq.status === EquipmentStatus.AVAILABLE);
+    .filter(eq => eq.type === EquipmentType.REFUELLER && eq.status === EquipmentStatus.AVAILABLE && (eq.currentVolume || 0) > 0);
 
   // Filter alerts for replenishment requests to highlight them
   const requestedRFs = Array.from(new Set(
@@ -204,6 +209,16 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
         return;
     }
 
+    const parsedVolume = parseInt(formData.volume.toString().replace(/,/g, '')) || 0;
+    const refueller = (equipment || []).find(eq => eq.id === formData.refuellerId);
+    if (refueller && refueller.currentVolume !== undefined) {
+      const maxAllowedVolume = refueller.currentVolume + 500;
+      if (parsedVolume > maxAllowedVolume) {
+        notify(`Transfer volume (${parsedVolume.toLocaleString()} L) exceeds the refueller's balance fuel volume (${refueller.currentVolume.toLocaleString()} L) by more than 500 L.`, 'error');
+        return;
+      }
+    }
+
     setLoading(true);
     
     // Simulate API call and save to database
@@ -255,6 +270,37 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
         };
 
         await supabaseService.createFlightLog(logToSave);
+
+        // Update Refueller Payload/Inventory if applicable
+        if (formData.refuellerId) {
+          const refueller = (equipment || []).find(eq => eq.id.toUpperCase() === formData.refuellerId.toUpperCase());
+          if (refueller && refueller.currentVolume !== undefined) {
+            const newVolume = Math.max(0, refueller.currentVolume - parsedVolume);
+            const capacity = refueller.maxCapacity || 20000;
+            const isLow = newVolume < 2000 || newVolume < capacity * 0.1;
+            
+            await updateEquipment(formData.refuellerId, {
+              currentVolume: newVolume,
+              status: isLow ? EquipmentStatus.REFUELLING : EquipmentStatus.AVAILABLE
+            });
+
+            if (isLow) {
+              try {
+                await createAlert({
+                  severity: 'medium',
+                  message: `Replenishment requested for unit ${formData.refuellerId} (Low fuel: ${newVolume.toLocaleString()}L)`,
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                  acknowledged: false,
+                  targetRole: UserRole.DEPOT_OPERATOR
+                });
+                notify(`Refueller ${formData.refuellerId} fuel level is low (${newVolume.toLocaleString()}L). Replenishment request triggered automatically.`, 'warning');
+              } catch (err) {
+                console.error("Auto alert trigger failed:", err);
+              }
+            }
+          }
+        }
+        await refreshData();
       } catch (dbError) {
         console.error('Error saving marine log to database:', dbError);
       }

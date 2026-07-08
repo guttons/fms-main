@@ -187,7 +187,14 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
     return parseFloat((snapshot.daysRemaining - snapshot.daysToShipment).toFixed(1));
   }, [snapshot]);
 
-  const { tanks = [] } = useOperationalData();
+  const { 
+    tanks = [], 
+    shipments = [], 
+    updateShipment: handleUpdateShipment, 
+    addShipment: handleAddShipment, 
+    removeShipment: handleRemoveShipment 
+  } = useOperationalData();
+
   const nffTanks = useMemo(() => tanks.filter(t => ['tk101', 'tk102', 'tk103'].includes(t.id)), [tanks]);
   const maxCapacity = useMemo(() => nffTanks.reduce((acc, t) => acc + t.capacity, 0) || 43500000, [nffTanks]);
   const tanksCurrentLevel = useMemo(() => nffTanks.reduce((acc, t) => acc + t.currentLevel, 0) || 33765840, [nffTanks]);
@@ -202,64 +209,6 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
   });
   const [initialStock, setInitialStock] = useState<number | null>(null);
   const activeInitialStock = initialStock !== null ? initialStock : tanksCurrentLevel;
-  
-  const [shipments, setShipments] = useState<ShipmentData[]>([
-    {
-      id: '168',
-      shipmentNumber: '168 Delivery',
-      vessel: 'MT.ALIMAS',
-      arrivalDate: '2026-06-12',
-      isConfirmed: true,
-      isCancelled: false,
-      orderQtyMt: 10000,
-      averageSales: 552887,
-      deadStock: 2500000
-    },
-    {
-      id: '169',
-      shipmentNumber: '169 Delivery',
-      vessel: 'MT.NEON',
-      arrivalDate: '2026-07-14',
-      isConfirmed: false,
-      isCancelled: false,
-      orderQtyMt: 13000,
-      averageSales: 665000,
-      deadStock: 2500000
-    },
-    {
-      id: '170',
-      shipmentNumber: '170 Delivery',
-      vessel: 'MT.NEON',
-      arrivalDate: '2026-08-02',
-      isConfirmed: false,
-      isCancelled: false,
-      orderQtyMt: 11000,
-      averageSales: 745000,
-      deadStock: 2500000
-    },
-    {
-      id: '171',
-      shipmentNumber: '171 Delivery',
-      vessel: 'MT.NEON',
-      arrivalDate: '2026-08-21',
-      isConfirmed: false,
-      isCancelled: false,
-      orderQtyMt: 10000,
-      averageSales: 732000,
-      deadStock: 2500000
-    },
-    {
-      id: '172',
-      shipmentNumber: '172 Delivery',
-      vessel: 'MT.NEON',
-      arrivalDate: '2026-09-09',
-      isConfirmed: false,
-      isCancelled: false,
-      orderQtyMt: 10000,
-      averageSales: 727000,
-      deadStock: 2500000
-    }
-  ]);
 
   const getDaysBetween = (d1Str: string, d2Str: string) => {
     const d1 = new Date(d1Str);
@@ -286,9 +235,9 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
         }
       }
       
-      // Auto-confirm logic: automatically confirm if date of arrival is less than 31 days from the Forecast Base Date (today)
+      // Auto-confirm logic: automatically confirm if date of arrival is less than 30 days from the Forecast Base Date (today)
       const daysFromBase = getDaysBetween(currentDate, shipment.arrivalDate);
-      const autoConfirmed = !shipment.isCancelled && (shipment.isConfirmed || daysFromBase < 31);
+      const autoConfirmed = !shipment.isCancelled && (shipment.isConfirmed || daysFromBase < 30);
       
       const estimatedSales = isPast ? 0 : days * shipment.averageSales;
       const orderQtyLiters = shipment.orderQtyMt * 1270;
@@ -359,44 +308,7 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
     );
   };
 
-  const handleUpdateShipment = (index: number, fields: Partial<ShipmentData>) => {
-    setShipments(prev => prev.map((s, i) => i === index ? { ...s, ...fields } : s));
-  };
 
-  const handleAddShipment = () => {
-    setShipments(prev => {
-      const lastShipment = prev[prev.length - 1];
-      const match = lastShipment.shipmentNumber.match(/(\d+)/);
-      const lastNum = match ? parseInt(match[1], 10) : 172;
-      const nextNum = lastNum + 1;
-      
-      const lastDate = new Date(lastShipment.arrivalDate);
-      lastDate.setDate(lastDate.getDate() + 19);
-      const nextArrivalDate = lastDate.toISOString().split('T')[0];
-
-      return [
-        ...prev,
-        {
-          id: String(nextNum),
-          shipmentNumber: `${nextNum} Delivery`,
-          vessel: lastShipment.vessel,
-          arrivalDate: nextArrivalDate,
-          isConfirmed: false,
-          isCancelled: false,
-          orderQtyMt: lastShipment.orderQtyMt,
-          averageSales: lastShipment.averageSales,
-          deadStock: lastShipment.deadStock
-        }
-      ];
-    });
-  };
-
-  const handleRemoveShipment = () => {
-    setShipments(prev => {
-      if (prev.length <= 1) return prev;
-      return prev.slice(0, -1);
-    });
-  };
 
   return (
     <div 
@@ -1019,6 +931,31 @@ export const ExecutiveModule: React.FC<ExecutiveModuleProps> = ({ user }) => {
                         {s.orderQtyLiters.toLocaleString()}
                       </td>
                     ))}
+                  </tr>
+
+                  {/* 5-Yr Trend Recommended Qty [L] */}
+                  <tr className="hover:bg-surface-dim/20 transition-colors border-b border-outline/30">
+                    <td className="sticky left-0 bg-surface border-r border-outline px-2 sm:px-5 py-1 font-bold text-on-surface-dim z-10 w-14 sm:w-64 group cursor-pointer focus:outline-none" tabIndex={0}>
+                      <div className="flex items-center justify-center sm:justify-start h-12">
+                        <TrendingUp className="w-3.5 h-3.5 sm:mr-2.5 text-primary opacity-50 shrink-0" />
+                        <span className="hidden sm:inline">5-Yr Recommended Qty [L]</span>
+                        <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 sm:hidden">
+                          5-Yr Recommended Qty [L]
+                        </div>
+                      </div>
+                    </td>
+                    {visibleShipments.map((s) => {
+                      const recLiters = Math.round((s.daysBetween || 19) * (s.averageSales || 665000));
+                      return (
+                        <td key={s.id} className={`px-4 py-3 text-center font-mono font-black text-primary ${
+                          s.isCancelled 
+                            ? 'text-on-surface-dim/40 line-through bg-error/5 opacity-70' 
+                            : 'bg-primary/5'
+                        }`}>
+                          {recLiters.toLocaleString()} L
+                        </td>
+                      );
+                    })}
                   </tr>
 
                   {/* Total Estimated Sales */}

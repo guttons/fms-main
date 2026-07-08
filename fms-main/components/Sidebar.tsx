@@ -75,6 +75,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
+          { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'history', label: 'Log History', icon: History },
         ];

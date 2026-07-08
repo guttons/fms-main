@@ -118,8 +118,15 @@ const MobileHeader: React.FC<{
                       style={{ color: getEquipmentHexColor(activeFlight?.vehicleId || selectedVehicleId) }}
                       className="bg-surface-container-highest border border-outline rounded-lg py-2 pl-3 pr-8 text-[12px] font-bold shadow-sm appearance-none focus:border-primary transition-all cursor-pointer uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap w-fit"
                   >
-                       {equipment
-                         .filter(eq => (eq.id.startsWith('RF') || eq.id.startsWith('HD')) && (eq.status === EquipmentStatus.AVAILABLE || eq.id === selectedVehicleId))
+                        {equipment
+                          .filter(eq => {
+                            const isRf = eq.id.startsWith('RF');
+                            const isHd = eq.id.startsWith('HD');
+                            if (isRf) {
+                              return (eq.currentVolume || 0) > 0 && (eq.status === EquipmentStatus.AVAILABLE || eq.id === selectedVehicleId);
+                            }
+                            return isHd && (eq.status === EquipmentStatus.AVAILABLE || eq.id === selectedVehicleId);
+                          })
                          .map(eq => (
                             <option 
                               key={eq.id} 
@@ -1624,7 +1631,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
     if (isRfJob && !isSelectedRf) {
       notify(`This job is assigned as REFUELLER (RF). You must select an RF equipment to start it.`, 'error');
-      const rfEquip = (equipment || []).filter(eq => eq.id.startsWith('RF') && eq.status === EquipmentStatus.AVAILABLE);
+      const rfEquip = (equipment || []).filter(eq => eq.id.startsWith('RF') && (eq.currentVolume || 0) > 0 && eq.status === EquipmentStatus.AVAILABLE);
       const saved = localStorage.getItem(`fms_last_selected_vehicle_${user.id}`);
       const defaultSelected = (saved && rfEquip.some(e => e.id === saved)) ? saved : (rfEquip[0]?.id || '');
       setEquipPickerSelected(defaultSelected);
@@ -1654,15 +1661,20 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     // Use parseFloat to handle both string and number values from BigQuery API
     const parseMeterClose = (v: any) => { const n = parseFloat(String(v)); return isNaN(n) ? 0 : n; };
     const vehicleLogs = (flightLogs || []).filter(log => 
-      log.vehicleId?.toUpperCase() === activeVehicleId?.toUpperCase() && 
+      log && log.vehicleId?.toUpperCase() === activeVehicleId?.toUpperCase() && 
       log.status?.toUpperCase() === 'COMPLETED' &&
       parseMeterClose(log.meterClose) > 0
     );
-    const lastLog = [...vehicleLogs].sort((a, b) => {
-       const timeA = a.timestampFinalEnd ? new Date(a.timestampFinalEnd).getTime() : (a.timestampClearance ? new Date(a.timestampClearance).getTime() : 0);
-       const timeB = b.timestampFinalEnd ? new Date(b.timestampFinalEnd).getTime() : (b.timestampClearance ? new Date(b.timestampClearance).getTime() : 0);
-       return timeB - timeA;
-    })[0];
+    const getLogTime = (log: any) => {
+      if (log.timestampFinalEnd) return new Date(log.timestampFinalEnd).getTime();
+      if (log.timestampClearance) return new Date(log.timestampClearance).getTime();
+      if (log.timestampInitialEnd) return new Date(log.timestampInitialEnd).getTime();
+      if (log.timestampStart) return new Date(log.timestampStart).getTime();
+      if (log.timestampArrived) return new Date(log.timestampArrived).getTime();
+      if (log.operationalDate) return new Date(log.operationalDate).getTime();
+      return 0;
+    };
+    const lastLog = [...vehicleLogs].sort((a, b) => getLogTime(b) - getLogTime(a))[0];
     
     const initialMeter = lastLog ? parseMeterClose(lastLog.meterClose) : undefined;
 
@@ -1674,7 +1686,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       aircraftType: job.aircraftType,
       stand: job.stand,
       operatorId: user.id,
-      vehicleId: selectedVehicleId,
+      vehicleId: activeVehicleId,
       status: 'PENDING',
       meterOpen: initialMeter,
       volume: 0,
@@ -1851,6 +1863,18 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
   const handleSubmit = async () => {
     if (!activeFlight) return;
+
+    if (selectedVehicleId && selectedVehicleId.startsWith('RF')) {
+      const vehicle = (equipment || []).find(eq => eq.id === selectedVehicleId);
+      if (vehicle && vehicle.currentVolume !== undefined) {
+        const volumeEntered = activeFlight.volume || 0;
+        const maxAllowedVolume = vehicle.currentVolume + 500;
+        if (volumeEntered > maxAllowedVolume) {
+          notify(`Volume delivered (${volumeEntered.toLocaleString()} L) exceeds the refueller's balance fuel volume (${vehicle.currentVolume.toLocaleString()} L) by more than 500 L.`, 'error');
+          return;
+        }
+      }
+    }
     
     if (activeFlight.deliveryNumber) {
       try {
@@ -2369,7 +2393,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                     const isHdJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'HYDRANT';
                     
                     if (isRfJob) {
-                      return isRf && (eq.status === EquipmentStatus.AVAILABLE || eq.id === equipPickerSelected);
+                      return isRf && (eq.currentVolume || 0) > 0 && (eq.status === EquipmentStatus.AVAILABLE || eq.id === equipPickerSelected);
                     }
                     if (isHdJob) {
                       return isHd;
@@ -2430,7 +2454,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                     const isHd = eq.id.startsWith('HD');
                     const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER';
                     const isHdJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'HYDRANT';
-                    if (isRfJob) return isRf && (eq.status === EquipmentStatus.AVAILABLE || eq.id === equipPickerSelected);
+                    if (isRfJob) return isRf && (eq.currentVolume || 0) > 0 && (eq.status === EquipmentStatus.AVAILABLE || eq.id === equipPickerSelected);
                     if (isHdJob) return isHd;
                     return false;
                   });

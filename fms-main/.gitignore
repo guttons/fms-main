@@ -22,3 +22,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Google Cloud Service Account Credentials
+*key.json
+*credentials.json
+macl-fms-496808-5809d185855e.json
+
+# Large migrated data files
+native_sales_table.csv
+*.csv
+

@@ -136,6 +136,8 @@ export interface FlightLog {
   meterOpen?: number;
   meterClose?: number;
   volume: number;
+  psi?: number;
+  lpm?: number;
   
   // QC (JIG Compliance)
   panelCheck: boolean;        // Panel Closed?
@@ -148,6 +150,12 @@ export interface FlightLog {
   route?: string;
   isDomestic?: boolean;
   airline?: string;
+  officer?: string;
+  operatorName?: string;
+  tacticalOperator?: string;
+  destination?: string;
+  paymentType?: string;
+  created_at?: string;
 }
 
 export interface BridgingLog {
@@ -189,4 +197,17 @@ export interface Vessel {
   flag?: string;
   status: 'active' | 'inactive';
   created_at?: string;
+}
+
+export interface ShipmentData {
+  id: string;
+  shipmentNumber: string;
+  shipmentNoCode?: string;
+  vessel: string;
+  arrivalDate: string;
+  isConfirmed: boolean;
+  isCancelled?: boolean;
+  orderQtyMt: number;
+  averageSales: number;
+  deadStock: number;
 }

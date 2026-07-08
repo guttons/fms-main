@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { MOCK_ALERTS, MOCK_USERS, MOCK_ADHOC_FLIGHTS } from '../constants';
 import { FuelType, Tank, User, UserRole, FlightJob, Equipment, EquipmentStatus as EqStatus, EquipmentType } from '../types';
-import { AlertTriangle, AlertOctagon, TrendingDown, TrendingUp, Activity, Droplet, Users, Clock, Plane, LayoutDashboard, MapPin, CheckCircle, Truck, Play, Thermometer, CloudSun, Wind, RefreshCw, Send, Globe, Anchor, ShoppingBag, Database, Eye, ChevronRight, ChevronDown, X } from 'lucide-react';
+import { AlertTriangle, AlertOctagon, TrendingDown, TrendingUp, Activity, Droplet, Users, Clock, Plane, LayoutDashboard, MapPin, CheckCircle, Truck, Play, Thermometer, CloudSun, Wind, RefreshCw, Send, Globe, Anchor, ShoppingBag, Database, Eye, ChevronRight, ChevronDown, X, Calendar } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { useNotification } from '../context/NotificationContext';
@@ -240,11 +240,37 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
   // --- Sub-Component: Operator Dashboard (My Tasks) ---
   const renderOperatorDashboard = () => {
-    // STRICT filtering for RBAC: Only show jobs assigned to current user (operator or officer)
-    const myTasks = flightJobs
-      .filter((job: FlightJob) => job.assignedTo === user.id || job.assignedOfficer === user.id)
-      .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+    const todayDateStr = new Date().toISOString().split('T')[0];
+    const isJobAssignedToUser = (job: FlightJob) => {
+      if (!job || !user) return false;
+      const userTokens = new Set<string>();
+      if (user.id) userTokens.add(user.id.toLowerCase());
+      if (user.name) userTokens.add(user.name.toLowerCase());
+      const staffList = (staff && staff.length > 0 ? staff : MOCK_USERS);
+      staffList.forEach(s => {
+        if (s.id.toLowerCase() === (user.id || '').toLowerCase() || s.name.toLowerCase() === (user.name || '').toLowerCase()) {
+          userTokens.add(s.id.toLowerCase());
+          userTokens.add(s.name.toLowerCase());
+        }
+      });
+      const assignedToVal = (job.assignedTo || '').toLowerCase();
+      const assignedOfficerVal = (job.assignedOfficer || '').toLowerCase();
+      if (!assignedToVal && !assignedOfficerVal) return false;
+      if (userTokens.has(assignedToVal) || userTokens.has(assignedOfficerVal)) return true;
+      const targetAssignee = staffList.find(s => s.id.toLowerCase() === assignedToVal || s.name.toLowerCase() === assignedToVal);
+      if (targetAssignee && (userTokens.has(targetAssignee.id.toLowerCase()) || userTokens.has(targetAssignee.name.toLowerCase()))) return true;
+      const targetOfficer = staffList.find(s => s.id.toLowerCase() === assignedOfficerVal || s.name.toLowerCase() === assignedOfficerVal);
+      if (targetOfficer && (userTokens.has(targetOfficer.id.toLowerCase()) || userTokens.has(targetOfficer.name.toLowerCase()))) return true;
+      return false;
+    };
 
+    const myTasks = flightJobs
+      .filter((job: FlightJob) => {
+        const isAssigned = isJobAssignedToUser(job);
+        const isToday = !job.date || job.date === todayDateStr || (job as any).operationalDate === todayDateStr;
+        return isAssigned && isToday;
+      })
+      .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
 
     const myDomesticFlights = myDomesticTeam 
       ? domesticFlights
@@ -267,9 +293,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                    <h2 className="title-lg text-on-surface">Operations Hub</h2>
                    <p className="text-on-surface-dim font-bold italic tracking-tight">Welcome back, <span className="text-primary">{user.name}</span></p>
                </div>
-               <div className="bg-primary/10 text-primary px-4 py-2 rounded-xl font-black border border-primary/20 flex items-center text-[10px] uppercase tracking-widest">
-                   <Clock className="w-4 h-4 mr-2" />
-                   {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+               <div className="bg-primary/10 text-primary px-4 py-2 rounded-xl font-black border border-primary/20 flex items-center text-[10px] uppercase tracking-widest gap-2">
+                   <Calendar className="w-3.5 h-3.5" />
+                   <span>{new Date().toLocaleDateString([], { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                   <span className="opacity-40">|</span>
+                   <Clock className="w-3.5 h-3.5" />
+                   <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
                </div>
            </div>
         </div>
@@ -669,7 +698,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                          {job.status !== 'COMPLETED' ? (
                                               <button
                                                 onClick={() => {
-                                                  const rfHdEquip = (equipment || []).filter(eq => (eq.id.startsWith('RF') || eq.id.startsWith('HD')) && eq.status === EqStatus.AVAILABLE);
+                                                  const rfHdEquip = (equipment || []).filter(eq => 
+                                                    ((eq.id.startsWith('RF') && (eq.currentVolume || 0) > 0) || eq.id.startsWith('HD')) && 
+                                                    eq.status === EqStatus.AVAILABLE
+                                                  );
                                                   const saved = localStorage.getItem(`fms_last_selected_vehicle_${user.id}`);
                                                   const defaultSelected = (saved && rfHdEquip.some(e => e.id === saved)) ? saved : (rfHdEquip[0]?.id || '');
                                                   setEquipPickerSelected(defaultSelected);
@@ -766,46 +798,60 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
   const frozenFlights = briefingInfo?.staffAssignments?.frozenFlights;
 
-  const intlJobs = (frozenFlights?.intl 
-    ? frozenFlights.intl.map((ff: any) => {
-        const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-        const dbJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
-        const status = dbJob ? dbJob.status : 'PENDING';
-        return { 
-          ...ff, 
-          status,
-          assignedTo: dbJob?.assignedTo || ff.assignedTo || '',
-          assignedOfficer: dbJob?.assignedOfficer || ff.assignedOfficer || '',
-          vehicleId: dbJob?.vehicleId || ff.vehicleId,
-          id: dbJob?.id || ff.id,
-        };
-      })
-    : (flightJobs || []).filter(f => {
-        const isDep = f.type ? f.type === 'departure' : !!f.std;
-        return isDep && isFlightInShift(f.std) && f.date === selectedBriefingDate;
-      }).map(f => {
-        const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-        const dbJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
-        const status = dbJob ? dbJob.status : 'PENDING';
-        return { ...f, status };
-      })
-  ).filter((f: any) => f.status?.toUpperCase() !== 'CANCELLED')
-   .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+  const liveIntlList = (flightJobs || []).filter(f => {
+    const isDep = f.type ? f.type === 'departure' : !!f.std;
+    return isDep && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate);
+  });
 
-  const domesticJobsRaw = (frozenFlights?.domestic 
-    ? frozenFlights.domestic.map((ff: any) => {
-        const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-        const dbJob = (domesticFlights || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
-        const status = dbJob ? dbJob.status : 'PENDING';
-        return { ...ff, status };
-      })
-    : (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && f.date === selectedBriefingDate).map(f => {
-        const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-        const dbJob = (domesticFlights || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
-        const status = dbJob ? dbJob.status : 'PENDING';
-        return { ...f, status };
-      })
-  ).filter((f: any) => f.status?.toUpperCase() !== 'CANCELLED');
+  const intlJobsMap = new Map<string, any>();
+  liveIntlList.forEach(f => {
+    const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+    intlJobsMap.set(cleanNo, { ...f, status: f.status || 'PENDING' });
+  });
+
+  if (frozenFlights?.intl) {
+    frozenFlights.intl.forEach((ff: any) => {
+      const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      const existing = intlJobsMap.get(cleanNo);
+      const dbJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+      intlJobsMap.set(cleanNo, {
+        ...(existing || {}),
+        ...ff,
+        status: dbJob ? dbJob.status : (ff.status || 'PENDING'),
+        assignedTo: dbJob?.assignedTo || ff.assignedTo || '',
+        assignedOfficer: dbJob?.assignedOfficer || ff.assignedOfficer || '',
+        vehicleId: dbJob?.vehicleId || ff.vehicleId,
+        id: dbJob?.id || ff.id,
+      });
+    });
+  }
+
+  const intlJobs = Array.from(intlJobsMap.values())
+    .filter((f: any) => f.status?.toUpperCase() !== 'CANCELLED')
+    .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+
+  const liveDomList = (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate));
+  const domJobsMap = new Map<string, any>();
+  liveDomList.forEach(f => {
+    const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+    domJobsMap.set(cleanNo, { ...f, status: f.status || 'PENDING' });
+  });
+
+  if (frozenFlights?.domestic) {
+    frozenFlights.domestic.forEach((ff: any) => {
+      const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      const existing = domJobsMap.get(cleanNo);
+      const dbJob = (domesticFlights || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+      domJobsMap.set(cleanNo, {
+        ...(existing || {}),
+        ...ff,
+        status: dbJob ? dbJob.status : (ff.status || 'PENDING')
+      });
+    });
+  }
+
+  const domesticJobsRaw = Array.from(domJobsMap.values())
+    .filter((f: any) => f.status?.toUpperCase() !== 'CANCELLED');
 
   const domesticJobs = domesticJobsRaw.map((df: any) => {
       const assignment = (domesticAssignments || []).find(da => da.team_name === df.assignedTeam);
@@ -1587,8 +1633,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                   const isHdJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'HYDRANT';
                   
                   if (isRfJob) {
-                    // RF Job: only show RF equipment, and only if available (or currently selected)
-                    return isRf && (eq.status === EqStatus.AVAILABLE || eq.id === equipPickerSelected);
+                    // RF Job: only show RF equipment, and only if available (or currently selected), and has volume > 0
+                    return isRf && (eq.currentVolume || 0) > 0 && (eq.status === EqStatus.AVAILABLE || eq.id === equipPickerSelected);
                   }
                   if (isHdJob) {
                     // HD Job: show ALL HD equipment
@@ -1644,13 +1690,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                     </button>
                   );
                 })}
-              {(() => {
+               {(() => {
                 const list = (equipment || []).filter(eq => {
                   const isRf = eq.id.startsWith('RF');
                   const isHd = eq.id.startsWith('HD');
                   const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER';
                   const isHdJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'HYDRANT';
-                  if (isRfJob) return isRf && (eq.status === EqStatus.AVAILABLE || eq.id === equipPickerSelected);
+                  if (isRfJob) return isRf && (eq.currentVolume || 0) > 0 && (eq.status === EqStatus.AVAILABLE || eq.id === equipPickerSelected);
                   if (isHdJob) return isHd;
                   return false;
                 });

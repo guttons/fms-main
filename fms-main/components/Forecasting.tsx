@@ -8,7 +8,7 @@ import {
   CheckCircle, TrendingUp, Info, Clock, ShieldAlert, Zap, BarChart2 
 } from 'lucide-react';
 import { useOperationalData } from '../context/OperationalDataContext';
-import { FuelType } from '../types';
+import { FuelType, EquipmentType } from '../types';
 
 const getScenarioGradient = (id: string) => {
   switch (id) {
@@ -22,7 +22,7 @@ const getScenarioGradient = (id: string) => {
 export const Forecasting: React.FC = () => {
   const [activeScenarioId, setActiveScenarioId] = useState<string>('nominal');
   const activeScenario = FORECAST_DATA.find(s => s.id === activeScenarioId) || FORECAST_DATA[0];
-  const { tanks } = useOperationalData();
+  const { tanks = [], equipment = [], shipments = [] } = useOperationalData();
 
   // Stock Order Estimator State
   const [selectedFuelType, setSelectedFuelType] = useState<FuelType>(FuelType.JET_A1);
@@ -74,10 +74,25 @@ export const Forecasting: React.FC = () => {
     setCustomReserveInput(getSafeReserve(type).toString());
   };
 
-  // Filter tanks and compute aggregates
+  // Filter tanks & mobile refueller equipment and compute aggregates
   const activeTanks = (tanks || []).filter(t => t && t.type === selectedFuelType);
-  const totalCurrentStock = activeTanks.reduce((sum, t) => sum + (t.currentLevel || 0), 0);
-  const totalCapacity = activeTanks.reduce((sum, t) => sum + (t.capacity || 0), 0);
+  const activeRefuellers = (equipment || []).filter(eq => {
+    if (selectedFuelType === FuelType.JET_A1) {
+      return eq.type === EquipmentType.REFUELLER;
+    } else if (selectedFuelType === FuelType.DIESEL) {
+      return eq.type === EquipmentType.DIESEL_TRUCK;
+    }
+    return false;
+  });
+
+  const bulkCurrentStock = activeTanks.reduce((sum, t) => sum + (t.currentLevel || 0), 0);
+  const bulkCapacity = activeTanks.reduce((sum, t) => sum + (t.capacity || 0), 0);
+  
+  const rfCurrentStock = activeRefuellers.reduce((sum, eq) => sum + (eq.currentVolume || 0), 0);
+  const rfCapacity = activeRefuellers.reduce((sum, eq) => sum + (eq.maxCapacity || 0), 0);
+
+  const totalCurrentStock = bulkCurrentStock + rfCurrentStock;
+  const totalCapacity = bulkCapacity + rfCapacity;
 
   const parsedBurnRate = parseFloat(burnRateInput) || getInitialBurnRate(selectedFuelType);
   const parsedReserve = parseFloat(customReserveInput) || getSafeReserve(selectedFuelType);
@@ -121,22 +136,44 @@ export const Forecasting: React.FC = () => {
     };
   });
 
-  // Calculate shipment recommendation calendar (before 1 month)
+  // Calculate shipment recommendation calendar (1 month window)
   const getUpcomingShipments = () => {
-    if (selectedFuelType === FuelType.JET_A1) {
-      return [
-        { id: 'sh1', vessel: 'MT ALIMAS', shipmentNo: 'NS/SHIP-JET A-1/22', eta: 6, quantity: 12500000, status: 'CONFIRMED', criticalDays: 14 },
-        { id: 'sh2', vessel: 'MT NORDIC SPIRIT', shipmentNo: 'NS/SHIP-JET A-1/23', eta: 18, quantity: 15000000, status: 'IN-TRANSIT', criticalDays: 14 },
-        { id: 'sh3', vessel: 'MT OCEAN PRIDE', shipmentNo: 'NS/SHIP-JET A-1/24', eta: 28, quantity: 12500000, status: 'RECOMMENDED', criticalDays: 14 }
-      ];
+    if (selectedFuelType === FuelType.JET_A1 && shipments && shipments.length > 0) {
+      let prevDateStr = new Date().toISOString().split('T')[0];
+      return shipments.map((ship) => {
+        const d1 = new Date();
+        d1.setHours(0,0,0,0);
+        const d2 = new Date(ship.arrivalDate);
+        d2.setHours(0,0,0,0);
+        const etaDays = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+        
+        const daysBetween = Math.max(1, Math.round((new Date(ship.arrivalDate).getTime() - new Date(prevDateStr).getTime()) / (1000 * 60 * 60 * 24)));
+        prevDateStr = ship.arrivalDate;
+        
+        const historicalDemandQty = Math.round((daysBetween || 19) * (ship.averageSales || 665000));
+        
+        return {
+          id: ship.id,
+          vessel: ship.vessel,
+          deliveryNumber: ship.shipmentNumber,
+          shipmentNoCode: ship.shipmentNoCode || `NS/SHIP-JET A-1/${ship.id}`,
+          shipmentNo: `${ship.shipmentNumber} • ${ship.shipmentNoCode || 'NS/SHIP-JET A-1/' + ship.id}`,
+          eta: etaDays,
+          quantity: ship.orderQtyMt * 1270,
+          orderQtyMt: ship.orderQtyMt,
+          recommendedQuantity: historicalDemandQty,
+          status: ship.isCancelled ? 'CANCELLED' : (ship.isConfirmed ? 'CONFIRMED' : 'FORECAST'),
+          criticalDays: 14
+        };
+      });
     } else if (selectedFuelType === FuelType.DIESEL) {
       return [
-        { id: 'sh4', vessel: 'MT HARI STAR', shipmentNo: 'NS/SHIP-DIESEL/05', eta: 10, quantity: 250000, status: 'IN-TRANSIT', criticalDays: 22 },
-        { id: 'sh5', vessel: 'MT VALIANT', shipmentNo: 'NS/SHIP-DIESEL/06', eta: 25, quantity: 200000, status: 'RECOMMENDED', criticalDays: 22 }
+        { id: 'sh4', vessel: 'MT HARI STAR', deliveryNumber: '05 Delivery', shipmentNoCode: 'NS/SHIP-DIESEL/05', shipmentNo: '05 Delivery • NS/SHIP-DIESEL/05', eta: 10, quantity: 250000, orderQtyMt: 196, recommendedQuantity: 245000, status: 'IN-TRANSIT', criticalDays: 22 },
+        { id: 'sh5', vessel: 'MT VALIANT', deliveryNumber: '06 Delivery', shipmentNoCode: 'NS/SHIP-DIESEL/06', shipmentNo: '06 Delivery • NS/SHIP-DIESEL/06', eta: 25, quantity: 200000, orderQtyMt: 157, recommendedQuantity: 195000, status: 'RECOMMENDED', criticalDays: 22 }
       ];
     } else {
       return [
-        { id: 'sh6', vessel: 'MT PACIFIC STAR', shipmentNo: 'NS/SHIP-PETROL/08', eta: 14, quantity: 150000, status: 'CONFIRMED', criticalDays: 25 }
+        { id: 'sh6', vessel: 'MT PACIFIC STAR', deliveryNumber: '08 Delivery', shipmentNoCode: 'NS/SHIP-PETROL/08', shipmentNo: '08 Delivery • NS/SHIP-PETROL/08', eta: 14, quantity: 150000, orderQtyMt: 118, recommendedQuantity: 145000, status: 'CONFIRMED', criticalDays: 25 }
       ];
     }
   };
@@ -461,12 +498,22 @@ export const Forecasting: React.FC = () => {
 
                 <div className="space-y-3 py-2">
                   <div className="flex justify-between text-xs">
-                    <span className="opacity-60">Estimated Quantity:</span>
-                    <span className="font-mono font-black">{(ship.quantity / 1000000).toFixed(2)}M L</span>
+                    <span className="opacity-60">Scheduled Order Qty:</span>
+                    <span className="font-mono font-black text-on-surface">
+                      {(ship.quantity / 1000000).toFixed(2)}M L <span className="text-[10px] opacity-50">({ship.orderQtyMt?.toLocaleString()} MT)</span>
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="opacity-60">5-Yr Trend Recommended:</span>
+                    <span className="font-mono font-black text-primary">
+                      {((ship.recommendedQuantity || 0) / 1000000).toFixed(2)}M L
+                    </span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="opacity-60">Shipment ETA:</span>
-                    <span className="font-mono font-black text-primary">In {ship.eta} Days</span>
+                    <span className="font-mono font-black text-primary">
+                      {ship.eta <= 0 ? 'Arrived / On Stand' : `In ${ship.eta} Days`}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -596,8 +643,8 @@ export const Forecasting: React.FC = () => {
                <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 mb-2">Live Current Stock</span>
                <div>
                   <span className="text-2xl font-black text-primary font-mono">{totalCurrentStock.toLocaleString()} L</span>
-                  <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest mt-1 opacity-50">
-                     Active across {activeTanks.length} tanks (Capacity: {totalCapacity.toLocaleString()}L)
+                  <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest mt-1 opacity-60">
+                     Bulk Tanks ({activeTanks.length}): {(bulkCurrentStock / 1000000).toFixed(2)}M L | RF Units ({activeRefuellers.length}): {(rfCurrentStock / 1000).toFixed(0)}K L
                   </p>
                </div>
             </div>

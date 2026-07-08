@@ -530,7 +530,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     if (log.timestampStart) {
       logDateStr = getLocalDatePart(log.timestampStart);
     } else if (log.operationalDate) {
-      logDateStr = log.operationalDate.includes('T') ? getLocalDatePart(log.operationalDate) : log.operationalDate;
+      const opDateStr = String(log.operationalDate);
+      logDateStr = opDateStr.includes('T') ? getLocalDatePart(opDateStr) : opDateStr;
     }
 
     let matchesDate = true;
@@ -897,7 +898,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Flight No</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Type</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Aircraft Reg / Type</th>
-                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Stand</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Airline / Customer</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Equipment</th>
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
                       {renderSortableHeader('ticket', 'Ticket', 'px-10')}
@@ -993,6 +994,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                 ) : (
                   sortedLogs.map((log) => {
                       const operatorName = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => u.id === log.operatorId)?.name || 'Unknown';
+                      const officerName = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => u.id === log.officer || u.name === log.officer)?.name || log.officer || 'N/A';
                       const isExpanded = expandedLogId === log.id;
                       
                       const seaplaneOp = log.flightNumber.replace('SEAPLANE-', '');
@@ -1036,8 +1038,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                   <div className="text-xs font-black text-on-surface uppercase tracking-widest">{log.aircraftReg}</div>
                                   <div className="text-[9px] font-black text-on-surface-dim opacity-30 uppercase tracking-widest mt-0.5">{log.aircraftType}</div>
                               </td>
-                              <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim uppercase tracking-widest">
-                                  {log.stand}
+                              <td className="px-10 py-6 text-xs font-black text-primary uppercase tracking-widest">
+                                  {log.co || log.airline || 'N/A'}
                               </td>
                               <td className="px-10 py-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest font-mono">
                                   {log.vehicleId}
@@ -1262,8 +1264,14 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                          <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.co || log.airline || 'N/A'}</span>
                                       </div>
                                       <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Operational Date</span>
-                                         <span className="text-[11px] font-mono text-on-surface">{log.operationalDate || (log as any).created_at?.split('T')[0] || 'N/A'}</span>
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Timestamp</span>
+                                         <span className="text-[11px] font-mono text-on-surface">
+                                           {log.created_at 
+                                             ? new Date(log.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: false }) 
+                                             : (log.timestampStart 
+                                                 ? new Date(log.timestampStart).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: false }) 
+                                                 : 'N/A')}
+                                         </span>
                                       </div>
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Payment Type</span>
@@ -1307,15 +1315,19 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                       </div>
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Officer</span>
-                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.officer || 'N/A'}</span>
+                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{officerName}</span>
                                       </div>
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Operator Name</span>
-                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.operatorName || operatorName || 'N/A'}</span>
+                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.tacticalOperator || log.operatorName || operatorName || 'N/A'}</span>
                                       </div>
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">C/O (Account)</span>
                                          <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.airline || 'N/A'}</span>
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Stand</span>
+                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.stand || 'N/A'}</span>
                                       </div>
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC Compliance</span>

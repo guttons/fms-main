@@ -1043,11 +1043,10 @@ const AppContextContent: React.FC<any> = ({
                                     await acknowledgeAllAlerts(unreadIds);
                                     notify('All notifications marked as read.', 'success');
                                   }}
-                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white text-[8px] font-black uppercase tracking-widest transition-all active:scale-95"
+                                  className="flex items-center justify-center p-2 rounded-lg kinetic-gradient text-white transition-all active:scale-95 shadow-sm hover:opacity-90"
                                   title="Mark all as read"
                                 >
-                                  <CheckCircle className="w-3 h-3" />
-                                  <span className="hidden sm:inline">Mark Read</span>
+                                  <CheckCircle className="w-3.5 h-3.5" />
                                 </button>
                               )}
                               {/* Clear All */}
@@ -1057,11 +1056,10 @@ const AppContextContent: React.FC<any> = ({
                                     await clearAllAlerts();
                                     notify('All notifications cleared.', 'info');
                                   }}
-                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-error/10 text-error hover:bg-error hover:text-white text-[8px] font-black uppercase tracking-widest transition-all active:scale-95"
+                                  className="flex items-center justify-center p-2 rounded-lg bg-error/10 text-error hover:bg-error hover:text-white transition-all active:scale-95"
                                   title="Clear all notifications"
                                 >
-                                  <Trash2 className="w-3 h-3" />
-                                  <span className="hidden sm:inline">Clear All</span>
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               )}
                               <button onClick={() => setShowAlertsPanel(false)} className="p-1.5 rounded-lg text-on-surface-dim hover:text-primary hover:bg-surface-container transition-colors ml-1">

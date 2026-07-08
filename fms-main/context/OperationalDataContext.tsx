@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightLog, StaffMember, UserRole, Vessel } from '../types';
+import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightLog, StaffMember, UserRole, Vessel, ShipmentData } from '../types';
 import { EQUIPMENT, TANKS, MOCK_ALERTS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
 import { supabase } from '../supabase';
@@ -49,6 +49,10 @@ interface OperationalDataContextType {
   domesticAssignments: any[];
   flightLogs: FlightLog[];
   isAlertsLoading: boolean;
+  shipments: ShipmentData[];
+  updateShipment: (index: number, fields: Partial<ShipmentData>) => void;
+  addShipment: () => void;
+  removeShipment: () => void;
   updateEquipmentStatus: (id: string, status: EqStatus) => void;
   updateEquipment: (id: string, updates: Partial<Equipment>) => Promise<void>;
   addEquipment: (eq: Omit<Equipment, 'id' | 'lastUpdated'>) => Promise<void>;
@@ -93,7 +97,79 @@ const mapDomesticAssignments = (data: any[]) => {
   }));
 };
 
+const INITIAL_SHIPMENTS: ShipmentData[] = [
+  {
+    id: '168',
+    shipmentNumber: '168 Delivery',
+    shipmentNoCode: 'NS/SHIP-JET A-1/168',
+    vessel: 'MT.ALIMAS',
+    arrivalDate: '2026-06-12',
+    isConfirmed: true,
+    isCancelled: false,
+    orderQtyMt: 10000,
+    averageSales: 552887,
+    deadStock: 2500000
+  },
+  {
+    id: '169',
+    shipmentNumber: '169 Delivery',
+    shipmentNoCode: 'NS/SHIP-JET A-1/169',
+    vessel: 'MT.NEON',
+    arrivalDate: '2026-07-14',
+    isConfirmed: false,
+    isCancelled: false,
+    orderQtyMt: 13000,
+    averageSales: 665000,
+    deadStock: 2500000
+  },
+  {
+    id: '170',
+    shipmentNumber: '170 Delivery',
+    shipmentNoCode: 'NS/SHIP-JET A-1/170',
+    vessel: 'MT.NEON',
+    arrivalDate: '2026-08-02',
+    isConfirmed: false,
+    isCancelled: false,
+    orderQtyMt: 11000,
+    averageSales: 745000,
+    deadStock: 2500000
+  },
+  {
+    id: '171',
+    shipmentNumber: '171 Delivery',
+    shipmentNoCode: 'NS/SHIP-JET A-1/171',
+    vessel: 'MT.NEON',
+    arrivalDate: '2026-08-21',
+    isConfirmed: false,
+    isCancelled: false,
+    orderQtyMt: 10000,
+    averageSales: 732000,
+    deadStock: 2500000
+  },
+  {
+    id: '172',
+    shipmentNumber: '172 Delivery',
+    shipmentNoCode: 'NS/SHIP-JET A-1/172',
+    vessel: 'MT.NEON',
+    arrivalDate: '2026-09-09',
+    isConfirmed: false,
+    isCancelled: false,
+    orderQtyMt: 10000,
+    averageSales: 727000,
+    deadStock: 2500000
+  }
+];
+
 export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user: any }> = ({ children, user: appUser }) => {
+  const [shipments, setShipments] = useState<ShipmentData[]>(() => {
+    try {
+      const saved = localStorage.getItem('fms_shipments');
+      return saved ? JSON.parse(saved) : INITIAL_SHIPMENTS;
+    } catch (e) {
+      console.error("Local storage parse failed for shipments", e);
+      return INITIAL_SHIPMENTS;
+    }
+  });
   const [equipment, setEquipment] = useState<Equipment[]>(() => {
     try {
       const saved = localStorage.getItem('fms_equipment');
@@ -542,6 +618,50 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   const replenishmentLocks = React.useRef<Record<string, number>>({});
 
   // Local sync to localStorage for persistence fallback
+  useEffect(() => {
+    localStorage.setItem('fms_shipments', JSON.stringify(shipments));
+  }, [shipments]);
+
+  const updateShipment = (index: number, fields: Partial<ShipmentData>) => {
+    setShipments(prev => prev.map((s, i) => i === index ? { ...s, ...fields } : s));
+  };
+
+  const addShipment = () => {
+    setShipments(prev => {
+      const lastShipment = prev[prev.length - 1];
+      const match = lastShipment ? lastShipment.shipmentNumber.match(/(\d+)/) : null;
+      const lastNum = match ? parseInt(match[1], 10) : 172;
+      const nextNum = lastNum + 1;
+      
+      const lastDate = lastShipment ? new Date(lastShipment.arrivalDate) : new Date();
+      lastDate.setDate(lastDate.getDate() + 19);
+      const nextArrivalDate = lastDate.toISOString().split('T')[0];
+
+      return [
+        ...prev,
+        {
+          id: String(nextNum),
+          shipmentNumber: `${nextNum} Delivery`,
+          shipmentNoCode: `NS/SHIP-JET A-1/${nextNum}`,
+          vessel: lastShipment ? lastShipment.vessel : 'MT.NEON',
+          arrivalDate: nextArrivalDate,
+          isConfirmed: false,
+          isCancelled: false,
+          orderQtyMt: lastShipment ? lastShipment.orderQtyMt : 10000,
+          averageSales: lastShipment ? lastShipment.averageSales : 700000,
+          deadStock: 2500000
+        }
+      ];
+    });
+  };
+
+  const removeShipment = () => {
+    setShipments(prev => {
+      if (prev.length <= 1) return prev;
+      return prev.slice(0, -1);
+    });
+  };
+
   useEffect(() => {
     localStorage.setItem('fms_equipment', JSON.stringify(equipment));
   }, [equipment]);
@@ -1277,6 +1397,10 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       addVessel,
       updateVessel,
       deleteVessel,
+      shipments: shipments || [],
+      updateShipment,
+      addShipment,
+      removeShipment,
       serviceTankId,
       setServiceTankId
     }}>
