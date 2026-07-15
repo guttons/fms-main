@@ -107,7 +107,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
   // Logic to determine initial view and if switching is allowed
   const isItpManager = user?.role === UserRole.ITP_MANAGER;
   const isItpOperator = user ? [UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER, UserRole.ITP_SUPERVISOR].includes(user.role) : false;
-  const isDualRole = user ? [UserRole.ADMIN, UserRole.EXECUTIVE].includes(user.role) : false;
+  const isDualRole = user ? [UserRole.ADMIN, UserRole.EXECUTIVE, UserRole.FUEL_MANAGEMENT].includes(user.role) : false;
   const isDepotRole = user ? [UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(user.role) : false;
   
   const [viewMode, setViewMode] = useState<'ITP' | 'DEPOT'>(isDepotRole ? 'DEPOT' : 'ITP');
@@ -117,10 +117,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
   const userAlerts = (alerts || []).filter(a => {
     if (!user) return false;
 
+    // Executive doesn't receive replenishing notifications
+    if (user.role === UserRole.EXECUTIVE && (a.message || '').toLowerCase().includes('replenish')) {
+      return false;
+    }
+
     // Targeted request/no-fuel alerts: only visible to assigned operator/officer, or supervisors
     const msgLower = (a.message || '').toLowerCase();
     const isRequestAlert = msgLower.includes('alert requested') || msgLower.includes('no fuel');
-    if (isRequestAlert && ![UserRole.ADMIN, UserRole.ITP_MANAGER].includes(user.role)) {
+    if (isRequestAlert && ![UserRole.ADMIN, UserRole.ITP_MANAGER, UserRole.FUEL_MANAGEMENT].includes(user.role)) {
       const isDomestic = (domesticFlights || []).some(df => msgLower.includes((df.flightNumber || '').toLowerCase()));
       if (isDomestic) {
         const isUserInDomesticTeam = (domesticAssignments || []).some(da => da.op1 === user.id || da.op2 === user.id);
@@ -686,8 +691,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                         <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-2">{job.aircraftType} • Stand {job.stand}</p>
                                     </div>
                                     
-                                    {/* Desktop Center-Aligned Timings (Inline) */}
-                                    <div className="hidden md:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-dim/40 px-4 py-2 rounded-xl border border-outline/50 absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm">
+                                    {/* Desktop Center-Aligned Timings (Inline) - lg+ only */}
+                                    <div className="hidden lg:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-dim/40 px-4 py-2 rounded-xl border border-outline/50 absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm">
                                          <div className="flex items-center gap-2">
                                              <span className="opacity-40 text-[10px]">STA</span>
                                              <span className="text-on-surface text-[14px] font-black tracking-tight">{job.sta || '--:--'}</span>
@@ -738,8 +743,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                 </div>
 
                                 <div className="mt-6 pt-6 border-t border-outline/30 space-y-4">
-                                    {/* Row 1: Tactical Times (Mobile Only) */}
-                                    <div className="flex md:hidden items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-dim/40 px-4 py-2 rounded-xl border border-outline/50 w-fit">
+                                    {/* Row 1: Tactical Times (Mobile + Tablet) */}
+                                    <div className="flex lg:hidden items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-dim/40 px-4 py-2 rounded-xl border border-outline/50 w-fit">
                                          <div className="flex items-center gap-2">
                                              <span className="opacity-40 text-[10px]">STA</span>
                                              <span className="text-on-surface text-[14px] font-black tracking-tight">{job.sta || '--:--'}</span>
@@ -1129,7 +1134,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
         )}
 
         {/* Available Equipment Section - categorised RF / HD for Managers */}
-        {equipment && equipment.length > 0 && (() => {
+        {user.role !== UserRole.EXECUTIVE && equipment && equipment.length > 0 && (() => {
           const getStatusLabel = (status: EqStatus) => {
             if (status === EqStatus.AVAILABLE) return 'Standby';
             if (status === EqStatus.IN_USE) return 'In Use';

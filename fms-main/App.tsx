@@ -41,9 +41,11 @@ const App: React.FC = () => {
     if (savedUser) {
       const user = JSON.parse(savedUser) as User;
       const savedView = localStorage.getItem('fms_active_view');
+      // Role-specific defaults take priority over stale saved views
+      if (user.role === UserRole.CUSTOMER) return savedView && savedView !== 'dashboard' ? savedView : 'customer-portal';
+      if (user.role === UserRole.FINANCE) return savedView && savedView !== 'dashboard' ? savedView : 'finance';
+      if (user.role === UserRole.COMMERCIAL) return savedView && savedView !== 'dashboard' ? savedView : 'commercial-reports';
       if (savedView) return savedView;
-      if (user.role === UserRole.CUSTOMER) return 'customer-portal';
-      if (user.role === UserRole.FINANCE) return 'finance';
     }
     return 'dashboard';
   });
@@ -136,6 +138,8 @@ const App: React.FC = () => {
       defaultView = 'customer-portal';
     } else if (user.role === UserRole.FINANCE) {
       defaultView = 'finance';
+    } else if (user.role === UserRole.COMMERCIAL) {
+      defaultView = 'commercial-reports';
     }
     localStorage.setItem('fms_active_view', defaultView);
     setActiveView(defaultView);
@@ -287,6 +291,11 @@ const AppContextContent: React.FC<any> = ({
     // Filter unacknowledged alerts matching this user's role
     const activeAlerts = alerts.filter(a => {
       if (!a || a.acknowledged) return false;
+
+      // Executive doesn't receive replenishing notifications
+      if (currentUser.role === UserRole.EXECUTIVE && (a.message || '').toLowerCase().includes('replenish')) {
+        return false;
+      }
 
       // Targeted request/no-fuel alerts: only visible to assigned operator/officer, or supervisors
       const msgLower = (a.message || '').toLowerCase();
@@ -555,16 +564,34 @@ const AppContextContent: React.FC<any> = ({
         setShowAlertsPanel(false);
         setIsSettingsOpen(false);
         setShowIOSGuide(false);
-        setActiveView('dashboard');
+        
+        let defaultView = 'dashboard';
+        if (currentUser?.role === UserRole.CUSTOMER) {
+          defaultView = 'customer-portal';
+        } else if (currentUser?.role === UserRole.FINANCE) {
+          defaultView = 'finance';
+        } else if (currentUser?.role === UserRole.COMMERCIAL) {
+          defaultView = 'commercial-reports';
+        }
+        setActiveView(defaultView);
       }
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [setIsMobileMenuOpen, setShowAlertsPanel, setIsSettingsOpen, setShowIOSGuide, setActiveView]);
+  }, [setIsMobileMenuOpen, setShowAlertsPanel, setIsSettingsOpen, setShowIOSGuide, setActiveView, currentUser]);
 
   useEffect(() => {
-    const hasOverlay = isMobileMenuOpen || showAlertsPanel || isSettingsOpen || showIOSGuide || activeView !== 'dashboard';
+    let defaultView = 'dashboard';
+    if (currentUser?.role === UserRole.CUSTOMER) {
+      defaultView = 'customer-portal';
+    } else if (currentUser?.role === UserRole.FINANCE) {
+      defaultView = 'finance';
+    } else if (currentUser?.role === UserRole.COMMERCIAL) {
+      defaultView = 'commercial-reports';
+    }
+
+    const hasOverlay = isMobileMenuOpen || showAlertsPanel || isSettingsOpen || showIOSGuide || activeView !== defaultView;
     
     if (hasOverlay) {
       if (!window.history.state?.fmsActive) {
@@ -575,7 +602,7 @@ const AppContextContent: React.FC<any> = ({
         window.history.back();
       }
     }
-  }, [isMobileMenuOpen, showAlertsPanel, isSettingsOpen, showIOSGuide, activeView]);
+  }, [isMobileMenuOpen, showAlertsPanel, isSettingsOpen, showIOSGuide, activeView, currentUser]);
 
   // Clean up history state on session unmount / logout
   useEffect(() => {
@@ -637,10 +664,15 @@ const AppContextContent: React.FC<any> = ({
   const userAlerts = (alerts || []).filter(a => {
     if (!a || !currentUser || !currentUser.role) return false;
 
+    // Executive doesn't receive replenishing notifications
+    if (currentUser.role === UserRole.EXECUTIVE && (a.message || '').toLowerCase().includes('replenish')) {
+      return false;
+    }
+
     // Targeted request/no-fuel alerts: only visible to assigned operator/officer, or supervisors
     const msgLower = (a.message || '').toLowerCase();
     const isRequestAlert = msgLower.includes('alert requested') || msgLower.includes('no fuel');
-    if (isRequestAlert && ![UserRole.ADMIN, UserRole.ITP_MANAGER].includes(currentUser.role)) {
+    if (isRequestAlert && ![UserRole.ADMIN, UserRole.ITP_MANAGER, UserRole.FUEL_MANAGEMENT].includes(currentUser.role)) {
       const isDomestic = (domesticFlights || []).some(df => msgLower.includes((df.flightNumber || '').toLowerCase()));
       if (isDomestic) {
         const isUserInDomesticTeam = (domesticAssignments || []).some(da => da.op1 === currentUser.id || da.op2 === currentUser.id);
@@ -653,7 +685,7 @@ const AppContextContent: React.FC<any> = ({
       }
     }
 
-    if ([UserRole.ADMIN, UserRole.EXECUTIVE].includes(currentUser.role)) return true;
+    if ([UserRole.ADMIN, UserRole.EXECUTIVE, UserRole.FUEL_MANAGEMENT].includes(currentUser.role)) return true;
     if (a.targetRole === currentUser.role) return true;
     // Depot role group: both DEPOT_MANAGER and DEPOT_OPERATOR see depot-targeted alerts
     if ([UserRole.DEPOT_MANAGER, UserRole.DEPOT_OPERATOR].includes(currentUser.role) && 
@@ -765,7 +797,7 @@ const AppContextContent: React.FC<any> = ({
         }
         return <CommercialReports />;
       case 'executive':
-        if (currentUser?.role && ![UserRole.ADMIN, UserRole.EXECUTIVE].includes(currentUser.role)) {
+        if (currentUser?.role && ![UserRole.ADMIN, UserRole.EXECUTIVE, UserRole.FUEL_MANAGEMENT].includes(currentUser.role)) {
           return (
             <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-300">
               <div className="w-24 h-24 bg-error/10 rounded-[32px] flex items-center justify-center mb-6 border border-error/20 shadow-premium">

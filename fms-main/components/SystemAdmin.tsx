@@ -32,6 +32,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   [UserRole.EXECUTIVE]: 'Executive',
   [UserRole.COMMERCIAL]: 'Commercial',
   [UserRole.FINANCE]: 'Finance Manager',
+  [UserRole.FUEL_MANAGEMENT]: 'Fuel Management',
   [UserRole.CUSTOMER]: 'Aviation Customer',
 };
 
@@ -47,6 +48,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
   [UserRole.EXECUTIVE]: 'bg-surface-container-low text-on-surface-dim border-outline',
   [UserRole.COMMERCIAL]: 'bg-surface-container-low text-on-surface-dim border-outline',
   [UserRole.FINANCE]: 'bg-primary/10 text-primary border-primary/20',
+  [UserRole.FUEL_MANAGEMENT]: 'bg-warning/10 text-warning border-warning/20',
   [UserRole.CUSTOMER]: 'bg-success/10 text-success border-success/20',
 };
 

@@ -622,8 +622,8 @@ const ScreenDashboard: React.FC<{
                           </div>
                       </div>
 
-                      {/* Desktop Center-Aligned Timings (Larger Font) */}
-                      <div className="hidden md:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/30 px-4 py-2 rounded-xl border border-outline/10 absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm">
+                      {/* Desktop Center-Aligned Timings (lg+ only) */}
+                      <div className="hidden lg:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/30 px-4 py-2 rounded-xl border border-outline/10 absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm">
                           <div className="flex items-center gap-2">
                               <span className="opacity-40 text-[10px]">STA</span>
                               <span className="text-on-surface text-[14px] font-black tracking-tight">{job.sta || '--:--'}</span>
@@ -772,8 +772,8 @@ const ScreenDashboard: React.FC<{
                   </div>
 
                   <div className="mt-6 pt-6 border-t border-outline/50 space-y-4">
-                      {/* Timings as they were before displayed on mobile view only — moved above operator/status */}
-                      <div className="grid grid-cols-3 gap-2 p-3 bg-surface-dim rounded-xl border border-outline md:hidden">
+                      {/* Timings displayed on mobile + tablet view — moved above operator/status */}
+                      <div className="grid grid-cols-3 gap-2 p-3 bg-surface-dim rounded-xl border border-outline lg:hidden">
                           <div className="text-center border-r border-outline/30">
                               <p className="text-[8px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-1">STA</p>
                               <p className="text-[11px] font-[900] text-on-surface">{job.sta || '--:--'}</p>
@@ -907,8 +907,10 @@ const ScreenTimestamps: React.FC<{
   onInputChange: (field: keyof FlightLog, value: any) => void,
   onNext: () => void, 
   onBack: () => void,
-  user: User
-}> = ({ activeFlight, onTimestamp, onInputChange, onNext, onBack, user }) => (
+  user: User,
+  getLocalTimeValue: (isoString?: string) => string,
+  setManualTime: (field: keyof FlightLog, timeVal: string) => void
+}> = ({ activeFlight, onTimestamp, onInputChange, onNext, onBack, user, getLocalTimeValue, setManualTime }) => (
   <div className="p-5 flex flex-col h-full min-h-[calc(100vh-140px)] pb-32">
       <button onClick={onBack} className="flex items-center text-on-surface-dim hover:text-primary mb-6 font-black text-[11px] uppercase tracking-widest transition-colors">
           <ChevronLeft className="w-4 h-4 mr-2" /> Back to Schedule
@@ -997,7 +999,7 @@ const ScreenTimestamps: React.FC<{
                             value={activeFlight?.pitNumber?.startsWith('J') ? activeFlight.pitNumber.substring(1) : (activeFlight?.pitNumber || '')}
                             onChange={(e) => {
                                 const val = e.target.value.toUpperCase().replace(/^J/, '');
-                                onInputChange('pitNumber', val ? `J${val}` : '');
+                                  onInputChange('pitNumber', val ? `J${val}` : '');
                             }}
                             list="pit-suggestions"
                         />
@@ -1024,86 +1026,131 @@ const ScreenTimestamps: React.FC<{
             </div>
           )}
 
-          <button 
-              onClick={() => onTimestamp('timestampArrived')}
-              disabled={isOperator(user.role)}
-              className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
-                  ${activeFlight?.timestampArrived 
-                      ? 'bg-success/5 border-success text-on-surface' 
-                      : isOperator(user.role)
-                          ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
-                          : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
-              `}
-          >
-              <div className="relative z-10">
-                  <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Alpha</span>
-                  <span className={`block text-3xl font-[900] tracking-tighter ${activeFlight?.timestampArrived ? 'text-success' : 'text-on-surface'}`}>
-                      LOG ARRIVED
-                  </span>
-                  {activeFlight?.timestampArrived && (
-                      <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
-                           <Clock className="w-4 h-4 mr-2 opacity-60"/>
-                           {new Date(activeFlight.timestampArrived).toLocaleTimeString([], { hour12: false })}
+          {/* Operation Alpha (Log Arrived) */}
+          <div className="flex gap-4 items-stretch w-full">
+              <button 
+                  onClick={() => onTimestamp('timestampArrived')}
+                  disabled={isOperator(user.role)}
+                  className={`flex-1 p-6 sm:p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
+                      ${activeFlight?.timestampArrived 
+                          ? 'bg-success/5 border-success text-on-surface' 
+                          : isOperator(user.role)
+                              ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
+                              : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
+                  `}
+              >
+                  <div className="relative z-10">
+                      <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Alpha</span>
+                      <span className={`block text-xl sm:text-2xl font-[900] tracking-tighter ${activeFlight?.timestampArrived ? 'text-success' : 'text-on-surface'}`}>
+                          LOG ARRIVED
                       </span>
-                  )}
+                      {activeFlight?.timestampArrived && (
+                          <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
+                               <Clock className="w-4 h-4 mr-2 opacity-60"/>
+                               {new Date(activeFlight.timestampArrived).toLocaleTimeString([], { hour12: false })}
+                          </span>
+                      )}
+                  </div>
+                  {!activeFlight?.timestampArrived && <MapPin className="absolute right-6 bottom-6 w-16 h-16 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
+                  {activeFlight?.timestampArrived && <CheckCircle className="absolute right-6 bottom-6 w-16 h-16 text-success opacity-10" />}
+              </button>
+              <div className="card-premium p-6 border-outline flex flex-col justify-center items-center w-36 sm:w-44 shrink-0">
+                  <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-3 text-center">Manual Time</span>
+                  <div className="relative w-full">
+                      <input 
+                          type="time"
+                          disabled={isOperator(user.role)}
+                          value={activeFlight?.timestampArrived ? getLocalTimeValue(activeFlight.timestampArrived) : ''}
+                          onChange={(e) => setManualTime('timestampArrived', e.target.value)}
+                          className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
+                      />
+                  </div>
               </div>
-              {!activeFlight?.timestampArrived && <MapPin className="absolute right-6 bottom-6 w-16 h-16 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
-              {activeFlight?.timestampArrived && <CheckCircle className="absolute right-6 bottom-6 w-16 h-16 text-success opacity-10" />}
-          </button>
+          </div>
 
-          <button 
-              onClick={() => onTimestamp('timestampPosition')}
-              disabled={!activeFlight?.timestampArrived || isOperator(user.role)}
-              className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
-                  ${activeFlight?.timestampPosition 
-                      ? 'bg-success/5 border-success text-on-surface' 
-                      : (!activeFlight?.timestampArrived || isOperator(user.role))
-                          ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
-                          : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
-              `}
-          >
-              <div className="relative z-10">
-                  <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Beta</span>
-                  <span className={`block text-3xl font-[900] tracking-tighter ${activeFlight?.timestampPosition ? 'text-success' : 'text-on-surface'}`}>
-                      POSITION / CONNECTED
-                  </span>
-                  {activeFlight?.timestampPosition && (
-                      <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
-                           <Clock className="w-4 h-4 mr-2 opacity-60"/>
-                           {new Date(activeFlight.timestampPosition).toLocaleTimeString([], { hour12: false })}
+          {/* Operation Beta (Position / Connected) */}
+          <div className="flex gap-4 items-stretch w-full">
+              <button 
+                  onClick={() => onTimestamp('timestampPosition')}
+                  disabled={!activeFlight?.timestampArrived || isOperator(user.role)}
+                  className={`flex-1 p-6 sm:p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
+                      ${activeFlight?.timestampPosition 
+                          ? 'bg-success/5 border-success text-on-surface' 
+                          : (!activeFlight?.timestampArrived || isOperator(user.role))
+                              ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
+                              : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
+                  `}
+              >
+                  <div className="relative z-10">
+                      <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Beta</span>
+                      <span className={`block text-xl sm:text-2xl font-[900] tracking-tighter ${activeFlight?.timestampPosition ? 'text-success' : 'text-on-surface'}`}>
+                          POSITION / CONNECTED
                       </span>
-                  )}
+                      {activeFlight?.timestampPosition && (
+                          <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
+                               <Clock className="w-4 h-4 mr-2 opacity-60"/>
+                               {new Date(activeFlight.timestampPosition).toLocaleTimeString([], { hour12: false })}
+                          </span>
+                      )}
+                  </div>
+                  {!activeFlight?.timestampPosition && <Truck className="absolute right-6 bottom-6 w-16 h-16 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
+                  {activeFlight?.timestampPosition && <CheckCircle className="absolute right-6 bottom-6 w-16 h-16 text-success opacity-10" />}
+              </button>
+              <div className="card-premium p-6 border-outline flex flex-col justify-center items-center w-36 sm:w-44 shrink-0">
+                  <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-3 text-center">Manual Time</span>
+                  <div className="relative w-full">
+                      <input 
+                          type="time"
+                          disabled={!activeFlight?.timestampArrived || isOperator(user.role)}
+                          value={activeFlight?.timestampPosition ? getLocalTimeValue(activeFlight.timestampPosition) : ''}
+                          onChange={(e) => setManualTime('timestampPosition', e.target.value)}
+                          className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
+                      />
+                  </div>
               </div>
-              {!activeFlight?.timestampPosition && <Truck className="absolute right-6 bottom-6 w-16 h-16 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
-              {activeFlight?.timestampPosition && <CheckCircle className="absolute right-6 bottom-6 w-16 h-16 text-success opacity-10" />}
-          </button>
+          </div>
 
-          <button 
-              onClick={() => onTimestamp('timestampStart')}
-              disabled={!activeFlight?.timestampPosition || !!activeFlight?.timestampStart || isOperator(user.role)}
-              className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
-                  ${activeFlight?.timestampStart 
-                      ? 'bg-success/5 border-success text-on-surface' 
-                      : (!activeFlight?.timestampPosition || !!activeFlight?.timestampStart || isOperator(user.role))
-                          ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
-                          : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
-              `}
-          >
-              <div className="relative z-10">
-                  <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Gamma</span>
-                  <span className={`block text-3xl font-[900] tracking-tighter ${activeFlight?.timestampStart ? 'text-success' : 'text-on-surface'}`}>
-                      COMMENCED PUMPING
-                  </span>
-                   {activeFlight?.timestampStart && (
-                      <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
-                           <Clock className="w-4 h-4 mr-2 opacity-60"/>
-                           {new Date(activeFlight.timestampStart).toLocaleTimeString([], { hour12: false })}
+          {/* Operation Gamma (Commenced Pumping) */}
+          <div className="flex gap-4 items-stretch w-full">
+              <button 
+                  onClick={() => onTimestamp('timestampStart')}
+                  disabled={!activeFlight?.timestampPosition || !!activeFlight?.timestampStart || isOperator(user.role)}
+                  className={`flex-1 p-6 sm:p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
+                      ${activeFlight?.timestampStart 
+                          ? 'bg-success/5 border-success text-on-surface' 
+                          : (!activeFlight?.timestampPosition || !!activeFlight?.timestampStart || isOperator(user.role))
+                              ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
+                              : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
+                  `}
+              >
+                  <div className="relative z-10">
+                      <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Gamma</span>
+                      <span className={`block text-xl sm:text-2xl font-[900] tracking-tighter ${activeFlight?.timestampStart ? 'text-success' : 'text-on-surface'}`}>
+                          COMMENCED PUMPING
                       </span>
-                  )}
+                       {activeFlight?.timestampStart && (
+                          <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
+                               <Clock className="w-4 h-4 mr-2 opacity-60"/>
+                               {new Date(activeFlight.timestampStart).toLocaleTimeString([], { hour12: false })}
+                          </span>
+                      )}
+                  </div>
+                  {!activeFlight?.timestampStart && <Play className="absolute right-6 bottom-6 w-16 h-16 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
+                  {activeFlight?.timestampStart && <CheckCircle className="absolute right-6 bottom-6 w-16 h-16 text-success opacity-10" />}
+              </button>
+              <div className="card-premium p-6 border-outline flex flex-col justify-center items-center w-36 sm:w-44 shrink-0">
+                  <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-3 text-center">Manual Time</span>
+                  <div className="relative w-full">
+                      <input 
+                          type="time"
+                          disabled={!activeFlight?.timestampPosition || !!activeFlight?.timestampStart || isOperator(user.role)}
+                          value={activeFlight?.timestampStart ? getLocalTimeValue(activeFlight.timestampStart) : ''}
+                          onChange={(e) => setManualTime('timestampStart', e.target.value)}
+                          className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
+                      />
+                  </div>
               </div>
-              {!activeFlight?.timestampStart && <Play className="absolute right-6 bottom-6 w-16 h-16 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
-              {activeFlight?.timestampStart && <CheckCircle className="absolute right-6 bottom-6 w-16 h-16 text-success opacity-10" />}
-          </button>
+          </div>
       </div>
 
       <button 
@@ -1124,8 +1171,10 @@ const ScreenMetering: React.FC<{
   onBack: () => void,
   showTopUp: boolean,
   setShowTopUp: (val: boolean) => void,
-  user: User
-}> = ({ activeFlight, onTimestamp, onInputChange, onNext, onBack, showTopUp, setShowTopUp, user }) => (
+  user: User,
+  getLocalTimeValue: (isoString?: string) => string,
+  setManualTime: (field: keyof FlightLog, timeVal: string) => void
+}> = ({ activeFlight, onTimestamp, onInputChange, onNext, onBack, showTopUp, setShowTopUp, user, getLocalTimeValue, setManualTime }) => (
   <div className="p-5 flex flex-col h-full min-h-[calc(100vh-140px)] pb-32">
        <button onClick={onBack} className="flex items-center text-on-surface-dim hover:text-primary mb-6 font-black text-[11px] uppercase tracking-widest transition-colors">
           <ChevronLeft className="w-4 h-4 mr-2" /> Back to Timestamps
@@ -1152,32 +1201,47 @@ const ScreenMetering: React.FC<{
               />
           </div>
 
-          <button 
-              onClick={() => onTimestamp('timestampInitialEnd')}
-              disabled={activeFlight?.meterOpen === undefined || isOperator(user.role)}
-              className={`w-full p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
-                  ${activeFlight?.timestampInitialEnd 
-                      ? 'bg-success/5 border-success text-on-surface' 
-                      : (activeFlight?.meterOpen === undefined || isOperator(user.role))
-                          ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
-                          : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
-              `}
-          >
-              <div className="relative z-10">
-                  <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Delta</span>
-                  <span className={`block text-3xl font-[900] tracking-tighter ${activeFlight?.timestampInitialEnd ? 'text-success' : 'text-on-surface'}`}>
-                      INITIAL END
-                  </span>
-                  {activeFlight?.timestampInitialEnd && (
-                      <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
-                           <Clock className="w-4 h-4 mr-2 opacity-60"/>
-                           {new Date(activeFlight.timestampInitialEnd).toLocaleTimeString([], { hour12: false })}
-                       </span>
-                  )}
+          {/* Operation Delta (Initial End) */}
+          <div className="flex gap-4 items-stretch w-full">
+              <button 
+                  onClick={() => onTimestamp('timestampInitialEnd')}
+                  disabled={activeFlight?.meterOpen === undefined || isOperator(user.role)}
+                  className={`flex-1 p-6 sm:p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
+                      ${activeFlight?.timestampInitialEnd 
+                          ? 'bg-success/5 border-success text-on-surface' 
+                          : (activeFlight?.meterOpen === undefined || isOperator(user.role))
+                              ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
+                              : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
+                  `}
+              >
+                  <div className="relative z-10">
+                      <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Delta</span>
+                      <span className={`block text-xl sm:text-2xl font-[900] tracking-tighter ${activeFlight?.timestampInitialEnd ? 'text-success' : 'text-on-surface'}`}>
+                          INITIAL END
+                      </span>
+                      {activeFlight?.timestampInitialEnd && (
+                          <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
+                               <Clock className="w-4 h-4 mr-2 opacity-60"/>
+                               {new Date(activeFlight.timestampInitialEnd).toLocaleTimeString([], { hour12: false })}
+                           </span>
+                      )}
+                  </div>
+                  {!activeFlight?.timestampInitialEnd && <Pause className="absolute right-6 bottom-6 w-16 h-16 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
+                  {activeFlight?.timestampInitialEnd && <CheckCircle className="absolute right-6 bottom-6 w-16 h-16 text-success opacity-10" />}
+              </button>
+              <div className="card-premium p-6 border-outline flex flex-col justify-center items-center w-36 sm:w-44 shrink-0">
+                  <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-3 text-center">Manual Time</span>
+                  <div className="relative w-full">
+                      <input 
+                          type="time"
+                          disabled={activeFlight?.meterOpen === undefined || isOperator(user.role)}
+                          value={activeFlight?.timestampInitialEnd ? getLocalTimeValue(activeFlight.timestampInitialEnd) : ''}
+                          onChange={(e) => setManualTime('timestampInitialEnd', e.target.value)}
+                          className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
+                      />
+                  </div>
               </div>
-              {!activeFlight?.timestampInitialEnd && <Pause className="absolute right-6 bottom-6 w-16 h-16 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
-              {activeFlight?.timestampInitialEnd && <CheckCircle className="absolute right-6 bottom-6 w-16 h-16 text-success opacity-10" />}
-          </button>
+          </div>
 
           <div className="mt-4 p-4 lg:p-8 bg-surface-dim/30 rounded-[32px] lg:rounded-[40px] border border-outline">
                <label className="block text-[10px] font-black text-on-surface uppercase mb-6 tracking-widest text-center opacity-60">Manual Volume Entry (L)</label>
@@ -1256,61 +1320,92 @@ const ScreenMetering: React.FC<{
                    {showTopUp ? '- Strike Top-Up Data' : '+ Register Top-Up Event'}
                </button>
                {showTopUp && (
-                   <div className="grid grid-cols-2 gap-4 mt-6 animate-in fade-in slide-in-from-top-4 duration-400">
-                       <button 
-                           onClick={() => { if (!isOperator(user.role)) onTimestamp('timestampFinalStart'); }} 
-                           disabled={isOperator(user.role)}
-                           className={`p-6 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
-                               ${activeFlight?.timestampFinalStart 
-                                   ? 'bg-success/5 border-success text-on-surface' 
-                                   : isOperator(user.role)
-                                       ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
-                                       : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
-                           `}
-                       >
-                           <div className="relative z-10">
-                               <span className="block text-[8px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-1">Top-Up</span>
-                               <span className={`block text-xl sm:text-2xl font-[900] tracking-tighter ${activeFlight?.timestampFinalStart ? 'text-success' : 'text-on-surface'}`}>
-                                   FINAL START
-                               </span>
-                               {activeFlight?.timestampFinalStart && (
-                                   <span className="block mt-3 font-black text-[10px] uppercase tracking-widest text-success flex items-center">
-                                        <Clock className="w-3.5 h-3.5 mr-1.5 opacity-60"/>
-                                        {new Date(activeFlight.timestampFinalStart).toLocaleTimeString([], { hour12: false })}
+                    <div className="space-y-4 mt-6 animate-in fade-in slide-in-from-top-4 duration-400">
+                        {/* Final Start */}
+                        <div className="flex gap-4 items-stretch w-full">
+                            <button 
+                                onClick={() => { if (!isOperator(user.role)) onTimestamp('timestampFinalStart'); }} 
+                                disabled={isOperator(user.role)}
+                                className={`flex-1 p-6 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
+                                    ${activeFlight?.timestampFinalStart 
+                                        ? 'bg-success/5 border-success text-on-surface' 
+                                        : isOperator(user.role)
+                                            ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
+                                            : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
+                                `}
+                            >
+                                <div className="relative z-10">
+                                    <span className="block text-[8px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-1">Top-Up</span>
+                                    <span className={`block text-xl sm:text-2xl font-[900] tracking-tighter ${activeFlight?.timestampFinalStart ? 'text-success' : 'text-on-surface'}`}>
+                                        FINAL START
                                     </span>
-                               )}
-                           </div>
-                           {!activeFlight?.timestampFinalStart && <Play className="absolute right-4 bottom-4 w-12 h-12 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
-                           {activeFlight?.timestampFinalStart && <CheckCircle className="absolute right-4 bottom-4 w-12 h-12 text-success opacity-10" />}
-                       </button>
-                       <button 
-                           onClick={() => { if (!isOperator(user.role)) onTimestamp('timestampFinalEnd'); }} 
-                           disabled={isOperator(user.role)}
-                           className={`p-6 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
-                               ${activeFlight?.timestampFinalEnd 
-                                   ? 'bg-success/5 border-success text-on-surface' 
-                                   : isOperator(user.role)
-                                       ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
-                                       : 'bg-surface-container-lowest-container border-outline hover:border-primary active:scale-[0.98]'}
-                           `}
-                       >
-                           <div className="relative z-10">
-                               <span className="block text-[8px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-1">Top-Up</span>
-                               <span className={`block text-xl sm:text-2xl font-[900] tracking-tighter ${activeFlight?.timestampFinalEnd ? 'text-success' : 'text-on-surface'}`}>
-                                   FINAL END
-                               </span>
-                               {activeFlight?.timestampFinalEnd && (
-                                   <span className="block mt-3 font-black text-[10px] uppercase tracking-widest text-success flex items-center">
-                                        <Clock className="w-3.5 h-3.5 mr-1.5 opacity-60"/>
-                                        {new Date(activeFlight.timestampFinalEnd).toLocaleTimeString([], { hour12: false })}
+                                    {activeFlight?.timestampFinalStart && (
+                                        <span className="block mt-3 font-black text-[10px] uppercase tracking-widest text-success flex items-center">
+                                             <Clock className="w-3.5 h-3.5 mr-1.5 opacity-60"/>
+                                             {new Date(activeFlight.timestampFinalStart).toLocaleTimeString([], { hour12: false })}
+                                         </span>
+                                    )}
+                                </div>
+                                {!activeFlight?.timestampFinalStart && <Play className="absolute right-4 bottom-4 w-12 h-12 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
+                                {activeFlight?.timestampFinalStart && <CheckCircle className="absolute right-4 bottom-4 w-12 h-12 text-success opacity-10" />}
+                            </button>
+                            <div className="card-premium p-4 border-outline flex flex-col justify-center items-center w-36 sm:w-44 shrink-0">
+                                <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-2 text-center">Manual Time</span>
+                                <div className="relative w-full">
+                                    <input 
+                                        type="time"
+                                        disabled={isOperator(user.role)}
+                                        value={activeFlight?.timestampFinalStart ? getLocalTimeValue(activeFlight.timestampFinalStart) : ''}
+                                        onChange={(e) => setManualTime('timestampFinalStart', e.target.value)}
+                                        className="w-full text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Final End */}
+                        <div className="flex gap-4 items-stretch w-full">
+                            <button 
+                                onClick={() => { if (!isOperator(user.role)) onTimestamp('timestampFinalEnd'); }} 
+                                disabled={isOperator(user.role)}
+                                className={`flex-1 p-6 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
+                                    ${activeFlight?.timestampFinalEnd 
+                                        ? 'bg-success/5 border-success text-on-surface' 
+                                        : isOperator(user.role)
+                                            ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
+                                            : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
+                                `}
+                            >
+                                <div className="relative z-10">
+                                    <span className="block text-[8px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-1">Top-Up</span>
+                                    <span className={`block text-xl sm:text-2xl font-[900] tracking-tighter ${activeFlight?.timestampFinalEnd ? 'text-success' : 'text-on-surface'}`}>
+                                        FINAL END
                                     </span>
-                               )}
-                           </div>
-                           {!activeFlight?.timestampFinalEnd && <Pause className="absolute right-4 bottom-4 w-12 h-12 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
-                           {activeFlight?.timestampFinalEnd && <CheckCircle className="absolute right-4 bottom-4 w-12 h-12 text-success opacity-10" />}
-                       </button>
-                   </div>
-               )}
+                                    {activeFlight?.timestampFinalEnd && (
+                                        <span className="block mt-3 font-black text-[10px] uppercase tracking-widest text-success flex items-center">
+                                             <Clock className="w-3.5 h-3.5 mr-1.5 opacity-60"/>
+                                             {new Date(activeFlight.timestampFinalEnd).toLocaleTimeString([], { hour12: false })}
+                                         </span>
+                                    )}
+                                </div>
+                                {!activeFlight?.timestampFinalEnd && <Pause className="absolute right-4 bottom-4 w-12 h-12 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
+                                {activeFlight?.timestampFinalEnd && <CheckCircle className="absolute right-4 bottom-4 w-12 h-12 text-success opacity-10" />}
+                            </button>
+                            <div className="card-premium p-4 border-outline flex flex-col justify-center items-center w-36 sm:w-44 shrink-0">
+                                <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-2 text-center">Manual Time</span>
+                                <div className="relative w-full">
+                                    <input 
+                                        type="time"
+                                        disabled={isOperator(user.role)}
+                                        value={activeFlight?.timestampFinalEnd ? getLocalTimeValue(activeFlight.timestampFinalEnd) : ''}
+                                        onChange={(e) => setManualTime('timestampFinalEnd', e.target.value)}
+                                        className="w-full text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
           </div>
 
        <div className="mt-auto pt-10">
@@ -1758,6 +1853,88 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         [field]: prev[field] ? undefined : new Date().toISOString()
       };
     });
+  };
+
+  const getLocalTimeValue = (isoString?: string) => {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
+  const setManualTime = (field: keyof FlightLog, timeVal: string) => {
+    if (!activeFlight) return;
+    
+    if (!timeVal) {
+      const TIMESTAMP_SEQUENCE: (keyof FlightLog)[] = [
+        'timestampArrived',
+        'timestampPosition',
+        'timestampStart',
+        'timestampInitialEnd',
+        'timestampFinalStart',
+        'timestampFinalEnd'
+      ];
+      const FIELD_LABELS: Record<string, string> = {
+        timestampArrived: 'Log Arrived',
+        timestampPosition: 'Log Position',
+        timestampStart: 'Commence Fueling',
+        timestampInitialEnd: 'Initial End',
+        timestampFinalStart: 'Final Start',
+        timestampFinalEnd: 'Final End'
+      };
+      const index = TIMESTAMP_SEQUENCE.indexOf(field);
+      if (index !== -1) {
+        for (let i = index + 1; i < TIMESTAMP_SEQUENCE.length; i++) {
+          const subsequentField = TIMESTAMP_SEQUENCE[i];
+          if (activeFlight[subsequentField]) {
+            notify(`Cannot undo "${FIELD_LABELS[field]}". Please undo "${FIELD_LABELS[subsequentField]}" first.`, 'warning');
+            return;
+          }
+        }
+      }
+      handleInputChange(field, undefined);
+      return;
+    }
+
+    const TIMESTAMP_SEQUENCE: (keyof FlightLog)[] = [
+      'timestampArrived',
+      'timestampPosition',
+      'timestampStart',
+      'timestampInitialEnd',
+      'timestampFinalStart',
+      'timestampFinalEnd'
+    ];
+    const FIELD_LABELS: Record<string, string> = {
+      timestampArrived: 'Log Arrived',
+      timestampPosition: 'Log Position',
+      timestampStart: 'Commence Fueling',
+      timestampInitialEnd: 'Initial End',
+      timestampFinalStart: 'Final Start',
+      timestampFinalEnd: 'Final End'
+    };
+    const index = TIMESTAMP_SEQUENCE.indexOf(field);
+    if (index !== -1) {
+      const isCurrentlySet = !!activeFlight[field];
+      if (!isCurrentlySet) {
+        for (let i = 0; i < index; i++) {
+          const previousField = TIMESTAMP_SEQUENCE[i];
+          if (!activeFlight[previousField]) {
+            notify(`Cannot log "${FIELD_LABELS[field]}" before "${FIELD_LABELS[previousField]}".`, 'warning');
+            return;
+          }
+        }
+      }
+    }
+
+    const dateStr = activeFlight?.operationalDate || new Date().toISOString().split('T')[0];
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const [hours, minutes] = timeVal.split(':').map(Number);
+    
+    const localDate = new Date();
+    localDate.setFullYear(year, month - 1, day);
+    localDate.setHours(hours, minutes, 0, 0);
+    handleInputChange(field, localDate.toISOString());
   };
 
   const isSubmittingOrCompletingRef = React.useRef(false);
@@ -2318,6 +2495,8 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 onNext={() => navigateToScreen('metering')}
                 onBack={() => window.history.back()}
                 user={user}
+                getLocalTimeValue={getLocalTimeValue}
+                setManualTime={setManualTime}
               />
             )}
             {currentScreen === 'metering' && (
@@ -2330,6 +2509,8 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 showTopUp={showTopUp}
                 setShowTopUp={setShowTopUp}
                 user={user}
+                getLocalTimeValue={getLocalTimeValue}
+                setManualTime={setManualTime}
               />
             )}
             {currentScreen === 'qc' && (

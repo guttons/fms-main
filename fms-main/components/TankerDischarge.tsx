@@ -1237,11 +1237,11 @@ export const TankerDischarge: React.FC = () => {
                   </div>
                   
                   {/* Wrap in scrolling card for mobile views */}
-                  <div className="overflow-x-auto -mx-6 px-6 lg:mx-0 lg:px-0 scrollbar-thin">
-                    <table className="w-full text-left border-collapse text-[11px] font-mono text-on-surface min-w-[550px] lg:min-w-0">
+                  <div className="overflow-x-auto custom-scrollbar border border-outline rounded-2xl bg-surface-dim/20 shadow-inner overflow-hidden mb-6">
+                    <table className={`w-full text-left border-collapse text-[11px] font-mono text-on-surface table-fixed transition-all duration-300 ${showTank2 ? 'min-w-[550px]' : 'min-w-[276px] lg:min-w-0'}`}>
                       <thead>
                         <tr className="border-b border-outline">
-                          <th className="sticky left-0 bg-surface border-r border-outline py-3 px-2 text-center font-black uppercase text-on-surface-dim tracking-wider w-14 md:w-[220px] z-20">
+                          <th className="sticky left-0 bg-surface-lowest border-r border-outline py-3 px-2 text-center font-black uppercase text-on-surface-dim tracking-wider w-14 md:w-56 z-20">
                             <span className="hidden md:inline">Parameter</span>
                             <span className="inline md:hidden flex justify-center"><Sliders className="w-4 h-4 text-primary" /></span>
                           </th>
@@ -1269,28 +1269,28 @@ export const TankerDischarge: React.FC = () => {
                           )}
                         </tr>
                         <tr className="border-b border-outline/50 text-center font-black bg-surface-container-low/10">
-                          <th className="sticky left-0 bg-surface border-r border-outline py-2 px-2 text-center font-black w-14 md:w-[220px] z-20"></th>
-                          <th className="py-2 px-1 w-[100px]">BEFORE</th>
-                          <th className="py-2 px-1 w-[100px]">AFTER</th>
-                          {showTank2 && <th className="py-2 px-1 w-[100px]">BEFORE</th>}
-                          {showTank2 && <th className="py-2 px-1 w-[100px]">AFTER</th>}
+                          <th className="sticky left-0 bg-surface-lowest border-r border-outline py-2 px-2 text-center font-black w-14 md:w-56 z-20"></th>
+                          <th className="py-2 px-1 w-[110px] md:w-auto">BEFORE</th>
+                          <th className="py-2 px-1 w-[110px] md:w-auto">AFTER</th>
+                          {showTank2 && <th className="py-2 px-1 w-[110px] md:w-auto">BEFORE</th>}
+                          {showTank2 && <th className="py-2 px-1 w-[110px] md:w-auto">AFTER</th>}
                         </tr>
                       </thead>
                       <tbody>
                         {/* Receiving Tank Selector */}
                         <tr className="border-b border-outline/30">
-                          <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                          <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                             <div className="flex items-center justify-center md:justify-start">
                               <Database className="w-3.5 h-3.5 md:mr-2.5 text-primary opacity-50 shrink-0" />
                               <span className="hidden md:inline">Receiving Tank ID</span>
-                              <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                              <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                 Receiving Tank ID
                               </div>
                             </div>
                           </td>
                           <td className="py-2 px-1" colSpan={2}>
                             <select 
-                              className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold focus:ring-2 focus:ring-primary/20 appearance-none"
+                              className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold focus:ring-2 focus:ring-primary/20 appearance-none"
                               value={activeTanks.tank1.before.tankId}
                               onChange={(e) => {
                                 handleMeasurementChange(reportType, 'tank1', 'before', 'tankId', e.target.value);
@@ -1306,7 +1306,7 @@ export const TankerDischarge: React.FC = () => {
                           {showTank2 && (
                             <td className="py-2 px-1" colSpan={2}>
                               <select 
-                                className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold focus:ring-2 focus:ring-primary/20 appearance-none"
+                                className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold focus:ring-2 focus:ring-primary/20 appearance-none"
                                 value={activeTanks.tank2.before.tankId}
                                 onChange={(e) => {
                                   handleMeasurementChange(reportType, 'tank2', 'before', 'tankId', e.target.value);
@@ -1324,11 +1324,11 @@ export const TankerDischarge: React.FC = () => {
 
                         {/* Gross Dip */}
                         <tr className="border-b border-outline/30">
-                          <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                          <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                             <div className="flex items-center justify-center md:justify-start">
                               <Ruler className="w-3.5 h-3.5 md:mr-2.5 text-primary opacity-50 shrink-0" />
                               <span className="hidden md:inline">Gross Dip (mm)</span>
-                              <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                              <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                 Gross Dip (mm)
                               </div>
                             </div>
@@ -1336,7 +1336,7 @@ export const TankerDischarge: React.FC = () => {
                           <td className="py-2 px-1">
                             <input 
                               type="number" 
-                              className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                              className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                               value={activeTanks.tank1.before.grossDip}
                               onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'before', 'grossDip', e.target.value)}
                             />
@@ -1344,7 +1344,7 @@ export const TankerDischarge: React.FC = () => {
                           <td className="py-2 px-1">
                             <input 
                               type="number" 
-                              className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                              className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                               value={activeTanks.tank1.after.grossDip}
                               onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'after', 'grossDip', e.target.value)}
                             />
@@ -1354,7 +1354,7 @@ export const TankerDischarge: React.FC = () => {
                               <td className="py-2 px-1">
                                 <input 
                                   type="number" 
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank2.before.grossDip}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'before', 'grossDip', e.target.value)}
                                 />
@@ -1362,7 +1362,7 @@ export const TankerDischarge: React.FC = () => {
                               <td className="py-2 px-1">
                                 <input 
                                   type="number" 
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank2.after.grossDip}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'after', 'grossDip', e.target.value)}
                                 />
@@ -1373,11 +1373,11 @@ export const TankerDischarge: React.FC = () => {
 
                         {/* Table Volume */}
                         <tr className="border-b border-outline/30">
-                          <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                          <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                             <div className="flex items-center justify-center md:justify-start">
                               <Droplet className="w-3.5 h-3.5 md:mr-2.5 text-primary opacity-50 shrink-0" />
                               <span className="hidden md:inline">Table Volume (KL)</span>
-                              <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                              <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                 Table Volume (KL)
                               </div>
                             </div>
@@ -1386,7 +1386,7 @@ export const TankerDischarge: React.FC = () => {
                             <input 
                               type="number" 
                               step="0.001"
-                              className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                              className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                               value={activeTanks.tank1.before.tableVolume}
                               onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'before', 'tableVolume', e.target.value)}
                             />
@@ -1395,7 +1395,7 @@ export const TankerDischarge: React.FC = () => {
                             <input 
                               type="number" 
                               step="0.001"
-                              className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                              className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                               value={activeTanks.tank1.after.tableVolume}
                               onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'after', 'tableVolume', e.target.value)}
                             />
@@ -1406,7 +1406,7 @@ export const TankerDischarge: React.FC = () => {
                                 <input 
                                   type="number" 
                                   step="0.001"
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank2.before.tableVolume}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'before', 'tableVolume', e.target.value)}
                                 />
@@ -1415,7 +1415,7 @@ export const TankerDischarge: React.FC = () => {
                                 <input 
                                   type="number" 
                                   step="0.001"
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank2.after.tableVolume}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'after', 'tableVolume', e.target.value)}
                                 />
@@ -1427,11 +1427,11 @@ export const TankerDischarge: React.FC = () => {
                         {/* Jet Specific: Roof Correction */}
                         {reportType === 'JETA1' && (
                           <tr className="border-b border-outline/30">
-                            <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                            <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                               <div className="flex items-center justify-center md:justify-start">
                                 <Layers className="w-3.5 h-3.5 md:mr-2.5 text-primary opacity-50 shrink-0" />
                                 <span className="hidden md:inline">Roof Correction (KL)</span>
-                                <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                                <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                   Roof Correction (KL)
                                 </div>
                               </div>
@@ -1440,7 +1440,7 @@ export const TankerDischarge: React.FC = () => {
                               <input 
                                 type="number" 
                                 step="0.001"
-                                className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                 value={activeTanks.tank1.before.roofCorrection}
                                 onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'before', 'roofCorrection', e.target.value)}
                               />
@@ -1449,7 +1449,7 @@ export const TankerDischarge: React.FC = () => {
                               <input 
                                 type="number" 
                                 step="0.001"
-                                className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                 value={activeTanks.tank1.after.roofCorrection}
                                 onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'after', 'roofCorrection', e.target.value)}
                               />
@@ -1460,7 +1460,7 @@ export const TankerDischarge: React.FC = () => {
                                   <input 
                                     type="number" 
                                     step="0.001"
-                                    className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                     value={activeTanks.tank2.before.roofCorrection}
                                     onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'before', 'roofCorrection', e.target.value)}
                                   />
@@ -1469,7 +1469,7 @@ export const TankerDischarge: React.FC = () => {
                                   <input 
                                     type="number" 
                                     step="0.001"
-                                    className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                     value={activeTanks.tank2.after.roofCorrection}
                                     onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'after', 'roofCorrection', e.target.value)}
                                   />
@@ -1483,11 +1483,11 @@ export const TankerDischarge: React.FC = () => {
                         {(reportType === 'MGO' || reportType === 'PETROL') && (
                           <>
                             <tr className="border-b border-outline/30">
-                              <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                              <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                                 <div className="flex items-center justify-center md:justify-start">
                                   <Waves className="w-3.5 h-3.5 md:mr-2.5 text-primary opacity-50 shrink-0" />
                                   <span className="hidden md:inline">Water Dip (mm)</span>
-                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                     Water Dip (mm)
                                   </div>
                                 </div>
@@ -1495,7 +1495,7 @@ export const TankerDischarge: React.FC = () => {
                               <td className="py-2 px-1">
                                 <input 
                                   type="text" 
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank1.before.waterDip}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'before', 'waterDip', e.target.value)}
                                 />
@@ -1503,7 +1503,7 @@ export const TankerDischarge: React.FC = () => {
                               <td className="py-2 px-1">
                                 <input 
                                   type="text" 
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank1.after.waterDip}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'after', 'waterDip', e.target.value)}
                                 />
@@ -1513,7 +1513,7 @@ export const TankerDischarge: React.FC = () => {
                                   <td className="py-2 px-1">
                                     <input 
                                       type="text" 
-                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                       value={activeTanks.tank2.before.waterDip}
                                       onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'before', 'waterDip', e.target.value)}
                                     />
@@ -1521,7 +1521,7 @@ export const TankerDischarge: React.FC = () => {
                                   <td className="py-2 px-1">
                                     <input 
                                       type="text" 
-                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                       value={activeTanks.tank2.after.waterDip}
                                       onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'after', 'waterDip', e.target.value)}
                                     />
@@ -1530,11 +1530,11 @@ export const TankerDischarge: React.FC = () => {
                               )}
                             </tr>
                             <tr className="border-b border-outline/30">
-                              <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                              <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                                 <div className="flex items-center justify-center md:justify-start">
                                   <Droplet className="w-3.5 h-3.5 md:mr-2.5 text-primary opacity-50 shrink-0" />
                                   <span className="hidden md:inline">Water Quantity (KL)</span>
-                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                     Water Quantity (KL)
                                   </div>
                                 </div>
@@ -1543,7 +1543,7 @@ export const TankerDischarge: React.FC = () => {
                                 <input 
                                   type="number" 
                                   step="0.001"
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank1.before.waterQuantity}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'before', 'waterQuantity', e.target.value)}
                                 />
@@ -1552,7 +1552,7 @@ export const TankerDischarge: React.FC = () => {
                                 <input 
                                   type="number" 
                                   step="0.001"
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank1.after.waterQuantity}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'after', 'waterQuantity', e.target.value)}
                                 />
@@ -1563,7 +1563,7 @@ export const TankerDischarge: React.FC = () => {
                                     <input 
                                       type="number" 
                                       step="0.001"
-                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                       value={activeTanks.tank2.before.waterQuantity}
                                       onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'before', 'waterQuantity', e.target.value)}
                                     />
@@ -1572,7 +1572,7 @@ export const TankerDischarge: React.FC = () => {
                                     <input 
                                       type="number" 
                                       step="0.001"
-                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                       value={activeTanks.tank2.after.waterQuantity}
                                       onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'after', 'waterQuantity', e.target.value)}
                                     />
@@ -1581,11 +1581,11 @@ export const TankerDischarge: React.FC = () => {
                               )}
                             </tr>
                             <tr className="border-b border-outline/30 bg-primary/5">
-                              <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                              <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                                 <div className="flex items-center justify-center md:justify-start">
                                   <Scale className="w-3.5 h-3.5 md:mr-2.5 text-primary opacity-50 shrink-0" />
                                   <span className="hidden md:inline">Volume Less Water (KL)</span>
-                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                     Volume Less Water (KL)
                                   </div>
                                 </div>
@@ -1608,11 +1608,11 @@ export const TankerDischarge: React.FC = () => {
                               )}
                             </tr>
                             <tr className="border-b border-outline/30">
-                              <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                              <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                                 <div className="flex items-center justify-center md:justify-start">
                                   <GitCommit className="w-3.5 h-3.5 md:mr-2.5 text-primary opacity-50 shrink-0" />
                                   <span className="hidden md:inline">Line Quantity (KL)</span>
-                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                     Line Quantity (KL)
                                   </div>
                                 </div>
@@ -1620,7 +1620,7 @@ export const TankerDischarge: React.FC = () => {
                               <td className="py-2 px-1">
                                 <input 
                                   type="text" 
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank1.before.lineQuantity}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'before', 'lineQuantity', e.target.value)}
                                 />
@@ -1628,7 +1628,7 @@ export const TankerDischarge: React.FC = () => {
                               <td className="py-2 px-1">
                                 <input 
                                   type="text" 
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank1.after.lineQuantity}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'after', 'lineQuantity', e.target.value)}
                                 />
@@ -1638,7 +1638,7 @@ export const TankerDischarge: React.FC = () => {
                                   <td className="py-2 px-1">
                                     <input 
                                       type="text" 
-                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                       value={activeTanks.tank2.before.lineQuantity}
                                       onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'before', 'lineQuantity', e.target.value)}
                                     />
@@ -1646,7 +1646,7 @@ export const TankerDischarge: React.FC = () => {
                                   <td className="py-2 px-1">
                                     <input 
                                       type="text" 
-                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                       value={activeTanks.tank2.after.lineQuantity}
                                       onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'after', 'lineQuantity', e.target.value)}
                                     />
@@ -1662,11 +1662,11 @@ export const TankerDischarge: React.FC = () => {
                           <>
                             {/* Observed Lab Density & Temp */}
                             <tr className="border-b border-outline/30 bg-surface-container-low/10">
-                              <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                              <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                                 <div className="flex items-center justify-center md:justify-start">
                                   <Scale className="w-3.5 h-3.5 md:mr-2.5 text-primary opacity-50 shrink-0" />
                                   <span className="hidden md:inline">Lab Observed Density</span>
-                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                     Lab Observed Density (g/cm³)
                                   </div>
                                 </div>
@@ -1676,7 +1676,7 @@ export const TankerDischarge: React.FC = () => {
                                   type="number" 
                                   step="0.0001"
                                   placeholder="e.g. 789.7"
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank1.before.densityObserved}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'before', 'densityObserved', e.target.value)}
                                 />
@@ -1686,7 +1686,7 @@ export const TankerDischarge: React.FC = () => {
                                   type="number" 
                                   step="0.0001"
                                   placeholder="e.g. 782.5"
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank1.after.densityObserved}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'after', 'densityObserved', e.target.value)}
                                 />
@@ -1697,7 +1697,7 @@ export const TankerDischarge: React.FC = () => {
                                     <input 
                                       type="number" 
                                       step="0.0001"
-                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                       value={activeTanks.tank2.before.densityObserved}
                                       onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'before', 'densityObserved', e.target.value)}
                                     />
@@ -1706,7 +1706,7 @@ export const TankerDischarge: React.FC = () => {
                                     <input 
                                       type="number" 
                                       step="0.0001"
-                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                       value={activeTanks.tank2.after.densityObserved}
                                       onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'after', 'densityObserved', e.target.value)}
                                     />
@@ -1716,11 +1716,11 @@ export const TankerDischarge: React.FC = () => {
                             </tr>
 
                             <tr className="border-b border-outline/30 bg-surface-container-low/10">
-                              <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                              <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                                 <div className="flex items-center justify-center md:justify-start">
                                   <Thermometer className="w-3.5 h-3.5 md:mr-2.5 text-primary opacity-50 shrink-0" />
                                   <span className="hidden md:inline">Lab Observed Temp (°C)</span>
-                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                     Lab Observed Temp (°C)
                                   </div>
                                 </div>
@@ -1729,7 +1729,7 @@ export const TankerDischarge: React.FC = () => {
                                 <input 
                                   type="number" 
                                   step="0.01"
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank1.before.temperature}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'before', 'temperature', e.target.value)}
                                 />
@@ -1738,7 +1738,7 @@ export const TankerDischarge: React.FC = () => {
                                 <input 
                                   type="number" 
                                   step="0.01"
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank1.after.temperature}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'after', 'temperature', e.target.value)}
                                 />
@@ -1749,7 +1749,7 @@ export const TankerDischarge: React.FC = () => {
                                     <input 
                                       type="number" 
                                       step="0.01"
-                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                       value={activeTanks.tank2.before.temperature}
                                       onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'before', 'temperature', e.target.value)}
                                     />
@@ -1758,7 +1758,7 @@ export const TankerDischarge: React.FC = () => {
                                     <input 
                                       type="number" 
                                       step="0.01"
-                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                       value={activeTanks.tank2.after.temperature}
                                       onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'after', 'temperature', e.target.value)}
                                     />
@@ -1769,11 +1769,11 @@ export const TankerDischarge: React.FC = () => {
 
                             {/* Density @ 15°C */}
                             <tr className="border-b border-outline/30 bg-primary/[0.03]">
-                              <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-sky-800 z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                              <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-sky-800 z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                                 <div className="flex items-center justify-center md:justify-start">
                                   <Scale className="w-3.5 h-3.5 md:mr-2.5 text-sky-800 opacity-55 shrink-0" />
                                   <span className="hidden md:inline">Density @ 15°C (ASTM 53B)</span>
-                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                     Density @ 15°C (g/cm³) (ASTM 53B)
                                   </div>
                                 </div>
@@ -1782,7 +1782,7 @@ export const TankerDischarge: React.FC = () => {
                                 <input 
                                   type="number" 
                                   step="0.0001"
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank1.before.density15}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'before', 'density15', e.target.value)}
                                 />
@@ -1791,7 +1791,7 @@ export const TankerDischarge: React.FC = () => {
                                 <input 
                                   type="number" 
                                   step="0.0001"
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank1.after.density15}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'after', 'density15', e.target.value)}
                                 />
@@ -1802,7 +1802,7 @@ export const TankerDischarge: React.FC = () => {
                                     <input 
                                       type="number" 
                                       step="0.0001"
-                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                       value={activeTanks.tank2.before.density15}
                                       onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'before', 'density15', e.target.value)}
                                     />
@@ -1811,7 +1811,7 @@ export const TankerDischarge: React.FC = () => {
                                     <input 
                                       type="number" 
                                       step="0.0001"
-                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                       value={activeTanks.tank2.after.density15}
                                       onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'after', 'density15', e.target.value)}
                                     />
@@ -1822,11 +1822,11 @@ export const TankerDischarge: React.FC = () => {
 
                             {/* W.C.F Row */}
                             <tr className="border-b border-outline/30 bg-primary/[0.03]">
-                              <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-sky-800 z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                              <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-sky-800 z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                                 <div className="flex items-center justify-center md:justify-start">
                                   <Percent className="w-3.5 h-3.5 md:mr-2.5 text-sky-800 opacity-55 shrink-0" />
                                   <span className="hidden md:inline">W.C.F</span>
-                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                     W.C.F
                                   </div>
                                 </div>
@@ -1851,11 +1851,11 @@ export const TankerDischarge: React.FC = () => {
 
                             {/* Tank Temperature */}
                             <tr className="border-b border-outline/30">
-                              <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                              <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface-dim z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                                 <div className="flex items-center justify-center md:justify-start">
                                   <Thermometer className="w-3.5 h-3.5 md:mr-2.5 text-primary opacity-50 shrink-0" />
                                   <span className="hidden md:inline">Tank Temperature (°C)</span>
-                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                     Tank Temperature (°C)
                                   </div>
                                 </div>
@@ -1864,7 +1864,7 @@ export const TankerDischarge: React.FC = () => {
                                 <input 
                                   type="number" 
                                   step="0.1"
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank1.before.tankTemperature}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'before', 'tankTemperature', e.target.value)}
                                 />
@@ -1873,7 +1873,7 @@ export const TankerDischarge: React.FC = () => {
                                 <input 
                                   type="number" 
                                   step="0.1"
-                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank1.after.tankTemperature}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'after', 'tankTemperature', e.target.value)}
                                 />
@@ -1884,7 +1884,7 @@ export const TankerDischarge: React.FC = () => {
                                     <input 
                                       type="number" 
                                       step="0.1"
-                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                       value={activeTanks.tank2.before.tankTemperature}
                                       onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'before', 'tankTemperature', e.target.value)}
                                     />
@@ -1893,7 +1893,7 @@ export const TankerDischarge: React.FC = () => {
                                     <input 
                                       type="number" 
                                       step="0.1"
-                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                      className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                       value={activeTanks.tank2.after.tankTemperature}
                                       onChange={(e) => handleMeasurementChange(reportType, 'tank2', 'after', 'tankTemperature', e.target.value)}
                                     />
@@ -1904,11 +1904,11 @@ export const TankerDischarge: React.FC = () => {
 
                             {/* VCF */}
                             <tr className="border-b border-outline/30 bg-primary/[0.03]">
-                              <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-sky-800 z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                              <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-sky-800 z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                                 <div className="flex items-center justify-center md:justify-start">
                                   <Sliders className="w-3.5 h-3.5 md:mr-2.5 text-sky-800 opacity-55 shrink-0" />
                                   <span className="hidden md:inline">VCF 54B</span>
-                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                     Volume Correction Factor (VCF 54B)
                                   </div>
                                 </div>
@@ -1933,11 +1933,11 @@ export const TankerDischarge: React.FC = () => {
 
                             {/* Kilo Litres @ 15C */}
                             <tr className="border-b border-outline/30 bg-primary/[0.05]">
-                              <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-sky-900 z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                              <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-sky-900 z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                                 <div className="flex items-center justify-center md:justify-start">
                                   <Droplet className="w-3.5 h-3.5 md:mr-2.5 text-sky-900 opacity-60 shrink-0" />
                                   <span className="hidden md:inline">Kilo Litres @ 15°C</span>
-                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                     Kilo Litres @ 15°C
                                   </div>
                                 </div>
@@ -1962,11 +1962,11 @@ export const TankerDischarge: React.FC = () => {
 
                             {/* Receipt @ 15C */}
                             <tr className="bg-sky-500/10 font-bold">
-                              <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                              <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                                 <div className="flex items-center justify-center md:justify-start">
                                   <ClipboardCheck className="w-3.5 h-3.5 md:mr-2.5 text-primary opacity-60 shrink-0" />
                                   <span className="hidden md:inline">Receipt @ 15°C (KL)</span>
-                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                     Receipt @ 15°C (KL)
                                   </div>
                                 </div>
@@ -1986,11 +1986,11 @@ export const TankerDischarge: React.FC = () => {
                         {/* Petrol Specific Receipt Outturn Row */}
                         {reportType === 'PETROL' && (
                           <tr className="bg-sky-500/10 font-bold">
-                            <td className="sticky left-0 bg-surface border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface z-10 w-14 md:w-[220px] group cursor-pointer focus:outline-none" tabIndex={0}>
+                            <td className="sticky left-0 bg-surface-lowest border-r border-outline/30 px-2 md:px-5 py-3 font-black text-on-surface z-10 w-14 md:w-56 group cursor-pointer focus:outline-none" tabIndex={0}>
                               <div className="flex items-center justify-center md:justify-start">
                                 <ClipboardCheck className="w-3.5 h-3.5 md:mr-2.5 text-primary opacity-60 shrink-0" />
                                 <span className="hidden md:inline">Total Observed Volume (KL)</span>
-                                <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden">
+                                <div className="absolute left-full ml-2 px-2.5 py-1 bg-[var(--color-surface-dim)] text-[9px] font-black text-[var(--color-on-surface)] uppercase rounded-lg border border-[var(--color-outline)] shadow-premium opacity-0 pointer-events-none group-hover:opacity-100 group-focus:opacity-100 transition-opacity whitespace-nowrap z-50 md:hidden font-sans">
                                   Total Observed Volume (KL)
                                 </div>
                               </div>
@@ -2026,7 +2026,7 @@ export const TankerDischarge: React.FC = () => {
                         <div className="mt-4">
                           <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-2 tracking-widest opacity-40">Remarks / Log Notes</label>
                           <textarea 
-                            className="w-full px-4 py-3 bg-surface-container-low border border-outline text-on-surface rounded-xl text-[10px] font-mono outline-none focus:ring-2 focus:ring-primary/20 uppercase"
+                            className="w-full px-2.5 md:px-4 py-3 bg-surface-container-low border border-outline text-on-surface rounded-xl text-[10px] font-mono outline-none focus:ring-2 focus:ring-primary/20 uppercase"
                             rows={3}
                             value={petrolHeader.remarks}
                             onChange={(e) => handleHeaderChange('PETROL', 'remarks', e.target.value)}
@@ -2111,7 +2111,7 @@ export const TankerDischarge: React.FC = () => {
                           <div className="mt-4">
                             <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-2 tracking-widest opacity-40">Remarks / Log Notes</label>
                             <textarea 
-                              className="w-full px-4 py-3 bg-surface-container-low border border-outline text-on-surface rounded-xl text-[10px] font-mono outline-none focus:ring-2 focus:ring-primary/20 uppercase"
+                              className="w-full px-2.5 md:px-4 py-3 bg-surface-container-low border border-outline text-on-surface rounded-xl text-[10px] font-mono outline-none focus:ring-2 focus:ring-primary/20 uppercase"
                               rows={2}
                               value={jetA1Header.remarks}
                               onChange={(e) => handleHeaderChange('JETA1', 'remarks', e.target.value)}
@@ -2134,7 +2134,7 @@ export const TankerDischarge: React.FC = () => {
                           <div>
                             <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-2 tracking-widest opacity-40">Remarks / Log Notes</label>
                             <textarea 
-                              className="w-full px-4 py-3 bg-surface-container-low border border-outline text-on-surface rounded-xl text-[10px] font-mono outline-none focus:ring-2 focus:ring-primary/20 uppercase"
+                              className="w-full px-2.5 md:px-4 py-3 bg-surface-container-low border border-outline text-on-surface rounded-xl text-[10px] font-mono outline-none focus:ring-2 focus:ring-primary/20 uppercase"
                               rows={3}
                               value={mgoHeader.remarks}
                               onChange={(e) => handleHeaderChange('MGO', 'remarks', e.target.value)}

@@ -130,16 +130,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       case UserRole.COMMERCIAL:
         return [
-          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'commercial-reports', label: 'Commercial Reports', icon: Coins },
           { id: 'forecasting', label: 'Forecasting & Trends', icon: TrendingUp },
           { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
-          { id: 'commercial-reports', label: 'Commercial Reports', icon: Coins },
           { id: 'finance', label: 'Finance & Billing', icon: Receipt },
         ];
 
       case UserRole.FINANCE:
         return [
-          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'finance', label: 'Finance & Billing', icon: Receipt },
           { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
           { id: 'reports', label: 'Financial Reports', icon: FileText },
@@ -148,6 +146,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       case UserRole.CUSTOMER:
         return [
           { id: 'customer-portal', label: 'Customer Portal', icon: Plane },
+        ];
+
+      case UserRole.FUEL_MANAGEMENT:
+        return [
+          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
+          { id: 'equipment', label: 'Equipment Status', icon: Truck },
+          { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
+          { id: 'history', label: 'Log History', icon: History },
+          { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
+          { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
+          { id: 'commercial-reports', label: 'Commercial Reports', icon: Coins },
+          { id: 'executive', label: 'Executive Module', icon: Briefcase },
+          { id: 'finance', label: 'Finance & Billing', icon: Receipt },
         ];
 
       case UserRole.ADMIN:

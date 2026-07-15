@@ -592,7 +592,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
         </div>
         
         <div className="flex flex-row items-center justify-between sm:justify-end gap-3 lg:gap-4 w-full sm:w-auto">
-          {user && ![UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER, UserRole.ITP_SUPERVISOR].includes(user.role) && (
+          {user && ![UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_OFFICER, UserRole.ITP_SUPERVISOR, UserRole.FUEL_MANAGEMENT].includes(user.role) && (
             <button
               onClick={exportToPDF}
               className="hidden sm:flex items-center justify-center p-2.5 lg:px-4 lg:py-2 bg-primary/10 text-primary border border-primary rounded-xl hover-kinetic-gradient transition-all active:scale-95 flex-shrink-0"
