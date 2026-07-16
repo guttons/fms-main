@@ -72,6 +72,11 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     return 'FLIGHT';
   });
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalVolume, setTotalVolume] = useState(0);
+
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
   // Tooltip auto-clear effect
@@ -294,67 +299,62 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
       const filters = {
         startDate: filterStartDate,
         endDate: filterEndDate,
-        searchTerm
+        searchTerm,
+        logType: selectedLogType,
+        flightCategory: filterFlightCategory,
+        equipmentId: selectedLogType === 'TOTALIZER_READINGS' ? totalizerEquipment : (selectedLogType === 'BRIDGING' ? filterEquipment : undefined),
+        page: currentPage,
+        limit: pageSize,
+        sortField: selectedLogType === 'TOTALIZER_READINGS' ? totalizerSortField : archiveSortField,
+        sortOrder: selectedLogType === 'TOTALIZER_READINGS' ? totalizerSortOrder : archiveSortOrder
       };
-      const [fetchedFlightLogs, fetchedFillingLogs, fetchedBridgingLogs] = await Promise.all([
-        supabaseService.getFlightLogs(filters),
-        supabaseService.getFillingStationLogs(filters),
-        supabaseService.getBridgingLogs(filters)
-      ]);
 
-      const dbBridgingLogs: FlightLog[] = (fetchedBridgingLogs || []).map(blog => ({
-        id: blog.id,
-        flightNumber: `LOAD-${blog.vehicleId}`,
-        aircraftReg: blog.sourceTankId,
-        aircraftType: 'REFUELLER LOADING',
-        stand: 'DEPOT',
-        operatorId: blog.operatorId,
-        vehicleId: blog.vehicleId,
-        status: 'COMPLETED',
-        deliveryNumber: blog.id,
-        operationalDate: blog.date,
-        logType: 'BRIDGING' as any,
-        timestampStart: blog.startTime ? combineDateAndTime(blog.date || '', blog.startTime) : undefined,
-        timestampFinalEnd: blog.endTime ? combineDateAndTime(blog.date || '', blog.endTime) : undefined,
-        volume: blog.volume,
-        remarks: `QC Visual: ${blog.visualCheckPassed ? 'PASS' : 'FAIL'}, CWD: ${blog.cwdCheckPassed ? 'PASS' : 'FAIL'}` + (blog.density ? `, Density: ${blog.density}` : '') + (blog.temperature ? `, Temp: ${blog.temperature}` : ''),
-        visualCheckPassed: blog.visualCheckPassed,
-        cwdCheckPassed: blog.cwdCheckPassed,
-        density: blog.density,
-        temperature: blog.temperature,
-        co: blog.co
-      } as any));
+      let fetchedLogsList: FlightLog[] = [];
+      let fetchedTotalCount = 0;
+      let fetchedTotalVolume = 0;
 
-      // Separate legacy/historical records still residing in operations_log
-      const legacyFillingLogs: FlightLog[] = [];
-      const legacyBridgingLogs: FlightLog[] = [];
-      const primaryFlightLogs: FlightLog[] = [];
-
-      for (const log of (fetchedFlightLogs || [])) {
-        if (!log) continue;
-        const logType = resolveLogType(log);
-        if (logType === 'BRIDGING' || (log.flightNumber || '').startsWith('LOAD-')) {
-          const isDup = dbBridgingLogs.some(dl => dl.vehicleId === log.vehicleId && dl.volume === log.volume && getLocalDatePart(dl.timestampStart) === getLocalDatePart(log.timestampStart));
-          if (!isDup) {
-            legacyBridgingLogs.push(log);
-          }
-        } else if (logType === 'FILLING_STATION' || (log.flightNumber || '').startsWith('GROUND-')) {
-          const isDup = (fetchedFillingLogs || []).some(fl => fl.vehicleId === log.vehicleId && fl.volume === log.volume && getLocalDatePart(fl.timestampStart) === getLocalDatePart(log.timestampStart));
-          if (!isDup) {
-            legacyFillingLogs.push(log);
-          }
-        } else {
-          primaryFlightLogs.push(log);
-        }
+      if (selectedLogType === 'FILLING_STATION') {
+        const res = await supabaseService.getFillingStationLogs(filters);
+        fetchedLogsList = res.logs;
+        fetchedTotalCount = res.totalCount;
+        fetchedTotalVolume = res.totalVolume;
+      } else if (selectedLogType === 'BRIDGING') {
+        const res = await supabaseService.getBridgingLogs(filters);
+        fetchedLogsList = (res.logs || []).map(blog => ({
+          id: blog.id,
+          flightNumber: `LOAD-${blog.vehicleId}`,
+          aircraftReg: blog.sourceTankId,
+          aircraftType: 'REFUELLER LOADING',
+          stand: 'DEPOT',
+          operatorId: blog.operatorId,
+          vehicleId: blog.vehicleId,
+          status: 'COMPLETED',
+          deliveryNumber: blog.id,
+          operationalDate: blog.date,
+          logType: 'BRIDGING' as any,
+          timestampStart: blog.startTime ? combineDateAndTime(blog.date || '', blog.startTime) : undefined,
+          timestampFinalEnd: blog.endTime ? combineDateAndTime(blog.date || '', blog.endTime) : undefined,
+          volume: blog.volume,
+          remarks: `QC Visual: ${blog.visualCheckPassed ? 'PASS' : 'FAIL'}, CWD: ${blog.cwdCheckPassed ? 'PASS' : 'FAIL'}` + (blog.density ? `, Density: ${blog.density}` : '') + (blog.temperature ? `, Temp: ${blog.temperature}` : ''),
+          visualCheckPassed: blog.visualCheckPassed,
+          cwdCheckPassed: blog.cwdCheckPassed,
+          density: blog.density,
+          temperature: blog.temperature,
+          co: blog.co
+        } as any));
+        fetchedTotalCount = res.totalCount;
+        fetchedTotalVolume = res.totalVolume;
+      } else {
+        // FLIGHT, SEAPLANE, MARINE, TOTALIZER_READINGS
+        const res = await supabaseService.getFlightLogs(filters);
+        fetchedLogsList = res.logs;
+        fetchedTotalCount = res.totalCount;
+        fetchedTotalVolume = res.totalVolume;
       }
 
-      setLogs([
-        ...primaryFlightLogs,
-        ...fetchedFillingLogs,
-        ...legacyFillingLogs,
-        ...dbBridgingLogs,
-        ...legacyBridgingLogs
-      ]);
+      setLogs(fetchedLogsList);
+      setTotalCount(fetchedTotalCount);
+      setTotalVolume(fetchedTotalVolume);
     } catch (error) {
       console.error('Error fetching logs:', error);
     } finally {
@@ -362,13 +362,48 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     }
   };
 
-  // Re-fetch logs when any filters change (debounced for search term changes)
+  // Reset page to 1 when filters or tabs change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    selectedLogType,
+    filterStartDate,
+    filterEndDate,
+    searchTerm,
+    filterFlightCategory,
+    filterFuelType,
+    filterEquipment,
+    filterStation,
+    totalizerEquipment,
+    archiveSortField,
+    archiveSortOrder,
+    totalizerSortField,
+    totalizerSortOrder
+  ]);
+
+  // Re-fetch logs when page, page size, or filters change (debounced for search term changes)
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchLogs();
     }, 400);
     return () => clearTimeout(timer);
-  }, [filterStartDate, filterEndDate, searchTerm]);
+  }, [
+    currentPage,
+    pageSize,
+    selectedLogType,
+    filterStartDate,
+    filterEndDate,
+    searchTerm,
+    filterFlightCategory,
+    filterFuelType,
+    filterEquipment,
+    filterStation,
+    totalizerEquipment,
+    archiveSortField,
+    archiveSortOrder,
+    totalizerSortField,
+    totalizerSortOrder
+  ]);
 
   useEffect(() => {
     if (editingLog) {
@@ -511,126 +546,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     }
   };
 
-  const filteredLogs = (logs || []).filter(log => {
-    if (!log) return false;
-    
-    const logType = resolveLogType(log);
-    const matchesType = selectedLogType === 'TOTALIZER_READINGS' 
-      ? (
-          logType !== 'SEAPLANE' &&
-          !(log.flightNumber || '').startsWith('SEAPLANE-') &&
-          log.vehicleId &&
-          log.vehicleId !== 'N/A' &&
-          !log.vehicleId.toUpperCase().includes('SCADA') &&
-          !log.vehicleId.toUpperCase().startsWith('PUMP') &&
-          (log.meterOpen !== undefined || log.meterClose !== undefined || (typeof log.volume === 'number' && log.volume > 0))
-        )
-      : logType === selectedLogType;
 
-    const searchLower = searchTerm.toLowerCase();
-    const matchesSearch = (
-      (log.flightNumber || '').toLowerCase().includes(searchLower) ||
-      (log.aircraftReg || '').toLowerCase().includes(searchLower) ||
-      (log.airline || '').toLowerCase().includes(searchLower) ||
-      (log.vehicleId || '').toLowerCase().includes(searchLower)
-    );
-
-    let logDateStr = '';
-    if (log.timestampStart) {
-      logDateStr = getLocalDatePart(log.timestampStart);
-    } else if (log.operationalDate) {
-      const opDateStr = String(log.operationalDate);
-      logDateStr = opDateStr.includes('T') ? getLocalDatePart(opDateStr) : opDateStr;
-    }
-
-    let matchesDate = true;
-    if (logDateStr) {
-      if (filterStartDate && logDateStr < filterStartDate) {
-        matchesDate = false;
-      }
-      if (filterEndDate && logDateStr > filterEndDate) {
-        matchesDate = false;
-      }
-    } else if (filterStartDate || filterEndDate) {
-      matchesDate = false;
-    }
-
-    let matchesFuelType = true;
-    if (selectedLogType === 'FILLING_STATION' && filterFuelType !== 'ALL') {
-      const parsed = parseGroundLog(log);
-      matchesFuelType = parsed.fuelType === filterFuelType;
-    }
-
-    let matchesStation = true;
-    if (selectedLogType === 'FILLING_STATION' && filterStation !== 'ALL') {
-      const parts = (log.flightNumber || '').split('-');
-      const stationCode = parts[1] || 'LFS';
-      matchesStation = stationCode === filterStation;
-    }
-
-    let matchesEquipment = true;
-    if (selectedLogType === 'BRIDGING' && filterEquipment !== 'ALL') {
-      matchesEquipment = log.vehicleId === filterEquipment;
-    } else if (selectedLogType === 'TOTALIZER_READINGS' && totalizerEquipment !== 'ALL') {
-      matchesEquipment = log.vehicleId === totalizerEquipment;
-    }
-
-    let matchesFlightCategory = true;
-    if (selectedLogType === 'FLIGHT' && filterFlightCategory !== 'ALL') {
-      const isLogDomestic = log.isDomestic ?? false;
-      if (filterFlightCategory === 'DOM') {
-        matchesFlightCategory = isLogDomestic === true;
-      } else if (filterFlightCategory === 'INT') {
-        matchesFlightCategory = isLogDomestic === false;
-      }
-    }
-
-    return matchesType && matchesSearch && matchesDate && matchesFuelType && matchesStation && matchesEquipment && matchesFlightCategory;
-  });
-
-  const sortedLogs = [...filteredLogs].sort((a, b) => {
-    if (selectedLogType === 'TOTALIZER_READINGS') {
-      const getVal = (log: FlightLog, field: 'meterOpen' | 'meterClose') => {
-        if (field === 'meterOpen') return log.meterOpen ?? 0;
-        return log.meterClose ?? ((log.meterOpen || 0) + (log.volume || 0));
-      };
-      const valA = getVal(a, totalizerSortField);
-      const valB = getVal(b, totalizerSortField);
-      return totalizerSortOrder === 'asc' ? valA - valB : valB - valA;
-    }
-
-    if (archiveSortField === 'date') {
-      const getLogSortDate = (log: FlightLog): number => {
-        if (log.operationalDate) {
-          const d = new Date(log.operationalDate);
-          if (!isNaN(d.getTime())) return d.getTime();
-        }
-        if (log.timestampStart) {
-          const d = new Date(log.timestampStart);
-          if (!isNaN(d.getTime())) return d.getTime();
-        }
-        return 0;
-      };
-      const dateA = getLogSortDate(a);
-      const dateB = getLogSortDate(b);
-      return archiveSortOrder === 'asc' ? dateA - dateB : dateB - dateA;
-    }
-
-    if (archiveSortField === 'ticket') {
-      const ticketA = a.deliveryNumber || '';
-      const ticketB = b.deliveryNumber || '';
-      if (!ticketA && !ticketB) return 0;
-      if (!ticketA) return archiveSortOrder === 'asc' ? 1 : -1;
-      if (!ticketB) return archiveSortOrder === 'asc' ? -1 : 1;
-      return archiveSortOrder === 'asc' 
-        ? ticketA.localeCompare(ticketB, undefined, { numeric: true, sensitivity: 'base' })
-        : ticketB.localeCompare(ticketA, undefined, { numeric: true, sensitivity: 'base' });
-    }
-
-    return 0;
-  });
-
-  const totalVolume = sortedLogs.reduce((sum, log) => sum + (log.volume || 0), 0);
 
   const currentEditingLogType = editingLog ? resolveLogType(editingLog) : selectedLogType;
   const isValidTicket = currentEditingLogType === 'BRIDGING' || editForm.deliveryNumber.replace(/\D/g, '').length === 6;
@@ -996,12 +912,12 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline">
-                {sortedLogs.length === 0 ? (
+                {logs.length === 0 ? (
                   <tr>
                     <td colSpan={selectedLogType === 'TOTALIZER_READINGS' ? 8 : (selectedLogType === 'FLIGHT' ? 9 : (selectedLogType === 'MARINE' ? 8 : (selectedLogType === 'FILLING_STATION' ? 7 : 6)))} className="px-10 py-20 text-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 italic">Zero matches in historical database</td>
                   </tr>
                 ) : (
-                  sortedLogs.map((log) => {
+                  logs.map((log) => {
                       const operatorName = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => 
                          u.id === log.operatorId || 
                          u.id.toLowerCase() === (log.tacticalOperator || '').toLowerCase() ||
@@ -1522,9 +1438,54 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                       );
                   })
                 )}</tbody>
-            </table>
-          </div>
-        )}
+             </table>
+             {/* Pagination Controls */}
+             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 bg-surface-dim/30 border-t border-outline shrink-0">
+               <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider">
+                 Showing <span className="text-primary">{totalCount > 0 ? Math.min(totalCount, (currentPage - 1) * pageSize + 1) : 0}</span> to{' '}
+                 <span className="text-primary">{Math.min(totalCount, currentPage * pageSize)}</span> of{' '}
+                 <span className="text-primary">{totalCount}</span> entries
+               </p>
+               <div className="flex items-center gap-2">
+                 <div className="flex items-center gap-2 mr-4">
+                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Rows per page:</span>
+                   <select
+                     value={pageSize}
+                     onChange={(e) => {
+                       setPageSize(Number(e.target.value));
+                       setCurrentPage(1);
+                     }}
+                     className="bg-surface-container border border-outline rounded-lg py-1 px-2 text-[10px] font-bold text-on-surface cursor-pointer focus:border-primary outline-none"
+                   >
+                     {[25, 50, 100, 250].map((size) => (
+                       <option key={size} value={size}>
+                         {size}
+                       </option>
+                     ))}
+                   </select>
+                 </div>
+
+                 <button
+                   onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                   disabled={currentPage === 1 || loading}
+                   className="px-3 py-1.5 rounded-lg border border-outline bg-surface-container-low text-[10px] font-black text-on-surface uppercase tracking-widest hover:border-primary hover:text-primary transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-outline disabled:hover:text-on-surface"
+                 >
+                   Prev
+                 </button>
+                 <span className="text-[10px] font-black text-on-surface font-mono px-2">
+                   PAGE {currentPage} OF {Math.max(1, Math.ceil(totalCount / pageSize))}
+                 </span>
+                 <button
+                   onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalCount / pageSize), prev + 1))}
+                   disabled={currentPage >= Math.ceil(totalCount / pageSize) || loading}
+                   className="px-3 py-1.5 rounded-lg border border-outline bg-surface-container-low text-[10px] font-black text-on-surface uppercase tracking-widest hover:border-primary hover:text-primary transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-outline disabled:hover:text-on-surface"
+                 >
+                   Next
+                 </button>
+               </div>
+             </div>
+           </div>
+         )}
       </div>
 
       {/* Edit Modal */}

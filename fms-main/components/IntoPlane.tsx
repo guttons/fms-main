@@ -2058,7 +2058,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       try {
         // Fetch fresh logs directly from BigQuery to perform a live uniqueness check
         const latestLogs = await supabaseService.getFlightLogs();
-        const isDuplicate = (latestLogs || []).some(log => log && log.deliveryNumber === activeFlight.deliveryNumber);
+        const isDuplicate = (latestLogs?.logs || []).some(log => log && log.deliveryNumber === activeFlight.deliveryNumber);
         if (isDuplicate) {
           notify(`Delivery ticket number ${activeFlight.deliveryNumber} is already used. Please enter a unique ticket number.`, 'error');
           return;

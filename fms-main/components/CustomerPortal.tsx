@@ -224,7 +224,7 @@ export const CustomerPortal: React.FC<{ user: any }> = ({ user }) => {
                 <button
                   type="submit"
                   disabled={isBlocked}
-                  className={`w-full font-black py-4 px-6 rounded-[18px] text-[11px] uppercase tracking-widest transition-all active:scale-95 hover:scale-[1.02] shadow-premium
+                  className={`w-full font-black py-3 sm:py-4 px-4 sm:px-6 rounded-[14px] sm:rounded-[18px] text-[11px] uppercase tracking-widest transition-all active:scale-95 hover:scale-[1.02] shadow-premium
                     ${isBlocked 
                       ? 'bg-on-surface-dim/20 text-on-surface-dim/40 cursor-not-allowed border border-outline' 
                       : 'kinetic-gradient text-white shadow-glow hover:shadow-premium'}`}
@@ -388,7 +388,7 @@ export const CustomerPortal: React.FC<{ user: any }> = ({ user }) => {
               <button
                 type="submit"
                 disabled={isSwiftUploading}
-                className={`w-full font-black py-3.5 px-4 rounded-xl text-[10px] uppercase tracking-widest transition-all active:scale-95 hover:scale-[1.02] shadow-premium mt-2 flex justify-center items-center gap-2
+                className={`w-full font-black py-2.5 sm:py-3.5 px-4 rounded-xl text-[10px] uppercase tracking-widest transition-all active:scale-95 hover:scale-[1.02] shadow-premium mt-2 flex justify-center items-center gap-2
                   ${isSwiftUploading
                     ? 'bg-on-surface-dim/20 text-on-surface-dim/40 cursor-not-allowed border border-outline'
                     : 'kinetic-gradient text-white shadow-glow hover:shadow-premium'}`}
@@ -439,47 +439,47 @@ export const CustomerPortal: React.FC<{ user: any }> = ({ user }) => {
       {selectedTicket && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 overflow-y-auto" onClick={() => setSelectedTicket(null)}>
           <div 
-            className="bg-white text-slate-800 rounded-3xl w-full max-w-4xl shadow-premium border border-outline/50 overflow-hidden flex flex-col my-auto"
+            className="bg-surface-lowest text-on-surface rounded-3xl w-full max-w-4xl shadow-premium border border-outline overflow-hidden flex flex-col my-auto print:bg-white print:text-slate-800 print-force-bg-white"
             onClick={e => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="bg-slate-900 text-white px-8 py-5 flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-cyan-400">TAX INVOICE STATEMENT RECORD</span>
+            <div className="bg-surface-dim text-on-surface px-8 py-5 flex items-center justify-between border-b border-outline print:bg-slate-900 print:text-white print-force-bg-slate-900">
+              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-primary print:text-cyan-400">TAX INVOICE STATEMENT RECORD</span>
               <button 
                 onClick={() => setSelectedTicket(null)}
-                className="p-2 rounded-xl hover:bg-slate-800 transition-colors"
+                className="p-2 rounded-xl hover:bg-surface-dim/80 transition-colors print:hover:bg-slate-800"
               >
-                <X className="w-5 h-5 text-slate-400 hover:text-white" />
+                <X className="w-5 h-5 text-on-surface-dim hover:text-on-surface print:text-slate-400 print:hover:text-white" />
               </button>
             </div>
 
             {/* Invoice Canvas Print Layout */}
-            <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto custom-scrollbar font-sans text-xs">
+            <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto custom-scrollbar font-sans text-xs print:p-8 print:bg-white print:text-slate-800 print-force-bg-white">
               
               {/* Header row */}
-              <div className="flex justify-between items-start border-b border-slate-200 pb-6">
+              <div className="flex justify-between items-start border-b border-outline pb-6 print:border-slate-200 print-force-border-slate-200">
                 <div className="space-y-2">
-                  <h1 className="text-xl font-[1000] text-slate-900 tracking-tighter uppercase leading-none">MALDIVES AIRPORTS Co.</h1>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Velana International Airport, Hulhule 22000, Maldives</p>
-                  <p className="text-[9px] text-slate-500 font-bold">TIN: 1000133GST501 • Email: billing@macl.aero</p>
+                  <h1 className="text-xl font-[1000] text-on-surface tracking-tighter uppercase leading-none print:text-slate-900 print-force-text-slate-900">MALDIVES AIRPORTS Co.</h1>
+                  <p className="text-[9px] font-bold text-on-surface-dim uppercase tracking-widest print:text-slate-400 print-force-text-slate-400">Velana International Airport, Hulhule 22000, Maldives</p>
+                  <p className="text-[9px] text-on-surface-dim font-bold print:text-slate-500 print-force-text-slate-500">TIN: 1000133GST501 • Email: billing@macl.aero</p>
                 </div>
                 <div className="text-right">
-                  <h2 className="text-lg font-black text-slate-800 uppercase tracking-wider">TAX INVOICE</h2>
-                  <span className="text-[10px] font-black text-slate-400 uppercase block mt-1">Invoice No: {selectedTicket.invoiceNumber || 'FFF/2025/2500001322'}</span>
-                  <span className="text-[10px] font-bold text-slate-500 block">Date: {selectedTicket.date}</span>
+                  <h2 className="text-lg font-black text-on-surface uppercase tracking-wider print:text-slate-800 print-force-text-slate-800">TAX INVOICE</h2>
+                  <span className="text-[10px] font-black text-on-surface-dim uppercase block mt-1 print:text-slate-400 print-force-text-slate-400">Invoice No: {selectedTicket.invoiceNumber || 'FFF/2025/2500001322'}</span>
+                  <span className="text-[10px] font-bold text-on-surface-dim block print:text-slate-500 print-force-text-slate-500">Date: {selectedTicket.date}</span>
                 </div>
               </div>
 
               {/* Customer and billing info */}
-              <div className="grid grid-cols-2 gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+              <div className="grid grid-cols-2 gap-6 bg-surface-dim p-6 rounded-2xl border border-outline print:bg-slate-50 print:border-slate-100 print-force-bg-slate-50 print-force-border-slate-100">
                 <div className="space-y-1">
-                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Billed To:</span>
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">{customer.name}</h3>
-                  <p className="text-[10px] text-slate-500">Corporate Account Code: {customer.id}</p>
+                  <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-wider block print:text-slate-400 print-force-text-slate-400">Billed To:</span>
+                  <h3 className="text-sm font-black text-on-surface uppercase tracking-tight print:text-slate-800 print-force-text-slate-800">{customer.name}</h3>
+                  <p className="text-[10px] text-on-surface-dim print:text-slate-500 print-force-text-slate-500">Corporate Account Code: {customer.id}</p>
                 </div>
                 <div className="space-y-1 text-right">
-                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Remit Info:</span>
-                  <p className="text-[9px] text-slate-500 leading-relaxed font-bold">
+                  <span className="text-[8px] font-black text-on-surface-dim uppercase tracking-wider block print:text-slate-400 print-force-text-slate-400">Remit Info:</span>
+                  <p className="text-[9px] text-on-surface-dim leading-relaxed font-bold print:text-slate-500 print-force-text-slate-500">
                     Please remit payment to US$ A/c # 7713-101443-005<br/>
                     at Bank of Maldives PLC, Airport Branch Hulhule<br/>
                     SWIFT CODE: MALBMVMV
@@ -490,46 +490,46 @@ export const CustomerPortal: React.FC<{ user: any }> = ({ user }) => {
               {/* Invoice Lines Table */}
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="border-b-2 border-slate-300 text-[9px] font-black uppercase tracking-wider text-slate-400">
+                  <tr className="border-b-2 border-outline text-[9px] font-black uppercase tracking-wider text-on-surface-dim print:border-slate-300 print:text-slate-400 print-force-border-slate-300 print-force-text-slate-400">
                     <th className="pb-3">Reference / Product Description</th>
                     <th className="pb-3 text-right">Volume Billed</th>
                     <th className="pb-3 text-right">Rate ($)</th>
                     <th className="pb-3 text-right">Amount ($)</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-outline print:divide-slate-100 print-force-border-slate-100">
                   <tr>
-                    <td className="py-4 font-bold text-slate-800 uppercase">
+                    <td className="py-4 font-bold text-on-surface uppercase print:text-slate-800 print-force-text-slate-800">
                       JET FUEL SALES FROM {selectedTicket.date}<br/>
-                      <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Flight: {selectedTicket.flightNumber} • A/C Reg: {selectedTicket.aircraftReg}</span>
+                      <span className="text-[9px] text-on-surface-dim font-bold uppercase tracking-wider print:text-slate-400 print-force-text-slate-400">Flight: {selectedTicket.flightNumber} • A/C Reg: {selectedTicket.aircraftReg}</span>
                     </td>
-                    <td className="py-4 text-right font-black">{selectedTicket.quantityLiters.toLocaleString()} Liters</td>
-                    <td className="py-4 text-right font-bold text-slate-500">${selectedTicket.pricePerLiter.toFixed(5)}</td>
-                    <td className="py-4 text-right font-black text-slate-900">${selectedTicket.amount.toLocaleString()}</td>
+                    <td className="py-4 text-right font-black text-on-surface print:text-slate-900 print-force-text-slate-900">{selectedTicket.quantityLiters.toLocaleString()} Liters</td>
+                    <td className="py-4 text-right font-bold text-on-surface-dim print:text-slate-500 print-force-text-slate-500">${selectedTicket.pricePerLiter.toFixed(5)}</td>
+                    <td className="py-4 text-right font-black text-on-surface print:text-slate-900 print-force-text-slate-900">${selectedTicket.amount.toLocaleString()}</td>
                   </tr>
                 </tbody>
               </table>
 
               {/* Total calculations */}
-              <div className="flex justify-end pt-4 border-t border-slate-200">
-                <div className="w-64 space-y-2 text-xs font-bold text-slate-500">
+              <div className="flex justify-end pt-4 border-t border-outline print:border-slate-200 print-force-border-slate-200">
+                <div className="w-64 space-y-2 text-xs font-bold text-on-surface-dim print:text-slate-500 print-force-text-slate-500">
                   <div className="flex justify-between">
                     <span>GST (8%):</span>
-                    <span className="text-slate-800">${(selectedTicket.amount * 0.08).toLocaleString()}</span>
+                    <span className="text-on-surface print:text-slate-800 print-force-text-slate-800">${(selectedTicket.amount * 0.08).toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between text-sm font-black text-slate-900 border-t border-slate-100 pt-2">
+                  <div className="flex justify-between text-sm font-black text-on-surface border-t border-outline pt-2 print:text-slate-900 print:border-slate-100 print-force-text-slate-900 print-force-border-slate-100">
                     <span>Grand Total:</span>
-                    <span className="text-slate-900">${(selectedTicket.amount * 1.08).toLocaleString()}</span>
+                    <span className="text-on-surface print:text-slate-900 print-force-text-slate-900">${(selectedTicket.amount * 1.08).toLocaleString()}</span>
                   </div>
                 </div>
               </div>
 
               {/* Supporting delivery logs matching screenshot */}
-              <div className="pt-6 border-t border-slate-100">
-                <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Supporting Uplift Logs</h4>
-                <table className="w-full text-left text-[10px] text-slate-500 border-collapse">
+              <div className="pt-6 border-t border-outline print:border-slate-100 print-force-border-slate-100">
+                <h4 className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-3 print:text-slate-400 print-force-text-slate-400">Supporting Uplift Logs</h4>
+                <table className="w-full text-left text-[10px] text-on-surface-dim border-collapse print:text-slate-500 print-force-text-slate-500">
                   <thead>
-                    <tr className="border-b border-slate-200 text-[8px] font-black uppercase tracking-wider text-slate-400">
+                    <tr className="border-b border-outline text-[8px] font-black uppercase tracking-wider text-on-surface-dim print:border-slate-200 print:text-slate-400 print-force-border-slate-200 print-force-text-slate-400">
                       <th className="pb-2">Delivery Ticket</th>
                       <th className="pb-2">Date</th>
                       <th className="pb-2">Operator Name</th>
@@ -541,15 +541,15 @@ export const CustomerPortal: React.FC<{ user: any }> = ({ user }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td className="py-2 font-bold text-slate-800">{selectedTicket.deliveryNumber}</td>
-                      <td className="py-2">{selectedTicket.date}</td>
-                      <td className="py-2 uppercase">{selectedTicket.operator}</td>
-                      <td className="py-2">{selectedTicket.aircraftType}</td>
+                    <tr className="text-on-surface print:text-slate-800 print-force-text-slate-800">
+                      <td className="py-2 font-bold">{selectedTicket.deliveryNumber}</td>
+                      <td className="py-2 text-on-surface-dim print:text-slate-500 print-force-text-slate-500">{selectedTicket.date}</td>
+                      <td className="py-2 uppercase text-on-surface-dim print:text-slate-500 print-force-text-slate-500">{selectedTicket.operator}</td>
+                      <td className="py-2 text-on-surface-dim print:text-slate-500 print-force-text-slate-500">{selectedTicket.aircraftType}</td>
                       <td className="py-2 font-bold">{selectedTicket.aircraftReg}</td>
                       <td className="py-2 text-right font-black">{selectedTicket.quantityLiters.toLocaleString()} L</td>
-                      <td className="py-2 text-right">${selectedTicket.pricePerLiter.toFixed(5)}</td>
-                      <td className="py-2 text-right font-black text-slate-800">${selectedTicket.amount.toLocaleString()}</td>
+                      <td className="py-2 text-right text-on-surface-dim print:text-slate-500 print-force-text-slate-500">${selectedTicket.pricePerLiter.toFixed(5)}</td>
+                      <td className="py-2 text-right font-black text-on-surface print:text-slate-800 print-force-text-slate-800">${selectedTicket.amount.toLocaleString()}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -558,10 +558,10 @@ export const CustomerPortal: React.FC<{ user: any }> = ({ user }) => {
             </div>
 
             {/* Print trigger footer */}
-            <div className="bg-slate-50 px-8 py-5 flex items-center justify-end gap-3 border-t border-slate-100">
+            <div className="bg-surface-dim px-8 py-5 flex items-center justify-end gap-3 border-t border-outline print:hidden">
               <button 
                 onClick={() => notify('PDF Statement download triggered.', 'success')}
-                className="px-5 py-2.5 rounded-xl border border-slate-300 text-[10px] font-black uppercase text-slate-700 hover:bg-slate-100 transition-all hover:scale-[1.02] active:scale-95"
+                className="px-5 py-2.5 rounded-xl border border-outline text-[10px] font-black uppercase text-on-surface hover:bg-surface-lowest transition-all hover:scale-[1.02] active:scale-95"
               >
                 Download PDF
               </button>

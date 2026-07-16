@@ -31,6 +31,13 @@ const formatDateShort = (dateStr: string) => {
   return `${months[d.getMonth()]} ${d.getDate()}, '${d.getFullYear().toString().substring(2)}`;
 };
 
+const getPrimaryColor = () => {
+  const currentTheme = typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') : 'light';
+  if (currentTheme === 'dark') return '#56c8eb';
+  if (currentTheme === 'black') return '#e0e0e0';
+  return '#002046';
+};
+
 const CustomScatterTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
@@ -83,6 +90,8 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
   // JET A-1 specific filter states
   const [startDateJet, setStartDateJet] = useState<string>('2026-04-14');
   const [endDateJet, setEndDateJet] = useState<string>('2026-07-14');
+  const [tempStartDateJet, setTempStartDateJet] = useState<string>('2026-04-14');
+  const [tempEndDateJet, setTempEndDateJet] = useState<string>('2026-07-14');
   const [compareJet, setCompareJet] = useState<string>('Previous Year');
   const [categoryJet, setCategoryJet] = useState<string>('All Categories');
   const [dayOfWeekJet, setDayOfWeekJet] = useState<string>('All Weekdays');
@@ -92,6 +101,8 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
   // DIESEL & PETROL specific filter states
   const [startDateGround, setStartDateGround] = useState<string>('2026-04-14');
   const [endDateGround, setEndDateGround] = useState<string>('2026-07-14');
+  const [tempStartDateGround, setTempStartDateGround] = useState<string>('2026-04-14');
+  const [tempEndDateGround, setTempEndDateGround] = useState<string>('2026-07-14');
   const [compareGround, setCompareGround] = useState<string>('Previous Year');
   const [fuelGradeGround, setFuelGradeGround] = useState<string>('All Grades');
   const [facilityGround, setFacilityGround] = useState<string>('All Facilities');
@@ -102,8 +113,9 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
   const uniqueAirlines = useMemo(() => {
     const set = new Set<string>();
     (flightLogs || []).forEach(l => {
-      if (l.airline && !l.flightNumber.includes('GROUND') && !l.flightNumber.includes('VESSEL')) {
-        set.add(l.airline.toUpperCase());
+      const carrier = l.co || l.airline;
+      if (carrier && !l.flightNumber.includes('GROUND') && !l.flightNumber.includes('VESSEL')) {
+        set.add(carrier.toUpperCase());
       }
     });
     return Array.from(set).sort();
@@ -117,7 +129,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 90;
 
     const getLogCategory = (l: FlightLog) => {
-      const airlineUpper = (l.airline || '').toUpperCase();
+      const airlineUpper = (l.co || l.airline || '').toUpperCase();
       const isSea = l.logType === 'SEAPLANE' || (l.flightNumber || '').startsWith('SEAPLANE');
 
       if (isSea) {
@@ -148,7 +160,8 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       }
 
       if (airlineJet !== 'All Airlines') {
-        if (l.airline?.toUpperCase() !== airlineJet.toUpperCase()) return false;
+        const carrier = l.co || l.airline || '';
+        if (carrier.toUpperCase() !== airlineJet.toUpperCase()) return false;
       }
 
       if (flightNoJet.trim() !== '') {
@@ -195,7 +208,8 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
         if (logCategory !== categoryJet) return false;
       }
       if (airlineJet !== 'All Airlines') {
-        if (l.airline?.toUpperCase() !== airlineJet.toUpperCase()) return false;
+        const carrier = l.co || l.airline || '';
+        if (carrier.toUpperCase() !== airlineJet.toUpperCase()) return false;
       }
       if (flightNoJet.trim() !== '') {
         if (!l.flightNumber.toLowerCase().includes(flightNoJet.toLowerCase())) return false;
@@ -338,9 +352,9 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       const duration = getLogDuration(l);
       return {
         x: duration,
-        y: l.volume,
+        y: l.volume || 0,
         name: l.flightNumber || 'Flight',
-        airline: l.airline || 'Other Airlines',
+        airline: l.co || l.airline || 'Other Airlines',
         date: l.operationalDate ? formatDateShort(l.operationalDate) : ''
       };
     });
@@ -442,7 +456,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
 
     const topCustomersMap: { [airline: string]: number } = {};
     filteredLogs.forEach(l => {
-      const airlineName = l.airline || 'Other / Unknown';
+      const airlineName = l.co || l.airline || 'Other / Unknown';
       topCustomersMap[airlineName] = (topCustomersMap[airlineName] || 0) + (l.volume || 0);
     });
     const topCustomers = Object.keys(topCustomersMap).map(airline => ({
@@ -461,7 +475,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
     })).sort((a, b) => b.volume - a.volume).slice(0, 10);
 
     const pieData = [
-      { name: 'International', value: international, color: '#002046' },
+      { name: 'International', value: international, color: getPrimaryColor() },
       { name: 'Domestic', value: domestic, color: '#22c55e' },
       { name: 'Ad-hoc Int', value: adhocInt, color: '#f59e0b' },
       { name: 'Ad-hoc Dom', value: adhocDom, color: '#ef4444' },
@@ -469,16 +483,17 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       { name: 'Local Sales', value: localSales, color: '#94a3b8' }
     ].filter(item => item.value > 0);
 
-    const intAirlinesTable = filteredLogs.filter(l => !l.isDomestic)
+    const intAirlinesTable = filteredLogs.filter(l => getLogCategory(l) === 'International' || !l.isDomestic)
       .reduce((acc: any[], l) => {
-        const existing = acc.find(x => x.airline === l.airline);
+        const carrier = l.co || l.airline || 'Other';
+        const existing = acc.find(x => x.airline === carrier);
         if (existing) {
           existing.volume += (l.volume || 0);
           existing.reps += 1;
           existing.avg = Math.round(existing.volume / existing.reps);
         } else {
           acc.push({
-            airline: l.airline || 'Other',
+            airline: carrier,
             volume: l.volume || 0,
             reps: 1,
             avg: l.volume || 0
@@ -593,7 +608,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       }
 
       if (deptGround !== 'All Departments') {
-        const dept = l.airline || '';
+        const dept = l.co || l.airline || '';
         if (dept.toLowerCase() !== deptGround.toLowerCase()) return false;
       }
 
@@ -611,10 +626,10 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
     const dieselVolume = filteredLogs.filter(l => l.remarks?.toLowerCase() === 'diesel').reduce((acc, l) => acc + (l.volume || 0), 0);
     const petrolVolume = filteredLogs.filter(l => l.remarks?.toLowerCase() === 'petrol').reduce((acc, l) => acc + (l.volume || 0), 0);
     
-    const gseConsumption = filteredLogs.filter(l => l.airline?.toLowerCase().includes('gse')).reduce((acc, l) => acc + (l.volume || 0), 0);
-    const depotGenerator = filteredLogs.filter(l => l.airline?.toLowerCase().includes('generator') || l.airline?.toLowerCase().includes('depot')).reduce((acc, l) => acc + (l.volume || 0), 0);
-    const vesselMarine = filteredLogs.filter(l => l.airline?.toLowerCase().includes('vessel') || l.airline?.toLowerCase().includes('marine') || l.airline?.toLowerCase().includes('coast')).reduce((acc, l) => acc + (l.volume || 0), 0);
-    const localSales = filteredLogs.filter(l => l.logType === 'FILLING_STATION' && !l.airline).reduce((acc, l) => acc + (l.volume || 0), 0);
+    const gseConsumption = filteredLogs.filter(l => (l.co || l.airline || '').toLowerCase().includes('gse')).reduce((acc, l) => acc + (l.volume || 0), 0);
+    const depotGenerator = filteredLogs.filter(l => (l.co || l.airline || '').toLowerCase().includes('generator') || (l.co || l.airline || '').toLowerCase().includes('depot')).reduce((acc, l) => acc + (l.volume || 0), 0);
+    const vesselMarine = filteredLogs.filter(l => (l.co || l.airline || '').toLowerCase().includes('vessel') || (l.co || l.airline || '').toLowerCase().includes('marine') || (l.co || l.airline || '').toLowerCase().includes('coast')).reduce((acc, l) => acc + (l.volume || 0), 0);
+    const localSales = filteredLogs.filter(l => l.logType === 'FILLING_STATION' && !(l.co || l.airline)).reduce((acc, l) => acc + (l.volume || 0), 0);
 
     const prevStart = new Date(start);
     prevStart.setDate(start.getDate() - diffDays);
@@ -626,9 +641,34 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       if (!isGround) return false;
       if (l.operationalDate) {
         const logDate = new Date(l.operationalDate);
-        return logDate >= prevStart && logDate <= prevEnd;
+        if (logDate < prevStart || logDate > prevEnd) return false;
+      } else {
+        return false;
       }
-      return false;
+      
+      if (fuelGradeGround !== 'All Grades') {
+        const grade = l.remarks || '';
+        if (grade.toLowerCase() !== fuelGradeGround.toLowerCase()) return false;
+      }
+
+      if (facilityGround !== 'All Facilities') {
+        const src = l.pitNumber || '';
+        if (!src.toLowerCase().includes(facilityGround.toLowerCase().replace(' station', '').replace(' trucks', ''))) return false;
+      }
+
+      if (deptGround !== 'All Departments') {
+        const dept = l.co || l.airline || '';
+        if (dept.toLowerCase() !== deptGround.toLowerCase()) return false;
+      }
+
+      if (searchGround.trim() !== '') {
+        const q = searchGround.toLowerCase();
+        const matchAsset = l.aircraftReg?.toLowerCase().includes(q);
+        const matchTrans = l.id?.toLowerCase().includes(q) || l.deliveryNumber?.toLowerCase().includes(q);
+        if (!matchAsset && !matchTrans) return false;
+      }
+
+      return true;
     });
 
     const prevTotalVolume = prevLogs.reduce((acc, l) => acc + (l.volume || 0), 0);
@@ -730,9 +770,9 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       const duration = getLogDuration(l);
       return {
         x: duration,
-        y: l.volume,
+        y: l.volume || 0,
         name: l.aircraftReg || l.flightNumber || 'Asset',
-        airline: l.airline || 'Ground Operations',
+        airline: l.co || l.airline || 'Ground Operations',
         date: l.operationalDate ? formatDateShort(l.operationalDate) : ''
       };
     });
@@ -823,7 +863,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
 
     const topCustomersMap: { [dept: string]: number } = {};
     filteredLogs.forEach(l => {
-      const deptName = l.airline || 'Local Sales';
+      const deptName = l.co || l.airline || 'Local Sales';
       topCustomersMap[deptName] = (topCustomersMap[deptName] || 0) + (l.volume || 0);
     });
     const topCustomers = Object.keys(topCustomersMap).map(name => ({
@@ -842,7 +882,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
     })).sort((a, b) => b.volume - a.volume).slice(0, 10);
 
     const pieData = [
-      { name: 'GSE Services', value: gseConsumption, color: '#002046' },
+      { name: 'GSE Services', value: gseConsumption, color: getPrimaryColor() },
       { name: 'Depot Generators', value: depotGenerator, color: '#f59e0b' },
       { name: 'Vessel / Marine', value: vesselMarine, color: '#22c55e' },
       { name: 'Local Sales / Others', value: localSales, color: '#888888' },
@@ -850,7 +890,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
 
     const deptTable = filteredLogs
       .reduce((acc: any[], l) => {
-        const dept = l.airline || 'Local Sales';
+        const dept = l.co || l.airline || 'Local Sales';
         const existing = acc.find(x => x.dept === dept);
         if (existing) {
           existing.volume += (l.volume || 0);
@@ -2113,8 +2153,8 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                 <div className="relative">
                   <input 
                     type="date" 
-                    value={startDateJet} 
-                    onChange={(e) => setStartDateJet(e.target.value)} 
+                    value={tempStartDateJet} 
+                    onChange={(e) => setTempStartDateJet(e.target.value)} 
                     className="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg text-xs font-mono font-bold select-text cursor-pointer"
                   />
                 </div>
@@ -2124,8 +2164,8 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                 <div className="relative">
                   <input 
                     type="date" 
-                    value={endDateJet} 
-                    onChange={(e) => setEndDateJet(e.target.value)} 
+                    value={tempEndDateJet} 
+                    onChange={(e) => setTempEndDateJet(e.target.value)} 
                     className="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg text-xs font-mono font-bold select-text cursor-pointer"
                   />
                 </div>
@@ -2205,7 +2245,14 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                 />
               </div>
               <div className="flex items-end">
-                <button className="w-12 py-2 bg-gradient-to-br from-[#0ea5e9] to-[#2563eb] hover:from-[#38bdf8] hover:to-[#3b82f6] text-white rounded-lg flex items-center justify-center transition-all active:scale-95 shadow-md border-0 h-[34px]" title="Search">
+                <button 
+                  onClick={() => {
+                    setStartDateJet(tempStartDateJet);
+                    setEndDateJet(tempEndDateJet);
+                  }}
+                  className="w-12 py-2 bg-gradient-to-br from-[#0ea5e9] to-[#2563eb] hover:from-[#38bdf8] hover:to-[#3b82f6] text-white rounded-lg flex items-center justify-center transition-all active:scale-95 shadow-md border-0 h-[34px]" 
+                  title="Search"
+                >
                   <Search className="w-4 h-4" />
                 </button>
               </div>
@@ -2217,8 +2264,8 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                 <div className="relative">
                   <input 
                     type="date" 
-                    value={startDateGround} 
-                    onChange={(e) => setStartDateGround(e.target.value)} 
+                    value={tempStartDateGround} 
+                    onChange={(e) => setTempStartDateGround(e.target.value)} 
                     className="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg text-xs font-mono font-bold select-text cursor-pointer"
                   />
                 </div>
@@ -2228,8 +2275,8 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                 <div className="relative">
                   <input 
                     type="date" 
-                    value={endDateGround} 
-                    onChange={(e) => setEndDateGround(e.target.value)} 
+                    value={tempEndDateGround} 
+                    onChange={(e) => setTempEndDateGround(e.target.value)} 
                     className="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg text-xs font-mono font-bold select-text cursor-pointer"
                   />
                 </div>
@@ -2302,7 +2349,14 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                     onChange={(e) => setSearchGround(e.target.value)} 
                     className="flex-1 px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg text-xs font-bold"
                   />
-                  <button className="px-3 py-2 bg-gradient-to-br from-[#0ea5e9] to-[#2563eb] hover:from-[#38bdf8] hover:to-[#3b82f6] text-white rounded-lg flex items-center justify-center transition-all active:scale-95 border-0 h-[34px] w-12" title="Search">
+                  <button 
+                    onClick={() => {
+                      setStartDateGround(tempStartDateGround);
+                      setEndDateGround(tempEndDateGround);
+                    }}
+                    className="px-3 py-2 bg-gradient-to-br from-[#0ea5e9] to-[#2563eb] hover:from-[#38bdf8] hover:to-[#3b82f6] text-white rounded-lg flex items-center justify-center transition-all active:scale-95 border-0 h-[34px] w-12" 
+                    title="Search"
+                  >
                     <Search className="w-4 h-4" />
                   </button>
                 </div>
@@ -2838,7 +2892,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                       </thead>
                       <tbody className="divide-y divide-outline">
                         {jetData.tables.pitTable.map((row) => (
-                          <tr key={row.pit} className="hover:bg-primary/[0.01]">
+                          <tr key={`${row.pit}-${row.stand}`} className="hover:bg-primary/[0.01]">
                             <td className="px-4 py-2 font-black uppercase font-mono">{row.pit}</td>
                             <td className="px-4 py-2 font-bold text-on-surface-dim">{row.stand}</td>
                             <td className="px-4 py-2 text-right font-mono font-bold">{row.volume.toLocaleString()}</td>
@@ -3424,9 +3478,9 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
               />
               <button
                 onClick={handleExportPDF}
-                className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary/90 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-premium"
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-700 hover:to-sky-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-premium hover:scale-[1.02] active:scale-95 duration-200"
               >
-                <Download className="w-3.5 h-3.5" />
+                <FileText className="w-3.5 h-3.5" />
                 Export PDF
               </button>
             </div>

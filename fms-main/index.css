@@ -334,7 +334,10 @@ html, body {
 .btn-emergency {
   background-color: var(--color-error);
   color: white;
-  padding: 1rem;
+  padding: 0.75rem 1rem;
+  @media (min-width: 1024px) {
+    padding: 1rem;
+  }
   border-radius: 0.5rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -741,6 +744,48 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .custom-tooltip:active::after {
   opacity: 1;
   transform: translateX(-50%) scale(1);
+}
+
+/* Prevent illegible text by improving contrast on small uppercase labels */
+.high-contrast-label {
+  color: var(--color-on-surface);
+  opacity: 0.75 !important;
+}
+
+/* Print utility styles to print themed elements cleanly in dark/black modes */
+@media print {
+  .print-force-bg-white {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+  .print-force-text-slate-900 {
+    color: #0f172a !important;
+  }
+  .print-force-text-slate-800 {
+    color: #1e293b !important;
+  }
+  .print-force-text-slate-500 {
+    color: #64748b !important;
+  }
+  .print-force-text-slate-400 {
+    color: #94a3b8 !important;
+  }
+  .print-force-border-slate-300 {
+    border-color: #cbd5e1 !important;
+  }
+  .print-force-border-slate-200 {
+    border-color: #e2e8f0 !important;
+  }
+  .print-force-border-slate-100 {
+    border-color: #f1f5f9 !important;
+  }
+  .print-force-bg-slate-50 {
+    background-color: #f8fafc !important;
+  }
+  .print-force-bg-slate-900 {
+    background-color: #0f172a !important;
+    color: #ffffff !important;
+  }
 }
 
 

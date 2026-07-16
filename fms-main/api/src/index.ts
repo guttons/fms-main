@@ -171,6 +171,19 @@ async function ensureSchema(): Promise<void> {
 }
 
 // ─── Row mappers ─────────────────────────────────────────────────────────────
+function cleanBigQueryRow(row: Record<string, any>): Record<string, any> {
+  if (!row) return row;
+  const cleaned: Record<string, any> = {};
+  for (const [key, val] of Object.entries(row)) {
+    if (val && typeof val === 'object' && 'value' in val) {
+      cleaned[key] = val.value;
+    } else {
+      cleaned[key] = val;
+    }
+  }
+  return cleaned;
+}
+
 function rowToLog(row: Record<string, any>) {
   const ts = (v: any) => v?.value ?? v ?? null;
   const dt = (v: any) => v?.value ?? v ?? null;
@@ -470,7 +483,7 @@ app.get('/external-flights', async (_req: Request, res: Response) => {
 // filling_station_log Endpoints
 // ═══════════════════════════════════════════════════════════════════════════
 app.get('/filling-station-log', requireAuth, async (req: Request, res: Response) => {
-  const { startDate, endDate, searchTerm } = req.query;
+  const { startDate, endDate, searchTerm, page, limit } = req.query;
 
   let filterClauses = [];
   const queryParams: Record<string, any> = {};
@@ -492,9 +505,24 @@ app.get('/filling-station-log', requireAuth, async (req: Request, res: Response)
     ? `WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE) AND ${filterClauses.join(' AND ')}`
     : `WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE)`;
 
-  const limitCount = (startDate || endDate || searchTerm) ? 10000 : 1000;
+  const limitCount = parseInt(limit as string) || 50;
+  const pageNum = parseInt(page as string) || 1;
+  const offset = (pageNum - 1) * limitCount;
 
-  const sql = `
+  const countSql = `
+    SELECT COUNT(1) AS total, SUM(volume) AS total_volume
+    FROM (
+      SELECT id, is_deleted, created_at, updated_at, date, vehicle_reg, driver_name, invoice_number, station, fuel_type, volume,
+             ROW_NUMBER() OVER (
+               PARTITION BY id
+               ORDER BY COALESCE(updated_at, created_at, TIMESTAMP('1970-01-01')) DESC
+             ) AS rn
+      FROM ${FILLING_STATION_TABLE_REF}
+    )
+    ${whereClause}
+  `;
+
+  const dataSql = `
     SELECT * EXCEPT(rn)
     FROM (
       SELECT *, ROW_NUMBER() OVER (
@@ -505,15 +533,17 @@ app.get('/filling-station-log', requireAuth, async (req: Request, res: Response)
     )
     ${whereClause}
     ORDER BY date DESC, created_at DESC
-    LIMIT ${limitCount}
+    LIMIT ${limitCount} OFFSET ${offset}
   `;
+
   try {
-    const [rows] = await bigquery.query({ 
-      query: sql, 
-      params: queryParams,
-      location: 'US' 
-    });
-    res.json({ logs: rows });
+    const [[countResult], [rows]] = await Promise.all([
+      bigquery.query({ query: countSql, params: queryParams, location: 'US' }),
+      bigquery.query({ query: dataSql, params: queryParams, location: 'US' })
+    ]);
+    const totalCount = countResult ? parseInt(countResult[0]?.total || '0') : 0;
+    const totalVolume = countResult ? parseFloat(countResult[0]?.total_volume || '0') : 0;
+    res.json({ logs: rows.map(cleanBigQueryRow), totalCount, totalVolume });
   } catch (err: any) {
     console.error('[BigQuery] GET filling-station-log error:', err.message);
     res.status(500).json({ error: err.message });
@@ -611,7 +641,7 @@ app.delete('/filling-station-log/:id', requireAuth, async (req: Request, res: Re
 // refueler_loading_log Endpoints
 // ═══════════════════════════════════════════════════════════════════════════
 app.get('/refueler-loading-log', requireAuth, async (req: Request, res: Response) => {
-  const { startDate, endDate, searchTerm } = req.query;
+  const { startDate, endDate, searchTerm, page, limit } = req.query;
 
   let filterClauses = [];
   const queryParams: Record<string, any> = {};
@@ -633,9 +663,24 @@ app.get('/refueler-loading-log', requireAuth, async (req: Request, res: Response
     ? `WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE) AND ${filterClauses.join(' AND ')}`
     : `WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE)`;
 
-  const limitCount = (startDate || endDate || searchTerm) ? 10000 : 1000;
+  const limitCount = parseInt(limit as string) || 50;
+  const pageNum = parseInt(page as string) || 1;
+  const offset = (pageNum - 1) * limitCount;
 
-  const sql = `
+  const countSql = `
+    SELECT COUNT(1) AS total, SUM(volume) AS total_volume
+    FROM (
+      SELECT id, is_deleted, created_at, updated_at, date, vehicle_id, source_tank_id, operator_id, volume,
+             ROW_NUMBER() OVER (
+               PARTITION BY id
+               ORDER BY COALESCE(updated_at, created_at, TIMESTAMP('1970-01-01')) DESC
+             ) AS rn
+      FROM ${REFUELER_LOADING_TABLE_REF}
+    )
+    ${whereClause}
+  `;
+
+  const dataSql = `
     SELECT * EXCEPT(rn)
     FROM (
       SELECT *, ROW_NUMBER() OVER (
@@ -646,15 +691,16 @@ app.get('/refueler-loading-log', requireAuth, async (req: Request, res: Response
     )
     ${whereClause}
     ORDER BY date DESC, created_at DESC
-    LIMIT ${limitCount}
+    LIMIT ${limitCount} OFFSET ${offset}
   `;
   try {
-    const [rows] = await bigquery.query({ 
-      query: sql, 
-      params: queryParams,
-      location: 'US' 
-    });
-    res.json({ logs: rows });
+    const [[countResult], [rows]] = await Promise.all([
+      bigquery.query({ query: countSql, params: queryParams, location: 'US' }),
+      bigquery.query({ query: dataSql, params: queryParams, location: 'US' })
+    ]);
+    const totalCount = countResult ? parseInt(countResult[0]?.total || '0') : 0;
+    const totalVolume = countResult ? parseFloat(countResult[0]?.total_volume || '0') : 0;
+    res.json({ logs: rows.map(cleanBigQueryRow), totalCount, totalVolume });
   } catch (err: any) {
     console.error('[BigQuery] GET refueler-loading-log error:', err.message);
     res.status(500).json({ error: err.message });
@@ -752,7 +798,7 @@ app.delete('/refueler-loading-log/:id', requireAuth, async (req: Request, res: R
 // GET /operations-log   — list all (non-deleted) entries
 // ═══════════════════════════════════════════════════════════════════════════
 app.get('/operations-log', requireAuth, async (req: Request, res: Response) => {
-  const { startDate, endDate, searchTerm } = req.query;
+  const { startDate, endDate, searchTerm, logType, flightCategory, equipmentId, page, limit, sortField, sortOrder } = req.query;
 
   let filterClauses = [];
   const queryParams: Record<string, any> = {};
@@ -770,15 +816,74 @@ app.get('/operations-log', requireAuth, async (req: Request, res: Response) => {
     queryParams.searchTerm = `%${String(searchTerm).toLowerCase()}%`;
   }
 
+  // Handle logType filter in database
+  if (logType === 'FLIGHT') {
+    filterClauses.push("(log_type = 'FLIGHT' AND NOT STARTS_WITH(flight_number, 'SEAPLANE') AND NOT STARTS_WITH(flight_number, 'GROUND-') AND NOT STARTS_WITH(flight_number, 'VESSEL-'))");
+  } else if (logType === 'SEAPLANE') {
+    filterClauses.push("(log_type = 'SEAPLANE' OR STARTS_WITH(flight_number, 'SEAPLANE-'))");
+  } else if (logType === 'MARINE') {
+    filterClauses.push("(log_type = 'MARINE' OR STARTS_WITH(flight_number, 'VESSEL-'))");
+  } else if (logType === 'TOTALIZER_READINGS') {
+    filterClauses.push(`(
+      NOT STARTS_WITH(flight_number, 'SEAPLANE') 
+      AND vehicle_id IS NOT NULL 
+      AND vehicle_id != 'N/A' 
+      AND NOT UPPER(vehicle_id) LIKE '%SCADA%' 
+      AND NOT UPPER(vehicle_id) LIKE 'PUMP%' 
+      AND (meter_open IS NOT NULL OR meter_close IS NOT NULL OR (volume > 0))
+    )`);
+    if (equipmentId && equipmentId !== 'ALL') {
+      filterClauses.push("vehicle_id = @equipmentId");
+      queryParams.equipmentId = equipmentId;
+    }
+  }
+
+  // Handle flightCategory filter for flights
+  if (logType === 'FLIGHT' && flightCategory && flightCategory !== 'ALL') {
+    if (flightCategory === 'DOM') {
+      filterClauses.push("is_domestic = TRUE");
+    } else if (flightCategory === 'INT') {
+      filterClauses.push("is_domestic = FALSE");
+    }
+  }
+
   const whereClause = filterClauses.length > 0
     ? `WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE) AND ${filterClauses.join(' AND ')}`
     : `WHERE rn = 1 AND (is_deleted IS NULL OR is_deleted = FALSE)`;
 
-  const limitCount = (startDate || endDate || searchTerm) ? 10000 : 1000;
+  // Pagination parameters
+  const limitCount = parseInt(limit as string) || 50;
+  const pageNum = parseInt(page as string) || 1;
+  const offset = (pageNum - 1) * limitCount;
 
-  // Deduplicate by id, keeping the row with the latest updated_at.
-  // This ensures tombstone rows (is_deleted=TRUE) override streaming-buffered originals.
-  const sql = `
+  // Sorting
+  let orderBy = "COALESCE(operational_date, date(created_at)) DESC, created_at DESC";
+  if (sortField === 'ticket') {
+    orderBy = `delivery_number ${sortOrder === 'asc' ? 'ASC' : 'DESC'}, COALESCE(operational_date, date(created_at)) DESC`;
+  } else if (sortField === 'meterOpen') {
+    orderBy = `COALESCE(meter_open, 0) ${sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
+  } else if (sortField === 'meterClose') {
+    orderBy = `COALESCE(meter_close, COALESCE(meter_open, 0) + COALESCE(volume, 0)) ${sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
+  } else if (sortField === 'date') {
+    orderBy = `COALESCE(operational_date, date(created_at)) ${sortOrder === 'asc' ? 'ASC' : 'DESC'}, created_at ${sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
+  }
+
+  // Count Query
+  const countSql = `
+    SELECT COUNT(1) AS total, SUM(volume) AS total_volume
+    FROM (
+      SELECT id, log_type, flight_number, is_deleted, created_at, updated_at, operational_date, vehicle_id, meter_open, meter_close, volume, is_domestic,
+             ROW_NUMBER() OVER (
+               PARTITION BY id
+               ORDER BY COALESCE(updated_at, created_at, TIMESTAMP('1970-01-01')) DESC
+             ) AS rn
+      FROM ${TABLE_REF}
+    )
+    ${whereClause}
+  `;
+
+  // Data Query
+  const dataSql = `
     SELECT * EXCEPT(rn)
     FROM (
       SELECT *, ROW_NUMBER() OVER (
@@ -788,19 +893,21 @@ app.get('/operations-log', requireAuth, async (req: Request, res: Response) => {
       FROM ${TABLE_REF}
     )
     ${whereClause}
-    ORDER BY COALESCE(operational_date, date(created_at)) DESC, created_at DESC
-    LIMIT ${limitCount}
+    ORDER BY ${orderBy}
+    LIMIT ${limitCount} OFFSET ${offset}
   `;
-  console.log(`[BigQuery SQL]\n${sql.trim()}`);
+
+  console.log(`[BigQuery SQL]\n${dataSql.trim()}`);
   try {
-    const [rows] = await bigquery.query({ 
-      query: sql, 
-      params: queryParams,
-      location: 'US' 
-    });
-    res.json({ logs: rows.map(rowToLog), count: rows.length });
+    const [[countResult], [rows]] = await Promise.all([
+      bigquery.query({ query: countSql, params: queryParams, location: 'US' }),
+      bigquery.query({ query: dataSql, params: queryParams, location: 'US' })
+    ]);
+    const totalCount = countResult ? parseInt(countResult[0]?.total || '0') : 0;
+    const totalVolume = countResult ? parseFloat(countResult[0]?.total_volume || '0') : 0;
+    res.json({ logs: rows.map(rowToLog), totalCount, totalVolume });
   } catch (err: any) {
-    console.error('[BigQuery] GET error:', err.message);
+    console.error('[BigQuery] GET operations-log error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

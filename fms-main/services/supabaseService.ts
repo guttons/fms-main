@@ -444,14 +444,29 @@ export const supabaseService = {
     return headers;
   },
 
-  async getFlightLogs(filters?: { startDate?: string; endDate?: string; searchTerm?: string }): Promise<FlightLog[]> {
+  async getFlightLogs(filters?: { 
+    startDate?: string; 
+    endDate?: string; 
+    searchTerm?: string;
+    logType?: string;
+    flightCategory?: string;
+    equipmentId?: string;
+    page?: number;
+    limit?: number;
+    sortField?: string;
+    sortOrder?: string;
+  }): Promise<{ logs: FlightLog[]; totalCount: number; totalVolume: number }> {
     console.log('[BigQuery API] GET /operations-log');
     try {
       const headers = await this._bqAuthHeaders();
       const queryParams = new URLSearchParams();
-      if (filters?.startDate) queryParams.append('startDate', filters.startDate);
-      if (filters?.endDate) queryParams.append('endDate', filters.endDate);
-      if (filters?.searchTerm) queryParams.append('searchTerm', filters.searchTerm);
+      if (filters) {
+        Object.entries(filters).forEach(([key, val]) => {
+          if (val !== undefined && val !== null) {
+            queryParams.append(key, String(val));
+          }
+        });
+      }
       
       const queryString = queryParams.toString();
       const url = `${this._bqBase()}/operations-log${queryString ? `?${queryString}` : ''}`;
@@ -459,10 +474,14 @@ export const supabaseService = {
       const res = await fetch(url, { headers, cache: 'no-store' });
       if (!res.ok) throw new Error(`BigQuery GET failed: ${res.status}`);
       const data = await res.json();
-      return data.logs as FlightLog[];
+      return {
+        logs: (data.logs || []) as FlightLog[],
+        totalCount: data.totalCount || 0,
+        totalVolume: data.totalVolume || 0
+      };
     } catch (error) {
       console.warn('[BigQuery] getFlightLogs unavailable – returning cached/empty data.', (error as Error)?.message || '');
-      return [];
+      return { logs: [], totalCount: 0, totalVolume: 0 };
     }
   },
 
@@ -522,15 +541,24 @@ export const supabaseService = {
     }
   },
 
-  // ── Bridging Logs ──────────────────────────────────────────────────────────
-  async getBridgingLogs(filters?: { startDate?: string; endDate?: string; searchTerm?: string }): Promise<BridgingLog[]> {
+  async getBridgingLogs(filters?: { 
+    startDate?: string; 
+    endDate?: string; 
+    searchTerm?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ logs: BridgingLog[]; totalCount: number; totalVolume: number }> {
     console.log('[BigQuery API] GET /refueler-loading-log');
     try {
       const headers = await this._bqAuthHeaders();
       const queryParams = new URLSearchParams();
-      if (filters?.startDate) queryParams.append('startDate', filters.startDate);
-      if (filters?.endDate) queryParams.append('endDate', filters.endDate);
-      if (filters?.searchTerm) queryParams.append('searchTerm', filters.searchTerm);
+      if (filters) {
+        Object.entries(filters).forEach(([key, val]) => {
+          if (val !== undefined && val !== null) {
+            queryParams.append(key, String(val));
+          }
+        });
+      }
 
       const queryString = queryParams.toString();
       const url = `${this._bqBase()}/refueler-loading-log${queryString ? `?${queryString}` : ''}`;
@@ -538,25 +566,37 @@ export const supabaseService = {
       const res = await fetch(url, { headers, cache: 'no-store' });
       if (!res.ok) throw new Error(`BigQuery GET refueler-loading-log failed: ${res.status}`);
       const data = await res.json();
-      const dbLogs = (data.logs || []).map((row: any) => ({
-        id: row.id,
-        sourceTankId: row.source_tank_id,
-        vehicleId: row.vehicle_id,
-        volume: Number(row.volume),
-        startTime: row.start_time || '',
-        endTime: row.end_time || '',
-        date: row.date,
-        visualCheckPassed: !!row.visual_check_passed,
-        cwdCheckPassed: !!row.cwd_check_passed,
-        density: row.density ? Number(row.density) : undefined,
-        temperature: row.temperature ? Number(row.temperature) : undefined,
-        operatorId: row.operator_name || '',
-        co: row.supervisor_name || ''
-      }));
-      return [...dbLogs, ...localBridgingLogs];
+      const logs = (data.logs || []).map((row: any) => {
+        const clean = (val: any) => (val && typeof val === 'object' && 'value' in val) ? val.value : val;
+        return {
+          id: row.id,
+          sourceTankId: row.source_tank_id,
+          vehicleId: row.vehicle_id,
+          volume: Number(row.volume),
+          startTime: clean(row.start_time) || '',
+          endTime: clean(row.end_time) || '',
+          date: clean(row.date),
+          visualCheckPassed: !!row.visual_check_passed,
+          cwdCheckPassed: !!row.cwd_check_passed,
+          density: row.density ? Number(row.density) : undefined,
+          temperature: row.temperature ? Number(row.temperature) : undefined,
+          operatorId: row.operator_name || '',
+          supervisorId: row.supervisor_name || '',
+          remarks: row.remarks || '',
+          isDeleted: !!row.is_deleted,
+          co: row.co || ''
+        };
+      });
+      const localBridgingVolume = localBridgingLogs.reduce((sum, l) => sum + (l.volume || 0), 0);
+      return { 
+        logs: [...logs, ...localBridgingLogs], 
+        totalCount: (data.totalCount || 0) + localBridgingLogs.length,
+        totalVolume: (data.totalVolume || 0) + localBridgingVolume
+      };
     } catch (error) {
       console.warn('[BigQuery] getBridgingLogs failed, falling back to localBridgingLogs:', error);
-      return localBridgingLogs;
+      const localBridgingVolume = localBridgingLogs.reduce((sum, l) => sum + (l.volume || 0), 0);
+      return { logs: localBridgingLogs, totalCount: localBridgingLogs.length, totalVolume: localBridgingVolume };
     }
   },
 
@@ -608,14 +648,24 @@ export const supabaseService = {
   },
 
   // ── Filling Station Logs ───────────────────────────────────────────────────
-  async getFillingStationLogs(filters?: { startDate?: string; endDate?: string; searchTerm?: string }): Promise<FlightLog[]> {
+  async getFillingStationLogs(filters?: { 
+    startDate?: string; 
+    endDate?: string; 
+    searchTerm?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ logs: FlightLog[]; totalCount: number; totalVolume: number }> {
     console.log('[BigQuery API] GET /filling-station-log');
     try {
       const headers = await this._bqAuthHeaders();
       const queryParams = new URLSearchParams();
-      if (filters?.startDate) queryParams.append('startDate', filters.startDate);
-      if (filters?.endDate) queryParams.append('endDate', filters.endDate);
-      if (filters?.searchTerm) queryParams.append('searchTerm', filters.searchTerm);
+      if (filters) {
+        Object.entries(filters).forEach(([key, val]) => {
+          if (val !== undefined && val !== null) {
+            queryParams.append(key, String(val));
+          }
+        });
+      }
 
       const queryString = queryParams.toString();
       const url = `${this._bqBase()}/filling-station-log${queryString ? `?${queryString}` : ''}`;
@@ -623,32 +673,37 @@ export const supabaseService = {
       const res = await fetch(url, { headers, cache: 'no-store' });
       if (!res.ok) throw new Error(`BigQuery GET filling-station-log failed: ${res.status}`);
       const data = await res.json();
-      return (data.logs || []).map((row: any) => ({
-        id: row.id,
-        flightNumber: `GROUND-${row.station}-${row.fuel_type.toUpperCase()}`,
-        aircraftReg: row.vehicle_reg.toUpperCase(),
-        aircraftType: 'GROUND VEHICLE',
-        stand: row.station === 'LFS' ? 'LANDSIDE STATION' : 'AIRSIDE STATION',
-        operatorId: row.operator_id || 'System Admin',
-        vehicleId: row.vehicle_reg.toUpperCase(),
-        status: 'COMPLETED',
-        logType: 'FILLING_STATION' as any,
-        deliveryNumber: row.invoice_number ? `MLE-${row.invoice_number}` : undefined,
-        timestampStart: `${row.date}T08:00:00.000Z`,
-        timestampFinalEnd: `${row.date}T16:00:00.000Z`,
-        timestampClearance: row.created_at || new Date().toISOString(),
-        meterOpen: 0,
-        meterClose: Number(row.volume),
-        volume: Number(row.volume),
-        panelCheck: true,
-        walkAroundCheck: true,
-        appearanceCheck: true,
-        waterCheck: true,
-        remarks: `Ground support refuel: ${row.vehicle_reg} loaded with ${row.volume}L ${row.fuel_type} (On account of: ${row.driver_name || 'N/A'}, Payment: ${row.payment_mode || 'Credit'}, Received by: ${row.received_by || 'N/A'}, Equipment: ${row.equipment_name || 'N/A'})`
-      }));
+      const logs = (data.logs || []).map((row: any) => {
+        const clean = (val: any) => (val && typeof val === 'object' && 'value' in val) ? val.value : val;
+        const rowDate = clean(row.date);
+        return {
+          id: row.id,
+          flightNumber: `GROUND-${row.station}-${row.fuel_type.toUpperCase()}`,
+          aircraftReg: row.vehicle_reg.toUpperCase(),
+          aircraftType: 'GROUND VEHICLE',
+          stand: row.station === 'LFS' ? 'LANDSIDE STATION' : 'AIRSIDE STATION',
+          operatorId: row.operator_id || 'System Admin',
+          vehicleId: row.vehicle_reg.toUpperCase(),
+          status: 'COMPLETED',
+          logType: 'FILLING_STATION' as any,
+          deliveryNumber: row.invoice_number ? `MLE-${row.invoice_number}` : undefined,
+          timestampStart: `${rowDate}T08:00:00.000Z`,
+          timestampFinalEnd: `${rowDate}T16:00:00.000Z`,
+          timestampClearance: clean(row.created_at) || new Date().toISOString(),
+          meterOpen: 0,
+          meterClose: Number(row.volume),
+          volume: Number(row.volume),
+          panelCheck: true,
+          walkAroundCheck: true,
+          appearanceCheck: true,
+          waterCheck: true,
+          remarks: `Ground support refuel: ${row.vehicle_reg} loaded with ${row.volume}L ${row.fuel_type} (On account of: ${row.driver_name || 'N/A'}, Payment: ${row.payment_mode || 'Credit'}, Received by: ${row.received_by || 'N/A'}, Equipment: ${row.equipment_name || 'N/A'})`
+        };
+      });
+      return { logs, totalCount: data.totalCount || 0, totalVolume: data.totalVolume || 0 };
     } catch (error) {
       console.warn('[BigQuery] getFillingStationLogs failed:', error);
-      return [];
+      return { logs: [], totalCount: 0, totalVolume: 0 };
     }
   },
 

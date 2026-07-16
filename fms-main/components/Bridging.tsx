@@ -128,7 +128,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
     const fetchLogs = async () => {
       try {
         const fetchedLogs = await supabaseService.getBridgingLogs();
-        setLogs(fetchedLogs || []);
+        setLogs(fetchedLogs?.logs || []);
       } catch (error) {
         console.error('Error fetching bridging logs:', error);
       }
@@ -279,7 +279,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
         
         // Refresh logs
         const updatedLogs = await supabaseService.getBridgingLogs();
-        setLogs(updatedLogs);
+        setLogs(updatedLogs?.logs || []);
 
         // Reset form
         setTimeout(() => {

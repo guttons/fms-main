@@ -82,7 +82,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <button
                 onClick={handleMicrosoftLogin}
                 disabled={isLoggingIn}
-                className="group kinetic-gradient relative w-full flex justify-center py-5 px-4 text-white text-[11px] font-black rounded-[22px] hover:scale-[1.02] active:scale-95 transition-all duration-300 disabled:opacity-50 uppercase tracking-[0.2em] shadow-premium"
+                className="group kinetic-gradient relative w-full flex justify-center py-3.5 sm:py-5 px-4 text-white text-[11px] font-black rounded-[22px] hover:scale-[1.02] active:scale-95 transition-all duration-300 disabled:opacity-50 uppercase tracking-[0.2em] shadow-premium"
               >
                 <div className="absolute left-6 inset-y-0 flex items-center">
                   <Lock className="h-4 w-4 text-white/40 group-hover:text-white transition-colors" />
@@ -103,7 +103,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
               <button
                 onClick={() => setShowMockLogin(true)}
-                className="w-full flex justify-center py-4.5 px-4 border border-outline text-[10px] font-black rounded-[22px] text-on-surface-dim hover:bg-surface-dim hover:text-on-surface transition-all duration-300 uppercase tracking-widest"
+                className="w-full flex justify-center py-3 sm:py-4.5 px-4 border border-outline text-[10px] font-black rounded-[22px] text-on-surface-dim hover:bg-surface-dim hover:text-on-surface transition-all duration-300 uppercase tracking-widest"
               >
                 <ShieldCheck className="h-4 w-4 text-primary mr-3" />
                 Bypass to Simulator
