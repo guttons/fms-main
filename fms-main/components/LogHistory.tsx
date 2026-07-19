@@ -347,9 +347,27 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
       } else {
         // FLIGHT, SEAPLANE, MARINE, TOTALIZER_READINGS
         const res = await supabaseService.getFlightLogs(filters);
-        fetchedLogsList = res.logs;
-        fetchedTotalCount = res.totalCount;
-        fetchedTotalVolume = res.totalVolume;
+        fetchedLogsList = res.logs || [];
+        if (selectedLogType === 'TOTALIZER_READINGS') {
+          const originalLen = fetchedLogsList.length;
+          fetchedLogsList = fetchedLogsList.filter(log => {
+            if (!log || !log.vehicleId) return false;
+            const veh = log.vehicleId.toUpperCase();
+            if (veh === 'N/A' || veh.includes('SCADA') || veh.startsWith('PUMP')) return false;
+            return veh.startsWith('RF') || veh.startsWith('HD');
+          });
+          if (fetchedLogsList.length < originalLen) {
+            // Recalculate totals client-side as fallback if server-side is not yet redeployed
+            fetchedTotalCount = fetchedLogsList.length;
+            fetchedTotalVolume = fetchedLogsList.reduce((sum, l) => sum + (l.volume || 0), 0);
+          } else {
+            fetchedTotalCount = res.totalCount;
+            fetchedTotalVolume = res.totalVolume;
+          }
+        } else {
+          fetchedTotalCount = res.totalCount;
+          fetchedTotalVolume = res.totalVolume;
+        }
       }
 
       setLogs(fetchedLogsList);

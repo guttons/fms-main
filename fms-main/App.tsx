@@ -1222,24 +1222,24 @@ const AppContextContent: React.FC<any> = ({
                                   <p className="text-[9px] font-bold text-on-surface-dim opacity-50">Select application theme</p>
                                 </div>
                               </div>
-                              <div className="grid grid-cols-3 gap-2 bg-surface-container-low p-1 rounded-2xl border border-outline/30">
+                              <div className="grid grid-cols-3 gap-2 bg-surface-container-low p-1 rounded-2xl border border-outline">
                                 <button
                                   onClick={() => setTheme('light')}
-                                  className={`py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center space-x-1.5 ${theme === 'light' ? 'bg-surface-container-lowest text-on-surface shadow-sm border border-outline/30' : 'text-on-surface-dim hover:text-on-surface'}`}
+                                  className={`py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center space-x-1.5 ${theme === 'light' ? 'bg-surface-container-lowest text-on-surface shadow-sm border border-outline' : 'text-on-surface-dim hover:text-on-surface'}`}
                                 >
                                   <Sun className="w-3.5 h-3.5" />
                                   <span>Light</span>
                                 </button>
                                 <button
                                   onClick={() => setTheme('dark')}
-                                  className={`py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center space-x-1.5 ${theme === 'dark' ? 'bg-surface-container-lowest text-on-surface shadow-sm border border-outline/30' : 'text-on-surface-dim hover:text-on-surface'}`}
+                                  className={`py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center space-x-1.5 ${theme === 'dark' ? 'bg-surface-container-lowest text-on-surface shadow-sm border border-outline' : 'text-on-surface-dim hover:text-on-surface'}`}
                                 >
                                   <Moon className="w-3.5 h-3.5" />
                                   <span>Dark</span>
                                 </button>
                                 <button
                                   onClick={() => setTheme('black')}
-                                  className={`py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center space-x-1.5 ${theme === 'black' ? 'bg-surface-container-lowest text-on-surface shadow-sm border border-outline/30' : 'text-on-surface-dim hover:text-on-surface'}`}
+                                  className={`py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center space-x-1.5 ${theme === 'black' ? 'bg-surface-container-lowest text-on-surface shadow-sm border border-outline' : 'text-on-surface-dim hover:text-on-surface'}`}
                                 >
                                   <Eclipse className="w-3.5 h-3.5" />
                                   <span>Black</span>
@@ -1263,7 +1263,7 @@ const AppContextContent: React.FC<any> = ({
                                 {notificationPermission !== 'granted' ? (
                                   <button
                                     onClick={handleEnableNotifications}
-                                    className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary hover:border-primary/40 border border-primary/20 text-[9px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95"
+                                    className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary hover:border-primary border border-outline text-[9px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95"
                                   >
                                     Enable
                                   </button>
@@ -1279,7 +1279,7 @@ const AppContextContent: React.FC<any> = ({
                             {!isInstalled && (
                               <button
                                 onClick={handleInstallApp}
-                                className="w-full p-4 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 hover:border-primary/30 rounded-[32px] flex items-center justify-between transition-all active:scale-[0.98] group"
+                                className="w-full p-4 bg-primary/10 hover:bg-primary/20 text-primary border border-outline hover:border-primary rounded-[32px] flex items-center justify-between transition-all active:scale-[0.98] group"
                               >
                                 <div className="flex items-center space-x-3 text-left">
                                   <div className="p-2.5 rounded-lg bg-primary/20 text-primary">
@@ -1315,7 +1315,7 @@ const AppContextContent: React.FC<any> = ({
                                 setIsSettingsOpen(false);
                                 wrappedLogout();
                               }}
-                              className="w-full py-2.5 bg-surface-container border border-outline text-on-surface hover:text-error hover:border-error/30 text-[9px] font-black uppercase tracking-[0.2em] rounded-xl transition-all"
+                              className="w-full py-2.5 bg-surface-container border border-outline text-on-surface hover:text-error hover:border-error text-[9px] font-black uppercase tracking-[0.2em] rounded-xl transition-all"
                              >
                                Secure Logout
                              </button>
