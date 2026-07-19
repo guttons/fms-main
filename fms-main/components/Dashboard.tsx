@@ -692,7 +692,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                     </div>
                                     
                                     {/* Desktop Center-Aligned Timings (Inline) - lg+ only */}
-                                    <div className="hidden lg:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-dim/40 px-4 py-2 rounded-xl border border-outline/50 absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm">
+                                    <div className="hidden lg:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-dim/40 px-4 py-2 rounded-xl border border-outline absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm">
                                          <div className="flex items-center gap-2">
                                              <span className="opacity-40 text-[10px]">STA</span>
                                              <span className="text-on-surface text-[14px] font-black tracking-tight">{job.sta || '--:--'}</span>
@@ -744,7 +744,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
                                 <div className="mt-6 pt-6 border-t border-outline/30 space-y-4">
                                     {/* Row 1: Tactical Times (Mobile + Tablet) */}
-                                    <div className="flex lg:hidden items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-dim/40 px-4 py-2 rounded-xl border border-outline/50 w-fit">
+                                    <div className="flex lg:hidden items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-dim/40 px-4 py-2 rounded-xl border border-outline w-fit">
                                          <div className="flex items-center gap-2">
                                              <span className="opacity-40 text-[10px]">STA</span>
                                              <span className="text-on-surface text-[14px] font-black tracking-tight">{job.sta || '--:--'}</span>
@@ -1503,59 +1503,61 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
         </div>
 
         {/* Refueling Requests Widget */}
-        <div className="card-premium p-4 sm:p-8 border border-outline relative overflow-hidden flex flex-col group">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div>
-              <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
-                <Droplet className="w-4 h-4 mr-3 text-primary animate-pulse" />
-                Active ITP Refueling Requests
-              </h3>
-              <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest mt-1 opacity-50">Pending vehicle replenishments from Into-Plane duty managers</p>
-            </div>
-            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap w-fit ${
-              refuelingRequests.length > 0 ? 'bg-primary/10 text-primary border border-primary/20 animate-pulse' : 'bg-success/10 text-success border border-success/20'
-            }`}>
-              {refuelingRequests.length} Pending
-            </span>
-          </div>
-
-          <div className="space-y-4 max-h-[280px] overflow-y-auto custom-scrollbar pr-2">
-            {refuelingRequests.length === 0 ? (
-              <div className="text-center py-10 opacity-30 flex flex-col items-center justify-center">
-                <CheckCircle className="w-10 h-10 text-success mb-3 opacity-60" />
-                <p className="text-[10px] font-black uppercase tracking-widest">All Vehicles Adequately Replenished</p>
+        {user.role !== UserRole.EXECUTIVE && (
+          <div className="card-premium p-4 sm:p-8 border border-outline relative overflow-hidden flex flex-col group">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
+                  <Droplet className="w-4 h-4 mr-3 text-primary animate-pulse" />
+                  Active ITP Refueling Requests
+                </h3>
+                <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest mt-1 opacity-50">Pending vehicle replenishments from Into-Plane duty managers</p>
               </div>
-            ) : (
-              refuelingRequests.map(request => {
-                const match = request.message.match(/unit\s+(RF-\d+)/i);
-                const vehicleId = match ? match[1].toUpperCase() : '';
-                return (
-                  <div key={request.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-surface-dim/60 border border-outline rounded-2xl gap-4 hover:bg-surface-container transition-all">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-10 h-10 bg-primary/10 text-primary border border-primary/20 rounded-xl flex items-center justify-center shrink-0">
-                        <Truck className="w-5 h-5" />
+              <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap w-fit ${
+                refuelingRequests.length > 0 ? 'bg-primary/10 text-primary border border-primary/20 animate-pulse' : 'bg-success/10 text-success border border-success/20'
+              }`}>
+                {refuelingRequests.length} Pending
+              </span>
+            </div>
+
+            <div className="space-y-4 max-h-[280px] overflow-y-auto custom-scrollbar pr-2">
+              {refuelingRequests.length === 0 ? (
+                <div className="text-center py-10 opacity-30 flex flex-col items-center justify-center">
+                  <CheckCircle className="w-10 h-10 text-success mb-3 opacity-60" />
+                  <p className="text-[10px] font-black uppercase tracking-widest">All Vehicles Adequately Replenished</p>
+                </div>
+              ) : (
+                refuelingRequests.map(request => {
+                  const match = request.message.match(/unit\s+(RF-\d+)/i);
+                  const vehicleId = match ? match[1].toUpperCase() : '';
+                  return (
+                    <div key={request.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-surface-dim/60 border border-outline rounded-2xl gap-4 hover:bg-surface-container transition-all">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-10 h-10 bg-primary/10 text-primary border border-primary/20 rounded-xl flex items-center justify-center shrink-0">
+                          <Truck className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-on-surface">{request.message}</p>
+                          <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-50 mt-0.5">Requested {request.timestamp}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-bold text-on-surface">{request.message}</p>
-                        <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-50 mt-0.5">Requested {request.timestamp}</p>
-                      </div>
+                      <button
+                        onClick={() => {
+                          // Store the target vehicle in localStorage so Bridging can auto-fill it
+                          if (vehicleId) localStorage.setItem('fms_initiate_loading_vehicle', vehicleId);
+                          setActiveView('bridging');
+                        }}
+                        className="kinetic-gradient text-white rounded-xl text-[10px] font-black uppercase tracking-[0.15em] transition-all hover:scale-105 active:scale-95 shrink-0 shadow-premium px-6 py-2.5"
+                      >
+                        Dispatch Loading
+                      </button>
                     </div>
-                    <button
-                      onClick={() => {
-                        // Store the target vehicle in localStorage so Bridging can auto-fill it
-                        if (vehicleId) localStorage.setItem('fms_initiate_loading_vehicle', vehicleId);
-                        setActiveView('bridging');
-                      }}
-                      className="kinetic-gradient text-white rounded-xl text-[10px] font-black uppercase tracking-[0.15em] transition-all hover:scale-105 active:scale-95 shrink-0 shadow-premium px-6 py-2.5"
-                    >
-                      Dispatch Loading
-                    </button>
-                  </div>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Centerpiece: Infrastructure Asset Grid */}
         <div className="card-premium p-4 sm:p-10">

@@ -487,7 +487,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
       <select
         value={value || ""}
         onChange={(e) => onChange(e.target.value)}
-        className={`block w-full text-[10px] font-bold rounded-xl focus:border-primary px-3 py-2 border uppercase tracking-wider appearance-none transition-colors ${(value || "") ? 'bg-surface-dim text-on-surface border-outline' : 'bg-surface-dim text-error border-error/30'
+        className={`block w-full text-[10px] font-bold rounded-xl focus:border-primary px-3 py-2 border border-outline uppercase tracking-wider appearance-none transition-colors ${(value || "") ? 'bg-surface-dim text-on-surface' : 'bg-surface-dim text-error'
           }`}
       >
         <option value="" className="bg-surface-dim text-on-surface">-- UNASSIGNED --</option>
@@ -737,7 +737,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                             </div>
                           </td>
                           <td className="px-4 py-6 whitespace-nowrap">
-                            <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-dim/30 px-4 py-2 rounded-full border border-outline/30 w-fit">
+                            <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-dim/30 px-4 py-2 rounded-full border border-outline w-fit">
                               <div className="flex items-center gap-1.5">
                                 <span className="text-on-surface-dim opacity-40">STA</span>
                                 <span className="text-on-surface text-xs font-black tracking-tight">{(item as any).sta || '--:--'}</span>

@@ -828,8 +828,9 @@ app.get('/operations-log', requireAuth, async (req: Request, res: Response) => {
       NOT STARTS_WITH(flight_number, 'SEAPLANE') 
       AND vehicle_id IS NOT NULL 
       AND vehicle_id != 'N/A' 
+      AND UPPER(vehicle_id) != 'N/A'
       AND NOT UPPER(vehicle_id) LIKE '%SCADA%' 
-      AND NOT UPPER(vehicle_id) LIKE 'PUMP%' 
+      AND (STARTS_WITH(UPPER(vehicle_id), 'RF') OR STARTS_WITH(UPPER(vehicle_id), 'HD'))
       AND (meter_open IS NOT NULL OR meter_close IS NOT NULL OR (volume > 0))
     )`);
     if (equipmentId && equipmentId !== 'ALL') {

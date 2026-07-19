@@ -623,7 +623,7 @@ const ScreenDashboard: React.FC<{
                       </div>
 
                       {/* Desktop Center-Aligned Timings (lg+ only) */}
-                      <div className="hidden lg:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/30 px-4 py-2 rounded-xl border border-outline/10 absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm">
+                      <div className="hidden lg:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/30 px-4 py-2 rounded-xl border border-outline absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm">
                           <div className="flex items-center gap-2">
                               <span className="opacity-40 text-[10px]">STA</span>
                               <span className="text-on-surface text-[14px] font-black tracking-tight">{job.sta || '--:--'}</span>
