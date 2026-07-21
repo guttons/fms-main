@@ -317,13 +317,44 @@ const ScreenDashboard: React.FC<{
     return isDep && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate);
   });
 
+  const getStatusForFlightDate = (cleanNo: string, flightDate: string, defaultStatus: string = 'PENDING') => {
+    const matchingLog = (flightLogs || []).find(log => {
+      if (!log || !log.flightNumber) return false;
+      const logNo = (log.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      if (logNo !== cleanNo) return false;
+      const logDate = log.operationalDate || (log.timestampFinalEnd ? log.timestampFinalEnd.split('T')[0] : (log.timestampStart ? log.timestampStart.split('T')[0] : ''));
+      return logDate ? logDate === flightDate : true;
+    });
+
+    if (matchingLog && matchingLog.status === 'COMPLETED') {
+      return 'COMPLETED';
+    }
+    if (matchingLog && matchingLog.status === 'IN_PROGRESS') {
+      return 'IN_PROGRESS';
+    }
+
+    const dbJob = (rawFlightJobs || []).find(j => {
+      if (!j || !j.flightNumber) return false;
+      const jobNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      if (jobNo !== cleanNo) return false;
+      return j.date ? j.date === flightDate : true;
+    });
+
+    if (dbJob && (dbJob.date === flightDate || !dbJob.date) && dbJob.status) {
+      return dbJob.status;
+    }
+
+    return defaultStatus;
+  };
+
   const intlJobsMap = new Map<string, any>();
   liveIntlList.forEach(f => {
     const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-    const dbJob = (rawFlightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+    const flightDate = f.date || selectedBriefingDate;
+    const computedStatus = getStatusForFlightDate(cleanNo, flightDate, f.status || 'PENDING');
     intlJobsMap.set(cleanNo, {
       ...f,
-      status: dbJob ? dbJob.status : (f.status || 'PENDING'),
+      status: computedStatus,
       fidsStatus: f.status
     });
   });
@@ -332,11 +363,12 @@ const ScreenDashboard: React.FC<{
     frozenFlights.intl.forEach((ff: any) => {
       const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
       const existing = intlJobsMap.get(cleanNo);
-      const dbJob = (rawFlightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+      const flightDate = ff.date || selectedBriefingDate;
+      const computedStatus = getStatusForFlightDate(cleanNo, flightDate, existing?.status || ff.status || 'PENDING');
       intlJobsMap.set(cleanNo, {
         ...(existing || {}),
         ...ff,
-        status: dbJob ? dbJob.status : (ff.status || 'PENDING'),
+        status: computedStatus,
         fidsStatus: existing?.fidsStatus || ff.status
       });
     });
@@ -350,10 +382,11 @@ const ScreenDashboard: React.FC<{
   const domJobsMap = new Map<string, any>();
   liveDomList.forEach(f => {
     const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-    const dbJob = (rawFlightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+    const flightDate = f.date || selectedBriefingDate;
+    const computedStatus = getStatusForFlightDate(cleanNo, flightDate, f.status || 'PENDING');
     domJobsMap.set(cleanNo, {
       ...f,
-      status: dbJob ? dbJob.status : (f.status || 'PENDING'),
+      status: computedStatus,
       fidsStatus: f.status
     });
   });
@@ -362,11 +395,12 @@ const ScreenDashboard: React.FC<{
     frozenFlights.domestic.forEach((ff: any) => {
       const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
       const existing = domJobsMap.get(cleanNo);
-      const dbJob = (rawFlightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+      const flightDate = ff.date || selectedBriefingDate;
+      const computedStatus = getStatusForFlightDate(cleanNo, flightDate, existing?.status || ff.status || 'PENDING');
       domJobsMap.set(cleanNo, {
         ...(existing || {}),
         ...ff,
-        status: dbJob ? dbJob.status : (ff.status || 'PENDING'),
+        status: computedStatus,
         fidsStatus: existing?.fidsStatus || ff.status
       });
     });
@@ -840,7 +874,7 @@ const ScreenDashboard: React.FC<{
     <div className="p-5 flex flex-col space-y-8 pb-24">
       {/* Category Toggle */}
       <div className="flex justify-center items-center mt-2 mb-4">
-          <div className="bg-surface-container-low p-1 rounded-[22px] border-transparent flex relative w-full max-w-[360px] h-[38px]">
+          <div className="bg-surface-container-low p-1 rounded-[22px] border-transparent flex relative w-full max-w-[370px] sm:max-w-[440px] h-[38px]">
               <div 
                   className={`absolute top-1 bottom-1 w-[calc(33.333%-2.6px)] kinetic-gradient rounded-[18px] transition-all duration-300 ${
                     viewMode === 'INT' ? 'translate-x-0' : 
@@ -849,21 +883,21 @@ const ScreenDashboard: React.FC<{
               />
               <button 
                   onClick={() => setViewMode('INT')}
-                  className={`flex-1 flex items-center justify-center rounded-[18px] text-[10px] font-black uppercase tracking-[0.2em] relative z-10 transition-colors duration-300 ${viewMode === 'INT' ? 'text-white' : 'text-on-surface-dim opacity-60'}`}
+                  className={`flex-1 flex items-center justify-center rounded-[18px] text-[10px] font-black uppercase tracking-[0.12em] relative z-10 transition-colors duration-300 ${viewMode === 'INT' ? 'text-white' : 'text-on-surface-dim opacity-60'}`}
               >
                   <span className="hidden sm:inline">International</span>
                   <span className="sm:hidden">INT</span>
               </button>
               <button 
                   onClick={() => setViewMode('DOM')}
-                  className={`flex-1 flex items-center justify-center rounded-[18px] text-[10px] font-black uppercase tracking-[0.2em] relative z-10 transition-colors duration-300 ${viewMode === 'DOM' ? 'text-white' : 'text-on-surface-dim opacity-60'}`}
+                  className={`flex-1 flex items-center justify-center rounded-[18px] text-[10px] font-black uppercase tracking-[0.12em] relative z-10 transition-colors duration-300 ${viewMode === 'DOM' ? 'text-white' : 'text-on-surface-dim opacity-60'}`}
               >
                   <span className="hidden sm:inline">Domestic</span>
                   <span className="sm:hidden">DOM</span>
               </button>
               <button 
                   onClick={() => setViewMode('ADHOC')}
-                  className={`flex-1 flex items-center justify-center rounded-[18px] text-[10px] font-black uppercase tracking-[0.2em] relative z-10 transition-colors duration-300 ${viewMode === 'ADHOC' ? 'text-white' : 'text-on-surface-dim opacity-60'}`}
+                  className={`flex-1 flex items-center justify-center rounded-[18px] text-[10px] font-black uppercase tracking-[0.12em] relative z-10 transition-colors duration-300 ${viewMode === 'ADHOC' ? 'text-white' : 'text-on-surface-dim opacity-60'}`}
               >
                   <span className="hidden sm:inline">Ad-Hoc</span>
                   <span className="sm:hidden">ADHOC</span>
@@ -925,8 +959,7 @@ const ScreenTimestamps: React.FC<{
                   <input
                       type="date"
                       required
-                      disabled={isOperator(user.role)}
-                      value={activeFlight?.operationalDate || new Date().toISOString().split('T')[0]}
+                      value={activeFlight?.operationalDate || selectedBriefingDate || new Date().toISOString().split('T')[0]}
                       onChange={(e) => onInputChange('operationalDate' as any, e.target.value)}
                       onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
                       className="w-full pl-10 pr-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:left-0 [&::-webkit-calendar-picker-indicator]:top-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
@@ -1794,6 +1827,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       route: job.route,
       isDomestic: job.isDomestic,
       officer: job.assignedOfficer || '',
+      operationalDate: job.date || selectedBriefingDate || new Date().toISOString().split('T')[0],
     });
     navigateToScreen('timestamps');
   };

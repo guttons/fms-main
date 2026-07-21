@@ -36,7 +36,10 @@
   --color-success-rgb: 34, 197, 94;
   --color-warning: #f59e0b;
   --color-warning-rgb: 245, 158, 11;
-  --radio-accent-color: #0ea5e9;
+  --radio-accent-color: var(--color-primary);
+  --color-primary-gradient-start: #002046;
+  --color-primary-gradient-end: #0284c7;
+  --color-primary-gradient-shadow: rgba(0, 32, 70, 0.25);
 }
 
 /* Dark Theme Overrides */
@@ -61,6 +64,9 @@
   --color-warning: #f59e0b;
   --color-warning-rgb: 245, 158, 11;
   --radio-accent-color: var(--color-primary);
+  --color-primary-gradient-start: #0ea5e9;
+  --color-primary-gradient-end: #0369a1;
+  --color-primary-gradient-shadow: rgba(3, 105, 161, 0.25);
 }
 
 /* Pitch Black Theme (Extra Dark — OLED / High Contrast) */
@@ -85,6 +91,9 @@
   --color-warning: #f59e0b;
   --color-warning-rgb: 245, 158, 11;
   --radio-accent-color: var(--color-primary);
+  --color-primary-gradient-start: #e0e0e0;
+  --color-primary-gradient-end: #9e9e9e;
+  --color-primary-gradient-shadow: rgba(255, 255, 255, 0.08);
 
   --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.4);
   --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5), 0 2px 6px -2px rgb(0 0 0 / 0.3);
@@ -152,7 +161,7 @@
   transition: all 0.2s ease;
 }
 .btn-add-delivery:hover {
-  background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%) !important;
+  background: linear-gradient(135deg, var(--color-primary-gradient-start) 0%, var(--color-primary-gradient-end) 100%) !important;
   color: white !important;
   border-color: transparent !important;
 }
@@ -239,13 +248,13 @@ html, body {
 }
 
 .btn-command, .kinetic-gradient, .gradient-primary {
-  background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%) !important;
+  background: linear-gradient(135deg, var(--color-primary-gradient-start) 0%, var(--color-primary-gradient-end) 100%) !important;
   color: white !important;
-  box-shadow: 0 4px 12px rgba(3, 105, 161, 0.25);
+  box-shadow: 0 4px 12px var(--color-primary-gradient-shadow);
 }
 
 .kinetic-gradient-no-glow, .gradient-primary-no-glow {
-  background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%) !important;
+  background: linear-gradient(135deg, var(--color-primary-gradient-start) 0%, var(--color-primary-gradient-end) 100%) !important;
   color: white !important;
   box-shadow: none !important;
 }
@@ -292,7 +301,7 @@ html, body {
 }
 
 .btn-replenish-hover:hover {
-  background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%) !important;
+  background: linear-gradient(135deg, var(--color-primary-gradient-start) 0%, var(--color-primary-gradient-end) 100%) !important;
   color: white !important;
   border-color: transparent !important;
   box-shadow: none !important;
@@ -303,7 +312,7 @@ html, body {
 }
 
 .hover-kinetic-gradient:hover {
-  background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%) !important;
+  background: linear-gradient(135deg, var(--color-primary-gradient-start) 0%, var(--color-primary-gradient-end) 100%) !important;
   color: white !important;
   border-color: transparent !important;
   box-shadow: none !important;
@@ -673,7 +682,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   background-color: rgba(3, 105, 161, 0.05);
 }
 .status-dropdown-pill-in_use:hover {
-  background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%) !important;
+  background: linear-gradient(135deg, var(--color-primary-gradient-start) 0%, var(--color-primary-gradient-end) 100%) !important;
   color: white !important;
   border-color: transparent !important;
 }
@@ -747,6 +756,16 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .custom-tooltip:active::after {
   opacity: 1;
   transform: translateX(-50%) scale(1);
+}
+
+/* Tooltips only show on mobile view mode; hide on desktop view (lg screen) */
+@media (min-width: 1024px) {
+  .custom-tooltip:hover::after,
+  .custom-tooltip:focus-within::after,
+  .custom-tooltip:active::after {
+    display: none !important;
+    opacity: 0 !important;
+  }
 }
 
 /* Prevent illegible text by improving contrast on small uppercase labels */

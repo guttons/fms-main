@@ -831,7 +831,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
     frozenFlights.intl.forEach((ff: any) => {
       const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
       const existing = intlJobsMap.get(cleanNo);
-      const dbJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+      const flightDate = ff.date || selectedBriefingDate;
+      const dbJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo && (!j.date || j.date === flightDate));
       intlJobsMap.set(cleanNo, {
         ...(existing || {}),
         ...ff,
@@ -859,7 +860,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
     frozenFlights.domestic.forEach((ff: any) => {
       const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
       const existing = domJobsMap.get(cleanNo);
-      const dbJob = (domesticFlights || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+      const flightDate = ff.date || selectedBriefingDate;
+      const dbJob = (domesticFlights || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo && (!j.date || j.date === flightDate));
       domJobsMap.set(cleanNo, {
         ...(existing || {}),
         ...ff,
