@@ -944,7 +944,9 @@ const ScreenTimestamps: React.FC<{
   user: User,
   getLocalTimeValue: (isoString?: string) => string,
   setManualTime: (field: keyof FlightLog, timeVal: string) => void
-}> = ({ activeFlight, onTimestamp, onInputChange, onNext, onBack, user, getLocalTimeValue, setManualTime }) => (
+}> = ({ activeFlight, onTimestamp, onInputChange, onNext, onBack, user, getLocalTimeValue, setManualTime }) => {
+  const { selectedBriefingDate } = useOperationalData();
+  return (
   <div className="p-5 flex flex-col h-full min-h-[calc(100vh-140px)] pb-32">
       <button onClick={onBack} className="flex items-center text-on-surface-dim hover:text-primary mb-6 font-black text-[11px] uppercase tracking-widest transition-colors">
           <ChevronLeft className="w-4 h-4 mr-2" /> Back to Schedule
@@ -1195,6 +1197,7 @@ const ScreenTimestamps: React.FC<{
       </button>
   </div>
 );
+};
 
 const ScreenMetering: React.FC<{ 
   activeFlight: Partial<FlightLog> | null, 
@@ -1572,7 +1575,7 @@ const ScreenQC: React.FC<{
 
 export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob, initialVehicleId, onClearInitialVehicleId }) => {
   const { notify } = useNotification();
-  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, externalFlights, staff, refreshData } = useOperationalData();
+  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, externalFlights, staff, refreshData, selectedBriefingDate } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(null);
   const [paymentType, setPaymentType] = useState<'CREDIT' | 'CASH' | 'VOID'>('CREDIT');

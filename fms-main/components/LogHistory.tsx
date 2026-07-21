@@ -851,10 +851,11 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                   {selectedLogType === 'SEAPLANE' && (
                     <>
                       {renderSortableHeader('date', 'Date', 'px-10')}
-                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Operator</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Airline / Customer</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Pump ID</th>
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
                       {renderSortableHeader('ticket', 'Ticket', 'px-10')}
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Verifying Officer</th>
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
                     </>
                   )}
@@ -949,13 +950,14 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                        )?.name || log.officer || 'N/A';
                       const isExpanded = expandedLogId === log.id;
                       
-                      const seaplaneOp = log.flightNumber.replace('SEAPLANE-', '');
-                      const pumpId = log.vehicleId || log.aircraftReg.replace('PUMP-', '');
+                      const seaplaneOp = log.tacticalOperator || log.operatorName || 'N/A';
+                      const customerName = log.co || log.airline || (log.flightNumber && !log.flightNumber.startsWith('SEAPLANE-') ? log.flightNumber : 'N/A');
+                      const pumpId = log.vehicleId || log.aircraftReg.replace('PUMP-', '') || 'N/A';
                       
                       const groundData = parseGroundLog(log);
                       const marineData = parseMarineLog(log);
                       
-                      const colSpanCount = selectedLogType === 'TOTALIZER_READINGS' ? 8 : (selectedLogType === 'FLIGHT' ? 9 : (selectedLogType === 'MARINE' ? 8 : (selectedLogType === 'FILLING_STATION' ? 7 : 6)));
+                      const colSpanCount = selectedLogType === 'TOTALIZER_READINGS' ? 8 : (selectedLogType === 'FLIGHT' ? 9 : (selectedLogType === 'MARINE' ? 8 : (selectedLogType === 'FILLING_STATION' ? 7 : (selectedLogType === 'SEAPLANE' ? 7 : 6))));
 
                       return (
                         <React.Fragment key={log.id}>
@@ -1011,8 +1013,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                               <td className="px-10 py-6 text-[11px] font-black text-on-surface-dim font-mono tracking-widest uppercase">
                                   {getDisplayOperationalDate(log)}
                               </td>
-                              <td className="px-10 py-6 text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">
-                                  {seaplaneOp}
+                              <td className="px-10 py-6 text-xs font-black text-primary uppercase tracking-widest">
+                                  {customerName}
                               </td>
                               <td className="px-10 py-6 text-xs font-black text-on-surface tracking-wider font-mono">
                                   {pumpId}
@@ -1022,6 +1024,9 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                               </td>
                               <td className="px-10 py-6 text-left font-mono">
                                   {renderTicketCell(log.deliveryNumber)}
+                              </td>
+                              <td className="px-10 py-6 text-xs font-black text-on-surface tracking-wider uppercase">
+                                  {officerName}
                               </td>
                             </>
                           )}
@@ -1296,36 +1301,36 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
                                  {/* Seaplane details */}
                                  {selectedLogType === 'SEAPLANE' && (
-                                   <div className="grid grid-cols-2 md:grid-cols-5 gap-6 animate-in fade-in duration-300">
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Operator Name</span>
-                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{seaplaneOp}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Infrastructure Registry</span>
-                                         <span className="text-[11px] font-mono text-on-surface">PUMP-{pumpId}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Airline / Customer</span>
-                                         <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.co || log.airline || 'N/A'}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Verifying Officer Name</span>
-                                          <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.co || 'N/A'}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Pumping Window</span>
-                                         <span className="text-[11px] font-mono text-on-surface">08:00 - 16:00</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Database Sync Time</span>
-                                         <span className="text-[11px] font-mono text-on-surface">{log.timestampClearance ? new Date(log.timestampClearance).toLocaleString() : 'N/A'}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1 col-span-2 md:col-span-5">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Remarks</span>
-                                         <span className="text-[11px] text-on-surface opacity-80">{log.remarks || 'No operational remarks.'}</span>
-                                      </div>
-                                   </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-6 animate-in fade-in duration-300">
+                                       <div className="flex flex-col gap-1">
+                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Operator Name</span>
+                                          <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{seaplaneOp}</span>
+                                       </div>
+                                       <div className="flex flex-col gap-1">
+                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Infrastructure Registry</span>
+                                          <span className="text-[11px] font-mono text-on-surface">PUMP-{pumpId}</span>
+                                       </div>
+                                       <div className="flex flex-col gap-1">
+                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Airline / Customer</span>
+                                          <span className="text-[11px] font-black text-primary uppercase tracking-widest">{customerName}</span>
+                                       </div>
+                                       <div className="flex flex-col gap-1">
+                                           <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Verifying Officer Name</span>
+                                           <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{officerName}</span>
+                                       </div>
+                                       <div className="flex flex-col gap-1">
+                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Pumping Window</span>
+                                          <span className="text-[11px] font-mono text-on-surface">08:00 - 16:00</span>
+                                       </div>
+                                       <div className="flex flex-col gap-1">
+                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Database Sync Time</span>
+                                          <span className="text-[11px] font-mono text-on-surface">{log.timestampClearance ? new Date(log.timestampClearance).toLocaleString() : 'N/A'}</span>
+                                       </div>
+                                       <div className="flex flex-col gap-1 col-span-2 md:col-span-5">
+                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Remarks</span>
+                                          <span className="text-[11px] text-on-surface opacity-80">{log.remarks || 'No operational remarks.'}</span>
+                                       </div>
+                                    </div>
                                  )}
 
                                  {/* Filling Station details */}
