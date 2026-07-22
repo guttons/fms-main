@@ -90,11 +90,16 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   }, [activeTooltip]);
 
   const resolveLogType = (log: FlightLog): string => {
-    if (log.logType) return log.logType;
     const num = log.flightNumber || '';
-    if (num.startsWith('SEAPLANE')) return 'SEAPLANE';
-    if (num.startsWith('GROUND-')) return 'FILLING_STATION';
-    if (num.startsWith('VESSEL-')) return 'MARINE';
+    if (log.logType === 'SEAPLANE' || num.startsWith('SEAPLANE')) return 'SEAPLANE';
+    if (log.logType === 'FILLING_STATION' || num.startsWith('GROUND-')) return 'FILLING_STATION';
+    if (log.logType === 'MARINE' || num.startsWith('VESSEL-')) return 'MARINE';
+    if (log.logType === 'BRIDGING' || num.startsWith('LOAD-')) return 'BRIDGING';
+
+    const cust = ((log.co || log.airline || '') as string).toUpperCase();
+    if (cust.includes('SEAPLANE')) return 'SEAPLANE';
+    if (cust.includes('LOCAL SALES') || cust.includes('OTHERS')) return 'MARINE';
+
     return 'FLIGHT';
   };
 
@@ -365,8 +370,16 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
             fetchedTotalVolume = res.totalVolume;
           }
         } else {
-          fetchedTotalCount = res.totalCount;
-          fetchedTotalVolume = res.totalVolume;
+          // Client-side fallback filtering by resolveLogType to guarantee clean separation on deployed app
+          const originalList = [...fetchedLogsList];
+          fetchedLogsList = fetchedLogsList.filter(log => resolveLogType(log) === selectedLogType);
+          if (fetchedLogsList.length < originalList.length) {
+            fetchedTotalCount = fetchedLogsList.length;
+            fetchedTotalVolume = fetchedLogsList.reduce((sum, l) => sum + (l.volume || 0), 0);
+          } else {
+            fetchedTotalCount = res.totalCount;
+            fetchedTotalVolume = res.totalVolume;
+          }
         }
       }
 

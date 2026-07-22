@@ -28,8 +28,9 @@ import { CustomerPortal } from './components/CustomerPortal';
 import { ExecutiveModule } from './components/ExecutiveModule';
 import { MOCK_USERS } from './constants';
 import { User, UserRole, FlightJob, Alert, EquipmentStatus as EqStatusEnum } from './types';
-import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, Eclipse, CheckCircle, Share2, Smartphone, Trash2, Download, Laptop, Globe } from 'lucide-react';
+import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, Eclipse, CheckCircle, Share2, Smartphone, Trash2, Download, Laptop, Globe, RefreshCw, Users, ArrowRight } from 'lucide-react';
 import { updatePWAManifestAndTheme, requestNotificationPermission, sendNativeNotification } from './utils/pwa';
+import { syncEngine } from './services/syncEngine';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -244,6 +245,12 @@ const AppContextContent: React.FC<any> = ({
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isHeaderLogoSpinning, setIsHeaderLogoSpinning] = useState(false);
   const [mainElement, setMainElement] = useState<HTMLElement | null>(null);
+
+  const [syncState, setSyncState] = useState(() => syncEngine.getStatus());
+
+  useEffect(() => {
+    return syncEngine.subscribe(status => setSyncState(status));
+  }, []);
 
   const alertsRef = React.useRef<HTMLDivElement>(null);
   const settingsRef = React.useRef<HTMLDivElement>(null);
@@ -915,6 +922,18 @@ const AppContextContent: React.FC<any> = ({
                   : 'transform 0.5s ease, filter 0.3s ease'
               }}
             >
+            {/* Phase 0: Offline Status Banner (Only expands when truly offline to prevent layout shift) */}
+            <div className={`transition-all duration-300 overflow-hidden text-xs font-bold ${!syncState.isOnline ? 'h-8 opacity-100' : 'h-0 opacity-0 pointer-events-none'}`}>
+              <div className="h-8 flex items-center justify-between px-6 bg-amber-600 text-white">
+                <div className="flex items-center space-x-2">
+                  <WifiOff className="w-3.5 h-3.5 animate-pulse" />
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider">
+                    Offline Mode — {syncState.pendingCount} pending local mutation(s) saved to IndexedDB
+                  </span>
+                </div>
+              </div>
+            </div>
+
             {/* Phase 1: Critical Alert Bar */}
             <div className={`transition-all duration-700 ease-in-out overflow-hidden shadow-lg ${activeCriticalAlerts.length > 0 ? 'h-10 opacity-100' : 'h-0 opacity-0 pointer-events-none'}`}>
               <div className="h-10 bg-error text-white flex items-center justify-between px-6 relative">
@@ -1291,7 +1310,7 @@ const AppContextContent: React.FC<any> = ({
                                   </div>
                                 </div>
                                 <div className="text-[10px] font-black uppercase tracking-widest text-primary opacity-80 group-hover:translate-x-0.5 transition-transform">
-                                  Install &rarr;
+                                Install &rarr;
                                 </div>
                               </button>
                             )}

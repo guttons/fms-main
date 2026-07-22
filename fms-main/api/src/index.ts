@@ -818,11 +818,11 @@ app.get('/operations-log', requireAuth, async (req: Request, res: Response) => {
 
   // Handle logType filter in database
   if (logType === 'FLIGHT') {
-    filterClauses.push("(log_type = 'FLIGHT' AND NOT STARTS_WITH(flight_number, 'SEAPLANE') AND NOT STARTS_WITH(flight_number, 'GROUND-') AND NOT STARTS_WITH(flight_number, 'VESSEL-'))");
+    filterClauses.push("( (log_type = 'FLIGHT' OR log_type IS NULL) AND NOT STARTS_WITH(flight_number, 'SEAPLANE') AND NOT STARTS_WITH(flight_number, 'GROUND-') AND NOT STARTS_WITH(flight_number, 'VESSEL-') AND NOT STARTS_WITH(flight_number, 'LOAD-') AND NOT UPPER(COALESCE(airline, co, '')) LIKE '%SEAPLANE%' AND NOT UPPER(COALESCE(airline, co, '')) LIKE '%LOCAL SALES%' AND NOT UPPER(COALESCE(airline, co, '')) LIKE '%OTHERS%' )");
   } else if (logType === 'SEAPLANE') {
-    filterClauses.push("(log_type = 'SEAPLANE' OR STARTS_WITH(flight_number, 'SEAPLANE-'))");
+    filterClauses.push("( log_type = 'SEAPLANE' OR STARTS_WITH(flight_number, 'SEAPLANE-') OR UPPER(COALESCE(airline, co, '')) LIKE '%SEAPLANE%' )");
   } else if (logType === 'MARINE') {
-    filterClauses.push("(log_type = 'MARINE' OR STARTS_WITH(flight_number, 'VESSEL-'))");
+    filterClauses.push("( log_type = 'MARINE' OR STARTS_WITH(flight_number, 'VESSEL-') OR UPPER(COALESCE(airline, co, '')) LIKE '%LOCAL SALES%' OR UPPER(COALESCE(airline, co, '')) LIKE '%OTHERS%' )");
   } else if (logType === 'TOTALIZER_READINGS') {
     filterClauses.push(`(
       NOT STARTS_WITH(flight_number, 'SEAPLANE') 

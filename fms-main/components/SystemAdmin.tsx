@@ -215,21 +215,16 @@ const StaffTab: React.FC<{
     if (!empIdRegex.test(trimmedEmpId)) { push('Employee ID must be alphanumeric and can only contain dashes (-)', 'error'); return; }
 
     const rawPhone = form.phone ? String(form.phone).trim() : '';
-    if (!rawPhone) { push('Phone number is required', 'error'); return; }
-    const sanitizedPhone = rawPhone.replace(/[\s-()]/g, '');
-    const phoneRegex = /^\+?[0-9]{6,15}$/;
-    if (!phoneRegex.test(sanitizedPhone)) {
-      push('Invalid Phone. Must contain at least 6 digits (e.g. +9607771234 or +960-777-1234).', 'error');
-      return;
+    if (rawPhone) {
+      const sanitizedPhone = rawPhone.replace(/[\s-()]/g, '');
+      const phoneRegex = /^\+?[0-9]{6,15}$/;
+      if (!phoneRegex.test(sanitizedPhone)) {
+        push('Invalid Phone format.', 'error');
+        return;
+      }
     }
 
     const trimmedEmail = form.email ? String(form.email).trim() : '';
-    if (!trimmedEmail) { push('Email address is required', 'error'); return; }
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!emailRegex.test(trimmedEmail)) {
-      push('Invalid Email Address. Please enter a valid email address (e.g. employee@macl.aero).', 'error');
-      return;
-    }
 
     if (!editing) {
       const exists = staff.some(s => s.employeeId.toUpperCase().trim() === trimmedEmpId.toUpperCase());
@@ -290,15 +285,36 @@ const StaffTab: React.FC<{
     catch { push('Failed to update status', 'error'); }
   };
 
-  const filtered = staff.filter(s =>
-    (filterRole === 'ALL' || s.role === filterRole) &&
-    (filterStatus === 'ALL' || s.status === filterStatus)
-  );
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filtered = staff.filter(s => {
+    const matchesRole = filterRole === 'ALL' || s.role === filterRole;
+    const matchesStatus = filterStatus === 'ALL' || s.status === filterStatus;
+    const q = searchQuery.trim().toLowerCase();
+    const matchesSearch = !q || (
+      s.name.toLowerCase().includes(q) ||
+      s.employeeId.toLowerCase().includes(q) ||
+      (s.email || '').toLowerCase().includes(q) ||
+      s.role.toLowerCase().includes(q)
+    );
+    return matchesRole && matchesStatus && matchesSearch;
+  });
 
   return (
     <>
       <div className="flex flex-col sm:flex-row gap-4 mb-6 items-start sm:items-center justify-between">
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex gap-3 flex-wrap items-center w-full sm:w-auto">
+          {/* Search Box */}
+          <div className="relative flex-1 sm:w-64">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search RC, Name, Email..."
+              className="w-full text-[10px] font-bold bg-surface-container-low border-transparent rounded-xl pl-9 pr-4 py-2 text-on-surface focus:border-primary outline-none"
+            />
+            <IdCard className="w-3.5 h-3.5 text-on-surface-dim opacity-40 absolute left-3 top-1/2 -translate-y-1/2" />
+          </div>
           <div className="relative">
             <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="text-[10px] font-black uppercase tracking-widest bg-surface-container-low border-transparent rounded-xl pl-4 pr-8 py-2 text-on-surface-dim appearance-none cursor-pointer focus:border-primary outline-none transition-all">
               <option value="ALL">All Roles</option>
@@ -326,14 +342,14 @@ const StaffTab: React.FC<{
         <div className="flex flex-col items-center justify-center py-20 text-on-surface-dim opacity-40">
           <Users className="w-12 h-12 mb-4" />
           <p className="text-sm font-black uppercase tracking-widest">No staff records found</p>
-          <p className="text-[10px] mt-1 uppercase tracking-widest">Add your first staff member above</p>
+          <p className="text-[10px] mt-1 uppercase tracking-widest">Try adjusting search or role filter</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border-transparent">
           <table className="min-w-full divide-y divide-outline">
             <thead className="bg-surface-container-low">
               <tr>
-                {['Personnel', 'Employee ID', 'Role', 'Contact', 'Status', 'Actions'].map(h => (
+                {['Personnel', 'RC Number', 'Role (RBAC)', 'Contact Email', 'Status', 'Actions'].map(h => (
                   <th key={h} className="px-6 py-4 text-left text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em]">{h}</th>
                 ))}
               </tr>
@@ -344,8 +360,8 @@ const StaffTab: React.FC<{
                   <td className="px-6 py-5 whitespace-nowrap">
                     <div className="flex items-center gap-4">
                       <div className="relative flex-shrink-0">
-                        <img src={s.avatar || `https://picsum.photos/100/100?random=${s.employeeId}`} alt="" className="w-10 h-10 rounded-2xl border-transparent object-cover" />
-                        <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-surface ${s.status === 'active' ? 'bg-success' : 'bg-outline'}`} />
+                        <img src={s.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(s.name)}`} alt="" className="w-10 h-10 rounded-2xl border-transparent object-cover" />
+                        <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-surface ${s.status === 'active' ? 'bg-success' : 'bg-error'}`} />
                       </div>
                       <div>
                         <p className="text-sm font-black text-on-surface uppercase tracking-tight">{s.name}</p>
@@ -365,25 +381,27 @@ const StaffTab: React.FC<{
                   </td>
                   <td className="px-6 py-5 whitespace-nowrap">
                     <div className="space-y-1">
-                      {s.phone && <p className="flex items-center gap-1.5 text-[10px] text-on-surface-dim opacity-60"><Phone className="w-3 h-3" />{s.phone}</p>}
                       {s.email && <p className="flex items-center gap-1.5 text-[10px] text-on-surface-dim opacity-60"><Mail className="w-3 h-3" />{s.email}</p>}
-                      {!s.phone && !s.email && <span className="text-[10px] text-on-surface-dim opacity-30 uppercase tracking-widest">—</span>}
+                      {!s.email && <span className="text-[10px] text-on-surface-dim opacity-30 uppercase tracking-widest">—</span>}
                     </div>
                   </td>
                   <td className="px-6 py-5 whitespace-nowrap">
-                    <span className={`px-3 py-1 text-[9px] font-black rounded-xl border uppercase tracking-widest ${s.status === 'active' ? 'bg-success/10 text-success border-success/20' : 'bg-outline text-on-surface-dim border-outline'}`}>
+                    <button 
+                      onClick={() => handleToggleStatus(s)}
+                      className={`px-3 py-1 text-[9px] font-black rounded-xl border uppercase tracking-widest transition-all ${s.status === 'active' ? 'bg-success/10 text-success border-success/20 hover:bg-success/20' : 'bg-error/10 text-error border-error/20 hover:bg-error/20'}`}
+                    >
                       {s.status}
-                    </span>
+                    </button>
                   </td>
                   <td className="px-6 py-5 whitespace-nowrap">
                     <div className="flex items-center gap-3">
-                      <button onClick={() => handleToggleStatus(s)} title={s.status === 'active' ? 'Deactivate' : 'Activate'} className="p-2 rounded-xl hover:bg-surface-container-low border border-transparent hover:border-outline transition-all active:scale-90">
+                      <button onClick={() => handleToggleStatus(s)} title={s.status === 'active' ? 'Deactivate Account' : 'Activate Account'} className="p-2 rounded-xl hover:bg-surface-container-low border border-transparent hover:border-outline transition-all active:scale-90">
                         {s.status === 'active' ? <UserX className="w-4 h-4 text-warning" /> : <UserCheck className="w-4 h-4 text-success" />}
                       </button>
-                      <button onClick={() => openEdit(s)} className="p-2 rounded-xl hover:bg-primary/10 border border-transparent hover:border-primary/20 transition-all active:scale-90">
-                        <Pencil className="w-4 h-4 text-primary" />
+                      <button onClick={() => openEdit(s)} title="Configure RBAC Access Role & Status" className="p-2 rounded-xl hover:bg-primary/10 border border-transparent hover:border-primary/20 transition-all active:scale-90 flex items-center gap-1 text-[10px] font-bold text-primary">
+                        <Pencil className="w-4 h-4" /> Role
                       </button>
-                      <button onClick={() => handleDelete(s)} className="p-2 rounded-xl hover:bg-error/10 border border-transparent hover:border-error/20 transition-all active:scale-90">
+                      <button onClick={() => handleDelete(s)} title="Remove Staff Member" className="p-2 rounded-xl hover:bg-error/10 border border-transparent hover:border-error/20 transition-all active:scale-90">
                         <Trash2 className="w-4 h-4 text-error" />
                       </button>
                     </div>
@@ -397,20 +415,36 @@ const StaffTab: React.FC<{
 
       {/* Staff Count */}
       <p className="text-[10px] font-black text-on-surface-dim opacity-30 uppercase tracking-widest mt-4">
-        {filtered.length} of {staff.length} personnel records
+        Showing {filtered.length} of {staff.length} MACL personnel records
       </p>
 
-      {/* Add/Edit Modal */}
+      {/* Add/Edit Modal: System Admin controls Access Roles & Active Status */}
       {showModal && (
-        <Modal title={editing ? 'Edit Staff Member' : 'Add New Staff Member'} onClose={() => setShowModal(false)}>
+        <Modal title={editing ? `Manage Access Role & Status (${editing.employeeId})` : 'Add New Staff Member'} onClose={() => setShowModal(false)}>
           <div className="space-y-5">
-            <Field label="Full Name" required>
-              <input className={inputCls} placeholder="e.g. Ahmed Rizwan" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
-            </Field>
-            <Field label="Employee ID" required>
-              <input className={inputCls} placeholder="e.g. EMP-1042" value={form.employeeId} onChange={e => setForm(p => ({ ...p, employeeId: e.target.value }))} />
-            </Field>
-            <Field label="Role" required>
+            {editing ? (
+              <div className="bg-surface-container-low p-4 rounded-2xl border border-outline/40 space-y-1.5">
+                <div className="text-xs font-black text-on-surface uppercase tracking-tight">{editing.name}</div>
+                <div className="text-[10px] font-bold text-on-surface-dim opacity-60 flex items-center gap-3">
+                  <span>RC Number: <strong className="text-on-surface">{editing.employeeId}</strong></span>
+                  <span>Email: <strong className="text-on-surface">{editing.email || '—'}</strong></span>
+                </div>
+              </div>
+            ) : (
+              <>
+                <Field label="Full Name" required>
+                  <input className={inputCls} placeholder="e.g. Ahmed Rizwan" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+                </Field>
+                <Field label="RC Number / Employee ID" required>
+                  <input className={inputCls} placeholder="e.g. A-3046" value={form.employeeId} onChange={e => setForm(p => ({ ...p, employeeId: e.target.value }))} />
+                </Field>
+                <Field label="Email Address">
+                  <input className={inputCls} placeholder="name@macl.aero" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
+                </Field>
+              </>
+            )}
+
+            <Field label="System Access Role (RBAC)" required>
               <div className="relative">
                 <select className={selectCls} value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value as UserRole }))}>
                   {Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -418,28 +452,22 @@ const StaffTab: React.FC<{
                 <ChevronDown className="w-4 h-4 text-on-surface-dim absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             </Field>
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Phone" required>
-                <input className={inputCls} placeholder="+960 xxx xxxx" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
-              </Field>
-              <Field label="Email" required>
-                <input className={inputCls} placeholder="name@macl.aero" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
-              </Field>
-            </div>
-            <Field label="Status">
+
+            <Field label="Account Status">
               <div className="relative">
                 <select className={selectCls} value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value as 'active' | 'inactive' }))}>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
+                  <option value="active">Active (Permit Sign In)</option>
+                  <option value="inactive">Inactive (Block Sign In)</option>
                 </select>
                 <ChevronDown className="w-4 h-4 text-on-surface-dim absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             </Field>
+
             <div className="flex gap-3 pt-2">
               <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 rounded-xl border-transparent text-[11px] font-black uppercase tracking-widest text-on-surface-dim hover:bg-surface-container-low transition-all">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 px-4 py-3 rounded-xl kinetic-gradient text-[11px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
                 {saving && <Logo className="w-4 h-4 animate-pulse" />}
-                {editing ? 'Save Changes' : 'Add Staff'}
+                {editing ? 'Update Access Role' : 'Add Staff'}
               </button>
             </div>
           </div>

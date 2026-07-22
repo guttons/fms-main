@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { UserRole, User } from '../types';
 import { supabaseService } from '../services/supabaseService';
 import { supabase } from '../supabase';
+import { fmsDb } from '../services/db';
 
 export type CustomerClassification = 'ADVANCE' | 'CREDIT' | 'CASH';
 
@@ -14,7 +15,8 @@ export interface CustomerAccount {
   advanceBalance: number;      // USD (Current running balance for pre-pay)
   creditLimit: number;         // USD
   estimated5DaysSales: number;  // USD
-  associatedAirlines?: string[]; // Third-party agent links
+  associatedAirlines?: string[]; // Third-party agent links or flight prefixes (e.g. EK, SQ, Q2)
+  associatedRegs?: string[];    // Aircraft registrations (e.g. A6-EEO, 8Q-IAI)
   outstandingReceipts: number;  // USD
   runningBalance: number;      // USD
   openingBalanceLiters?: number;
@@ -204,18 +206,34 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode; user?: U
     const saved = localStorage.getItem('fms_fin_customers');
     if (saved) return JSON.parse(saved);
     return [
-      { id: 'c1', name: 'Emirates Airlines', classification: 'ADVANCE', openingBalance: 280000, paymentsReceived: 150000, advanceBalance: 430000, creditLimit: 0, estimated5DaysSales: 150000, runningBalance: 430000, outstandingReceipts: 0, openingBalanceLiters: 100000, balanceLiters: 153571 },
-      { id: 'c2', name: 'Singapore Airlines', classification: 'ADVANCE', openingBalance: 175712, paymentsReceived: 220000, advanceBalance: 395712, creditLimit: 0, estimated5DaysSales: 80000, runningBalance: 395712, outstandingReceipts: 0, openingBalanceLiters: 62754, balanceLiters: 141325 },
-      { id: 'c3', name: 'Maldivian (IAS)', classification: 'CREDIT', openingBalance: -28200000, paymentsReceived: 10000000, advanceBalance: 0, creditLimit: 50000000, estimated5DaysSales: 500000, runningBalance: -18200000, outstandingReceipts: 18200000 },
-      { id: 'c4', name: 'Manta Aviation Pvt Ltd', classification: 'CREDIT', openingBalance: -150790, paymentsReceived: 10000000, advanceBalance: 0, creditLimit: 20000000, estimated5DaysSales: 200000, runningBalance: -150790, outstandingReceipts: 150790 },
-      { id: 'c5', name: 'Flyme (Villa Air)', classification: 'CREDIT', openingBalance: 477188, paymentsReceived: 10000000, advanceBalance: 0, creditLimit: 15000000, estimated5DaysSales: 150000, runningBalance: 477188, outstandingReceipts: 0 },
-      { id: 'c6', name: 'Qatar Airways', classification: 'ADVANCE', openingBalance: 151575, paymentsReceived: 500000, advanceBalance: 651575, creditLimit: 0, estimated5DaysSales: 120000, runningBalance: 651575, outstandingReceipts: 0, openingBalanceLiters: 54134, balanceLiters: 232705 },
-      { id: 'c7', name: 'Access Flight Support', classification: 'ADVANCE', openingBalance: 26485, paymentsReceived: 15000, advanceBalance: 41485, creditLimit: 0, estimated5DaysSales: 30000, runningBalance: 41485, outstandingReceipts: 0 },
-      { id: 'c8', name: 'AML Global Ltd', classification: 'ADVANCE', openingBalance: 311853, paymentsReceived: 0, advanceBalance: 311853, creditLimit: 0, estimated5DaysSales: 50000, runningBalance: 311853, outstandingReceipts: 0 },
-      { id: 'c9', name: 'Aviation Services Management', classification: 'CREDIT', openingBalance: -326370, paymentsReceived: 1215191, advanceBalance: 0, creditLimit: 5000000, estimated5DaysSales: 100000, runningBalance: 888821, outstandingReceipts: 0 },
-      { id: 'c10', name: 'Mega Airport Services (Cash Agent)', classification: 'CASH', openingBalance: 0, paymentsReceived: 0, advanceBalance: 0, creditLimit: 0, estimated5DaysSales: 0, runningBalance: 0, outstandingReceipts: 0 },
+      { id: 'c1', name: 'Emirates Airlines', classification: 'ADVANCE', openingBalance: 280000, paymentsReceived: 150000, advanceBalance: 430000, creditLimit: 0, estimated5DaysSales: 150000, runningBalance: 430000, outstandingReceipts: 0, openingBalanceLiters: 100000, balanceLiters: 153571, associatedAirlines: ['EK', 'EK650', 'EK651', 'EK652', 'EK653'], associatedRegs: ['A6-EEO', 'A6-EUV', 'A6-EOC'] },
+      { id: 'c2', name: 'Singapore Airlines', classification: 'ADVANCE', openingBalance: 175712, paymentsReceived: 220000, advanceBalance: 395712, creditLimit: 0, estimated5DaysSales: 80000, runningBalance: 395712, outstandingReceipts: 0, openingBalanceLiters: 62754, balanceLiters: 141325, associatedAirlines: ['SQ', 'SQ451', 'SQ452'], associatedRegs: ['9V-SMA', '9V-SMB'] },
+      { id: 'c3', name: 'Maldivian (IAS)', classification: 'CREDIT', openingBalance: -28200000, paymentsReceived: 10000000, advanceBalance: 0, creditLimit: 50000000, estimated5DaysSales: 500000, runningBalance: -18200000, outstandingReceipts: 18200000, associatedAirlines: ['Q2', 'Q2700', 'Q2701', 'Q2702'], associatedRegs: ['8Q-IAI', '8Q-IAJ', '8Q-ISD'] },
+      { id: 'c4', name: 'Manta Aviation Pvt Ltd', classification: 'CREDIT', openingBalance: -150790, paymentsReceived: 10000000, advanceBalance: 0, creditLimit: 20000000, estimated5DaysSales: 200000, runningBalance: -150790, outstandingReceipts: 150790, associatedAirlines: ['NR', 'NR101', 'NR102'], associatedRegs: ['8Q-RAA', '8Q-RAB'] },
+      { id: 'c5', name: 'Flyme (Villa Air)', classification: 'CREDIT', openingBalance: 477188, paymentsReceived: 10000000, advanceBalance: 0, creditLimit: 15000000, estimated5DaysSales: 150000, runningBalance: 477188, outstandingReceipts: 0, associatedAirlines: ['VP', 'VP201', 'VP202'], associatedRegs: ['8Q-VAH', '8Q-VAI'] },
+      { id: 'c6', name: 'Qatar Airways', classification: 'ADVANCE', openingBalance: 151575, paymentsReceived: 500000, advanceBalance: 651575, creditLimit: 0, estimated5DaysSales: 120000, runningBalance: 651575, outstandingReceipts: 0, openingBalanceLiters: 54134, balanceLiters: 232705, associatedAirlines: ['QR', 'QR672', 'QR673'], associatedRegs: ['A7-BCA', 'A7-BCB'] },
+      { id: 'c7', name: 'Access Flight Support', classification: 'ADVANCE', openingBalance: 26485, paymentsReceived: 15000, advanceBalance: 41485, creditLimit: 0, estimated5DaysSales: 30000, runningBalance: 41485, outstandingReceipts: 0, associatedAirlines: ['AFS'] },
+      { id: 'c8', name: 'AML Global Ltd', classification: 'ADVANCE', openingBalance: 311853, paymentsReceived: 0, advanceBalance: 311853, creditLimit: 0, estimated5DaysSales: 50000, runningBalance: 311853, outstandingReceipts: 0, associatedAirlines: ['AML'] },
+      { id: 'c9', name: 'Aviation Services Management', classification: 'CREDIT', openingBalance: -326370, paymentsReceived: 1215191, advanceBalance: 0, creditLimit: 5000000, estimated5DaysSales: 100000, runningBalance: 888821, outstandingReceipts: 0, associatedAirlines: ['ASM'] },
+      { id: 'c10', name: 'Mega Airport Services (Cash Agent)', classification: 'CASH', openingBalance: 0, paymentsReceived: 0, advanceBalance: 0, creditLimit: 0, estimated5DaysSales: 0, runningBalance: 0, outstandingReceipts: 0, associatedAirlines: ['MAS', 'CASH'] },
     ];
   });
+
+  // Index customer master database into IndexedDB for offline flight number & aircraft reg resolution
+  useEffect(() => {
+    fmsDb.indexCustomerMappings(customers).catch(err => {
+      console.warn('[MasterDB] Failed to index customer flight/reg mappings:', err);
+    });
+
+    // Also map specific aircraft tail numbers to customers
+    for (const cust of customers) {
+      if (cust.associatedRegs) {
+        for (const reg of cust.associatedRegs) {
+          fmsDb.mapFlightOrRegToCustomer(reg, cust.id, cust.name, cust.classification, 'AIRCRAFT_REG');
+        }
+      }
+    }
+  }, [customers]);
 
   const [upcomingPayments, setUpcomingPayments] = useState<UpcomingPayment[]>(() => {
     const saved = localStorage.getItem('fms_fin_upcoming');

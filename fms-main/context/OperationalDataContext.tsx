@@ -6,6 +6,8 @@ import { supabaseService } from '../services/supabaseService';
 import { supabase } from '../supabase';
 import { sendNativeNotification } from '../utils/pwa';
 
+import { INITIAL_STAFF_LIST } from '../constants/staffList';
+
 interface ShiftBriefingInfo {
   info: { text: string; type: string; isHighAlert?: boolean }[];
   dieselNeeds: string[];
@@ -587,7 +589,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   });
   const [flightLogs, setFlightLogs] = useState<FlightLog[]>([]);
   const [domesticAssignments, setDomesticAssignments] = useState<any[]>([]);
-  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [staff, setStaff] = useState<StaffMember[]>(INITIAL_STAFF_LIST);
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [isAlertsLoading, setIsAlertsLoading] = useState(false);
 

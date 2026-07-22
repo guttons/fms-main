@@ -2,6 +2,9 @@ import { supabase } from '../supabase';
 import { User, Tank, FlightLog, BridgingLog, Alert, FlightJob, Equipment, StaffMember, UserRole, EquipmentStatus, Vessel } from '../types';
 import { CustomerAccount, UpcomingPayment, Invoice, Receipt, ProformaRecord, FuelRequest, MonthEndVariance, ProcurementPR, SurchargeRecord, MpdSale, CustomsShipment } from '../context/FinanceDataContext';
 import { TANKS, MOCK_USERS, EQUIPMENT } from '../constants';
+import { INITIAL_STAFF_LIST } from '../constants/staffList';
+import { fmsDb } from './db';
+import { syncEngine } from './syncEngine';
 
 const localBridgingLogs: BridgingLog[] = [
   {
@@ -91,49 +94,60 @@ export const supabaseService = {
 
   // ── Tanks ───────────────────────────────────────────────────────────────────
   async getTanks(): Promise<Tank[]> {
-    const { data, error } = await supabase.from('tanks').select('*').order('name');
-    if (error) {
-      console.warn('[Supabase] getTanks failed, falling back to static constants:', error);
-      if (localTanks.length === 0) localTanks = TANKS;
+    try {
+      const { data, error } = await supabase.from('tanks').select('*').order('name');
+      if (!error && data && data.length > 0) {
+        localTanks = data.map(row => ({
+          id: row.id,
+          name: row.name,
+          type: row.type,
+          capacity: Number(row.capacity),
+          currentLevel: Number(row.current_level),
+          safeMinLevel: Number(row.safe_min_level),
+          lastUpdated: row.last_updated
+        } as Tank));
+        // Cache to IndexedDB
+        await fmsDb.bulkPut('tanks', localTanks);
+        return localTanks;
+      }
+    } catch (e) {
+      console.warn('[Supabase] Network query failed for getTanks, checking IndexedDB cache:', e);
+    }
+
+    // Fallback to IndexedDB
+    const cached = await fmsDb.getAll<Tank>('tanks');
+    if (cached && cached.length > 0) {
+      localTanks = cached;
       return localTanks;
     }
-    if (!data || data.length === 0) {
-      if (localTanks.length === 0) localTanks = TANKS;
-      return localTanks;
-    }
-    localTanks = data.map(row => ({
-      id: row.id,
-      name: row.name,
-      type: row.type,
-      capacity: Number(row.capacity),
-      currentLevel: Number(row.current_level),
-      safeMinLevel: Number(row.safe_min_level),
-      lastUpdated: row.last_updated
-    } as Tank));
+
+    if (localTanks.length === 0) localTanks = TANKS;
+    await fmsDb.bulkPut('tanks', localTanks);
     return localTanks;
   },
 
   async updateTankLevel(id: string, newLevel: number): Promise<void> {
     const index = localTanks.findIndex(t => t.id === id);
-    let original: Tank | null = null;
+    const lastUpdated = new Date().toISOString();
     if (index !== -1) {
-      original = { ...localTanks[index] };
-      localTanks[index] = { ...localTanks[index], currentLevel: newLevel, lastUpdated: new Date().toISOString() };
+      localTanks[index] = { ...localTanks[index], currentLevel: newLevel, lastUpdated };
       triggerTanksCallbacks();
+      await fmsDb.put('tanks', localTanks[index]);
     }
 
-    const { error } = await supabase.from('tanks').update({
-      current_level: newLevel,
-      last_updated: new Date().toISOString()
-    }).eq('id', id);
+    const payload = { current_level: newLevel, last_updated: lastUpdated };
 
-    if (error) {
-      if (index !== -1 && original) {
-        localTanks[index] = original;
-        triggerTanksCallbacks();
-      }
-      console.error('[Supabase] updateTankLevel failed:', error);
-    }
+    // Enqueue mutation to IndexedDB Outbox
+    await fmsDb.enqueueOutbox({
+      action: 'UPDATE',
+      entityType: 'tank',
+      entityId: id,
+      payload,
+      idempotencyKey: `tank-lvl-${id}-${Date.now()}`
+    });
+
+    // Attempt background sync
+    syncEngine.flushOutbox().catch(err => console.warn('[Outbox] Background sync queued offline:', err));
   },
 
   subscribeToTanks(callback: (tanks: Tank[]) => void) {
@@ -237,61 +251,71 @@ export const supabaseService = {
 
   // ── Flight Jobs ─────────────────────────────────────────────────────────────
   async getFlightJobs(): Promise<FlightJob[]> {
-    const { data, error } = await supabase.from('flight_jobs').select('*');
-    if (error) {
-      console.warn('[Supabase] getFlightJobs failed:', error);
-      return [];
-    }
-    if (!data || data.length === 0) return [];
-    return data.map(row => {
-      let dateVal: string | undefined = undefined;
-      let routeVal: string | undefined = undefined;
-      let isDomesticVal: boolean | undefined = undefined;
-      let isAdhocVal: boolean | undefined = undefined;
-      let typeVal: 'arrival' | 'departure' | undefined = undefined;
-      let remarksVal = row.remarks || '';
+    try {
+      const { data, error } = await supabase.from('flight_jobs').select('*');
+      if (!error && data && data.length > 0) {
+        const jobs = data.map(row => {
+          let dateVal: string | undefined = undefined;
+          let routeVal: string | undefined = undefined;
+          let isDomesticVal: boolean | undefined = undefined;
+          let isAdhocVal: boolean | undefined = undefined;
+          let typeVal: 'arrival' | 'departure' | undefined = undefined;
+          let remarksVal = row.remarks || '';
 
-      if (row.remarks && row.remarks.startsWith('{"_fms_meta":')) {
-        try {
-          const meta = JSON.parse(row.remarks);
-          dateVal = meta.date;
-          routeVal = meta.route;
-          isDomesticVal = meta.isDomestic;
-          isAdhocVal = meta.isAdhoc;
-          typeVal = meta.type;
-          remarksVal = meta.remarks || '';
-        } catch (e) {
-          // fallback
-        }
+          if (row.remarks && row.remarks.startsWith('{"_fms_meta":')) {
+            try {
+              const meta = JSON.parse(row.remarks);
+              dateVal = meta.date;
+              routeVal = meta.route;
+              isDomesticVal = meta.isDomestic;
+              isAdhocVal = meta.isAdhoc;
+              typeVal = meta.type;
+              remarksVal = meta.remarks || '';
+            } catch (e) {}
+          }
+
+          return {
+            id: row.id,
+            flightNumber: row.flight_number,
+            aircraftReg: row.aircraft_reg,
+            aircraftType: row.aircraft_type,
+            stand: row.stand,
+            sta: row.sta,
+            eta: row.eta,
+            std: row.std,
+            assignedTo: row.assigned_to,
+            assignedOfficer: row.assigned_officer,
+            equipmentUsage: row.equipment_usage,
+            status: row.status,
+            vehicleId: row.vehicle_id,
+            remarks: remarksVal,
+            deliveryNumber: row.delivery_number,
+            pitNumber: row.pit_number,
+            date: dateVal,
+            route: routeVal,
+            isDomestic: isDomesticVal,
+            isAdhoc: isAdhocVal,
+            type: typeVal
+          } as FlightJob;
+        });
+
+        // Cache in IndexedDB
+        await fmsDb.bulkPut('flight_jobs', jobs);
+        return jobs;
       }
+    } catch (e) {
+      console.warn('[Supabase] getFlightJobs network query failed, falling back to IndexedDB:', e);
+    }
 
-      return {
-        id: row.id,
-        flightNumber: row.flight_number,
-        aircraftReg: row.aircraft_reg,
-        aircraftType: row.aircraft_type,
-        stand: row.stand,
-        sta: row.sta,
-        eta: row.eta,
-        std: row.std,
-        assignedTo: row.assigned_to,
-        assignedOfficer: row.assigned_officer,
-        equipmentUsage: row.equipment_usage,
-        status: row.status,
-        vehicleId: row.vehicle_id,
-        remarks: remarksVal,
-        deliveryNumber: row.delivery_number,
-        pitNumber: row.pit_number,
-        date: dateVal,
-        route: routeVal,
-        isDomestic: isDomesticVal,
-        isAdhoc: isAdhocVal,
-        type: typeVal
-      } as FlightJob;
-    });
+    // Offline fallback from IndexedDB
+    const cachedJobs = await fmsDb.getAll<FlightJob>('flight_jobs');
+    return cachedJobs || [];
   },
 
   async addFlightJob(job: FlightJob): Promise<void> {
+    // 1. Write to local IndexedDB immediately
+    await fmsDb.put('flight_jobs', job);
+
     const metaString = JSON.stringify({
       _fms_meta: true,
       date: job.date,
@@ -321,14 +345,25 @@ export const supabaseService = {
       pit_number: job.pitNumber || null
     };
 
-    const { error } = await supabase.from('flight_jobs').insert([row]);
-    if (error) {
-      console.error('[Supabase] addFlightJob failed:', error);
-      throw error;
-    }
+    // 2. Queue mutation in outbox
+    await fmsDb.enqueueOutbox({
+      action: 'INSERT',
+      entityType: 'flight_job',
+      entityId: job.id,
+      payload: row,
+      idempotencyKey: `fj-ins-${job.id}-${Date.now()}`
+    });
+
+    syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
   },
 
   async updateFlightJob(id: string, updates: Partial<FlightJob>): Promise<void> {
+    // 1. Update local IndexedDB
+    const existing = await fmsDb.get<FlightJob>('flight_jobs', id);
+    if (existing) {
+      await fmsDb.put('flight_jobs', { ...existing, ...updates });
+    }
+
     const row: Record<string, any> = {};
     if ('flightNumber' in updates) row.flight_number = updates.flightNumber;
     if ('aircraftReg' in updates) row.aircraft_reg = updates.aircraftReg;
@@ -357,19 +392,28 @@ export const supabaseService = {
     if ('deliveryNumber' in updates) row.delivery_number = updates.deliveryNumber === undefined ? null : updates.deliveryNumber;
     if ('pitNumber' in updates) row.pit_number = updates.pitNumber === undefined ? null : updates.pitNumber;
 
-    const { error } = await supabase.from('flight_jobs').update(row).eq('id', id);
-    if (error) {
-      console.error('[Supabase] updateFlightJob failed:', error);
-      throw error;
-    }
+    // 2. Queue outbox
+    await fmsDb.enqueueOutbox({
+      action: 'UPDATE',
+      entityType: 'flight_job',
+      entityId: id,
+      payload: row,
+      idempotencyKey: `fj-upd-${id}-${Date.now()}`
+    });
+
+    syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
   },
 
   async deleteFlightJob(id: string): Promise<void> {
-    const { error } = await supabase.from('flight_jobs').delete().eq('id', id);
-    if (error) {
-      console.error('[Supabase] deleteFlightJob failed:', error);
-      throw error;
-    }
+    await fmsDb.delete('flight_jobs', id);
+    await fmsDb.enqueueOutbox({
+      action: 'DELETE',
+      entityType: 'flight_job',
+      entityId: id,
+      payload: null,
+      idempotencyKey: `fj-del-${id}-${Date.now()}`
+    });
+    syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
   },
 
   async clearAllFlightJobs(): Promise<void> {
@@ -1114,48 +1158,53 @@ export const supabaseService = {
   },
 
   async getStaff(): Promise<StaffMember[]> {
-    const { data, error } = await supabase.from('staff').select('*').order('name');
-    if (error) {
-      console.warn('[Supabase] getStaff failed, falling back to mocks:', error);
-      if (localStaff.length === 0) {
-        localStaff = MOCK_USERS.map(u => ({
-          id: u.id,
-          name: u.name,
-          role: u.role,
-          employeeId: `EMP-${u.id.toUpperCase()}`,
-          status: 'active',
-          joinDate: new Date().toISOString(),
-          avatar: u.avatar
-        }));
+    try {
+      const { data, error } = await supabase.from('staff').select('*').order('name');
+      if (!error && data && data.length >= 50) {
+        localStaff = data.map(row => ({
+          id: row.id,
+          name: row.name,
+          role: row.role as UserRole,
+          employeeId: row.employee_id,
+          phone: row.phone,
+          email: row.email,
+          status: row.status as 'active' | 'inactive',
+          joinDate: row.join_date || new Date().toISOString(),
+          avatar: row.avatar
+        } as StaffMember));
+        await fmsDb.bulkPut('staff', localStaff);
+        return localStaff;
       }
+    } catch (e) {
+      console.warn('[Supabase] getStaff failed, checking IndexedDB cache:', e);
+    }
+
+    // Fallback to IndexedDB
+    const cachedStaff = await fmsDb.getAll<StaffMember>('staff');
+    if (cachedStaff && cachedStaff.length >= 50 && !cachedStaff.some(s => s.id === 'u1')) {
+      localStaff = cachedStaff;
       return localStaff;
     }
-    if (!data || data.length === 0) {
-      if (localStaff.length === 0) {
-        localStaff = MOCK_USERS.map(u => ({
-          id: u.id,
-          name: u.name,
-          role: u.role,
-          employeeId: `EMP-${u.id.toUpperCase()}`,
-          status: 'active',
-          joinDate: new Date().toISOString(),
-          avatar: u.avatar
-        }));
-      }
-      return localStaff;
-    }
-    localStaff = data.map(row => ({
-      id: row.id,
-      name: row.name,
-      role: row.role as UserRole,
-      employeeId: row.employee_id,
-      phone: row.phone,
-      email: row.email,
-      status: row.status as 'active' | 'inactive',
-      joinDate: row.join_date || new Date().toISOString(),
-      avatar: row.avatar
-    } as StaffMember));
+
+    // Always use INITIAL_STAFF_LIST (the 90+ MACL Staff List)
+    localStaff = INITIAL_STAFF_LIST;
+    await fmsDb.bulkPut('staff', localStaff);
     return localStaff;
+  },
+
+  async findStaffByEmailOrRc(identifier: string): Promise<StaffMember | null> {
+    if (!identifier) return null;
+    const staffList = await this.getStaff();
+    const clean = identifier.trim().toLowerCase();
+    
+    // Match exact RC Number / employeeId (e.g. "a-3046", "35075", "a-6600") OR Email (e.g. "mohamed.ashhad@macl.aero")
+    const match = staffList.find(s => {
+      const empId = (s.employeeId || '').trim().toLowerCase();
+      const email = (s.email || '').trim().toLowerCase();
+      return empId === clean || email === clean || empId.replace('-', '') === clean.replace('-', '');
+    });
+
+    return match || null;
   },
 
   async addStaff(member: Omit<StaffMember, 'id'>): Promise<void> {
@@ -1168,31 +1217,32 @@ export const supabaseService = {
     localStaff.push(newMember);
     triggerStaffCallbacks();
 
-    const row = {
-      name: member.name,
-      role: member.role,
-      employee_id: member.employeeId,
-      phone: member.phone || null,
-      email: member.email || null,
-      status: member.status,
-      avatar: newMember.avatar
-    };
-    const { error } = await supabase.from('staff').insert([row]);
-    if (error) {
-      localStaff = localStaff.filter(s => s.id !== newId);
-      triggerStaffCallbacks();
-      console.error('[Supabase] addStaff failed:', error);
-      throw error;
-    }
+    await fmsDb.put('staff', newMember);
+    await fmsDb.enqueueOutbox({
+      action: 'INSERT',
+      entityType: 'staff',
+      entityId: newId,
+      payload: {
+        id: newId,
+        name: member.name,
+        role: member.role,
+        employee_id: member.employeeId,
+        phone: member.phone || null,
+        email: member.email || null,
+        status: member.status,
+        avatar: newMember.avatar
+      },
+      idempotencyKey: `staff-ins-${newId}-${Date.now()}`
+    });
+    syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
   },
 
   async updateStaff(id: string, updates: Partial<Omit<StaffMember, 'id'>>): Promise<void> {
     const index = localStaff.findIndex(s => s.id === id);
-    let original: StaffMember | null = null;
     if (index !== -1) {
-      original = { ...localStaff[index] };
       localStaff[index] = { ...localStaff[index], ...updates };
       triggerStaffCallbacks();
+      await fmsDb.put('staff', localStaff[index]);
     }
 
     const row: Record<string, any> = {};
@@ -1204,35 +1254,32 @@ export const supabaseService = {
     if ('status' in updates) row.status = updates.status;
     if ('avatar' in updates) row.avatar = updates.avatar;
 
-    const { error } = await supabase.from('staff').update(row).eq('id', id);
-    if (error) {
-      if (index !== -1 && original) {
-        localStaff[index] = original;
-        triggerStaffCallbacks();
-      }
-      console.error('[Supabase] updateStaff failed:', error);
-      throw error;
-    }
+    await fmsDb.enqueueOutbox({
+      action: 'UPDATE',
+      entityType: 'staff',
+      entityId: id,
+      payload: row,
+      idempotencyKey: `staff-upd-${id}-${Date.now()}`
+    });
+    syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
   },
 
   async deleteStaff(id: string): Promise<void> {
     const index = localStaff.findIndex(s => s.id === id);
-    let original: StaffMember | null = null;
     if (index !== -1) {
-      original = { ...localStaff[index] };
       localStaff.splice(index, 1);
       triggerStaffCallbacks();
+      await fmsDb.delete('staff', id);
     }
 
-    const { error } = await supabase.from('staff').delete().eq('id', id);
-    if (error) {
-      if (index !== -1 && original) {
-        localStaff.splice(index, 0, original);
-        triggerStaffCallbacks();
-      }
-      console.error('[Supabase] deleteStaff failed:', error);
-      throw error;
-    }
+    await fmsDb.enqueueOutbox({
+      action: 'DELETE',
+      entityType: 'staff',
+      entityId: id,
+      payload: null,
+      idempotencyKey: `staff-del-${id}-${Date.now()}`
+    });
+    syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
   },
 
   // ── BigQuery Sync ──────────────────────────────────────────────────────────
