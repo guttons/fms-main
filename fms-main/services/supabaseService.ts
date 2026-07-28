@@ -1158,6 +1158,36 @@ export const supabaseService = {
   },
 
   async getStaff(): Promise<StaffMember[]> {
+    if (localStaff.length > 0) {
+      return localStaff;
+    }
+
+    // Try reading persistent local edits from localStorage first
+    try {
+      const savedLocal = localStorage.getItem('fms_staff_list');
+      if (savedLocal) {
+        const parsed: StaffMember[] = JSON.parse(savedLocal);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          localStaff = parsed;
+          const existingIds = new Set(localStaff.map(s => s.id));
+          let missingAdded = false;
+          for (const initStaff of INITIAL_STAFF_LIST) {
+            if (!existingIds.has(initStaff.id)) {
+              localStaff.push(initStaff);
+              missingAdded = true;
+            }
+          }
+          if (missingAdded) {
+            try { localStorage.setItem('fms_staff_list', JSON.stringify(localStaff)); } catch(e) {}
+          }
+          await fmsDb.bulkPut('staff', localStaff);
+          return localStaff;
+        }
+      }
+    } catch (e) {
+      console.warn('[Supabase] Failed to parse localStorage staff list:', e);
+    }
+
     try {
       const { data, error } = await supabase.from('staff').select('*').order('name');
       if (!error && data && data.length >= 50) {
@@ -1173,6 +1203,7 @@ export const supabaseService = {
           avatar: row.avatar
         } as StaffMember));
         await fmsDb.bulkPut('staff', localStaff);
+        try { localStorage.setItem('fms_staff_list', JSON.stringify(localStaff)); } catch (e) {}
         return localStaff;
       }
     } catch (e) {
@@ -1183,12 +1214,14 @@ export const supabaseService = {
     const cachedStaff = await fmsDb.getAll<StaffMember>('staff');
     if (cachedStaff && cachedStaff.length >= 50 && !cachedStaff.some(s => s.id === 'u1')) {
       localStaff = cachedStaff;
+      try { localStorage.setItem('fms_staff_list', JSON.stringify(localStaff)); } catch (e) {}
       return localStaff;
     }
 
-    // Always use INITIAL_STAFF_LIST (the 90+ MACL Staff List)
+    // Always fallback to INITIAL_STAFF_LIST (the 90+ MACL Staff List)
     localStaff = INITIAL_STAFF_LIST;
     await fmsDb.bulkPut('staff', localStaff);
+    try { localStorage.setItem('fms_staff_list', JSON.stringify(localStaff)); } catch (e) {}
     return localStaff;
   },
 
@@ -1215,6 +1248,7 @@ export const supabaseService = {
       avatar: member.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}`
     };
     localStaff.push(newMember);
+    try { localStorage.setItem('fms_staff_list', JSON.stringify(localStaff)); } catch (e) {}
     triggerStaffCallbacks();
 
     await fmsDb.put('staff', newMember);
@@ -1241,6 +1275,7 @@ export const supabaseService = {
     const index = localStaff.findIndex(s => s.id === id);
     if (index !== -1) {
       localStaff[index] = { ...localStaff[index], ...updates };
+      try { localStorage.setItem('fms_staff_list', JSON.stringify(localStaff)); } catch (e) {}
       triggerStaffCallbacks();
       await fmsDb.put('staff', localStaff[index]);
     }
@@ -1268,6 +1303,7 @@ export const supabaseService = {
     const index = localStaff.findIndex(s => s.id === id);
     if (index !== -1) {
       localStaff.splice(index, 1);
+      try { localStorage.setItem('fms_staff_list', JSON.stringify(localStaff)); } catch (e) {}
       triggerStaffCallbacks();
       await fmsDb.delete('staff', id);
     }

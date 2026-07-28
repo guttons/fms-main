@@ -27,8 +27,9 @@ import { FinanceModule } from './components/FinanceModule';
 import { CustomerPortal } from './components/CustomerPortal';
 import { ExecutiveModule } from './components/ExecutiveModule';
 import { MOCK_USERS } from './constants';
+import { AIChatModal } from './components/AIChatModal';
 import { User, UserRole, FlightJob, Alert, EquipmentStatus as EqStatusEnum } from './types';
-import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, Eclipse, CheckCircle, Share2, Smartphone, Trash2, Download, Laptop, Globe, RefreshCw, Users, ArrowRight } from 'lucide-react';
+import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, Eclipse, CheckCircle, Share2, Smartphone, Trash2, Download, Laptop, Globe, RefreshCw, Users, ArrowRight, Sparkles } from 'lucide-react';
 import { updatePWAManifestAndTheme, requestNotificationPermission, sendNativeNotification } from './utils/pwa';
 import { syncEngine } from './services/syncEngine';
 
@@ -243,6 +244,8 @@ const AppContextContent: React.FC<any> = ({
   };
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isAIChatOpen, setIsAIChatOpen] = useState(false);
+  const [aiInitialQuery, setAiInitialQuery] = useState('');
   const [isHeaderLogoSpinning, setIsHeaderLogoSpinning] = useState(false);
   const [mainElement, setMainElement] = useState<HTMLElement | null>(null);
 
@@ -994,8 +997,22 @@ const AppContextContent: React.FC<any> = ({
 
                   {/* Search Dropdown */}
                   {isSearchFocused && searchQuery.trim().length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-2 bg-surface-lowest border border-outline rounded-xl transition-allow-hidden max-h-[400px] overflow-y-auto animate-in fade-in slide-in-from-top-2 z-[100]">
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-surface-lowest border border-outline rounded-2xl transition-allow-hidden max-h-[400px] overflow-y-auto animate-in fade-in slide-in-from-top-2 z-[100] shadow-premium">
                       <div className="p-2 space-y-2">
+                        {/* Generative AI Quick Action */}
+                        <button
+                          onClick={() => {
+                            setAiInitialQuery(searchQuery);
+                            setIsAIChatOpen(true);
+                          }}
+                          className="w-full text-left p-3 bg-primary/10 hover:bg-primary hover:text-white border border-primary/30 rounded-xl flex items-center justify-between text-primary transition-all group"
+                        >
+                          <div className="flex items-center space-x-2.5">
+                            <Sparkles className="w-4 h-4 text-primary animate-pulse group-hover:text-white" />
+                            <span className="text-xs font-black">Ask Generative AI: "{searchQuery}"</span>
+                          </div>
+                          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                        </button>
                         {searchResults.jobs.length > 0 && (
                           <div>
                             <div className="px-3 py-1.5 text-[10px] font-black opacity-40 uppercase tracking-widest">Active Jobs</div>
@@ -1495,6 +1512,29 @@ const AppContextContent: React.FC<any> = ({
             </div>
           </div>
         )}
+
+        {/* Floating ASK AI Assistant Button (Bottom Right - Theme Adaptive) */}
+        <button
+          onClick={() => setIsAIChatOpen(true)}
+          className={`fixed bottom-6 right-6 z-[120] flex items-center space-x-2.5 px-4 py-3 kinetic-gradient rounded-full shadow-premium border border-white/20 hover:scale-105 active:scale-95 transition-all duration-200 group ${
+            theme === 'black' ? 'text-black' : 'text-white'
+          }`}
+          title="Open FMS Generative AI Assistant"
+        >
+          <div className="relative flex items-center justify-center">
+            <Sparkles className={`w-5 h-5 ${theme === 'black' ? 'text-black' : 'text-white'} animate-[pulse_4s_cubic-bezier(0.4,0,0.6,1)_infinite]`} />
+            <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${theme === 'black' ? 'bg-black' : 'bg-white'} animate-[ping_3.5s_cubic-bezier(0,0,0.2,1)_infinite] opacity-50`}></span>
+          </div>
+          <span className={`text-xs font-black uppercase tracking-wider hidden sm:inline ${theme === 'black' ? 'text-black' : 'text-white'}`}>ASK</span>
+        </button>
+
+        {/* FMS Generative AI Assistant Chatbot Modal */}
+        <AIChatModal
+          isOpen={isAIChatOpen}
+          onClose={() => setIsAIChatOpen(false)}
+          onNavigate={(view) => setActiveView(view as any)}
+          initialQuery={aiInitialQuery}
+        />
 
       </div>
   );

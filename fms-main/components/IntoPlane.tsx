@@ -2119,6 +2119,12 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         savedRoute = parts[parts.length - 1];
       }
 
+      const isSeaplaneFlight = 
+        (activeFlight as any).category?.toUpperCase() === 'SEA' || 
+        (activeFlight as any).flightCategory?.toUpperCase() === 'SEA' || 
+        (activeFlight as any).flight_category?.toUpperCase() === 'SEA' || 
+        activeFlight.logType === 'SEAPLANE';
+
       const logToSave: Omit<FlightLog, 'id'> = {
         flightNumber: activeFlight.flightNumber || '',
         aircraftReg: activeFlight.aircraftReg || '',
@@ -2127,7 +2133,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         operatorId: user.id,
         vehicleId: selectedVehicleId,
         status: 'COMPLETED',
-        logType: 'FLIGHT' as const,
+        logType: isSeaplaneFlight ? 'SEAPLANE' : 'FLIGHT',
         timestampArrived: activeFlight.timestampArrived,
         timestampPosition: activeFlight.timestampPosition,
         timestampStart: activeFlight.timestampStart,

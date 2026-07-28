@@ -589,7 +589,16 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   });
   const [flightLogs, setFlightLogs] = useState<FlightLog[]>([]);
   const [domesticAssignments, setDomesticAssignments] = useState<any[]>([]);
-  const [staff, setStaff] = useState<StaffMember[]>(INITIAL_STAFF_LIST);
+  const [staff, setStaff] = useState<StaffMember[]>(() => {
+    try {
+      const saved = localStorage.getItem('fms_staff_list');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_STAFF_LIST;
+  });
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [isAlertsLoading, setIsAlertsLoading] = useState(false);
 

@@ -91,7 +91,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
   const resolveLogType = (log: FlightLog): string => {
     const num = log.flightNumber || '';
-    if (log.logType === 'SEAPLANE' || num.startsWith('SEAPLANE')) return 'SEAPLANE';
+    const category = String((log as any).category || (log as any).flightCategory || (log as any).flight_category || (log as any).route || '').toUpperCase();
+    if (log.logType === 'SEAPLANE' || num.startsWith('SEAPLANE') || category === 'SEA' || category.startsWith('SEA')) return 'SEAPLANE';
     if (log.logType === 'FILLING_STATION' || num.startsWith('GROUND-')) return 'FILLING_STATION';
     if (log.logType === 'MARINE' || num.startsWith('VESSEL-')) return 'MARINE';
     if (log.logType === 'BRIDGING' || num.startsWith('LOAD-')) return 'BRIDGING';
@@ -888,10 +889,10 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                       {renderSortableHeader('date', 'Date', 'px-10')}
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Vessel Name</th>
                       <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Source RF</th>
-                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Meter Open</th>
-                      <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Meter Close</th>
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Volume (L)</th>
                       {renderSortableHeader('ticket', 'Ticket', 'px-10')}
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Verifying Officer</th>
+                      <th className="px-10 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Operator Name</th>
                       <th className="px-10 py-5 text-right text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Registry</th>
                     </>
                   )}
@@ -1075,22 +1076,22 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                   {getDisplayOperationalDate(log)}
                               </td>
                               <td className="px-10 py-6 text-sm font-[900] text-on-surface tracking-tighter italic uppercase group-hover:text-primary transition-colors">
-                                  {marineData.vesselName}
+                                  {marineData.vesselName || log.operatorName || 'N/A'}
                               </td>
                               <td className="px-10 py-6 text-xs font-black text-on-surface tracking-wider font-mono">
-                                  {log.vehicleId}
-                              </td>
-                              <td className="px-10 py-6 text-right text-xs font-bold text-on-surface-dim font-mono">
-                                  {(log.meterOpen || 0).toLocaleString()}
-                              </td>
-                              <td className="px-10 py-6 text-right text-xs font-bold text-on-surface-dim font-mono">
-                                  {(log.meterClose || 0).toLocaleString()}
+                                  {log.vehicleId || 'N/A'}
                               </td>
                               <td className="px-10 py-6 text-right text-sm font-black text-on-surface-dim font-mono tracking-tighter">
                                   {(log.volume || 0).toLocaleString()}
                               </td>
                               <td className="px-10 py-6 text-left font-mono">
                                   {renderTicketCell(log.deliveryNumber)}
+                              </td>
+                              <td className="px-10 py-6 text-xs font-black text-on-surface tracking-wider uppercase">
+                                  {officerName}
+                              </td>
+                              <td className="px-10 py-6 text-xs font-black text-on-surface tracking-wider uppercase font-mono">
+                                  {log.tacticalOperator || 'N/A'}
                               </td>
                             </>
                           )}
@@ -1388,14 +1389,6 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                  {selectedLogType === 'MARINE' && (
                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-in fade-in duration-300">
                                       <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Vessel Name</span>
-                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{marineData.vesselName}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Source Refueller</span>
-                                         <span className="text-[11px] font-mono text-on-surface">{log.vehicleId}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Opening Meter</span>
                                          <span className="text-[11px] font-mono text-on-surface">{(log.meterOpen || 0).toLocaleString()} L</span>
                                       </div>
@@ -1410,10 +1403,6 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC Water verification</span>
                                          <span className={`text-[11px] font-black uppercase tracking-widest ${log.waterCheck ? 'text-success' : 'text-error'}`}>{log.waterCheck ? 'PASS' : 'FAIL'}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Verifying Officer</span>
-                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{marineData.supervisor}</span>
                                       </div>
                                       <div className="flex flex-col gap-1 col-span-2 md:col-span-4">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Remarks</span>
