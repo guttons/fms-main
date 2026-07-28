@@ -873,7 +873,7 @@ app.get('/operations-log', requireAuth, async (req: Request, res: Response) => {
   const countSql = `
     SELECT COUNT(1) AS total, SUM(volume) AS total_volume
     FROM (
-      SELECT id, log_type, flight_number, is_deleted, created_at, updated_at, operational_date, vehicle_id, meter_open, meter_close, volume, is_domestic,
+      SELECT *,
              ROW_NUMBER() OVER (
                PARTITION BY id
                ORDER BY COALESCE(updated_at, created_at, TIMESTAMP('1970-01-01')) DESC
