@@ -2155,6 +2155,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         isAdhoc: activeFlight.isAdhoc,
         route: savedRoute,
         isDomestic: activeFlight.isDomestic,
+        intDom: isSeaplaneFlight ? 'SEA' : (activeFlight.isDomestic ? 'DOM' : 'INT'),
         airline: getAirlineName(activeFlight.flightNumber || '', externalFlights),
         operationalDate: activeFlight.operationalDate || new Date().toISOString().split('T')[0],
         psi: activeFlight.psi,

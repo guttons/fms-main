@@ -195,6 +195,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     timeStart: '',
     timeEnd: '',
     isDomestic: false,
+    intDom: '',
 
     // Seaplane specific
     seaplaneOperator: 'TMA',
@@ -536,7 +537,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           timestampPosition: combineDateAndTime(editForm.date, editForm.timePosition),
           timestampStart: combineDateAndTime(editForm.date, editForm.timeStart),
           timestampInitialEnd: combineDateAndTime(editForm.date, editForm.timeEnd),
-          isDomestic: editForm.isDomestic
+          isDomestic: editForm.isDomestic,
+          intDom: editForm.intDom
         });
       }
       setEditingLog(null);
@@ -997,13 +999,27 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                   )}
                               </td>
                               <td className="px-10 py-6">
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black tracking-widest uppercase ${
-                                    log.isDomestic 
-                                      ? 'bg-success/15 text-success border border-success/20' 
-                                      : 'bg-primary/15 text-primary border border-primary/20'
-                                  }`}>
-                                      {log.isDomestic ? 'DOM' : 'INT'}
-                                  </span>
+                                  {(() => {
+                                    const cat = String(log.intDom || (log.isDomestic ? 'DOM' : 'INT')).toUpperCase();
+                                    let badgeClass = '';
+                                    let badgeStyle = {};
+                                    if (cat === 'SEA') {
+                                      badgeClass = 'border';
+                                      badgeStyle = { backgroundColor: 'rgba(139, 92, 246, 0.15)', color: '#a78bfa', borderColor: 'rgba(139, 92, 246, 0.2)' };
+                                    } else if (cat === 'DOM') {
+                                      badgeClass = 'bg-success/15 text-success border border-success/20';
+                                    } else {
+                                      badgeClass = 'bg-primary/15 text-primary border border-primary/20';
+                                    }
+                                    return (
+                                      <span 
+                                        className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black tracking-widest uppercase ${badgeClass}`}
+                                        style={badgeStyle}
+                                      >
+                                          {cat}
+                                      </span>
+                                    );
+                                  })()}
                               </td>
                               <td className="px-10 py-6">
                                   <div className="text-xs font-black text-on-surface uppercase tracking-widest">{log.aircraftReg}</div>
@@ -1179,6 +1195,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                        timeStart: getLocalTimePart(log.timestampStart),
                                        timeEnd: getLocalTimePart(log.timestampFinalEnd || log.timestampInitialEnd),
                                        isDomestic: log.isDomestic ?? false,
+                                       intDom: log.intDom || (log.isDomestic ? 'DOM' : 'INT'),
 
                                        // Seaplane specific
                                        seaplaneOperator: seaplaneOp,
@@ -1549,12 +1566,20 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                       <div>
                         <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Category</label>
                         <select 
-                          value={editForm.isDomestic ? 'DOMESTIC' : 'INTERNATIONAL'}
-                          onChange={e => setEditForm({...editForm, isDomestic: e.target.value === 'DOMESTIC'})}
+                          value={editForm.intDom || (editForm.isDomestic ? 'DOM' : 'INT')}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setEditForm({
+                              ...editForm,
+                              intDom: val,
+                              isDomestic: val === 'DOM'
+                            });
+                          }}
                           className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none cursor-pointer"
                         >
-                          <option value="INTERNATIONAL">INT</option>
-                          <option value="DOMESTIC">DOM</option>
+                          <option value="INT">INT</option>
+                          <option value="DOM">DOM</option>
+                          <option value="SEA">SEA</option>
                         </select>
                       </div>
                       <div>

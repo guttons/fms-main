@@ -150,6 +150,7 @@ export interface FlightLog {
   isAdhoc?: boolean;
   route?: string;
   isDomestic?: boolean;
+  intDom?: string;
   airline?: string;
   officer?: string;
   operatorName?: string;
