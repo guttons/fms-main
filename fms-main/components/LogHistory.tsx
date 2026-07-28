@@ -29,7 +29,9 @@ const parseGroundLog = (log: FlightLog) => {
 };
 
 const parseMarineLog = (log: FlightLog) => {
-  const vesselName = (log.flightNumber || '').replace('VESSEL-', '');
+  const opName = log.operatorName && log.operatorName !== 'N/A' ? log.operatorName : '';
+  const flightVessel = (log.flightNumber || '').replace(/^VESSEL-/i, '');
+  const vesselName = opName || (flightVessel && flightVessel !== 'N/A' ? flightVessel : 'N/A');
   const remarks = log.remarks || '';
   const supervisorMatch = remarks.match(/Supervised by\s+([^)]+)/i);
   return {
@@ -1000,10 +1002,13 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                               </td>
                               <td className="px-10 py-6">
                                   {(() => {
-                                    const cat = String(log.intDom || (log.isDomestic ? 'DOM' : 'INT')).toUpperCase();
+                                    const isCancelled = String(log.airline || log.co || log.remarks || '').toUpperCase().includes('CANCELLED DELIVERY');
+                                    const cat = isCancelled ? 'VOID' : String(log.intDom || (log.isDomestic ? 'DOM' : 'INT')).toUpperCase();
                                     let badgeClass = '';
                                     let badgeStyle = {};
-                                    if (cat === 'SEA') {
+                                    if (cat === 'VOID') {
+                                      badgeClass = 'bg-error/15 text-error border border-error/20';
+                                    } else if (cat === 'SEA') {
                                       badgeClass = 'border';
                                       badgeStyle = { backgroundColor: 'rgba(139, 92, 246, 0.15)', color: '#a78bfa', borderColor: 'rgba(139, 92, 246, 0.2)' };
                                     } else if (cat === 'DOM') {
@@ -1580,6 +1585,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                           <option value="INT">INT</option>
                           <option value="DOM">DOM</option>
                           <option value="SEA">SEA</option>
+                          <option value="VOID">VOID</option>
                         </select>
                       </div>
                       <div>

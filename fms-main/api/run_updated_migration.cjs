@@ -149,9 +149,12 @@ async function run() {
     const id = `hist-${rowId}`;
     const dateStr = parseCSVDate(rec.DATE);
 
+    const customerName = String(rec['CUSTOMER NAME'] || rec.CUSTOMER_NAME || '').trim();
     const intDomRaw = String(rec.INT_DOM || rec.OR_DOMESTIC || '').toUpperCase();
-    const isSeaplane = intDomRaw === 'SEA';
-    const isDomestic = intDomRaw === 'DOM' || intDomRaw.includes('DOMESTIC');
+    const isCancelled = customerName.toUpperCase() === 'CANCELLED DELIVERY' || intDomRaw === 'VOID' || String(rec['OR CREDIT'] || rec.OR_CREDIT || '').toUpperCase() === 'VOID';
+    const isSeaplane = !isCancelled && intDomRaw === 'SEA';
+    const isDomestic = !isCancelled && (intDomRaw === 'DOM' || intDomRaw.includes('DOMESTIC'));
+    const finalIntDom = isCancelled ? 'VOID' : (intDomRaw || (isDomestic ? 'DOM' : 'INT'));
 
     const row = {
       id,
@@ -178,12 +181,12 @@ async function run() {
       timestamp_final_start: null,
       timestamp_final_end:   parseTime(dateStr, rec.ENDED),
       timestamp_clearance:   parseTime(dateStr, rec.ENDED),
-      remarks:               rec['CUSTOMER NAME'] || rec.CUSTOMER_NAME ? `Customer: ${rec['CUSTOMER NAME'] || rec.CUSTOMER_NAME}` : null,
+      remarks:               customerName ? `Customer: ${customerName}` : null,
       tactical_operator:     rec['RF OPERATOR'] || rec.RF_OPERATOR || null,
       route:                 null,
-      co:                    rec['CUSTOMER NAME'] || rec.CUSTOMER_NAME || null,
+      co:                    customerName || null,
       is_domestic:           isDomestic,
-      int_dom:               intDomRaw || (isDomestic ? 'DOM' : 'INT'),
+      int_dom:               finalIntDom,
       airline:               rec['CUSTOMER NAME'] || rec.CUSTOMER_NAME || null,
       operational_date:      dateStr,
       pit_number:            rec['PIT NO'] || rec.PIT_NO || null,

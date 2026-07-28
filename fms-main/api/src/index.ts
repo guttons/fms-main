@@ -218,7 +218,7 @@ function rowToLog(row: Record<string, any>) {
     route:               row.route,
     co:                  row.co,
     isDomestic:          row.is_domestic,
-    intDom:              row.INT_DOM || row.int_dom || null,
+    intDom:              (String(row.airline || row.co || row.remarks || '').toUpperCase().includes('CANCELLED DELIVERY') || String(row.INT_DOM || row.int_dom || '').toUpperCase() === 'VOID') ? 'VOID' : (row.INT_DOM || row.int_dom || null),
     airline:             row.airline,
     operationalDate:     dt(row.operational_date),
     pitNumber:           row.pit_number,
@@ -235,6 +235,7 @@ function rowToLog(row: Record<string, any>) {
 function logToRow(log: Record<string, any>, id: string): Record<string, any> {
   const now = new Date().toISOString();
   const isSeaplane = (log.flightNumber ?? '').startsWith('SEAPLANE');
+  const isCancelled = String(log.airline || log.co || log.remarks || '').toUpperCase().includes('CANCELLED DELIVERY') || log.intDom === 'VOID';
   return {
     id,
     log_type:              log.logType ?? (isSeaplane ? 'SEAPLANE' : 'FLIGHT'),
@@ -265,7 +266,7 @@ function logToRow(log: Record<string, any>, id: string): Record<string, any> {
     route:                 log.route               ?? null,
     co:                    log.co                  ?? null,
     is_domestic:           log.isDomestic          ?? null,
-    int_dom:               log.intDom || (log.logType === 'SEAPLANE' ? 'SEA' : (log.isDomestic ? 'DOM' : 'INT')),
+    int_dom:               isCancelled ? 'VOID' : (log.intDom || (log.logType === 'SEAPLANE' ? 'SEA' : (log.isDomestic ? 'DOM' : 'INT'))),
     airline:               log.airline             ?? null,
     operational_date:      log.operationalDate     ?? null,
     pit_number:            log.pitNumber           ?? null,

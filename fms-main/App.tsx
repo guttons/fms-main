@@ -1068,8 +1068,22 @@ const AppContextContent: React.FC<any> = ({
                 </div>
               </div>
 
-              <div className="flex items-center space-x-6">
-                <div className="flex items-center space-x-4 border-outline pl-6">
+              <div className="flex items-center space-x-2 sm:space-x-6">
+                <div className="flex items-center space-x-2 sm:space-x-4 border-outline pl-2 sm:pl-6">
+
+                  {/* Mobile ASK AI Assistant Button (Icon Only - Sized Same as Alert Button) */}
+                  <button
+                    onClick={() => setIsAIChatOpen(true)}
+                    className={`lg:hidden relative p-3 kinetic-gradient rounded-xl border border-white/20 transition-all active:scale-90 group shadow-sm flex items-center justify-center ${
+                      theme === 'black' ? 'text-black' : 'text-white'
+                    }`}
+                    title="Open FMS Generative AI Assistant"
+                  >
+                    <div className="relative flex items-center justify-center">
+                      <Sparkles className={`w-5 h-5 ${theme === 'black' ? 'text-black' : 'text-white'} animate-[pulse_4s_cubic-bezier(0.4,0,0.6,1)_infinite]`} />
+                      <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${theme === 'black' ? 'bg-black' : 'bg-white'} animate-[ping_3.5s_cubic-bezier(0,0,0.2,1)_infinite] opacity-50`}></span>
+                    </div>
+                  </button>
 
                   <div className="relative" ref={alertsRef}>
                     <button 
@@ -1513,10 +1527,10 @@ const AppContextContent: React.FC<any> = ({
           </div>
         )}
 
-        {/* Floating ASK AI Assistant Button (Bottom Right - Theme Adaptive) */}
+        {/* Floating ASK AI Assistant Button (Desktop Only - Theme Adaptive) */}
         <button
           onClick={() => setIsAIChatOpen(true)}
-          className={`fixed bottom-6 right-6 z-[120] flex items-center space-x-2.5 px-4 py-3 kinetic-gradient rounded-full shadow-premium border border-white/20 hover:scale-105 active:scale-95 transition-all duration-200 group ${
+          className={`hidden lg:flex fixed bottom-6 right-6 z-[120] items-center space-x-2.5 px-4 py-3 kinetic-gradient rounded-full shadow-premium border border-white/20 hover:scale-105 active:scale-95 transition-all duration-200 group ${
             theme === 'black' ? 'text-black' : 'text-white'
           }`}
           title="Open FMS Generative AI Assistant"
