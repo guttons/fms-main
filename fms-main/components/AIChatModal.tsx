@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Send, X, Bot, User as UserIcon, ArrowRight, RefreshCw, Zap, Shield, Database, Compass, Plane, UserCheck, Truck, Coins, Fuel, BarChart3, ChevronRight } from 'lucide-react';
-import { aiAssistantService, AIResponse } from '../services/aiAssistantService';
+import { Sparkles, Send, X, Bot, User as UserIcon, ArrowRight, Plane, UserCheck, Truck, Coins, Fuel, BarChart3, Calendar, ShieldCheck, TrendingUp, Layers } from 'lucide-react';
+import { aiAssistantService, AIResponse, ConversationContext } from '../services/aiAssistantService';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { useFinanceData } from '../context/FinanceDataContext';
 
@@ -31,6 +31,7 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [convCtx, setConvCtx] = useState<ConversationContext>({});
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Initialize welcoming message
@@ -40,7 +41,7 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
         {
           id: 'welcome-1',
           sender: 'ai',
-          text: 'Hello! I am your **MACL FMS AI Assistant**. Ask me about Fuel Uplifts (e.g., *"How much fuel does SU321 usually uplift?"*), Tank Levels, Active Flights, Staff RC Numbers, or Finance Balances.',
+          text: 'Hello! I am your **MACL FMS Generative AI Assistant**.\n\nAsk me about **Fuel Uplift Logs** (e.g. *"How much fuel does SU321 usually uplift?"*), **Date Range Analysis** (*"Total fuel consumed last week"* or *"between July 1 and July 15"*), **Tank Storage**, **Staff RC Numbers**, or **Refueler Loading Logs**.',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);
@@ -60,9 +61,9 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSendQuery = (textToSend?: string) => {
+  const handleSendQuery = async (textToSend?: string) => {
     const query = textToSend || input;
-    if (!query.trim()) return;
+    if (!query.trim() || isTyping) return;
 
     const userMsg: Message = {
       id: `usr-${Date.now()}`,
@@ -75,15 +76,17 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
     if (!textToSend) setInput('');
     setIsTyping(true);
 
-    setTimeout(() => {
-      const response = aiAssistantService.processQuery(query, {
+    try {
+      const { response, updatedConvCtx } = await aiAssistantService.processQuery(query, {
         tanks,
         flightJobs,
         equipment,
         staff,
         alerts,
         financeCustomers: financeContext?.customers
-      });
+      }, convCtx);
+
+      setConvCtx(updatedConvCtx);
 
       const aiMsg: Message = {
         id: `ai-${Date.now()}`,
@@ -94,17 +97,29 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
       };
 
       setMessages(prev => [...prev, aiMsg]);
+    } catch (err) {
+      console.error('[AI Chat] Error processing query:', err);
+      setMessages(prev => [
+        ...prev,
+        {
+          id: `ai-err-${Date.now()}`,
+          sender: 'ai',
+          text: 'I encountered an issue accessing historical operational logs. Showing available live system data.',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+    } finally {
       setIsTyping(false);
-    }, 400);
+    }
   };
 
   const quickPrompts = [
     { label: 'SU321 Fuel Uplift History', icon: <Plane className="w-3.5 h-3.5 text-primary" />, query: 'How much fuel does SU321 usually uplift?' },
+    { label: 'Total Usage Last Week', icon: <Calendar className="w-3.5 h-3.5 text-primary" />, query: 'Total fuel consumed last week' },
+    { label: 'Top Flights This Month', icon: <TrendingUp className="w-3.5 h-3.5 text-primary" />, query: 'Top flights by volume this month' },
+    { label: 'Refueler Loading Yesterday', icon: <Truck className="w-3.5 h-3.5 text-primary" />, query: 'Bridging logs loading summary yesterday' },
     { label: 'Check Tank Levels', icon: <Fuel className="w-3.5 h-3.5 text-primary" />, query: 'Check Tank Levels' },
-    { label: 'Active Flights In Progress', icon: <BarChart3 className="w-3.5 h-3.5 text-primary" />, query: 'Active Flights In Progress' },
-    { label: 'Who is A-6600?', icon: <UserCheck className="w-3.5 h-3.5 text-primary" />, query: 'Who is A-6600?' },
-    { label: 'Fleet Equipment Status', icon: <Truck className="w-3.5 h-3.5 text-primary" />, query: 'Fleet Equipment Status' },
-    { label: 'Emirates Account Balance', icon: <Coins className="w-3.5 h-3.5 text-primary" />, query: 'Emirates Account Balance' }
+    { label: 'Who is A-6600?', icon: <UserCheck className="w-3.5 h-3.5 text-primary" />, query: 'Who is A-6600?' }
   ];
 
   return (
@@ -121,11 +136,11 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
               <div className="flex items-center space-x-2">
                 <h3 className="text-sm font-black text-on-surface uppercase tracking-tight">MACL FMS AI Assistant</h3>
                 <span className="px-2 py-0.5 bg-primary/10 text-primary text-[8px] font-black rounded-full uppercase tracking-wider border border-primary/20">
-                  Live Engine
+                  BigQuery Engine
                 </span>
               </div>
               <p className="text-[10px] font-bold text-on-surface-dim opacity-50 uppercase tracking-widest mt-0.5">
-                Real-time Flight Logs & Operations Intelligence
+                Date Range NLP & Statistical Log Intelligence
               </p>
             </div>
           </div>
@@ -157,6 +172,15 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
                   ? 'kinetic-gradient text-white rounded-tr-none shadow-md font-bold'
                   : 'bg-surface border border-outline hover:border-primary/40 text-on-surface rounded-tl-none shadow-premium'
               }`}>
+                
+                {/* Date Range Badge for AI Responses */}
+                {msg.responseObj?.dateRangeUsed && (
+                  <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-full text-[9px] font-black text-primary uppercase tracking-wider mb-1">
+                    <Calendar className="w-3 h-3" />
+                    <span>Analyzed Period: {msg.responseObj.dateRangeUsed}</span>
+                  </div>
+                )}
+
                 <div className="whitespace-pre-wrap">{msg.text}</div>
 
                 {/* Response Highlights Badge Grid */}
@@ -197,11 +221,11 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
           {isTyping && (
             <div className="flex items-center space-x-3 fade-in">
               <div className="w-8 h-8 rounded-xl bg-surface-container-high text-primary border border-outline flex items-center justify-center">
-                <Bot className="w-4 h-4 animate-spin" />
+                <Bot className="w-4 h-4 animate-spin text-primary" />
               </div>
               <div className="bg-surface border border-outline p-3 rounded-2xl text-xs font-bold text-on-surface-dim flex items-center space-x-2 shadow-sm">
                 <span className="w-2 h-2 rounded-full bg-primary animate-ping"></span>
-                <span>Scanning flight logs & module records...</span>
+                <span>Querying BigQuery historical logs & computing statistics...</span>
               </div>
             </div>
           )}
@@ -234,7 +258,7 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask AI about fuel uplifts (e.g. SU321), tanks, staff RC, or finance..."
+              placeholder="Ask AI (e.g. SU321 uplift, usage last week, July 1 to 15, Tank 101, A-6600)..."
               className="w-full pl-11 pr-4 py-3 bg-surface border border-outline focus:border-primary rounded-2xl text-xs font-bold text-on-surface focus:outline-none transition-all placeholder:text-on-surface-dim/40"
             />
             <Sparkles className="w-4 h-4 text-primary absolute left-4 top-1/2 -translate-y-1/2" />

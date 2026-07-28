@@ -31,6 +31,7 @@ import { AIChatModal } from './components/AIChatModal';
 import { User, UserRole, FlightJob, Alert, EquipmentStatus as EqStatusEnum } from './types';
 import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, Eclipse, CheckCircle, Share2, Smartphone, Trash2, Download, Laptop, Globe, RefreshCw, Users, ArrowRight, Sparkles } from 'lucide-react';
 import { updatePWAManifestAndTheme, requestNotificationPermission, sendNativeNotification } from './utils/pwa';
+import { haptic, isHapticEnabled, setHapticEnabled, isReducedMotion, setReducedMotion } from './utils/haptics';
 import { syncEngine } from './services/syncEngine';
 
 const App: React.FC = () => {
@@ -113,10 +114,16 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Network listener
+  // Network listener with haptic feedback
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    const handleOnline = () => {
+      setIsOnline(true);
+      haptic('SUCCESS');
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      haptic('WARNING');
+    };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     return () => {
@@ -254,6 +261,17 @@ const AppContextContent: React.FC<any> = ({
   useEffect(() => {
     return syncEngine.subscribe(status => setSyncState(status));
   }, []);
+
+  // --- View History Stack for smart back-button navigation ---
+  const viewHistoryRef = React.useRef<string[]>([activeView]);
+  const isNavigatingBackRef = React.useRef(false);
+
+  // --- Keyboard-aware layout ---
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  // --- Haptic & Motion preferences (reactive state for settings UI) ---
+  const [hapticEnabled, setHapticEnabledState] = useState(isHapticEnabled());
+  const [reducedMotionEnabled, setReducedMotionState] = useState(isReducedMotion());
 
   const alertsRef = React.useRef<HTMLDivElement>(null);
   const settingsRef = React.useRef<HTMLDivElement>(null);
@@ -543,6 +561,7 @@ const AppContextContent: React.FC<any> = ({
       const currentPull = pullStateRef.current.pullDistance;
 
       if (currentPull >= 60) {
+        haptic('PULL_REFRESH');
         setIsRefreshing(true);
         setPullDistance(60);
         // Wait 800ms to allow the spinner animation to play, then trigger a page reload
@@ -566,53 +585,95 @@ const AppContextContent: React.FC<any> = ({
     };
   }, [mainElement]);
 
-  // --- Mobile Back Button Gesture Navigation Support ---
+  // --- Mobile Back Button Gesture Navigation Support (Stack-Based) ---
+  // Track view changes in the history stack
+  useEffect(() => {
+    if (isNavigatingBackRef.current) {
+      isNavigatingBackRef.current = false;
+      return;
+    }
+    const stack = viewHistoryRef.current;
+    // Prevent duplicate consecutive entries
+    if (stack[stack.length - 1] !== activeView) {
+      stack.push(activeView);
+      // Cap stack at 20 entries
+      if (stack.length > 20) {
+        viewHistoryRef.current = stack.slice(-20);
+      }
+    }
+  }, [activeView]);
+
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
-      if (!e.state?.fmsActive) {
-        setIsMobileMenuOpen(false);
-        setShowAlertsPanel(false);
-        setIsSettingsOpen(false);
-        setShowIOSGuide(false);
-        
-        let defaultView = 'dashboard';
-        if (currentUser?.role === UserRole.CUSTOMER) {
-          defaultView = 'customer-portal';
-        } else if (currentUser?.role === UserRole.FINANCE) {
-          defaultView = 'finance';
-        } else if (currentUser?.role === UserRole.COMMERCIAL) {
-          defaultView = 'commercial-reports';
-        }
-        setActiveView(defaultView);
+      haptic('TAP');
+
+      // Priority 1: Close any open overlays/modals first
+      if (isAIChatOpen) {
+        setIsAIChatOpen(false);
+        window.history.pushState({ fmsActive: true }, '');
+        return;
       }
+      if (isSettingsOpen) {
+        setIsSettingsOpen(false);
+        window.history.pushState({ fmsActive: true }, '');
+        return;
+      }
+      if (showAlertsPanel) {
+        setShowAlertsPanel(false);
+        window.history.pushState({ fmsActive: true }, '');
+        return;
+      }
+      if (showIOSGuide || showMacGuide || showOtherGuide) {
+        setShowIOSGuide(false);
+        setShowMacGuide(false);
+        setShowOtherGuide(false);
+        window.history.pushState({ fmsActive: true }, '');
+        return;
+      }
+
+      // Priority 2: Close mobile sidebar drawer
+      if (isMobileMenuOpen) {
+        setIsMobileMenuOpen(false);
+        window.history.pushState({ fmsActive: true }, '');
+        return;
+      }
+
+      // Priority 3: Navigate back through view history stack
+      const stack = viewHistoryRef.current;
+      if (stack.length > 1) {
+        stack.pop(); // Remove current view
+        const previousView = stack[stack.length - 1];
+        isNavigatingBackRef.current = true;
+        setActiveView(previousView);
+        // Keep the history entry alive if we're not at root
+        if (stack.length > 1) {
+          window.history.pushState({ fmsActive: true }, '');
+        }
+        return;
+      }
+
+      // Priority 4: At root view — let the browser/PWA handle exit
+      // Don't prevent default behavior — this allows the app to minimize/exit
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [setIsMobileMenuOpen, setShowAlertsPanel, setIsSettingsOpen, setShowIOSGuide, setActiveView, currentUser]);
+  }, [isMobileMenuOpen, showAlertsPanel, isSettingsOpen, showIOSGuide, showMacGuide, showOtherGuide, isAIChatOpen, setIsMobileMenuOpen, setShowAlertsPanel, setIsSettingsOpen, setShowIOSGuide, setActiveView]);
 
+  // Push initial history state so back button works
   useEffect(() => {
-    let defaultView = 'dashboard';
-    if (currentUser?.role === UserRole.CUSTOMER) {
-      defaultView = 'customer-portal';
-    } else if (currentUser?.role === UserRole.FINANCE) {
-      defaultView = 'finance';
-    } else if (currentUser?.role === UserRole.COMMERCIAL) {
-      defaultView = 'commercial-reports';
+    if (!window.history.state?.fmsActive) {
+      window.history.pushState({ fmsActive: true }, '');
     }
+  }, []);
 
-    const hasOverlay = isMobileMenuOpen || showAlertsPanel || isSettingsOpen || showIOSGuide || activeView !== defaultView;
-    
-    if (hasOverlay) {
-      if (!window.history.state?.fmsActive) {
-        window.history.pushState({ fmsActive: true }, '');
-      }
-    } else {
-      if (window.history.state?.fmsActive) {
-        window.history.back();
-      }
+  // Track overlay state changes — push history when opening overlays
+  useEffect(() => {
+    const hasOverlay = isMobileMenuOpen || showAlertsPanel || isSettingsOpen || showIOSGuide || isAIChatOpen;
+    if (hasOverlay && !window.history.state?.fmsOverlay) {
+      window.history.pushState({ fmsActive: true, fmsOverlay: true }, '');
     }
-  }, [isMobileMenuOpen, showAlertsPanel, isSettingsOpen, showIOSGuide, activeView, currentUser]);
+  }, [isMobileMenuOpen, showAlertsPanel, isSettingsOpen, showIOSGuide, isAIChatOpen]);
 
   // Clean up history state on session unmount / logout
   useEffect(() => {
@@ -621,6 +682,23 @@ const AppContextContent: React.FC<any> = ({
         window.history.back();
       }
     };
+  }, []);
+
+  // --- Keyboard-Aware Layout Detection ---
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    const handleResize = () => {
+      // If the visual viewport height is significantly less than the window height,
+      // the virtual keyboard is likely open
+      const heightDiff = window.innerHeight - viewport.height;
+      const keyboardOpen = heightDiff > 150; // 150px threshold
+      setIsKeyboardVisible(keyboardOpen);
+    };
+
+    viewport.addEventListener('resize', handleResize);
+    return () => viewport.removeEventListener('resize', handleResize);
   }, []);
 
   // Header scroll listener
@@ -1325,6 +1403,58 @@ const AppContextContent: React.FC<any> = ({
                                 )}
                             </div>
 
+                            {/* Haptic Feedback Toggle */}
+                            <div className="p-4 bg-surface-dim/40 rounded-[32px] flex items-center justify-between hover:scale-[1.02] transition-all duration-300">
+                                <div className="flex items-center space-x-3 text-left">
+                                  <div className={`p-2.5 rounded-lg transition-all ${hapticEnabled ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary'}`}>
+                                    <Smartphone className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight">Haptic Feedback</h4>
+                                    <p className="text-[9px] font-bold text-on-surface-dim opacity-50">
+                                      {hapticEnabled ? 'Vibration active' : 'Vibration disabled'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const next = !hapticEnabled;
+                                    setHapticEnabledState(next);
+                                    setHapticEnabled(next);
+                                    if (next) haptic('TAP');
+                                  }}
+                                  className={`relative w-11 h-6 rounded-full transition-all duration-300 ${hapticEnabled ? 'bg-success' : 'bg-outline/40'}`}
+                                >
+                                  <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 ${hapticEnabled ? 'left-[22px]' : 'left-0.5'}`} />
+                                </button>
+                            </div>
+
+                            {/* Reduced Motion Toggle */}
+                            <div className="p-4 bg-surface-dim/40 rounded-[32px] flex items-center justify-between hover:scale-[1.02] transition-all duration-300">
+                                <div className="flex items-center space-x-3 text-left">
+                                  <div className={`p-2.5 rounded-lg transition-all bg-primary/10 text-primary`}>
+                                    <RefreshCw className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight">Reduced Motion</h4>
+                                    <p className="text-[9px] font-bold text-on-surface-dim opacity-50">
+                                      {reducedMotionEnabled ? 'Animations minimized' : 'Full animations'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const next = !reducedMotionEnabled;
+                                    setReducedMotionState(next);
+                                    setReducedMotion(next);
+                                    haptic('TOGGLE');
+                                  }}
+                                  className={`relative w-11 h-6 rounded-full transition-all duration-300 ${reducedMotionEnabled ? 'bg-success' : 'bg-outline/40'}`}
+                                >
+                                  <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 ${reducedMotionEnabled ? 'left-[22px]' : 'left-0.5'}`} />
+                                </button>
+                            </div>
+
                             {/* Install FMS button if not installed */}
                             {!isInstalled && (
                               <button
@@ -1397,7 +1527,17 @@ const AppContextContent: React.FC<any> = ({
             activeView={activeView} 
             setActiveView={setActiveView}
             onMenuClick={() => setIsMobileMenuOpen(true)}
-            isVisible={showHeader}
+            isVisible={showHeader && !isKeyboardVisible}
+            onSettingsClick={() => {
+              if (currentUser?.role === UserRole.ADMIN) {
+                setActiveView('admin');
+              } else {
+                setIsSettingsOpen(true);
+              }
+            }}
+            onLogout={wrappedLogout}
+            theme={theme}
+            onThemeToggle={() => setTheme(prev => prev === 'light' ? 'dark' : prev === 'dark' ? 'black' : 'light')}
           />
         </div>
         

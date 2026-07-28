@@ -4,6 +4,7 @@ import { supabase } from '../supabase';
 import { User, UserRole, StaffMember } from '../types';
 import { supabaseService } from '../services/supabaseService';
 import { Logo } from './Logo';
+import { haptic } from '../utils/haptics';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -28,6 +29,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const handleCredentialSignIn = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!credentialInput.trim()) {
+      haptic('WARNING');
       setError('Please enter an Email or RC Number (e.g. A-6600 or ibr.hamdhan@macl.aero)');
       return;
     }
@@ -38,12 +40,14 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     try {
       const match = await supabaseService.findStaffByEmailOrRc(credentialInput);
       if (!match) {
+        haptic('ERROR');
         setError(`No staff record found for "${credentialInput}". Please check your Email or RC Number.`);
         setIsLoggingIn(false);
         return;
       }
 
       if (match.status === 'inactive') {
+        haptic('ERROR');
         setError(`Account "${match.name}" (${match.employeeId}) is currently INACTIVE. Contact your System Administrator to enable access.`);
         setIsLoggingIn(false);
         return;
@@ -56,9 +60,11 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         avatar: match.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(match.name)}`
       };
 
+      haptic('SUCCESS');
       onLogin(user);
     } catch (err: any) {
       console.error('Credential login error:', err);
+      haptic('ERROR');
       setError(err?.message || 'Login failed.');
     } finally {
       setIsLoggingIn(false);
@@ -66,6 +72,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   const handleMicrosoftLogin = async () => {
+    haptic('TAP');
     setIsLoggingIn(true);
     setError(null);
     try {
@@ -78,6 +85,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       if (authErr) throw authErr;
     } catch (err: any) {
       console.error("Microsoft Login failed:", err);
+      haptic('ERROR');
       setError(err.message || "Failed to sign in with Microsoft.");
       setIsLoggingIn(false);
     }
@@ -85,6 +93,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   const handleStaffSelect = (staff: StaffMember) => {
     if (staff.status === 'inactive') {
+      haptic('ERROR');
       setError(`Account "${staff.name}" (${staff.employeeId}) is currently INACTIVE. Contact System Administrator.`);
       return;
     }
@@ -95,6 +104,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       role: staff.role,
       avatar: staff.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(staff.name)}`
     };
+    haptic('SUCCESS');
     onLogin(user);
   };
 
