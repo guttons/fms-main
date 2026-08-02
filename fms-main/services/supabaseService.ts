@@ -1162,36 +1162,25 @@ export const supabaseService = {
       return localStaff;
     }
 
-    // Try reading persistent local edits from localStorage first
+    // Check localStorage saved edits first
+    let savedLocalStaff: StaffMember[] | null = null;
     try {
       const savedLocal = localStorage.getItem('fms_staff_list');
       if (savedLocal) {
         const parsed: StaffMember[] = JSON.parse(savedLocal);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          localStaff = parsed;
-          const existingIds = new Set(localStaff.map(s => s.id));
-          let missingAdded = false;
-          for (const initStaff of INITIAL_STAFF_LIST) {
-            if (!existingIds.has(initStaff.id)) {
-              localStaff.push(initStaff);
-              missingAdded = true;
-            }
-          }
-          if (missingAdded) {
-            try { localStorage.setItem('fms_staff_list', JSON.stringify(localStaff)); } catch(e) {}
-          }
-          await fmsDb.bulkPut('staff', localStaff);
-          return localStaff;
+          savedLocalStaff = parsed;
         }
       }
     } catch (e) {
       console.warn('[Supabase] Failed to parse localStorage staff list:', e);
     }
 
+    let fetchedFromDb: StaffMember[] = [];
     try {
       const { data, error } = await supabase.from('staff').select('*').order('name');
-      if (!error && data && data.length >= 50) {
-        localStaff = data.map(row => ({
+      if (!error && data && data.length > 0) {
+        fetchedFromDb = data.map(row => ({
           id: row.id,
           name: row.name,
           role: row.role as UserRole,
@@ -1202,26 +1191,59 @@ export const supabaseService = {
           joinDate: row.join_date || new Date().toISOString(),
           avatar: row.avatar
         } as StaffMember));
-        await fmsDb.bulkPut('staff', localStaff);
-        try { localStorage.setItem('fms_staff_list', JSON.stringify(localStaff)); } catch (e) {}
-        return localStaff;
       }
     } catch (e) {
       console.warn('[Supabase] getStaff failed, checking IndexedDB cache:', e);
     }
 
-    // Fallback to IndexedDB
-    const cachedStaff = await fmsDb.getAll<StaffMember>('staff');
-    if (cachedStaff && cachedStaff.length >= 50 && !cachedStaff.some(s => s.id === 'u1')) {
-      localStaff = cachedStaff;
-      try { localStorage.setItem('fms_staff_list', JSON.stringify(localStaff)); } catch (e) {}
-      return localStaff;
+    // Merge baseline code definitions (INITIAL_STAFF_LIST) + Supabase DB + localStorage
+    const mergedMap = new Map<string, StaffMember>();
+
+    // Step 1: Base list from INITIAL_STAFF_LIST (contains up-to-date roles like DEPOT_OPERATOR, FUEL_MANAGEMENT, etc.)
+    INITIAL_STAFF_LIST.forEach(s => mergedMap.set(s.id, s));
+
+    // Step 2: Overlay Supabase DB rows (if any)
+    fetchedFromDb.forEach(dbStaff => {
+      const existing = mergedMap.get(dbStaff.id);
+      if (existing) {
+        mergedMap.set(dbStaff.id, { ...existing, ...dbStaff });
+      } else {
+        mergedMap.set(dbStaff.id, dbStaff);
+      }
+    });
+
+    // Step 3: Overlay local edits from savedLocalStaff (preserve any edits user made in UI)
+    if (savedLocalStaff) {
+      savedLocalStaff.forEach(localS => {
+        const existing = mergedMap.get(localS.id);
+        if (existing) {
+          mergedMap.set(localS.id, { ...existing, ...localS });
+        } else {
+          mergedMap.set(localS.id, localS);
+        }
+      });
     }
 
-    // Always fallback to INITIAL_STAFF_LIST (the 90+ MACL Staff List)
-    localStaff = INITIAL_STAFF_LIST;
+    localStaff = Array.from(mergedMap.values());
     await fmsDb.bulkPut('staff', localStaff);
     try { localStorage.setItem('fms_staff_list', JSON.stringify(localStaff)); } catch (e) {}
+
+    // Background sync: Upsert INITIAL_STAFF_LIST into Supabase database to bring remote database up-to-date
+    Promise.resolve(supabase.from('staff').upsert(INITIAL_STAFF_LIST.map(user => ({
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      employee_id: user.employeeId,
+      phone: user.phone || null,
+      email: user.email || null,
+      status: user.status || 'active',
+      join_date: user.joinDate || new Date().toISOString(),
+      avatar: user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`
+    })))).then(({ error }) => {
+      if (error) console.warn('[Supabase] Background staff upsert warn:', error);
+      else console.log('[Supabase] Staff table successfully synchronized with updated roles!');
+    }).catch(() => {});
+
     return localStaff;
   },
 
@@ -1252,20 +1274,30 @@ export const supabaseService = {
     triggerStaffCallbacks();
 
     await fmsDb.put('staff', newMember);
+
+    const payload = {
+      id: newId,
+      name: member.name,
+      role: member.role,
+      employee_id: member.employeeId,
+      phone: member.phone || null,
+      email: member.email || null,
+      status: member.status,
+      avatar: newMember.avatar
+    };
+
+    try {
+      const { error } = await supabase.from('staff').insert([payload]);
+      if (error) console.warn('[Supabase] Direct addStaff error:', error);
+    } catch (e) {
+      console.warn('[Supabase] Direct addStaff failed:', e);
+    }
+
     await fmsDb.enqueueOutbox({
       action: 'INSERT',
       entityType: 'staff',
       entityId: newId,
-      payload: {
-        id: newId,
-        name: member.name,
-        role: member.role,
-        employee_id: member.employeeId,
-        phone: member.phone || null,
-        email: member.email || null,
-        status: member.status,
-        avatar: newMember.avatar
-      },
+      payload,
       idempotencyKey: `staff-ins-${newId}-${Date.now()}`
     });
     syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
@@ -1289,6 +1321,13 @@ export const supabaseService = {
     if ('status' in updates) row.status = updates.status;
     if ('avatar' in updates) row.avatar = updates.avatar;
 
+    try {
+      const { error } = await supabase.from('staff').update(row).eq('id', id);
+      if (error) console.warn('[Supabase] Direct updateStaff error:', error);
+    } catch (e) {
+      console.warn('[Supabase] Direct updateStaff failed:', e);
+    }
+
     await fmsDb.enqueueOutbox({
       action: 'UPDATE',
       entityType: 'staff',
@@ -1306,6 +1345,13 @@ export const supabaseService = {
       try { localStorage.setItem('fms_staff_list', JSON.stringify(localStaff)); } catch (e) {}
       triggerStaffCallbacks();
       await fmsDb.delete('staff', id);
+    }
+
+    try {
+      const { error } = await supabase.from('staff').delete().eq('id', id);
+      if (error) console.warn('[Supabase] Direct deleteStaff error:', error);
+    } catch (e) {
+      console.warn('[Supabase] Direct deleteStaff failed:', e);
     }
 
     await fmsDb.enqueueOutbox({
