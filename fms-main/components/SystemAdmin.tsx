@@ -4,7 +4,7 @@ import {
   Users, Server, ShieldCheck, Activity, Database,
   Plus, Pencil, Trash2, X, Check, AlertTriangle,
   Truck, Fuel, ChevronDown, Phone, Mail, IdCard, UserCheck, UserX,
-  RefreshCw, Anchor
+  RefreshCw, Anchor, Plane
 } from 'lucide-react';
 import { UserRole, EquipmentType, EquipmentStatus, FuelType } from '../types';
 import type { StaffMember, Equipment, Tank, Vessel } from '../types';
@@ -13,9 +13,11 @@ import { Logo } from './Logo';
 import { useNotification, NotificationType } from '../context/NotificationContext';
 import { seedingService } from '../services/seedingService';
 import { useOperationalData } from '../context/OperationalDataContext';
+import { supabaseService } from '../services/supabaseService';
+import { FlightMasterTab } from './FlightMasterTab';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Tab = 'staff' | 'equipment' | 'tanks' | 'vessels';
+type Tab = 'staff' | 'equipment' | 'tanks' | 'vessels' | 'flight-master';
 
 interface ConfirmState { open: boolean; message: string; onConfirm: () => void; }
 
@@ -108,7 +110,7 @@ const ConfirmDialog: React.FC<{ state: ConfirmState; onClose: () => void }> = ({
         </div>
         <p className="text-sm text-on-surface-dim mb-8">{state.message}</p>
         <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl border-transparent text-[11px] font-black uppercase tracking-widest text-on-surface-dim hover:bg-surface-container-low transition-all">Cancel</button>
+          <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline text-[11px] font-black uppercase tracking-widest text-on-surface hover:text-primary transition-all active:scale-95 shadow-sm">Cancel</button>
           <button onClick={() => { state.onConfirm(); onClose(); }} className="flex-1 px-4 py-3 rounded-xl bg-error text-white text-[11px] font-black uppercase tracking-widest hover:bg-error/90 transition-all active:scale-95">Delete</button>
         </div>
       </div>
@@ -181,13 +183,27 @@ const StaffTab: React.FC<{
   confirm: (msg: string, cb: () => void) => void;
   currentUser?: any;
 }> = ({ push, confirm, currentUser }) => {
-  const { staff, addStaff, updateStaff, deleteStaff, isLoading } = useOperationalData();
+  const { staff, addStaff, updateStaff, deleteStaff, refreshData, isLoading } = useOperationalData();
   const loading = isLoading;
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<StaffMember | null>(null);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [filterRole, setFilterRole] = useState<string>('ALL');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
+
+  const handleSyncStaff = async () => {
+    setSyncing(true);
+    try {
+      await supabaseService.syncStaffWithCode();
+      await refreshData();
+      push('Staff list & roles successfully synchronized with latest system definitions!', 'success');
+    } catch (e) {
+      push('Failed to sync staff roles.', 'error');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const emptyForm: Omit<StaffMember, 'id'> = {
     name: '',
@@ -331,9 +347,14 @@ const StaffTab: React.FC<{
             <ChevronDown className="w-3 h-3 text-on-surface-dim absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
         </div>
-        <button onClick={openAdd} className="flex items-center gap-2 px-5 py-2.5 kinetic-gradient rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/90 active:scale-95 transition-all shadow-premium whitespace-nowrap">
-          <Plus className="w-4 h-4" /> Add Staff
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={handleSyncStaff} disabled={syncing} title="Force sync staff list & roles with latest system definitions" className="flex items-center gap-2 px-4 py-2.5 bg-surface-container-low hover:bg-surface-container border border-outline rounded-xl text-[10px] font-black uppercase tracking-widest text-on-surface hover:text-primary transition-all active:scale-95 whitespace-nowrap">
+            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} /> Sync Roles
+          </button>
+          <button onClick={openAdd} className="flex items-center gap-2 px-5 py-2.5 kinetic-gradient rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/90 active:scale-95 transition-all shadow-premium whitespace-nowrap">
+            <Plus className="w-4 h-4" /> Add Staff
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -464,7 +485,7 @@ const StaffTab: React.FC<{
             </Field>
 
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 rounded-xl border-transparent text-[11px] font-black uppercase tracking-widest text-on-surface-dim hover:bg-surface-container-low transition-all">Cancel</button>
+              <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline text-[11px] font-black uppercase tracking-widest text-on-surface hover:text-primary transition-all active:scale-95 shadow-sm">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 px-4 py-3 rounded-xl kinetic-gradient text-[11px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
                 {saving && <Logo className="w-4 h-4 animate-pulse" />}
                 {editing ? 'Update Access Role' : 'Add Staff'}
@@ -691,7 +712,7 @@ const EquipmentTab: React.FC<{ push: (msg: string, type?: NotificationType) => v
               </div>
             )}
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 rounded-xl border-transparent text-[11px] font-black uppercase tracking-widest text-on-surface-dim hover:bg-surface-container-low transition-all">Cancel</button>
+              <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline text-[11px] font-black uppercase tracking-widest text-on-surface hover:text-primary transition-all active:scale-95 shadow-sm">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 px-4 py-3 rounded-xl kinetic-gradient text-[11px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
                 {saving && <Logo className="w-4 h-4 animate-pulse" />}
                 {editing ? 'Save Changes' : 'Add Equipment'}
@@ -894,7 +915,7 @@ const TanksTab: React.FC<{ push: (msg: string, type?: NotificationType) => void;
               <input type="number" className={inputCls} placeholder="100000" min={0} value={form.safeMinLevel || ''} onChange={e => setForm(p => ({ ...p, safeMinLevel: Number(e.target.value) }))} />
             </Field>
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 rounded-xl border-transparent text-[11px] font-black uppercase tracking-widest text-on-surface-dim hover:bg-surface-container-low transition-all">Cancel</button>
+              <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline text-[11px] font-black uppercase tracking-widest text-on-surface hover:text-primary transition-all active:scale-95 shadow-sm">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 px-4 py-3 rounded-xl kinetic-gradient text-[11px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
                 {saving && <Logo className="w-4 h-4 animate-pulse" />}
                 {editing ? 'Save Changes' : 'Add Tank'}
@@ -1085,7 +1106,7 @@ const VesselsTab: React.FC<{ push: (msg: string, type?: NotificationType) => voi
               </div>
             </Field>
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 rounded-xl border-transparent text-[11px] font-black uppercase tracking-widest text-on-surface-dim hover:bg-surface-container-low transition-all">Cancel</button>
+              <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline text-[11px] font-black uppercase tracking-widest text-on-surface hover:text-primary transition-all active:scale-95 shadow-sm">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 px-4 py-3 rounded-xl kinetic-gradient text-[11px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
                 {saving && <Logo className="w-4 h-4 animate-pulse" />}
                 {editing ? 'Save Changes' : 'Add Vessel'}
@@ -1141,6 +1162,7 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
     { key: 'equipment', label: 'Fleet Registry', icon: <Truck className="w-4 h-4" /> },
     { key: 'tanks', label: 'Tank Inventory', icon: <Fuel className="w-4 h-4" /> },
     { key: 'vessels', label: 'Vessel Registry', icon: <Anchor className="w-4 h-4" /> },
+    { key: 'flight-master', label: 'Airline & Aircraft Master', icon: <Plane className="w-4 h-4" /> },
   ];
 
   const [isSeeding, setIsSeeding] = useState(false);
@@ -1236,14 +1258,13 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
       {/* Tab Navigation */}
       <div className="bg-surface-container-lowest rounded-3xl border-transparent overflow-visible shadow-sm">
         <div className="border-b border-outline p-4 bg-surface-container-low/30 flex justify-center">
-          <div className="bg-surface-container-low p-1.5 rounded-2xl border-transparent relative grid grid-cols-4 w-full max-w-[800px] shadow-inner">
+          <div className="bg-surface-container-low p-1.5 rounded-2xl border-transparent relative grid grid-cols-5 w-full max-w-[950px] shadow-inner">
             <div 
-              className={`absolute top-1.5 bottom-1.5 w-[calc(25%-4px)] rounded-xl kinetic-gradient transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform
-                ${activeTab === 'staff' ? 'left-1.5 translate-x-[0%]' : ''}
-                ${activeTab === 'equipment' ? 'left-1.5 translate-x-[100%]' : ''}
-                ${activeTab === 'tanks' ? 'left-1.5 translate-x-[200%]' : ''}
-                ${activeTab === 'vessels' ? 'left-1.5 translate-x-[300%]' : ''}
-              `}
+              className="absolute top-1.5 bottom-1.5 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform"
+              style={{
+                left: `calc(6px + ${tabs.findIndex(t => t.key === activeTab)} * (100% - 12px) / 5)`,
+                width: 'calc((100% - 12px) / 5)'
+              }}
             />
             {tabs.map(tab => (
               <button
@@ -1252,7 +1273,7 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
                   setActiveTab(tab.key);
                   triggerTooltip(tab.key);
                 }}
-                className={`flex items-center justify-center gap-1.5 sm:gap-2.5 px-1 sm:px-6 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest sm:tracking-[0.2em] transition-all relative z-10 overflow-visible
+                className={`flex items-center justify-center gap-1.5 sm:gap-2.5 px-1 sm:px-4 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest sm:tracking-[0.2em] transition-all relative z-10 overflow-visible text-center w-full
                   ${activeTab === tab.key ? 'text-white' : 'text-on-surface-dim opacity-50 hover:opacity-100'}`}
               >
                 {activeTooltip === tab.key && (
@@ -1262,7 +1283,7 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
                     <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-outline -z-10 mt-[1px]" />
                   </div>
                 )}
-                {tab.icon}
+                <span className="flex items-center justify-center shrink-0">{tab.icon}</span>
                 <span className="hidden sm:inline truncate">{tab.label}</span>
               </button>
             ))}
@@ -1289,6 +1310,11 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
           {activeTab === 'vessels' && (
             <div key="vessels" className="animate-in fade-in slide-in-from-right-4 duration-500">
               <VesselsTab push={notify} confirm={confirmAction} />
+            </div>
+          )}
+          {activeTab === 'flight-master' && (
+            <div key="flight-master" className="animate-in fade-in slide-in-from-right-4 duration-500">
+              <FlightMasterTab push={notify} confirm={confirmAction} currentUser={currentUser} />
             </div>
           )}
         </div>

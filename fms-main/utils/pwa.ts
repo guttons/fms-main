@@ -5,8 +5,8 @@
  */
 export const updatePWAManifestAndTheme = async (theme: 'light' | 'dark' | 'black') => {
   const isDark          = theme !== 'light';
-  const themeColor      = theme === 'black' ? '#0E0E0E' : (theme === 'dark' ? '#0b121f' : '#f7f9fb');
-  const backgroundColor = theme === 'black' ? '#0E0E0E' : (theme === 'dark' ? '#0b121f' : '#f7f9fb');
+  const themeColor      = theme === 'black' ? '#0E0E0E' : (theme === 'dark' ? '#0b121f' : '#0b121f');
+  const backgroundColor = theme === 'black' ? '#0E0E0E' : '#0b121f';
   const iconSrc         = isDark ? '/icon-dark.svg' : '/icon-light.svg';
 
   // ── 1. meta[name="theme-color"] ─────────────────────────────────────────

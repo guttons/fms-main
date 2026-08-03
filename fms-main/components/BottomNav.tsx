@@ -12,7 +12,7 @@ import {
   Settings,
   Calendar,
   Truck,
-  MoreHorizontal,
+  SlidersHorizontal,
   Fuel,
   BookOpen,
   History,
@@ -284,10 +284,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
   return (
     <>
-      <div className={`fixed bottom-6 left-0 right-0 mx-auto w-[calc(100%-48px)] bg-surface border border-slate-300/40 dark:border-[rgba(255,255,255,0.08)] lg:hidden z-50 px-4 rounded-[32px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6),0_0_20px_rgba(0,0,0,0.2)] transition-[transform,opacity,visibility] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+      <div className={`fixed left-0 right-0 mx-auto w-[calc(100%-48px)] bg-surface border border-slate-300/40 dark:border-[rgba(255,255,255,0.08)] lg:hidden z-50 px-4 rounded-[32px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6),0_0_20px_rgba(0,0,0,0.2)] transition-[transform,opacity,visibility] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
         isVisible ? 'translate-y-0 opacity-100 scale-100 visible' : 'translate-y-32 opacity-0 scale-90 invisible pointer-events-none'
       }`}
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      style={{ bottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))' }}
       >
         <div className="flex items-center justify-around h-16 relative">
           {/* Sliding Indicator */}
@@ -337,7 +337,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               <div className={`p-2 rounded-2xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                 isOverflowActive ? 'bg-primary/10 shadow-glow scale-110' : 'opacity-60 group-hover:bg-primary/5'
               }`}>
-                <MoreHorizontal className="w-5 h-5 transition-transform duration-500" />
+                <SlidersHorizontal className="w-5 h-5 transition-transform duration-500" />
               </div>
             </button>
           )}

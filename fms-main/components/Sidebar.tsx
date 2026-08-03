@@ -30,6 +30,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import { Logo } from './Logo';
+import { haptic } from '../utils/haptics';
 
 interface SidebarProps {
   user: User;
@@ -197,6 +198,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside className={`
       fixed inset-y-0 left-0 z-[60] bg-surface border-r border-outline transform transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
+      pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] transform-gpu will-change-transform
       ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl w-[var(--sidebar-width)]' : '-translate-x-full w-[var(--sidebar-width)]'} 
       lg:translate-x-0 lg:static lg:inset-0 shadow-sm transition-colors duration-500
       ${isCollapsed ? 'lg:w-[78px]' : 'lg:w-[var(--sidebar-width)]'}
@@ -205,6 +207,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Brand */}
         <button 
           onClick={() => {
+            haptic('TAP');
             if (window.innerWidth < 1024) {
               onCloseMobileMenu?.();
             } else {
@@ -240,7 +243,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             return (
               <div key={item.id} className="relative group w-full flex justify-center">
                 <button
-                  onClick={() => setActiveView(item.id)}
+                  onClick={() => {
+                    haptic('TAP');
+                    setActiveView(item.id);
+                  }}
                   onMouseEnter={(e) => {
                     if (!isCollapsed) return;
                     const rect = e.currentTarget.getBoundingClientRect();
@@ -271,7 +277,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
 
         {/* Footer Controls */}
-        <div className={`p-6 transition-all duration-300 ${isCollapsed ? 'lg:p-4' : 'p-6'}`}>
+        <div className={`p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] transition-all duration-300 ${isCollapsed ? 'lg:p-4 lg:pb-[calc(1rem+env(safe-area-inset-bottom,0px))]' : 'p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]'}`}>
           <div className={`border-t border-outline transition-all duration-300 ${
             isCollapsed 
               ? 'lg:flex lg:flex-col lg:items-center w-full lg:space-y-2 lg:pt-2 space-y-4 pt-4' 
@@ -280,6 +286,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Help Center */}
             <div className="relative group w-full flex justify-center">
               <button 
+                onClick={() => haptic('TAP')}
                 onMouseEnter={(e) => {
                   if (!isCollapsed) return;
                   const rect = e.currentTarget.getBoundingClientRect();
@@ -302,7 +309,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* System Settings */}
             <div className="relative group w-full flex justify-center">
               <button 
-                onClick={onSettingsClick}
+                onClick={() => {
+                  haptic('TAP');
+                  onSettingsClick();
+                }}
                 onMouseEnter={(e) => {
                   if (!isCollapsed) return;
                   const rect = e.currentTarget.getBoundingClientRect();
@@ -330,7 +340,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Sign Out */}
             <div className="relative group w-full flex justify-center">
               <button 
-                onClick={onLogout}
+                onClick={() => {
+                  haptic('TAP');
+                  onLogout();
+                }}
                 onMouseEnter={(e) => {
                   if (!isCollapsed) return;
                   const rect = e.currentTarget.getBoundingClientRect();

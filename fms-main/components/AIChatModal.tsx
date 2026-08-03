@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Send, X, Bot, User as UserIcon, ArrowRight, Plane, UserCheck, Truck, Coins, Fuel, BarChart3, Calendar, ShieldCheck, TrendingUp, Layers } from 'lucide-react';
+import { Sparkles, Send, X, User as UserIcon, ArrowRight, Calendar } from 'lucide-react';
+import { Logo } from './Logo';
 import { aiAssistantService, AIResponse, ConversationContext } from '../services/aiAssistantService';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { useFinanceData } from '../context/FinanceDataContext';
@@ -41,7 +42,7 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
         {
           id: 'welcome-1',
           sender: 'ai',
-          text: 'Hello! I am your **MACL FMS Generative AI Assistant**.\n\nAsk me about **Fuel Uplift Logs** (e.g. *"How much fuel does SU321 usually uplift?"*), **Date Range Analysis** (*"Total fuel consumed last week"* or *"between July 1 and July 15"*), **Tank Storage**, **Staff RC Numbers**, or **Refueler Loading Logs**.',
+          text: 'Hello! Welcome to MACL FMS Assistant.\n\nYou can search operational logs, fuel uplifts, sales summaries, tank storage levels, staff records, or refueler loading stats.',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);
@@ -98,7 +99,7 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
 
       setMessages(prev => [...prev, aiMsg]);
     } catch (err) {
-      console.error('[AI Chat] Error processing query:', err);
+      console.error('[Assistant Chat] Error processing query:', err);
       setMessages(prev => [
         ...prev,
         {
@@ -113,15 +114,6 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
     }
   };
 
-  const quickPrompts = [
-    { label: 'SU321 Fuel Uplift History', icon: <Plane className="w-3.5 h-3.5 text-primary" />, query: 'How much fuel does SU321 usually uplift?' },
-    { label: 'Total Usage Last Week', icon: <Calendar className="w-3.5 h-3.5 text-primary" />, query: 'Total fuel consumed last week' },
-    { label: 'Top Flights This Month', icon: <TrendingUp className="w-3.5 h-3.5 text-primary" />, query: 'Top flights by volume this month' },
-    { label: 'Refueler Loading Yesterday', icon: <Truck className="w-3.5 h-3.5 text-primary" />, query: 'Bridging logs loading summary yesterday' },
-    { label: 'Check Tank Levels', icon: <Fuel className="w-3.5 h-3.5 text-primary" />, query: 'Check Tank Levels' },
-    { label: 'Who is A-6600?', icon: <UserCheck className="w-3.5 h-3.5 text-primary" />, query: 'Who is A-6600?' }
-  ];
-
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
       <div className="w-full max-w-2xl bg-surface border border-outline rounded-[36px] shadow-premium overflow-hidden flex flex-col h-[650px] max-h-[90vh] relative">
@@ -134,13 +126,13 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h3 className="text-sm font-black text-on-surface uppercase tracking-tight">MACL FMS AI Assistant</h3>
+                <h3 className="text-sm font-black text-on-surface uppercase tracking-tight">MACL FMS Assistant</h3>
                 <span className="px-2 py-0.5 bg-primary/10 text-primary text-[8px] font-black rounded-full uppercase tracking-wider border border-primary/20">
-                  BigQuery Engine
+                  Operations Engine
                 </span>
               </div>
               <p className="text-[10px] font-bold text-on-surface-dim opacity-50 uppercase tracking-widest mt-0.5">
-                Date Range NLP & Statistical Log Intelligence
+                Statistical Log & Operations Assistant
               </p>
             </div>
           </div>
@@ -164,7 +156,7 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
                   ? 'kinetic-gradient text-white shadow-sm'
                   : 'bg-surface-container-high text-primary border border-outline'
               }`}>
-                {msg.sender === 'user' ? <UserIcon className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                {msg.sender === 'user' ? <UserIcon className="w-4 h-4" /> : <Logo className="w-4 h-4" />}
               </div>
 
               <div className={`max-w-[85%] rounded-3xl p-4 text-xs font-semibold leading-relaxed space-y-3 transition-all ${
@@ -173,7 +165,7 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
                   : 'bg-surface border border-outline hover:border-primary/40 text-on-surface rounded-tl-none shadow-premium'
               }`}>
                 
-                {/* Date Range Badge for AI Responses */}
+                {/* Date Range Badge for Responses */}
                 {msg.responseObj?.dateRangeUsed && (
                   <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-full text-[9px] font-black text-primary uppercase tracking-wider mb-1">
                     <Calendar className="w-3 h-3" />
@@ -181,7 +173,8 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
                   </div>
                 )}
 
-                <div className="whitespace-pre-wrap">{msg.text}</div>
+                {/* Sanitizes out any asterisks * and ** completely */}
+                <div className="whitespace-pre-wrap">{msg.text.replace(/\*/g, '')}</div>
 
                 {/* Response Highlights Badge Grid */}
                 {msg.responseObj?.highlights && (
@@ -221,7 +214,7 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
           {isTyping && (
             <div className="flex items-center space-x-3 fade-in">
               <div className="w-8 h-8 rounded-xl bg-surface-container-high text-primary border border-outline flex items-center justify-center">
-                <Bot className="w-4 h-4 animate-spin text-primary" />
+                <Logo className="w-4 h-4 animate-pulse text-primary" />
               </div>
               <div className="bg-surface border border-outline p-3 rounded-2xl text-xs font-bold text-on-surface-dim flex items-center space-x-2 shadow-sm">
                 <span className="w-2 h-2 rounded-full bg-primary animate-ping"></span>
@@ -231,21 +224,6 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
           )}
 
           <div ref={chatEndRef} />
-        </div>
-
-        {/* Quick Prompts Suggestions Bar */}
-        <div className="px-5 py-2.5 bg-surface-dim border-t border-outline flex items-center space-x-2 overflow-x-auto custom-scrollbar">
-          <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest shrink-0 mr-1">Suggestions:</span>
-          {quickPrompts.map((p, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleSendQuery(p.query)}
-              className="px-3 py-1.5 bg-surface hover:bg-primary hover:text-black hover:border-primary border border-outline rounded-xl text-[10px] font-bold text-on-surface-dim whitespace-nowrap transition-all active:scale-95 shrink-0 flex items-center space-x-1.5 group"
-            >
-              {React.cloneElement(p.icon, { className: 'w-3.5 h-3.5 text-primary group-hover:text-black transition-colors' })}
-              <span className="group-hover:text-black transition-colors">{p.label}</span>
-            </button>
-          ))}
         </div>
 
         {/* Input Bar */}
@@ -258,7 +236,7 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask AI (e.g. SU321 uplift, usage last week, July 1 to 15, Tank 101, A-6600)..."
+              placeholder="Search or ask..."
               className="w-full pl-11 pr-4 py-3 bg-surface border border-outline focus:border-primary rounded-2xl text-xs font-bold text-on-surface focus:outline-none transition-all placeholder:text-on-surface-dim/40"
             />
             <Sparkles className="w-4 h-4 text-primary absolute left-4 top-1/2 -translate-y-1/2" />

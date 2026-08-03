@@ -1220,6 +1220,31 @@ app.post('/migrate-legacy-data', requireAuth, async (req: Request, res: Response
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// GET /master-db-records — query distinct historical airlines, flight numbers, regs & types
+// ═══════════════════════════════════════════════════════════════════════════
+app.get('/master-db-records', async (req: Request, res: Response) => {
+  try {
+    const query = `
+      SELECT DISTINCT
+        TRIM(airline) AS airline_name,
+        TRIM(flight_number) AS flight_number,
+        TRIM(aircraft_reg) AS aircraft_reg,
+        TRIM(aircraft_type) AS aircraft_type
+      FROM \`${PROJECT_ID}.${DATASET_ID}.${TABLE_ID}\`
+      WHERE airline IS NOT NULL AND TRIM(airline) != ''
+        AND flight_number IS NOT NULL AND TRIM(flight_number) != ''
+        AND aircraft_reg IS NOT NULL AND TRIM(aircraft_reg) != ''
+      ORDER BY airline_name, flight_number, aircraft_reg
+    `;
+    const [rows] = await bigquery.query({ query });
+    res.json({ count: rows.length, records: rows });
+  } catch (err: any) {
+    console.error('[BigQuery Master DB] Query error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Start server ─────────────────────────────────────────────────────────────
 const PORT = parseInt(process.env.PORT ?? '8080', 10);
 

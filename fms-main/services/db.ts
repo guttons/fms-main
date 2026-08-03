@@ -30,7 +30,7 @@ export interface FlightCustomerMapping {
 }
 
 const DB_NAME = 'MACL_FMS_OFFLINE_DB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 class FMSDatabase {
   private dbPromise: Promise<IDBDatabase> | null = null;
@@ -81,6 +81,19 @@ class FMSDatabase {
         if (!db.objectStoreNames.contains('vessels')) {
           db.createObjectStore('vessels', { keyPath: 'id' });
         }
+        if (!db.objectStoreNames.contains('airlines')) {
+          db.createObjectStore('airlines', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('flight_master')) {
+          const fmStore = db.createObjectStore('flight_master', { keyPath: 'id' });
+          fmStore.createIndex('airlineName', 'airlineName', { unique: false });
+          fmStore.createIndex('flightNumber', 'flightNumber', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('aircraft_master')) {
+          const amStore = db.createObjectStore('aircraft_master', { keyPath: 'id' });
+          amStore.createIndex('airlineName', 'airlineName', { unique: false });
+          amStore.createIndex('aircraftReg', 'aircraftReg', { unique: false });
+        }
         if (!db.objectStoreNames.contains('outbox')) {
           const outboxStore = db.createObjectStore('outbox', { keyPath: 'id' });
           outboxStore.createIndex('syncStatus', 'syncStatus', { unique: false });
@@ -101,10 +114,17 @@ class FMSDatabase {
     return this.dbPromise;
   }
 
-  private async getStore(storeName: string, mode: IDBTransactionMode = 'readonly'): Promise<IDBObjectStore> {
-    const db = await this.initDB();
-    const tx = db.transaction(storeName, mode);
-    return tx.objectStore(storeName);
+  private async getStore(storeName: string, mode: IDBTransactionMode = 'readonly'): Promise<IDBObjectStore | null> {
+    try {
+      const db = await this.initDB();
+      if (!db.objectStoreNames.contains(storeName)) {
+        return null;
+      }
+      const tx = db.transaction(storeName, mode);
+      return tx.objectStore(storeName);
+    } catch (e) {
+      return null;
+    }
   }
 
   // ── Generic CRUD Helpers ───────────────────────────────────────────────────
@@ -112,6 +132,7 @@ class FMSDatabase {
   async getAll<T>(storeName: string): Promise<T[]> {
     try {
       const store = await this.getStore(storeName, 'readonly');
+      if (!store) return [];
       return new Promise((resolve, reject) => {
         const req = store.getAll();
         req.onsuccess = () => resolve(req.result as T[]);
@@ -126,6 +147,7 @@ class FMSDatabase {
   async get<T>(storeName: string, key: string): Promise<T | null> {
     try {
       const store = await this.getStore(storeName, 'readonly');
+      if (!store) return null;
       return new Promise((resolve, reject) => {
         const req = store.get(key);
         req.onsuccess = () => resolve((req.result as T) || null);
@@ -140,6 +162,7 @@ class FMSDatabase {
   async put<T>(storeName: string, value: T): Promise<void> {
     try {
       const store = await this.getStore(storeName, 'readwrite');
+      if (!store) return;
       return new Promise((resolve, reject) => {
         const req = store.put(value);
         req.onsuccess = () => resolve();
@@ -153,16 +176,11 @@ class FMSDatabase {
   async bulkPut<T>(storeName: string, items: T[]): Promise<void> {
     if (!items || items.length === 0) return;
     try {
-      const db = await this.initDB();
-      const tx = db.transaction(storeName, 'readwrite');
-      const store = tx.objectStore(storeName);
+      const store = await this.getStore(storeName, 'readwrite');
+      if (!store) return;
       for (const item of items) {
         store.put(item);
       }
-      return new Promise((resolve, reject) => {
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      });
     } catch (err) {
       console.error(`[IndexedDB] bulkPut ${storeName} failed:`, err);
     }
@@ -171,6 +189,7 @@ class FMSDatabase {
   async delete(storeName: string, key: string): Promise<void> {
     try {
       const store = await this.getStore(storeName, 'readwrite');
+      if (!store) return;
       return new Promise((resolve, reject) => {
         const req = store.delete(key);
         req.onsuccess = () => resolve();

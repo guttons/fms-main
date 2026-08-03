@@ -189,6 +189,8 @@ html, body {
   color: var(--color-on-surface);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   height: 100vh;
+  height: 100dvh;
+  height: -webkit-fill-available;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), 

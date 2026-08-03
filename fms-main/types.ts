@@ -213,3 +213,43 @@ export interface ShipmentData {
   averageSales: number;
   deadStock: number;
 }
+
+export interface AirlineMaster {
+  id: string;
+  name: string;
+  iataCode?: string;
+  icaoCode?: string;
+  category?: 'INT' | 'DOM';
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface FlightMaster {
+  id: string;
+  airlineId: string;
+  airlineName: string;
+  flightNumber: string;
+  route?: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AircraftMaster {
+  id: string;
+  airlineId: string;
+  airlineName: string;
+  aircraftReg: string;
+  aircraftType: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AirlineHierarchyNode {
+  airline: AirlineMaster;
+  flights: FlightMaster[];
+  aircrafts: AircraftMaster[];
+}
+

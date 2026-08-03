@@ -49,14 +49,14 @@ export type QueryIntent =
 
 // Static benchmarks fallback dictionary for offline mode or when BigQuery returns 0 records
 const FLIGHT_BENCHMARKS: Record<string, { avgLiters: number; range: string; aircraft: string; route: string; recent: number[] }> = {
-  'SU321': { avgLiters: 44500, range: '41,000 L – 48,000 L', aircraft: 'Boeing 777-300ER', route: 'MLE ➔ SVO (Moscow)', recent: [44200, 45100, 43800] },
-  'SU320': { avgLiters: 43800, range: '40,500 L – 47,000 L', aircraft: 'Airbus A350-900', route: 'MLE ➔ SVO (Moscow)', recent: [43500, 44100, 43800] },
-  'EK650': { avgLiters: 38200, range: '35,000 L – 42,000 L', aircraft: 'Boeing 777-300ER', route: 'MLE ➔ DXB (Dubai)', recent: [38500, 37900, 38200] },
-  'EK651': { avgLiters: 37800, range: '34,500 L – 41,500 L', aircraft: 'Boeing 777-300ER', route: 'MLE ➔ DXB (Dubai)', recent: [37500, 38100, 37800] },
-  'SQ451': { avgLiters: 32800, range: '30,000 L – 36,000 L', aircraft: 'Airbus A350-900', route: 'MLE ➔ SIN (Singapore)', recent: [32500, 33100, 32800] },
-  'QR675': { avgLiters: 34500, range: '31,500 L – 38,000 L', aircraft: 'Airbus A350-900', route: 'MLE ➔ DOH (Doha)', recent: [34200, 34800, 34500] },
-  'UL102': { avgLiters: 14500, range: '12,500 L – 16,500 L', aircraft: 'Airbus A320neo', route: 'MLE ➔ CMB (Colombo)', recent: [14200, 14800, 14500] },
-  'BA061': { avgLiters: 52000, range: '48,000 L – 56,000 L', aircraft: 'Boeing 777-200ER', route: 'MLE ➔ LHR (London)', recent: [51800, 52400, 51900] }
+  'SU321': { avgLiters: 44500, range: '41,000 L – 48,000 L', aircraft: 'Boeing 777-300ER', route: 'MLE to SVO (Moscow)', recent: [44200, 45100, 43800] },
+  'SU320': { avgLiters: 43800, range: '40,500 L – 47,000 L', aircraft: 'Airbus A350-900', route: 'MLE to SVO (Moscow)', recent: [43500, 44100, 43800] },
+  'EK650': { avgLiters: 38200, range: '35,000 L – 42,000 L', aircraft: 'Boeing 777-300ER', route: 'MLE to DXB (Dubai)', recent: [38500, 37900, 38200] },
+  'EK651': { avgLiters: 37800, range: '34,500 L – 41,500 L', aircraft: 'Boeing 777-300ER', route: 'MLE to DXB (Dubai)', recent: [37500, 38100, 37800] },
+  'SQ451': { avgLiters: 32800, range: '30,000 L – 36,000 L', aircraft: 'Airbus A350-900', route: 'MLE to SIN (Singapore)', recent: [32500, 33100, 32800] },
+  'QR675': { avgLiters: 34500, range: '31,500 L – 38,000 L', aircraft: 'Airbus A350-900', route: 'MLE to DOH (Doha)', recent: [34200, 34800, 34500] },
+  'UL102': { avgLiters: 14500, range: '12,500 L – 16,500 L', aircraft: 'Airbus A320neo', route: 'MLE to CMB (Colombo)', recent: [14200, 14800, 14500] },
+  'BA061': { avgLiters: 52000, range: '48,000 L – 56,000 L', aircraft: 'Boeing 777-200ER', route: 'MLE to LHR (London)', recent: [51800, 52400, 51900] }
 };
 
 // Helper: detect airline name/code from query
@@ -75,7 +75,7 @@ export const aiAssistantService = {
   /**
    * Helper: Classifies query intent using weighted multi-signal scoring
    */
-  classifyIntent(q: string, hasDateRange: boolean, flightCode: string | null, vehicleCode: string | null, airlineDetected: boolean): QueryIntent {
+  classifyIntent(q: string, hasDateRange: boolean, flightCode: string | null, vehicleCode: string | null, airlineDetected: boolean, rcMatch: any): QueryIntent {
     let scores: Record<QueryIntent, number> = {
       FLIGHT_UPLIFT: 0,
       AIRLINE_FLIGHTS: 0,
@@ -91,10 +91,10 @@ export const aiAssistantService = {
       GENERAL: 0
     };
 
-    // Signals for AIRLINE_FLIGHTS (High priority whenever airline name is detected without explicit single flight code)
+    // Signals for AIRLINE_FLIGHTS
     if (airlineDetected) {
       if (!flightCode) {
-        scores.AIRLINE_FLIGHTS += 8; // Dominant intent when asking about an airline
+        scores.AIRLINE_FLIGHTS += 8;
       } else {
         scores.AIRLINE_FLIGHTS += 5;
       }
@@ -104,9 +104,23 @@ export const aiAssistantService = {
     if (flightCode) scores.FLIGHT_UPLIFT += 5;
     if (q.includes('uplift') || q.includes('how much fuel') || q.includes('average fuel') || q.includes('fuel history')) scores.FLIGHT_UPLIFT += 4;
 
-    // Signals for DAILY_CONSUMPTION
-    if (q.includes('consumption') || q.includes('consumed') || q.includes('total fuel') || q.includes('daily usage') || q.includes('daily average')) scores.DAILY_CONSUMPTION += 4;
-    if (hasDateRange && (q.includes('fuel') || q.includes('total'))) scores.DAILY_CONSUMPTION += 2;
+    // Signals for DAILY_CONSUMPTION & Sales
+    if (
+      q.includes('sale') || q.includes('sales') || q.includes('revenue') || q.includes('sold') ||
+      q.includes('consumption') || q.includes('consumed') || q.includes('total fuel') ||
+      q.includes('daily usage') || q.includes('daily average') || q.includes('usage') ||
+      q.includes('volume') || q.includes('total') || q.includes('how much')
+    ) {
+      scores.DAILY_CONSUMPTION += 6;
+    }
+
+    if (hasDateRange) {
+      if (!flightCode && !vehicleCode && !rcMatch && !airlineDetected) {
+        scores.DAILY_CONSUMPTION += 5;
+      } else {
+        scores.DAILY_CONSUMPTION += 2;
+      }
+    }
 
     // Signals for TOP_FLIGHTS
     if (q.includes('busiest') || q.includes('top flight') || q.includes('most fuel') || q.includes('highest uplift')) scores.TOP_FLIGHTS += 5;
@@ -184,7 +198,7 @@ export const aiAssistantService = {
     const airlineInfo = detectAirline(q) || (convCtx?.lastAirline ? detectAirline(convCtx.lastAirline) : null);
 
     // 3. Classify Intent
-    const intent = this.classifyIntent(q, !!parsedDateRange, flightCode, vehicleCode, !!airlineInfo);
+    const intent = this.classifyIntent(q, !!parsedDateRange, flightCode, vehicleCode, !!airlineInfo, rcMatch);
 
     // Track updated context
     const updatedConvCtx: ConversationContext = {
@@ -199,22 +213,16 @@ export const aiAssistantService = {
     if (intent === 'AIRLINE_FLIGHTS' && airlineInfo) {
       const stats = await aiDataEngine.aggregateByAirline(airlineInfo.key, effectiveDateRange);
 
-      // Combine with live flight jobs for this airline
       const liveMatches = ctx.flightJobs.filter(j => {
         const fn = j.flightNumber.toUpperCase().replace(/\s+/g, '');
         return fn.startsWith(airlineInfo.prefix) || (j.aircraftReg && j.aircraftReg.toLowerCase().includes(airlineInfo.key));
       });
 
-      // Combine with static benchmark flight numbers for this airline
       const benchmarkMatches = Object.entries(FLIGHT_BENCHMARKS).filter(([fn]) => fn.startsWith(airlineInfo.prefix));
-
-      // Combine with full carrier registry for this airline
       const registryMatches = AIRLINE_FLIGHTS_REGISTRY[airlineInfo.prefix] || [];
 
-      // Build complete list of distinct flight numbers from all sources
       const flightMap: Record<string, { avgL: number; aircraft: string; route: string; opsCount: number; liveJob?: FlightJob }> = {};
 
-      // Source 1: BigQuery records for date range
       stats.distinctFlights.forEach(f => {
         flightMap[f.flightNumber] = {
           avgL: f.avgVolume,
@@ -224,7 +232,6 @@ export const aiAssistantService = {
         };
       });
 
-      // Source 2: Full carrier registry (ensure ALL flight numbers are included)
       registryMatches.forEach(r => {
         if (!flightMap[r.flightNumber]) {
           flightMap[r.flightNumber] = {
@@ -236,7 +243,6 @@ export const aiAssistantService = {
         }
       });
 
-      // Source 3: Static benchmarks
       benchmarkMatches.forEach(([fn, b]) => {
         if (!flightMap[fn]) {
           flightMap[fn] = {
@@ -248,7 +254,6 @@ export const aiAssistantService = {
         }
       });
 
-      // Source 4: Live flight jobs
       liveMatches.forEach(j => {
         const fn = j.flightNumber.toUpperCase().replace(/\s+/g, '');
         if (!flightMap[fn]) {
@@ -268,21 +273,21 @@ export const aiAssistantService = {
 
       if (flightList.length > 0) {
         const flightRowsStr = flightList.map(([fn, info], i) => {
-          const liveStr = info.liveJob ? `\n    └─ 🟢 *[TODAY ACTIVE: Stand ${info.liveJob.stand} • Status: ${info.liveJob.status}]*` : '';
-          const opsStr = info.opsCount > 0 ? ` (**${info.opsCount} ops logged** in ${effectiveDateRange.label})` : ` *(0 ops logged in ${effectiveDateRange.label})*`;
-          return `${i + 1}. **${fn}**: Average Uplift **${info.avgL.toLocaleString()} Liters** (~${Math.round(info.avgL * 0.80).toLocaleString()} KG)\n   • **Aircraft:** ${info.aircraft} • **Route:** ${info.route}${opsStr}${liveStr}`;
+          const liveStr = info.liveJob ? `\n    └─ [TODAY ACTIVE: Stand ${info.liveJob.stand} • Status: ${info.liveJob.status}]` : '';
+          const opsStr = info.opsCount > 0 ? ` (${info.opsCount} ops logged in ${effectiveDateRange.label})` : ` (0 ops logged in ${effectiveDateRange.label})`;
+          return `${i + 1}. ${fn}: Average Uplift ${info.avgL.toLocaleString()} Liters (~${Math.round(info.avgL * 0.80).toLocaleString()} KG)\n   • Aircraft: ${info.aircraft} • Route: ${info.route}${opsStr}${liveStr}`;
         }).join('\n\n');
 
-        const totalVolStr = stats.totalVolume > 0 ? `\n• **Total Volume Uplifted (${formatDateLabel(effectiveDateRange)}):** **${stats.totalVolume.toLocaleString()} Liters** (~${stats.totalMass.toLocaleString()} KG across ${stats.flightCount} operations)` : '';
+        const totalVolStr = stats.totalVolume > 0 ? `\n• Total Volume Uplifted (${formatDateLabel(effectiveDateRange)}): ${stats.totalVolume.toLocaleString()} Liters (~${stats.totalMass.toLocaleString()} KG across ${stats.flightCount} operations)` : '';
 
         return {
           response: {
-            answer: `**${airlineInfo.name} (${airlineInfo.code}) — All Flight Numbers & Uplift Records:**\n` +
-              `• **IATA Prefix:** \`${airlineInfo.prefix}\`${totalVolStr}\n` +
-              `• **Analyzed Date Range:** ${formatDateLabel(effectiveDateRange)}\n` +
-              `• **Total Airline Flight Routes:** **${flightList.length} distinct flight numbers**\n\n` +
-              `**Flight Numbers & Fuel Uplift Breakdown:**\n\n${flightRowsStr}\n\n` +
-              `*Data Source: BigQuery Operations Log, Carrier Route Registry & Live Schedule (${formatDateLabel(effectiveDateRange)}).*`,
+            answer: `${airlineInfo.name} (${airlineInfo.code}) — All Flight Numbers & Uplift Records:\n` +
+              `• IATA Prefix: ${airlineInfo.prefix}${totalVolStr}\n` +
+              `• Analyzed Date Range: ${formatDateLabel(effectiveDateRange)}\n` +
+              `• Total Airline Flight Routes: ${flightList.length} distinct flight numbers\n\n` +
+              `Flight Numbers & Fuel Uplift Breakdown:\n\n${flightRowsStr}\n\n` +
+              `Data Source: BigQuery Operations Log, Carrier Route Registry & Live Schedule (${formatDateLabel(effectiveDateRange)}).`,
             category: 'flight',
             action: { label: `View ${airlineInfo.name} Flights in Schedule`, view: 'into-plane' },
             highlights: [
@@ -311,26 +316,26 @@ export const aiAssistantService = {
       });
 
       if (upliftStats.sampleSize > 0) {
-        const confidenceBadge = upliftStats.confidence === 'high' ? '██████████ HIGH' : upliftStats.confidence === 'medium' ? '██████░░░░ MEDIUM' : '███░░░░░░░ LOW';
-        const trendStr = upliftStats.trendLabel ? `\n• **Trend:** ${upliftStats.trendLabel}` : '';
+        const confidenceBadge = upliftStats.confidence === 'high' ? 'HIGH' : upliftStats.confidence === 'medium' ? 'MEDIUM' : 'LOW';
+        const trendStr = upliftStats.trendLabel ? `\n• Trend: ${upliftStats.trendLabel}` : '';
         const recentStr = upliftStats.recentLogs.length > 0
           ? upliftStats.recentLogs.map(r => `${r.date}: ${r.volume.toLocaleString()} L (${r.vehicle})`).join('\n  ')
           : 'None';
 
         return {
           response: {
-            answer: `**Fuel Uplift Statistical Analysis — ${targetFlightCode}:**\n` +
-              `• **Date Range:** ${formatDateLabel(effectiveDateRange)}\n` +
-              `• **Sample Size:** ${upliftStats.sampleSize} completed operations\n` +
-              `• **Average Uplift:** **${upliftStats.avgVolume.toLocaleString()} Liters** (~${Math.round(upliftStats.avgVolume * 0.80).toLocaleString()} KG)\n` +
-              `• **Median Uplift:** ${upliftStats.medianVolume.toLocaleString()} L\n` +
-              `• **Uplift Range:** ${upliftStats.minVolume.toLocaleString()} L – ${upliftStats.maxVolume.toLocaleString()} L\n` +
-              `• **Std Deviation:** ±${upliftStats.stdDeviation.toLocaleString()} L${trendStr}\n` +
-              `• **Aircraft:** ${upliftStats.aircraftTypes.join(', ') || 'Boeing 777 / Airbus A350'}\n` +
-              `• **Routes:** ${upliftStats.routes.join(', ') || 'MLE International'}\n\n` +
-              `**Recent Uplifts:**\n  ${recentStr}\n` +
-              `${liveFlight ? `\n• **Today's Active Job:** Stand ${liveFlight.stand} (Status: ${liveFlight.status})` : ''}\n\n` +
-              `*Data Confidence: ${confidenceBadge} (${upliftStats.confidenceNote})*`,
+            answer: `Fuel Uplift Statistical Analysis — ${targetFlightCode}:\n` +
+              `• Date Range: ${formatDateLabel(effectiveDateRange)}\n` +
+              `• Sample Size: ${upliftStats.sampleSize} completed operations\n` +
+              `• Average Uplift: ${upliftStats.avgVolume.toLocaleString()} Liters (~${Math.round(upliftStats.avgVolume * 0.80).toLocaleString()} KG)\n` +
+              `• Median Uplift: ${upliftStats.medianVolume.toLocaleString()} L\n` +
+              `• Uplift Range: ${upliftStats.minVolume.toLocaleString()} L – ${upliftStats.maxVolume.toLocaleString()} L\n` +
+              `• Std Deviation: ±${upliftStats.stdDeviation.toLocaleString()} L${trendStr}\n` +
+              `• Aircraft: ${upliftStats.aircraftTypes.join(', ') || 'Boeing 777 / Airbus A350'}\n` +
+              `• Routes: ${upliftStats.routes.join(', ') || 'MLE International'}\n\n` +
+              `Recent Uplifts:\n  ${recentStr}\n` +
+              `${liveFlight ? `\n• Today's Active Job: Stand ${liveFlight.stand} (Status: ${liveFlight.status})` : ''}\n\n` +
+              `Data Confidence: ${confidenceBadge} (${upliftStats.confidenceNote})`,
             category: 'flight',
             action: { label: 'View Into-Plane Operations Log', view: 'into-plane' },
             highlights: [
@@ -358,14 +363,14 @@ export const aiAssistantService = {
 
       return {
         response: {
-          answer: `**Fuel Uplift Analysis — ${targetFlightCode} (Historical Benchmarks):**\n` +
-            `• **Average Uplift:** **${benchmark.avgLiters.toLocaleString()} Liters** (~${avgKg.toLocaleString()} KG @ 0.80 kg/L density)\n` +
-            `• **Historical Range:** ${benchmark.range}\n` +
-            `• **Typical Aircraft:** ${benchmark.aircraft}\n` +
-            `• **Route:** ${benchmark.route}\n` +
-            `• **Recent Uplift History:** ${benchmark.recent.map(v => `${v.toLocaleString()} L`).join(' • ')}\n` +
-            `${liveFlight ? `\n• **Today's Active Job:** ${liveFlight.flightNumber} at Stand ${liveFlight.stand} (Status: ${liveFlight.status})` : ''}\n\n` +
-            `*Note: Using system benchmark dataset for ${formatDateLabel(effectiveDateRange)}.*`,
+          answer: `Fuel Uplift Analysis — ${targetFlightCode} (Historical Benchmarks):\n` +
+            `• Average Uplift: ${benchmark.avgLiters.toLocaleString()} Liters (~${avgKg.toLocaleString()} KG @ 0.80 kg/L density)\n` +
+            `• Historical Range: ${benchmark.range}\n` +
+            `• Typical Aircraft: ${benchmark.aircraft}\n` +
+            `• Route: ${benchmark.route}\n` +
+            `• Recent Uplift History: ${benchmark.recent.map(v => `${v.toLocaleString()} L`).join(' • ')}\n` +
+            `${liveFlight ? `\n• Today's Active Job: ${liveFlight.flightNumber} at Stand ${liveFlight.stand} (Status: ${liveFlight.status})` : ''}\n\n` +
+            `Note: Using system benchmark dataset for ${formatDateLabel(effectiveDateRange)}.`,
           category: 'flight',
           action: { label: 'View Into-Plane Log History', view: 'into-plane' },
           highlights: [
@@ -381,27 +386,27 @@ export const aiAssistantService = {
       };
     }
 
-    // ── Intent 3: DAILY_CONSUMPTION Aggregation ───────────────────────────
+    // ── Intent 3: DAILY_CONSUMPTION & Sales Aggregation ───────────────────
     if (intent === 'DAILY_CONSUMPTION') {
       const consumption: DailyConsumptionResult = await aiDataEngine.aggregateDailyConsumption(effectiveDateRange);
 
       const topFlightsStr = consumption.topFlights.length > 0
-        ? consumption.topFlights.slice(0, 5).map((f, i) => `${i + 1}. **${f.flightNumber}**: ${f.totalVolume.toLocaleString()} L (${f.count} operations)`).join('\n')
+        ? consumption.topFlights.slice(0, 5).map((f, i) => `${i + 1}. ${f.flightNumber}: ${f.totalVolume.toLocaleString()} L (${f.count} operations)`).join('\n')
         : 'No flight logs recorded for this period.';
 
       return {
         response: {
-          answer: `**Fuel Consumption Summary — ${formatDateLabel(effectiveDateRange)}:**\n` +
-            `• **Total Fuel Uplifted:** **${consumption.totalVolume.toLocaleString()} Liters** (~${consumption.totalMass.toLocaleString()} KG)\n` +
-            `• **Total Flight Operations:** ${consumption.flightCount} completed flights\n` +
-            `• **Daily Average Usage:** ${consumption.dailyAvg.toLocaleString()} Liters/day across ${consumption.dayCount} active days\n\n` +
-            `**Top Aircraft Operations by Fuel Volume:**\n${topFlightsStr}\n\n` +
-            `*Data Confidence: ${consumption.confidenceNote}*`,
+          answer: `Fuel Volume & Uplift Summary — ${formatDateLabel(effectiveDateRange)}:\n` +
+            `• Total Fuel Volume Sold: ${consumption.totalVolume.toLocaleString()} Liters (~${consumption.totalMass.toLocaleString()} KG)\n` +
+            `• Total Flight Operations: ${consumption.flightCount} completed flights\n` +
+            `• Daily Average Uplift: ${consumption.dailyAvg.toLocaleString()} Liters/day across ${consumption.dayCount} active days\n\n` +
+            `Top Aircraft Operations by Fuel Volume:\n${topFlightsStr}\n\n` +
+            `Data Source: BigQuery Operations Log (${formatDateLabel(effectiveDateRange)}).`,
           category: 'flight',
           action: { label: 'Explore Operations Archive', view: 'into-plane' },
           highlights: [
             { label: 'Total Volume', value: `${consumption.totalVolume.toLocaleString()} L` },
-            { label: 'Daily Average', value: `${consumption.dailyAvg.toLocaleString()} L/day` },
+            { label: 'Total Mass', value: `${consumption.totalMass.toLocaleString()} KG` },
             { label: 'Operations', value: `${consumption.flightCount}` },
             { label: 'Timeframe', value: effectiveDateRange.label }
           ],
@@ -416,14 +421,14 @@ export const aiAssistantService = {
     if (intent === 'TOP_FLIGHTS') {
       const topData = await aiDataEngine.getTopFlightsByVolume(effectiveDateRange, 8);
       const listStr = topData.flights.length > 0
-        ? topData.flights.map((f, i) => `${i + 1}. **${f.flightNumber}**: Total ${f.totalVolume.toLocaleString()} L | Avg ${f.avgVolume.toLocaleString()} L (${f.count} ops)`).join('\n')
+        ? topData.flights.map((f, i) => `${i + 1}. ${f.flightNumber}: Total ${f.totalVolume.toLocaleString()} L | Avg ${f.avgVolume.toLocaleString()} L (${f.count} ops)`).join('\n')
         : 'No flight log entries found for this period.';
 
       return {
         response: {
-          answer: `**Top Aircraft Operations by Uplift Volume (${formatDateLabel(effectiveDateRange)}):**\n\n${listStr}\n\n` +
-            `• **Total Volume Analyzed:** ${topData.totalVolume.toLocaleString()} Liters\n` +
-            `*Data Confidence: ${topData.confidenceNote}*`,
+          answer: `Top Aircraft Operations by Uplift Volume (${formatDateLabel(effectiveDateRange)}):\n\n${listStr}\n\n` +
+            `• Total Volume Analyzed: ${topData.totalVolume.toLocaleString()} Liters\n` +
+            `Data Confidence: ${topData.confidenceNote}`,
           category: 'flight',
           action: { label: 'View Flight Logs', view: 'into-plane' },
           highlights: [
@@ -442,22 +447,22 @@ export const aiAssistantService = {
       const bridging = await aiDataEngine.aggregateBridgingStats(effectiveDateRange, { vehicleId: vehicleCode || undefined });
 
       const vehicleBreakdown = bridging.byVehicle.length > 0
-        ? bridging.byVehicle.slice(0, 5).map(v => `• **${v.vehicleId}**: ${v.totalVolume.toLocaleString()} L (${v.count} loads)`).join('\n')
+        ? bridging.byVehicle.slice(0, 5).map(v => `• ${v.vehicleId}: ${v.totalVolume.toLocaleString()} L (${v.count} loads)`).join('\n')
         : 'No vehicle loading records.';
 
       const tankBreakdown = bridging.byTank.length > 0
-        ? bridging.byTank.slice(0, 4).map(t => `• **${t.tankId}**: ${t.totalVolume.toLocaleString()} L (${t.count} loads)`).join('\n')
+        ? bridging.byTank.slice(0, 4).map(t => `• ${t.tankId}: ${t.totalVolume.toLocaleString()} L (${t.count} loads)`).join('\n')
         : 'No tank issue records.';
 
       return {
         response: {
-          answer: `**Refueler Loading & Bridging Log Analysis (${formatDateLabel(effectiveDateRange)}):**\n` +
-            `• **Total Volume Loaded:** **${bridging.totalVolume.toLocaleString()} Liters**\n` +
-            `• **Total Loading Ops:** ${bridging.loadCount} transfers\n` +
-            `• **Average Load Size:** ${bridging.avgVolume.toLocaleString()} L per transfer\n\n` +
-            `**Volume Loaded per Refueler Vehicle:**\n${vehicleBreakdown}\n\n` +
-            `**Volume Issued per Storage Tank:**\n${tankBreakdown}\n\n` +
-            `*Data Confidence: ${bridging.confidenceNote}*`,
+          answer: `Refueler Loading & Bridging Log Analysis (${formatDateLabel(effectiveDateRange)}):\n` +
+            `• Total Volume Loaded: ${bridging.totalVolume.toLocaleString()} Liters\n` +
+            `• Total Loading Ops: ${bridging.loadCount} transfers\n` +
+            `• Average Load Size: ${bridging.avgVolume.toLocaleString()} L per transfer\n\n` +
+            `Volume Loaded per Refueler Vehicle:\n${vehicleBreakdown}\n\n` +
+            `Volume Issued per Storage Tank:\n${tankBreakdown}\n\n` +
+            `Data Confidence: ${bridging.confidenceNote}`,
           category: 'tank',
           action: { label: 'View Refueler Loading Log', view: 'bridging' },
           highlights: [
@@ -486,11 +491,11 @@ export const aiAssistantService = {
 
       return {
         response: {
-          answer: `**Period Comparison Analysis — ${targetFlight}:**\n` +
-            `• **${comp.period1.label}:** ${comp.period1.totalVolume.toLocaleString()} L across ${comp.period1.flightCount} ops (Avg ${comp.period1.avgVolume.toLocaleString()} L)\n` +
-            `• **${comp.period2.label}:** ${comp.period2.totalVolume.toLocaleString()} L across ${comp.period2.flightCount} ops (Avg ${comp.period2.avgVolume.toLocaleString()} L)\n` +
-            `• **Net Trend:** **${comp.changeLabel}** in total fuel uplifted\n\n` +
-            `*Data Confidence: ${comp.confidenceNote}*`,
+          answer: `Period Comparison Analysis — ${targetFlight}:\n` +
+            `• ${comp.period1.label}: ${comp.period1.totalVolume.toLocaleString()} L across ${comp.period1.flightCount} ops (Avg ${comp.period1.avgVolume.toLocaleString()} L)\n` +
+            `• ${comp.period2.label}: ${comp.period2.totalVolume.toLocaleString()} L across ${comp.period2.flightCount} ops (Avg ${comp.period2.avgVolume.toLocaleString()} L)\n` +
+            `• Net Trend: ${comp.changeLabel} in total fuel uplifted\n\n` +
+            `Data Confidence: ${comp.confidenceNote}`,
           category: 'flight',
           action: { label: 'Open Analytics Archive', view: 'into-plane' },
           highlights: [
@@ -522,7 +527,7 @@ export const aiAssistantService = {
       if (staffMatch) {
         return {
           response: {
-            answer: `**Staff Record Found:** **${staffMatch.name}** (RC: \`${staffMatch.employeeId}\`)\n• **Role:** ${staffMatch.role.replace(/_/g, ' ')}\n• **Email:** ${staffMatch.email || 'None'}\n• **Account Status:** ${staffMatch.status.toUpperCase()}`,
+            answer: `Staff Record Found: ${staffMatch.name} (RC: ${staffMatch.employeeId})\n• Role: ${staffMatch.role.replace(/_/g, ' ')}\n• Email: ${staffMatch.email || 'None'}\n• Account Status: ${staffMatch.status.toUpperCase()}`,
             category: 'staff',
             action: { label: 'Manage Staff in System Settings', view: 'admin' },
             highlights: [
@@ -539,7 +544,7 @@ export const aiAssistantService = {
       const activeCount = ctx.staff.filter(s => s.status === 'active').length;
       return {
         response: {
-          answer: `There are currently **${ctx.staff.length} total staff members** registered in MACL Fuel Services (**${activeCount} Active**). You can search personnel by RC Number (e.g. \`A-6600\` or \`A-3046\`), Name, or Role.`,
+          answer: `There are currently ${ctx.staff.length} total staff members registered in MACL Fuel Services (${activeCount} Active). You can search personnel by RC Number (e.g. A-6600 or A-3046), Name, or Role.`,
           category: 'staff',
           action: { label: 'Open Staff Directory', view: 'admin' }
         },
@@ -554,7 +559,7 @@ export const aiAssistantService = {
         const pct = Math.round((tankMatch.currentLevel / tankMatch.capacity) * 100);
         return {
           response: {
-            answer: `**Tank Analysis — ${tankMatch.name} (${tankMatch.id.toUpperCase()}):**\n• **Current Level:** ${tankMatch.currentLevel.toLocaleString()} Liters (${pct}% capacity)\n• **Total Capacity:** ${tankMatch.capacity.toLocaleString()} Liters\n• **Safe Min:** ${tankMatch.safeMinLevel.toLocaleString()} L\n• **Status:** ${tankMatch.currentLevel < tankMatch.safeMinLevel ? '⚠️ CRITICAL LOW' : '✅ NORMAL'}`,
+            answer: `Tank Analysis — ${tankMatch.name} (${tankMatch.id.toUpperCase()}):\n• Current Level: ${tankMatch.currentLevel.toLocaleString()} Liters (${pct}% capacity)\n• Total Capacity: ${tankMatch.capacity.toLocaleString()} Liters\n• Safe Min: ${tankMatch.safeMinLevel.toLocaleString()} L\n• Status: ${tankMatch.currentLevel < tankMatch.safeMinLevel ? 'CRITICAL LOW' : 'NORMAL'}`,
             category: 'tank',
             action: { label: 'View Stock & Tanks View', view: 'stock' },
             highlights: [
@@ -571,7 +576,7 @@ export const aiAssistantService = {
       const avgPct = Math.round((totalVol / totalCap) * 100);
       return {
         response: {
-          answer: `**Bulk Storage Overview:**\n• **Total Fuel On Hand:** ${totalVol.toLocaleString()} Liters across ${ctx.tanks.length} main tanks.\n• **Overall Capacity:** ${avgPct}% filled (${totalCap.toLocaleString()} L total).\n• Tanks: ${ctx.tanks.map(t => `${t.name}: ${Math.round((t.currentLevel/t.capacity)*100)}%`).join(', ')}.`,
+          answer: `Bulk Storage Overview:\n• Total Fuel On Hand: ${totalVol.toLocaleString()} Liters across ${ctx.tanks.length} main tanks.\n• Overall Capacity: ${avgPct}% filled (${totalCap.toLocaleString()} L total).\n• Tanks: ${ctx.tanks.map(t => `${t.name}: ${Math.round((t.currentLevel/t.capacity)*100)}%`).join(', ')}.`,
           category: 'tank',
           action: { label: 'Go to Tank Oversight', view: 'stock' }
         },
@@ -585,7 +590,7 @@ export const aiAssistantService = {
       if (eqMatch) {
         return {
           response: {
-            answer: `**Equipment Record — ${eqMatch.name} (${eqMatch.id.toUpperCase()}):**\n• **Type:** ${eqMatch.type.replace(/_/g, ' ')}\n• **Status:** ${eqMatch.status.toUpperCase()}\n• **Fuel Volume:** ${eqMatch.currentVolume ? `${eqMatch.currentVolume.toLocaleString()} L / ${eqMatch.maxCapacity.toLocaleString()} L` : 'N/A'}`,
+            answer: `Equipment Record — ${eqMatch.name} (${eqMatch.id.toUpperCase()}):\n• Type: ${eqMatch.type.replace(/_/g, ' ')}\n• Status: ${eqMatch.status.toUpperCase()}\n• Fuel Volume: ${eqMatch.currentVolume ? `${eqMatch.currentVolume.toLocaleString()} L / ${eqMatch.maxCapacity.toLocaleString()} L` : 'N/A'}`,
             category: 'equipment',
             action: { label: 'Open Equipment View', view: 'equipment' }
           },
@@ -596,7 +601,7 @@ export const aiAssistantService = {
       const activeEq = ctx.equipment.filter(e => e.status === EquipmentStatus.AVAILABLE || e.status === EquipmentStatus.IN_USE);
       return {
         response: {
-          answer: `**Fleet Status Summary:**\n• **Total Fleet:** ${ctx.equipment.length} assets\n• **Available / Active:** ${activeEq.length} units\n• Fleet includes Refuelers (RF-01 to RF-17) and Hydrant Dispensers.`,
+          answer: `Fleet Status Summary:\n• Total Fleet: ${ctx.equipment.length} assets\n• Available / Active: ${activeEq.length} units\n• Fleet includes Refuelers (RF-01 to RF-17) and Hydrant Dispensers.`,
           category: 'equipment',
           action: { label: 'View Equipment Fleet', view: 'equipment' }
         },
@@ -611,7 +616,7 @@ export const aiAssistantService = {
         if (custMatch) {
           return {
             response: {
-              answer: `**Finance Master DB — ${custMatch.name}:**\n• **Classification:** ${custMatch.classification}\n• **Running Balance:** MVR ${custMatch.running_balance.toLocaleString()}\n• **Opening Balance:** MVR ${custMatch.opening_balance.toLocaleString()}\n• **Estimated 5-Day Sales:** MVR ${custMatch.estimated_5_days_sales.toLocaleString()}`,
+              answer: `Finance Master DB — ${custMatch.name}:\n• Classification: ${custMatch.classification}\n• Running Balance: MVR ${custMatch.running_balance.toLocaleString()}\n• Opening Balance: MVR ${custMatch.opening_balance.toLocaleString()}\n• Estimated 5-Day Sales: MVR ${custMatch.estimated_5_days_sales.toLocaleString()}`,
               category: 'finance',
               action: { label: 'Open Finance Oversight', view: 'finance' }
             },
@@ -621,7 +626,7 @@ export const aiAssistantService = {
       }
       return {
         response: {
-          answer: `**Finance Master Overview:** Track customer balances, prepayments, credit limits, and flight-to-customer mappings. Key accounts include Emirates, Singapore Airlines, Qatar Airways, and Maldivian (IAS).`,
+          answer: `Finance Master Overview: Track customer balances, prepayments, credit limits, and flight-to-customer mappings. Key accounts include Emirates, Singapore Airlines, Qatar Airways, and Maldivian (IAS).`,
           category: 'finance',
           action: { label: 'Go to Finance Module', view: 'finance' }
         },
@@ -632,13 +637,13 @@ export const aiAssistantService = {
     // ── Intent 11: Default Smart System Answer ─────────────────────────────
     return {
       response: {
-        answer: `I am your **MACL FMS Generative AI Assistant**. I analyze live operational state and BigQuery historical logs across date ranges:\n\n` +
-          `• **Airline Flight Records:** Ask *"Show Emirates flight numbers"* or *"Aeroflot flights history"*\n` +
-          `• **Date Range Analysis:** Ask *"Total fuel uplifted between July 1 and July 15"* or *"Yesterday's fuel usage"*\n` +
-          `• **Flight Uplifts:** Ask *"How much fuel does SU321 usually uplift?"*\n` +
-          `• **Staff Lookup:** Ask *"Who is A-6600?"* or *"Search staff Ashhad"*\n` +
-          `• **Tank Levels:** Ask *"What is Tank 101 level?"*\n` +
-          `• **Fleet & Refuelers:** Ask *"Bridging logs last week"* or *"Show available refuelers"*`,
+        answer: `I am your MACL FMS Operations Assistant. I analyze live operational state and BigQuery historical logs across date ranges:\n\n` +
+          `• Airline Flight Records: Ask "Show Emirates flight numbers" or "Aeroflot flights history"\n` +
+          `• Date Range Analysis & Sales: Ask "Total fuel uplifted between July 1 and July 15" or "How much sales was last week"\n` +
+          `• Flight Uplifts: Ask "How much fuel does SU321 usually uplift?"\n` +
+          `• Staff Lookup: Ask "Who is A-6600?" or "Search staff Ashhad"\n` +
+          `• Tank Levels: Ask "What is Tank 101 level?"\n` +
+          `• Fleet & Refuelers: Ask "Bridging logs last week" or "Show available refuelers"`,
         category: 'general',
         action: { label: 'Explore Operations Dashboard', view: 'dashboard' }
       },

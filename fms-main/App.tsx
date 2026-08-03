@@ -917,7 +917,7 @@ const AppContextContent: React.FC<any> = ({
   };
 
   return (
-    <div className="flex h-screen bg-surface overflow-hidden text-on-surface transition-colors duration-500">
+    <div className="flex h-screen h-[100dvh] bg-surface overflow-hidden text-on-surface transition-colors duration-500">
         <Sidebar 
           user={currentUser} 
           activeView={activeView} 
@@ -995,7 +995,7 @@ const AppContextContent: React.FC<any> = ({
 
             {/* Animated Combined Header Container */}
             <div 
-              className={`transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] sticky top-0 z-50 ${showHeader ? 'translate-y-0' : '-translate-y-full'}`}
+              className={`transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] sticky top-0 z-50 pt-[env(safe-area-inset-top,0px)] bg-surface ${showHeader ? 'translate-y-0' : '-translate-y-full'}`}
               style={{
                 filter: blurAmount > 0 ? `blur(${blurAmount}px)` : 'none',
                 transition: pullingRef.current 
@@ -1045,6 +1045,7 @@ const AppContextContent: React.FC<any> = ({
                 <div className="flex items-center space-x-4">
                   <button 
                     onClick={() => {
+                      haptic('TAP');
                       setIsMobileMenuOpen(true);
                     }}
                     className="lg:hidden active:scale-95 transition-transform group"
@@ -1087,7 +1088,7 @@ const AppContextContent: React.FC<any> = ({
                         >
                           <div className="flex items-center space-x-2.5">
                             <Sparkles className="w-4 h-4 text-primary animate-pulse group-hover:text-white" />
-                            <span className="text-xs font-black">Ask Generative AI: "{searchQuery}"</span>
+                            <span className="text-xs font-black">Search Assistant: "{searchQuery}"</span>
                           </div>
                           <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                         </button>
@@ -1149,17 +1150,15 @@ const AppContextContent: React.FC<any> = ({
               <div className="flex items-center space-x-2 sm:space-x-6">
                 <div className="flex items-center space-x-2 sm:space-x-4 border-outline pl-2 sm:pl-6">
 
-                  {/* Mobile ASK AI Assistant Button (Icon Only - Sized Same as Alert Button) */}
+                  {/* Mobile Assistant Button (Matched to Bell Button style, non-themed, slow animation) */}
                   <button
                     onClick={() => setIsAIChatOpen(true)}
-                    className={`lg:hidden relative p-3 kinetic-gradient rounded-xl border border-white/20 transition-all active:scale-90 group shadow-sm flex items-center justify-center ${
-                      theme === 'black' ? 'text-black' : 'text-white'
-                    }`}
-                    title="Open FMS Generative AI Assistant"
+                    className="lg:hidden relative p-3 bg-surface-dim hover:bg-surface-container border border-outline rounded-xl text-on-surface-dim hover:text-primary transition-all active:scale-90 group flex items-center justify-center"
+                    title="Open FMS Assistant"
                   >
                     <div className="relative flex items-center justify-center">
-                      <Sparkles className={`w-5 h-5 ${theme === 'black' ? 'text-black' : 'text-white'} animate-[pulse_4s_cubic-bezier(0.4,0,0.6,1)_infinite]`} />
-                      <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${theme === 'black' ? 'bg-black' : 'bg-white'} animate-[ping_3.5s_cubic-bezier(0,0,0.2,1)_infinite] opacity-50`}></span>
+                      <Sparkles className="w-5 h-5 animate-[pulse_10s_cubic-bezier(0.4,0,0.6,1)_infinite]" />
+                      <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-primary animate-[ping_8s_cubic-bezier(0,0,0.2,1)_infinite] opacity-40"></span>
                     </div>
                   </button>
 
@@ -1511,7 +1510,7 @@ const AppContextContent: React.FC<any> = ({
 
             <div 
               key={activeView} 
-              className="animate-in fade-in duration-300 ease-out"
+              className="animate-in fade-in duration-200 ease-out transform-gpu will-change-transform"
               style={{
                 filter: blurAmount > 0 ? `blur(${blurAmount}px)` : 'none',
                 transition: pullingRef.current ? 'none' : 'filter 0.3s ease'
@@ -1526,9 +1525,13 @@ const AppContextContent: React.FC<any> = ({
             user={currentUser!} 
             activeView={activeView} 
             setActiveView={setActiveView}
-            onMenuClick={() => setIsMobileMenuOpen(true)}
+            onMenuClick={() => {
+              haptic('TAP');
+              setIsMobileMenuOpen(true);
+            }}
             isVisible={showHeader && !isKeyboardVisible}
             onSettingsClick={() => {
+              haptic('TAP');
               if (currentUser?.role === UserRole.ADMIN) {
                 setActiveView('admin');
               } else {
@@ -1537,18 +1540,24 @@ const AppContextContent: React.FC<any> = ({
             }}
             onLogout={wrappedLogout}
             theme={theme}
-            onThemeToggle={() => setTheme(prev => prev === 'light' ? 'dark' : prev === 'dark' ? 'black' : 'light')}
+            onThemeToggle={() => {
+              haptic('TAP');
+              setTheme(prev => prev === 'light' ? 'dark' : prev === 'dark' ? 'black' : 'light');
+            }}
           />
         </div>
         
         {/* Mobile Overlay */}
         <div 
-          className={`fixed inset-0 bg-primary/40 backdrop-blur-sm z-50 lg:hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          className={`fixed inset-0 bg-primary/40 backdrop-blur-sm z-50 lg:hidden transition-opacity duration-300 ease-out transform-gpu ${
             isMobileMenuOpen 
               ? 'opacity-100 pointer-events-auto' 
               : 'opacity-0 pointer-events-none'
           }`}
-          onClick={() => setIsMobileMenuOpen(false)}
+          onClick={() => {
+            haptic('TAP');
+            setIsMobileMenuOpen(false);
+          }}
         />
 
         {/* Install toast is now handled by NotificationContext.notifyWithAction() */}
@@ -1673,11 +1682,11 @@ const AppContextContent: React.FC<any> = ({
           className={`hidden lg:flex fixed bottom-6 right-6 z-[120] items-center space-x-2.5 px-4 py-3 kinetic-gradient rounded-full shadow-premium border border-white/20 hover:scale-105 active:scale-95 transition-all duration-200 group ${
             theme === 'black' ? 'text-black' : 'text-white'
           }`}
-          title="Open FMS Generative AI Assistant"
+          title="Open FMS Assistant"
         >
           <div className="relative flex items-center justify-center">
-            <Sparkles className={`w-5 h-5 ${theme === 'black' ? 'text-black' : 'text-white'} animate-[pulse_4s_cubic-bezier(0.4,0,0.6,1)_infinite]`} />
-            <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${theme === 'black' ? 'bg-black' : 'bg-white'} animate-[ping_3.5s_cubic-bezier(0,0,0.2,1)_infinite] opacity-50`}></span>
+            <Sparkles className={`w-5 h-5 ${theme === 'black' ? 'text-black' : 'text-white'} animate-[pulse_10s_cubic-bezier(0.4,0,0.6,1)_infinite]`} />
+            <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${theme === 'black' ? 'bg-black' : 'bg-white'} animate-[ping_8s_cubic-bezier(0,0,0.2,1)_infinite] opacity-50`}></span>
           </div>
           <span className={`text-xs font-black uppercase tracking-wider hidden sm:inline ${theme === 'black' ? 'text-black' : 'text-white'}`}>ASK</span>
         </button>

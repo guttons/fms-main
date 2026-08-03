@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { User, Tank, FlightLog, BridgingLog, Alert, FlightJob, Equipment, StaffMember, UserRole, EquipmentStatus, Vessel } from '../types';
+import { User, Tank, FlightLog, BridgingLog, Alert, FlightJob, Equipment, StaffMember, UserRole, EquipmentStatus, Vessel, AirlineMaster, FlightMaster, AircraftMaster, AirlineHierarchyNode } from '../types';
 import { CustomerAccount, UpcomingPayment, Invoice, Receipt, ProformaRecord, FuelRequest, MonthEndVariance, ProcurementPR, SurchargeRecord, MpdSale, CustomsShipment } from '../context/FinanceDataContext';
 import { TANKS, MOCK_USERS, EQUIPMENT } from '../constants';
 import { INITIAL_STAFF_LIST } from '../constants/staffList';
@@ -74,6 +74,34 @@ const triggerTanksCallbacks = () => {
     try { cb(list); } catch (e) { console.error('Error in tank callback:', e); }
   });
 };
+
+// Persistent storage helpers for User UI Staff Edits (ensures manual UI edits are NEVER reverted)
+function getUserEdits(): Record<string, Partial<StaffMember>> {
+  try {
+    const raw = localStorage.getItem('fms_staff_user_edits');
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveUserEdit(id: string, updates: Partial<StaffMember>) {
+  try {
+    const edits = getUserEdits();
+    edits[id] = { ...(edits[id] || {}), ...updates };
+    localStorage.setItem('fms_staff_user_edits', JSON.stringify(edits));
+  } catch (e) {
+    console.warn('[Supabase] Failed to save user staff edit:', e);
+  }
+}
+
+function removeUserEdit(id: string) {
+  try {
+    const edits = getUserEdits();
+    delete edits[id];
+    localStorage.setItem('fms_staff_user_edits', JSON.stringify(edits));
+  } catch (e) {}
+}
 
 export const supabaseService = {
   // ── Auth & Users ────────────────────────────────────────────────────────────
@@ -1157,79 +1185,62 @@ export const supabaseService = {
     };
   },
 
-  async getStaff(): Promise<StaffMember[]> {
-    if (localStaff.length > 0) {
+  async getStaff(forceRefresh = false): Promise<StaffMember[]> {
+    if (localStaff.length > 0 && !forceRefresh) {
       return localStaff;
     }
 
-    // Check localStorage saved edits first
-    let savedLocalStaff: StaffMember[] | null = null;
-    try {
-      const savedLocal = localStorage.getItem('fms_staff_list');
-      if (savedLocal) {
-        const parsed: StaffMember[] = JSON.parse(savedLocal);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          savedLocalStaff = parsed;
-        }
-      }
-    } catch (e) {
-      console.warn('[Supabase] Failed to parse localStorage staff list:', e);
-    }
+    const mergedMap = new Map<string, StaffMember>();
 
-    let fetchedFromDb: StaffMember[] = [];
+    // Step 1: Base map from code definitions (INITIAL_STAFF_LIST)
+    INITIAL_STAFF_LIST.forEach(s => mergedMap.set(s.id, s));
+
+    // Step 2: Fetch remote database records from Supabase
     try {
       const { data, error } = await supabase.from('staff').select('*').order('name');
       if (!error && data && data.length > 0) {
-        fetchedFromDb = data.map(row => ({
-          id: row.id,
-          name: row.name,
-          role: row.role as UserRole,
-          employeeId: row.employee_id,
-          phone: row.phone,
-          email: row.email,
-          status: row.status as 'active' | 'inactive',
-          joinDate: row.join_date || new Date().toISOString(),
-          avatar: row.avatar
-        } as StaffMember));
+        data.forEach(row => {
+          const dbStaff: StaffMember = {
+            id: row.id,
+            name: row.name,
+            role: row.role as UserRole,
+            employeeId: row.employee_id,
+            phone: row.phone,
+            email: row.email,
+            status: row.status as 'active' | 'inactive',
+            joinDate: row.join_date || new Date().toISOString(),
+            avatar: row.avatar
+          };
+          const existing = mergedMap.get(dbStaff.id);
+          if (existing) {
+            mergedMap.set(dbStaff.id, { ...existing, ...dbStaff });
+          } else {
+            mergedMap.set(dbStaff.id, dbStaff);
+          }
+        });
       }
     } catch (e) {
-      console.warn('[Supabase] getStaff failed, checking IndexedDB cache:', e);
+      console.warn('[Supabase] Remote staff fetch warning:', e);
     }
 
-    // Merge baseline code definitions (INITIAL_STAFF_LIST) + Supabase DB + localStorage
-    const mergedMap = new Map<string, StaffMember>();
-
-    // Step 1: Base list from INITIAL_STAFF_LIST (contains up-to-date roles like DEPOT_OPERATOR, FUEL_MANAGEMENT, etc.)
-    INITIAL_STAFF_LIST.forEach(s => mergedMap.set(s.id, s));
-
-    // Step 2: Overlay Supabase DB rows (if any)
-    fetchedFromDb.forEach(dbStaff => {
-      const existing = mergedMap.get(dbStaff.id);
+    // Step 3: ABSOLUTE TOP PRIORITY: User UI Edits (fms_staff_user_edits)
+    // Edits made in the Staff Management UI overwrite everything else so they NEVER revert!
+    const userEdits = getUserEdits();
+    Object.entries(userEdits).forEach(([id, edits]) => {
+      const existing = mergedMap.get(id);
       if (existing) {
-        mergedMap.set(dbStaff.id, { ...existing, ...dbStaff });
-      } else {
-        mergedMap.set(dbStaff.id, dbStaff);
+        mergedMap.set(id, { ...existing, ...edits });
+      } else if (edits.name && edits.role) {
+        mergedMap.set(id, edits as StaffMember);
       }
     });
 
-    // Step 3: Overlay local edits from savedLocalStaff (preserve any edits user made in UI)
-    if (savedLocalStaff) {
-      savedLocalStaff.forEach(localS => {
-        const existing = mergedMap.get(localS.id);
-        if (existing) {
-          mergedMap.set(localS.id, { ...existing, ...localS });
-        } else {
-          mergedMap.set(localS.id, localS);
-        }
-      });
-    }
-
     localStaff = Array.from(mergedMap.values());
     await fmsDb.bulkPut('staff', localStaff);
-    try { localStorage.setItem('fms_staff_list', JSON.stringify(localStaff)); } catch (e) {}
+    try { localStorage.setItem('fms_staff_list_v3', JSON.stringify(localStaff)); } catch (e) {}
 
-    // Background sync: Upsert INITIAL_STAFF_LIST into Supabase database to bring remote database up-to-date
-    Promise.resolve(supabase.from('staff').upsert(INITIAL_STAFF_LIST.map(user => ({
+    // Synchronize current merged staff records to remote Supabase PostgreSQL DB
+    const staffDataToUpsert = localStaff.map(user => ({
       id: user.id,
       name: user.name,
       role: user.role,
@@ -1239,12 +1250,21 @@ export const supabaseService = {
       status: user.status || 'active',
       join_date: user.joinDate || new Date().toISOString(),
       avatar: user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`
-    })))).then(({ error }) => {
-      if (error) console.warn('[Supabase] Background staff upsert warn:', error);
-      else console.log('[Supabase] Staff table successfully synchronized with updated roles!');
-    }).catch(() => {});
+    }));
+
+    try {
+      await supabase.from('staff').upsert(staffDataToUpsert);
+      console.log('[Supabase] Staff table successfully synchronized in remote DB!');
+    } catch (err) {
+      console.warn('[Supabase] Staff remote upsert error:', err);
+    }
 
     return localStaff;
+  },
+
+  async syncStaffWithCode(): Promise<StaffMember[]> {
+    console.log('[Supabase] Synchronizing staff list with database and user edits...');
+    return this.getStaff(true);
   },
 
   async findStaffByEmailOrRc(identifier: string): Promise<StaffMember | null> {
@@ -1270,7 +1290,8 @@ export const supabaseService = {
       avatar: member.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}`
     };
     localStaff.push(newMember);
-    try { localStorage.setItem('fms_staff_list', JSON.stringify(localStaff)); } catch (e) {}
+    saveUserEdit(newId, newMember);
+    try { localStorage.setItem('fms_staff_list_v3', JSON.stringify(localStaff)); } catch (e) {}
     triggerStaffCallbacks();
 
     await fmsDb.put('staff', newMember);
@@ -1307,7 +1328,8 @@ export const supabaseService = {
     const index = localStaff.findIndex(s => s.id === id);
     if (index !== -1) {
       localStaff[index] = { ...localStaff[index], ...updates };
-      try { localStorage.setItem('fms_staff_list', JSON.stringify(localStaff)); } catch (e) {}
+      saveUserEdit(id, updates); // Save edit permanently in user edits map!
+      try { localStorage.setItem('fms_staff_list_v3', JSON.stringify(localStaff)); } catch (e) {}
       triggerStaffCallbacks();
       await fmsDb.put('staff', localStaff[index]);
     }
@@ -1342,7 +1364,8 @@ export const supabaseService = {
     const index = localStaff.findIndex(s => s.id === id);
     if (index !== -1) {
       localStaff.splice(index, 1);
-      try { localStorage.setItem('fms_staff_list', JSON.stringify(localStaff)); } catch (e) {}
+      removeUserEdit(id);
+      try { localStorage.setItem('fms_staff_list_v3', JSON.stringify(localStaff)); } catch (e) {}
       triggerStaffCallbacks();
       await fmsDb.delete('staff', id);
     }
@@ -2116,5 +2139,505 @@ export const supabaseService = {
       console.error('[Supabase] deleteVessel failed:', error);
       throw error;
     }
+  },
+
+  // ── Airline & Aircraft Master DB ──────────────────────────────────────────────
+  unmigratedTables: new Set<string>(['airlines', 'flight_master', 'aircraft_master']),
+
+  async getAirlines(): Promise<AirlineMaster[]> {
+    if (!this.unmigratedTables.has('airlines')) {
+      try {
+        const { data, error } = await supabase.from('airlines').select('*').order('name');
+        if (error) {
+          if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+            this.unmigratedTables.add('airlines');
+          }
+        } else if (data && data.length > 0) {
+          const result: AirlineMaster[] = data.map(row => ({
+            id: row.id,
+            name: row.name,
+            iataCode: row.iata_code || undefined,
+            icaoCode: row.icao_code || undefined,
+            category: row.category || 'INT',
+            isActive: row.is_active ?? true,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at
+          }));
+          await fmsDb.bulkPut('airlines', result);
+          return this.dedupeAirlines(result);
+        }
+      } catch (e) {
+        this.unmigratedTables.add('airlines');
+      }
+    }
+    const cached = await fmsDb.getAll<AirlineMaster>('airlines');
+    if (cached && cached.length > 0) return this.dedupeAirlines(cached);
+    try {
+      const raw = localStorage.getItem('fms_master_airlines');
+      return this.dedupeAirlines(raw ? JSON.parse(raw) : []);
+    } catch (e) {
+      return [];
+    }
+  },
+
+  async clearMasterDB(): Promise<void> {
+    try {
+      localStorage.removeItem('fms_master_airlines');
+      localStorage.removeItem('fms_master_flights');
+      localStorage.removeItem('fms_master_aircrafts');
+      const allA = await fmsDb.getAll<any>('airlines');
+      for (const a of allA) await fmsDb.delete('airlines', a.id);
+      const allF = await fmsDb.getAll<any>('flight_master');
+      for (const f of allF) await fmsDb.delete('flight_master', f.id);
+      const allAc = await fmsDb.getAll<any>('aircraft_master');
+      for (const ac of allAc) await fmsDb.delete('aircraft_master', ac.id);
+    } catch (e) {}
+  },
+
+  dedupeAirlines(list: AirlineMaster[]): AirlineMaster[] {
+    const map = new Map<string, AirlineMaster>();
+    for (const item of list) {
+      let name = item.name.trim();
+      if (name.toUpperCase() === 'MALDIVIAN DOMESTIC') name = 'Maldivian';
+      const key = name.toUpperCase();
+      if (!map.has(key)) {
+        map.set(key, { ...item, name });
+      }
+    }
+    return Array.from(map.values());
+  },
+
+  async addAirline(name: string, iataCode?: string, icaoCode?: string, category: 'INT' | 'DOM' = 'INT'): Promise<AirlineMaster> {
+    const cleanName = name.trim();
+    const existing = await this.getAirlines();
+    const existingItem = existing.find(a => a.name.toUpperCase() === cleanName.toUpperCase());
+
+    if (existingItem) {
+      const updated = {
+        ...existingItem,
+        iataCode: iataCode?.toUpperCase().trim() || existingItem.iataCode,
+        icaoCode: icaoCode?.toUpperCase().trim() || existingItem.icaoCode,
+        category: category || existingItem.category || 'INT'
+      };
+      await this.updateAirline(existingItem.id, updated);
+      return updated;
+    }
+
+    const row = {
+      name: cleanName,
+      iata_code: iataCode?.toUpperCase().trim() || null,
+      icao_code: icaoCode?.toUpperCase().trim() || null,
+      category: category,
+      is_active: true
+    };
+
+    if (!this.unmigratedTables.has('airlines')) {
+      try {
+        const { data, error } = await supabase.from('airlines').insert([row]).select().single();
+        if (error) {
+          if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+            this.unmigratedTables.add('airlines');
+          }
+        } else if (data) {
+          const created: AirlineMaster = {
+            id: data.id,
+            name: data.name,
+            iataCode: data.iata_code || undefined,
+            icaoCode: data.icao_code || undefined,
+            category: data.category || category,
+            isActive: data.is_active,
+            createdAt: data.created_at,
+            updatedAt: data.updated_at
+          };
+          await fmsDb.put('airlines', created);
+          return created;
+        }
+      } catch (e) {
+        this.unmigratedTables.add('airlines');
+      }
+    }
+
+    // Local Fallback
+    const created: AirlineMaster = {
+      id: `airline-${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+      name: cleanName,
+      iataCode: iataCode?.toUpperCase().trim() || undefined,
+      icaoCode: icaoCode?.toUpperCase().trim() || undefined,
+      category: category,
+      isActive: true,
+      createdAt: new Date().toISOString()
+    };
+    await fmsDb.put('airlines', created);
+    const updatedList = this.dedupeAirlines([...existing, created]);
+    try { localStorage.setItem('fms_master_airlines', JSON.stringify(updatedList)); } catch (e) {}
+    return created;
+  },
+
+  async updateAirline(id: string, updates: Partial<AirlineMaster>): Promise<void> {
+    if (!this.unmigratedTables.has('airlines')) {
+      const row: Record<string, any> = {};
+      if ('name' in updates && updates.name) row.name = updates.name.trim();
+      if ('iataCode' in updates) row.iata_code = updates.iataCode?.toUpperCase().trim() || null;
+      if ('icaoCode' in updates) row.icao_code = updates.icaoCode?.toUpperCase().trim() || null;
+      if ('category' in updates) row.category = updates.category;
+      if ('isActive' in updates) row.is_active = updates.isActive;
+
+      try {
+        const { error } = await supabase.from('airlines').update(row).eq('id', id);
+        if (error && (error.code === 'PGRST205' || error.message?.includes('schema cache'))) {
+          this.unmigratedTables.add('airlines');
+        }
+      } catch (e) {
+        this.unmigratedTables.add('airlines');
+      }
+    }
+
+    const existing = await this.getAirlines();
+    const idx = existing.findIndex(a => a.id === id || a.name.toUpperCase() === (updates.name || '').toUpperCase());
+    if (idx !== -1) {
+      existing[idx] = { ...existing[idx], ...updates };
+      await fmsDb.put('airlines', existing[idx]);
+      try { localStorage.setItem('fms_master_airlines', JSON.stringify(existing)); } catch (e) {}
+    }
+  },
+
+  async deleteAirline(id: string): Promise<void> {
+    if (!this.unmigratedTables.has('airlines')) {
+      try {
+        await supabase.from('airlines').delete().eq('id', id);
+      } catch (e) {}
+    }
+    await fmsDb.delete('airlines', id);
+    const existing = await this.getAirlines();
+    const filtered = existing.filter(a => a.id !== id);
+    try { localStorage.setItem('fms_master_airlines', JSON.stringify(filtered)); } catch (e) {}
+  },
+
+  async getFlightMaster(): Promise<FlightMaster[]> {
+    if (!this.unmigratedTables.has('flight_master')) {
+      try {
+        const { data, error } = await supabase.from('flight_master').select('*').order('flight_number');
+        if (error) {
+          if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+            this.unmigratedTables.add('flight_master');
+          }
+        } else if (data && data.length > 0) {
+          const result: FlightMaster[] = data.map(row => ({
+            id: row.id,
+            airlineId: row.airline_id,
+            airlineName: row.airline_name,
+            flightNumber: row.flight_number,
+            route: row.route || undefined,
+            isActive: row.is_active ?? true,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at
+          }));
+          await fmsDb.bulkPut('flight_master', result);
+          return this.dedupeFlights(result);
+        }
+      } catch (e) {
+        this.unmigratedTables.add('flight_master');
+      }
+    }
+    const cached = await fmsDb.getAll<FlightMaster>('flight_master');
+    if (cached && cached.length > 0) return this.dedupeFlights(cached);
+    try {
+      const raw = localStorage.getItem('fms_master_flights');
+      return this.dedupeFlights(raw ? JSON.parse(raw) : []);
+    } catch (e) {
+      return [];
+    }
+  },
+
+  dedupeFlights(list: FlightMaster[]): FlightMaster[] {
+    const map = new Map<string, FlightMaster>();
+    for (const item of list) {
+      let airlineName = item.airlineName.trim();
+      if (airlineName.toUpperCase() === 'MALDIVIAN DOMESTIC') airlineName = 'Maldivian';
+      const key = `${airlineName.toUpperCase()}|${item.flightNumber.trim().toUpperCase()}`;
+      if (!map.has(key)) map.set(key, { ...item, airlineName });
+    }
+    return Array.from(map.values());
+  },
+
+  async addFlightMaster(airlineId: string, airlineName: string, flightNumber: string, route?: string): Promise<FlightMaster> {
+    const cleanFlt = flightNumber.toUpperCase().trim();
+    const cleanAirline = airlineName.trim();
+    const existing = await this.getFlightMaster();
+    const existingItem = existing.find(f => f.airlineName.toUpperCase() === cleanAirline.toUpperCase() && f.flightNumber.toUpperCase() === cleanFlt);
+
+    if (existingItem) {
+      const updated = {
+        ...existingItem,
+        route: route?.trim() || existingItem.route
+      };
+      await this.updateFlightMaster(existingItem.id, updated);
+      return updated;
+    }
+
+    const row = {
+      airline_id: airlineId,
+      airline_name: cleanAirline,
+      flight_number: cleanFlt,
+      route: route?.trim() || null,
+      is_active: true
+    };
+
+    if (!this.unmigratedTables.has('flight_master')) {
+      try {
+        const { data, error } = await supabase.from('flight_master').insert([row]).select().single();
+        if (error) {
+          if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+            this.unmigratedTables.add('flight_master');
+          }
+        } else if (data) {
+          const created: FlightMaster = {
+            id: data.id,
+            airlineId: data.airline_id,
+            airlineName: data.airline_name,
+            flightNumber: data.flight_number,
+            route: data.route || undefined,
+            isActive: data.is_active,
+            createdAt: data.created_at,
+            updatedAt: data.updated_at
+          };
+          await fmsDb.put('flight_master', created);
+          return created;
+        }
+      } catch (e) {
+        this.unmigratedTables.add('flight_master');
+      }
+    }
+
+    // Local Fallback
+    const created: FlightMaster = {
+      id: `flt-${cleanAirline.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${cleanFlt.toLowerCase()}`,
+      airlineId,
+      airlineName: cleanAirline,
+      flightNumber: cleanFlt,
+      route: route?.trim() || undefined,
+      isActive: true,
+      createdAt: new Date().toISOString()
+    };
+    await fmsDb.put('flight_master', created);
+    const updatedList = this.dedupeFlights([...existing, created]);
+    try { localStorage.setItem('fms_master_flights', JSON.stringify(updatedList)); } catch (e) {}
+    return created;
+  },
+
+  async updateFlightMaster(id: string, updates: Partial<FlightMaster>): Promise<void> {
+    if (!this.unmigratedTables.has('flight_master')) {
+      const row: Record<string, any> = {};
+      if ('flightNumber' in updates && updates.flightNumber) row.flight_number = updates.flightNumber.toUpperCase().trim();
+      if ('route' in updates) row.route = updates.route?.trim() || null;
+      if ('isActive' in updates) row.is_active = updates.isActive;
+
+      try {
+        const { error } = await supabase.from('flight_master').update(row).eq('id', id);
+        if (error && (error.code === 'PGRST205' || error.message?.includes('schema cache'))) {
+          this.unmigratedTables.add('flight_master');
+        }
+      } catch (e) {
+        this.unmigratedTables.add('flight_master');
+      }
+    }
+
+    const existing = await this.getFlightMaster();
+    const idx = existing.findIndex(f => f.id === id);
+    if (idx !== -1) {
+      existing[idx] = { ...existing[idx], ...updates };
+      await fmsDb.put('flight_master', existing[idx]);
+      try { localStorage.setItem('fms_master_flights', JSON.stringify(existing)); } catch (e) {}
+    }
+  },
+
+  async deleteFlightMaster(id: string): Promise<void> {
+    if (!this.unmigratedTables.has('flight_master')) {
+      try {
+        await supabase.from('flight_master').delete().eq('id', id);
+      } catch (e) {}
+    }
+    await fmsDb.delete('flight_master', id);
+    const existing = await this.getFlightMaster();
+    const filtered = existing.filter(f => f.id !== id);
+    try { localStorage.setItem('fms_master_flights', JSON.stringify(filtered)); } catch (e) {}
+  },
+
+  async getAircraftMaster(): Promise<AircraftMaster[]> {
+    if (!this.unmigratedTables.has('aircraft_master')) {
+      try {
+        const { data, error } = await supabase.from('aircraft_master').select('*').order('aircraft_reg');
+        if (error) {
+          if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+            this.unmigratedTables.add('aircraft_master');
+          }
+        } else if (data && data.length > 0) {
+          const result: AircraftMaster[] = data.map(row => ({
+            id: row.id,
+            airlineId: row.airline_id,
+            airlineName: row.airline_name,
+            aircraftReg: row.aircraft_reg,
+            aircraftType: row.aircraft_type,
+            isActive: row.is_active ?? true,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at
+          }));
+          await fmsDb.bulkPut('aircraft_master', result);
+          return this.dedupeAircrafts(result);
+        }
+      } catch (e) {
+        this.unmigratedTables.add('aircraft_master');
+      }
+    }
+    const cached = await fmsDb.getAll<AircraftMaster>('aircraft_master');
+    if (cached && cached.length > 0) return this.dedupeAircrafts(cached);
+    try {
+      const raw = localStorage.getItem('fms_master_aircrafts');
+      return this.dedupeAircrafts(raw ? JSON.parse(raw) : []);
+    } catch (e) {
+      return [];
+    }
+  },
+
+  dedupeAircrafts(list: AircraftMaster[]): AircraftMaster[] {
+    const map = new Map<string, AircraftMaster>();
+    for (const item of list) {
+      let airlineName = item.airlineName.trim();
+      if (airlineName.toUpperCase() === 'MALDIVIAN DOMESTIC') airlineName = 'Maldivian';
+      const key = item.aircraftReg.trim().toUpperCase();
+      if (!map.has(key)) map.set(key, { ...item, airlineName });
+    }
+    return Array.from(map.values());
+  },
+
+  async addAircraftMaster(airlineId: string, airlineName: string, aircraftReg: string, aircraftType: string): Promise<AircraftMaster> {
+    const cleanReg = aircraftReg.toUpperCase().trim();
+    const cleanType = aircraftType.trim();
+    const cleanAirline = airlineName.trim();
+    const existing = await this.getAircraftMaster();
+    const existingItem = existing.find(a => a.aircraftReg.toUpperCase() === cleanReg);
+
+    if (existingItem) {
+      const updated = {
+        ...existingItem,
+        aircraftType: cleanType,
+        airlineName: cleanAirline
+      };
+      await this.updateAircraftMaster(existingItem.id, updated);
+      return updated;
+    }
+
+    const row = {
+      airline_id: airlineId,
+      airline_name: cleanAirline,
+      aircraft_reg: cleanReg,
+      aircraft_type: cleanType,
+      is_active: true
+    };
+
+    if (!this.unmigratedTables.has('aircraft_master')) {
+      try {
+        const { data, error } = await supabase.from('aircraft_master').insert([row]).select().single();
+        if (error) {
+          if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+            this.unmigratedTables.add('aircraft_master');
+          }
+        } else if (data) {
+          const created: AircraftMaster = {
+            id: data.id,
+            airlineId: data.airline_id,
+            airlineName: data.airline_name,
+            aircraftReg: data.aircraft_reg,
+            aircraftType: data.aircraft_type,
+            isActive: data.is_active,
+            createdAt: data.created_at,
+            updatedAt: data.updated_at
+          };
+          await fmsDb.put('aircraft_master', created);
+          return created;
+        }
+      } catch (e) {
+        this.unmigratedTables.add('aircraft_master');
+      }
+    }
+
+    // Local Fallback
+    const created: AircraftMaster = {
+      id: `ac-${cleanReg.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+      airlineId,
+      airlineName: cleanAirline,
+      aircraftReg: cleanReg,
+      aircraftType: cleanType,
+      isActive: true,
+      createdAt: new Date().toISOString()
+    };
+    await fmsDb.put('aircraft_master', created);
+    const updatedList = this.dedupeAircrafts([...existing, created]);
+    try { localStorage.setItem('fms_master_aircrafts', JSON.stringify(updatedList)); } catch (e) {}
+    return created;
+  },
+
+  async updateAircraftMaster(id: string, updates: Partial<AircraftMaster>): Promise<void> {
+    if (!this.unmigratedTables.has('aircraft_master')) {
+      const row: Record<string, any> = {};
+      if ('aircraftReg' in updates && updates.aircraftReg) row.aircraft_reg = updates.aircraftReg.toUpperCase().trim();
+      if ('aircraftType' in updates && updates.aircraftType) row.aircraft_type = updates.aircraftType.trim();
+      if ('isActive' in updates) row.is_active = updates.isActive;
+
+      try {
+        const { error } = await supabase.from('aircraft_master').update(row).eq('id', id);
+        if (error && (error.code === 'PGRST205' || error.message?.includes('schema cache'))) {
+          this.unmigratedTables.add('aircraft_master');
+        }
+      } catch (e) {
+        this.unmigratedTables.add('aircraft_master');
+      }
+    }
+
+    const existing = await this.getAircraftMaster();
+    const idx = existing.findIndex(a => a.id === id);
+    if (idx !== -1) {
+      existing[idx] = { ...existing[idx], ...updates };
+      await fmsDb.put('aircraft_master', existing[idx]);
+      try { localStorage.setItem('fms_master_aircrafts', JSON.stringify(existing)); } catch (e) {}
+    }
+  },
+
+  async deleteAircraftMaster(id: string): Promise<void> {
+    if (!this.unmigratedTables.has('aircraft_master')) {
+      try {
+        await supabase.from('aircraft_master').delete().eq('id', id);
+      } catch (e) {}
+    }
+    await fmsDb.delete('aircraft_master', id);
+    const existing = await this.getAircraftMaster();
+    const filtered = existing.filter(a => a.id !== id);
+    try { localStorage.setItem('fms_master_aircrafts', JSON.stringify(filtered)); } catch (e) {}
+  },
+
+  async getMasterDBHierarchy(): Promise<AirlineHierarchyNode[]> {
+    const [rawAirlines, rawFlights, rawAircrafts] = await Promise.all([
+      this.getAirlines(),
+      this.getFlightMaster(),
+      this.getAircraftMaster()
+    ]);
+
+    const airlines = this.dedupeAirlines(rawAirlines);
+    const flights = this.dedupeFlights(rawFlights);
+    const aircrafts = this.dedupeAircrafts(rawAircrafts);
+
+    const hierarchy: AirlineHierarchyNode[] = airlines.map(airline => {
+      const airlineFlights = flights.filter(f => f.airlineId === airline.id || f.airlineName.toLowerCase() === airline.name.toLowerCase());
+      const airlineAircrafts = aircrafts.filter(a => a.airlineId === airline.id || a.airlineName.toLowerCase() === airline.name.toLowerCase());
+
+      return {
+        airline,
+        flights: this.dedupeFlights(airlineFlights),
+        aircrafts: this.dedupeAircrafts(airlineAircrafts)
+      };
+    });
+
+    return hierarchy;
   }
 };
+
