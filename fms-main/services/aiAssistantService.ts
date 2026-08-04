@@ -390,6 +390,12 @@ export const aiAssistantService = {
     if (intent === 'DAILY_CONSUMPTION') {
       const consumption: DailyConsumptionResult = await aiDataEngine.aggregateDailyConsumption(effectiveDateRange);
 
+      const categoryBreakdownStr = consumption.byCategory && consumption.byCategory.length > 0
+        ? consumption.byCategory.map(c => 
+            `  • ${c.label}: ${c.volume.toLocaleString()} Liters (~${c.mass.toLocaleString()} KG) across ${c.count} ops (${c.percentage}%)`
+          ).join('\n')
+        : '  • No categorized fuel logs available for this period.';
+
       const topFlightsStr = consumption.topFlights.length > 0
         ? consumption.topFlights.slice(0, 5).map((f, i) => `${i + 1}. ${f.flightNumber}: ${f.totalVolume.toLocaleString()} L (${f.count} operations)`).join('\n')
         : 'No flight logs recorded for this period.';
@@ -400,6 +406,7 @@ export const aiAssistantService = {
             `• Total Fuel Volume Sold: ${consumption.totalVolume.toLocaleString()} Liters (~${consumption.totalMass.toLocaleString()} KG)\n` +
             `• Total Flight Operations: ${consumption.flightCount} completed flights\n` +
             `• Daily Average Uplift: ${consumption.dailyAvg.toLocaleString()} Liters/day across ${consumption.dayCount} active days\n\n` +
+            `Volume Breakdown by Operation Category:\n${categoryBreakdownStr}\n\n` +
             `Top Aircraft Operations by Fuel Volume:\n${topFlightsStr}\n\n` +
             `Data Source: BigQuery Operations Log (${formatDateLabel(effectiveDateRange)}).`,
           category: 'flight',

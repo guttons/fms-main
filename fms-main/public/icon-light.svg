@@ -1,9 +1,33 @@
 <svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @keyframes pulseGlow {
+      0%, 100% { transform: scale(0.92); opacity: 0.25; }
+      50% { transform: scale(1.1); opacity: 0.75; }
+    }
+    @keyframes breatheDrop {
+      0%, 100% { transform: scale(0.95); }
+      50% { transform: scale(1.05); }
+    }
+    @keyframes nodeFlash {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; filter: drop-shadow(0 0 8px #56c8eb); }
+    }
+    .svg-glow { transform-origin: 256px 256px; animation: pulseGlow 2.2s ease-in-out infinite; }
+    .svg-drop { transform-origin: 256px 256px; animation: breatheDrop 1.8s ease-in-out infinite; }
+    .svg-node { animation: nodeFlash 1.6s ease-in-out infinite; }
+    .n1 { animation-delay: 0s; }
+    .n2 { animation-delay: 0.25s; }
+    .n3 { animation-delay: 0.5s; }
+    .n4 { animation-delay: 0.75s; }
+    .n5 { animation-delay: 1.0s; }
+    .n6 { animation-delay: 1.25s; }
+  </style>
+
   <!-- Solid Dark Background for PWA Android Launch Screen -->
   <rect width="512" height="512" fill="#0b121f"/>
   
-  <!-- Outer subtle glow ring -->
-  <circle cx="256" cy="256" r="160" fill="none" stroke="#56c8eb" stroke-width="2" opacity="0.2"/>
+  <!-- Animated Outer Glow Ring -->
+  <circle cx="256" cy="256" r="160" fill="none" stroke="#56c8eb" stroke-width="3" class="svg-glow"/>
   
   <!-- Hexagon frame (scaled to fit Android maskable icon safe zone) -->
   <path 
@@ -15,17 +39,18 @@
     fill="none"
   />
   
-  <!-- Fuel droplet -->
+  <!-- Animated Fuel droplet -->
   <path 
     d="M256 180 C256 180 214 236 214 270 C214 293.192 232.808 312 256 312 C279.192 312 298 293.192 298 270 C298 236 256 180 256 180 Z" 
     fill="#56c8eb"
+    class="svg-drop"
   />
   
-  <!-- Hexagon nodes (fully within safe zone boundary) -->
-  <circle cx="256" cy="127" r="14" fill="#56c8eb"/>
-  <circle cx="368" cy="191" r="14" fill="#56c8eb"/>
-  <circle cx="368" cy="321" r="14" fill="#56c8eb"/>
-  <circle cx="256" cy="385" r="14" fill="#56c8eb"/>
-  <circle cx="144" cy="321" r="14" fill="#56c8eb"/>
-  <circle cx="144" cy="191" r="14" fill="#56c8eb"/>
+  <!-- Animated Hexagon nodes -->
+  <circle cx="256" cy="127" r="14" fill="#56c8eb" class="svg-node n1"/>
+  <circle cx="368" cy="191" r="14" fill="#56c8eb" class="svg-node n2"/>
+  <circle cx="368" cy="321" r="14" fill="#56c8eb" class="svg-node n3"/>
+  <circle cx="256" cy="385" r="14" fill="#56c8eb" class="svg-node n4"/>
+  <circle cx="144" cy="321" r="14" fill="#56c8eb" class="svg-node n5"/>
+  <circle cx="144" cy="191" r="14" fill="#56c8eb" class="svg-node n6"/>
 </svg>

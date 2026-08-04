@@ -57,13 +57,13 @@ export const updatePWAManifestAndTheme = async (theme: 'light' | 'dark' | 'black
       icons: [
         {
           src: absIconSrc,
-          sizes: 'any',
+          sizes: '192x192 512x512 any',
           type: 'image/svg+xml',
           purpose: 'any'
         },
         {
           src: absIconSrc,
-          sizes: 'any',
+          sizes: '192x192 512x512 any',
           type: 'image/svg+xml',
           purpose: 'maskable'
         }

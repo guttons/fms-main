@@ -824,23 +824,48 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
   const intlJobsMap = new Map<string, any>();
   liveIntlList.forEach(f => {
     const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-    intlJobsMap.set(cleanNo, { ...f, status: f.status || 'PENDING' });
+    const flightDate = f.date ? f.date.split('T')[0] : selectedBriefingDate;
+    const dbJob = (flightJobs || []).find(j => {
+      if (!j || !j.flightNumber) return false;
+      const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      if (jNo !== cleanNo) return false;
+      const jDate = j.date ? j.date.split('T')[0] : '';
+      return !jDate || !flightDate || jDate === flightDate;
+    });
+
+    const existing = intlJobsMap.get(cleanNo);
+
+    intlJobsMap.set(cleanNo, {
+      ...(existing || {}),
+      ...f,
+      status: f.status || 'PENDING',
+      assignedTo: dbJob?.assignedTo || f.assignedTo || existing?.assignedTo || '',
+      assignedOfficer: dbJob?.assignedOfficer || f.assignedOfficer || existing?.assignedOfficer || '',
+      vehicleId: dbJob?.vehicleId || f.vehicleId || existing?.vehicleId,
+      id: dbJob?.id || f.id || existing?.id,
+    });
   });
 
   if (frozenFlights?.intl) {
     frozenFlights.intl.forEach((ff: any) => {
       const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
       const existing = intlJobsMap.get(cleanNo);
-      const flightDate = ff.date || selectedBriefingDate;
-      const dbJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo && (!j.date || j.date === flightDate));
+      const flightDate = ff.date ? ff.date.split('T')[0] : selectedBriefingDate;
+      const dbJob = (flightJobs || []).find(j => {
+        if (!j || !j.flightNumber) return false;
+        const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        if (jNo !== cleanNo) return false;
+        const jDate = j.date ? j.date.split('T')[0] : '';
+        return !jDate || !flightDate || jDate === flightDate;
+      });
       intlJobsMap.set(cleanNo, {
         ...(existing || {}),
         ...ff,
         status: dbJob ? dbJob.status : (ff.status || 'PENDING'),
-        assignedTo: dbJob?.assignedTo || ff.assignedTo || '',
-        assignedOfficer: dbJob?.assignedOfficer || ff.assignedOfficer || '',
-        vehicleId: dbJob?.vehicleId || ff.vehicleId,
-        id: dbJob?.id || ff.id,
+        assignedTo: dbJob?.assignedTo || ff.assignedTo || existing?.assignedTo || '',
+        assignedOfficer: dbJob?.assignedOfficer || ff.assignedOfficer || existing?.assignedOfficer || '',
+        vehicleId: dbJob?.vehicleId || ff.vehicleId || existing?.vehicleId,
+        id: dbJob?.id || ff.id || existing?.id,
       });
     });
   }

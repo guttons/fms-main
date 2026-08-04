@@ -13,19 +13,19 @@
   "icons": [
     {
       "src": "/icon-dark.svg",
-      "sizes": "any",
+      "sizes": "192x192 512x512 any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
       "src": "/icon-dark.svg",
-      "sizes": "any",
+      "sizes": "192x192 512x512 any",
       "type": "image/svg+xml",
       "purpose": "maskable"
     },
     {
       "src": "/icon-light.svg",
-      "sizes": "any",
+      "sizes": "192x192 512x512 any",
       "type": "image/svg+xml",
       "purpose": "monochrome"
     }

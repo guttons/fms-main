@@ -1,0 +1,9322 @@
+[
+  {
+    "airline_name": "MALDIVIAN",
+    "category": "DOM",
+    "iata": "Q2",
+    "icao": "DIV",
+    "flights": [
+      "104",
+      "2140",
+      "21406",
+      "2160",
+      "2168",
+      "2178",
+      "2268",
+      "2448",
+      "2548",
+      "442",
+      "682",
+      "8132",
+      "8160",
+      "8Q118",
+      "K2N9404",
+      "KZN9410",
+      "NR404",
+      "OQ2394",
+      "Q144",
+      "Q20PC",
+      "Q2102",
+      "Q2104",
+      "Q2106",
+      "Q2112",
+      "Q2116",
+      "Q2118",
+      "Q2124",
+      "Q2126",
+      "Q2128",
+      "Q2132",
+      "Q2142",
+      "Q2144",
+      "Q2156",
+      "Q2160",
+      "Q2162",
+      "Q2166",
+      "Q2168",
+      "Q2182",
+      "Q2192",
+      "Q22100",
+      "Q22104",
+      "Q22106",
+      "Q22108",
+      "Q22110",
+      "Q22112",
+      "Q22114",
+      "Q22116",
+      "Q22118",
+      "Q22120",
+      "Q22122",
+      "Q22124",
+      "Q22126",
+      "Q22128",
+      "Q22132",
+      "Q22136",
+      "Q2214",
+      "Q22140",
+      "Q22142",
+      "Q22144",
+      "Q22146",
+      "Q22148",
+      "Q22150",
+      "Q22152",
+      "Q22156",
+      "Q22158",
+      "Q22160",
+      "Q22162",
+      "Q22164",
+      "Q22166",
+      "Q22168",
+      "Q22168`",
+      "Q22170",
+      "Q22174",
+      "Q22176",
+      "Q22178",
+      "Q22182",
+      "Q22184",
+      "Q22186",
+      "Q22190",
+      "Q22192",
+      "Q22194",
+      "Q22196",
+      "Q2220",
+      "Q22220",
+      "Q22224",
+      "Q22226",
+      "Q22228",
+      "Q22232",
+      "Q2224",
+      "Q22240",
+      "Q22246",
+      "Q22248",
+      "Q22249",
+      "Q22250",
+      "Q22252",
+      "Q22254",
+      "Q22256",
+      "Q2226",
+      "Q22260",
+      "Q22262",
+      "Q22264",
+      "Q22266",
+      "Q22268",
+      "Q22270",
+      "Q22272",
+      "Q22274",
+      "Q22276",
+      "Q2228",
+      "Q22280",
+      "Q22282",
+      "Q22284",
+      "Q22286",
+      "Q22320",
+      "Q22322",
+      "Q22326",
+      "Q22336",
+      "Q22338",
+      "Q22342",
+      "Q22356",
+      "Q2242",
+      "Q22430",
+      "Q2244",
+      "Q22444",
+      "Q22448",
+      "Q22449",
+      "Q22452",
+      "Q22456",
+      "Q22458",
+      "Q2246",
+      "Q22460",
+      "Q22462",
+      "Q22464",
+      "Q22470",
+      "Q22472",
+      "Q22474",
+      "Q22476",
+      "Q22478",
+      "Q2248",
+      "Q22482",
+      "Q22484",
+      "Q22486",
+      "Q2250",
+      "Q2260",
+      "Q2262",
+      "Q2264",
+      "Q2268",
+      "Q22680",
+      "Q22682",
+      "Q22684",
+      "Q22700",
+      "Q22702",
+      "Q22706",
+      "Q22716",
+      "Q2280",
+      "Q2282",
+      "Q2288",
+      "Q2322",
+      "Q2324",
+      "Q2340",
+      "Q2342",
+      "Q2388",
+      "Q2394",
+      "Q2396",
+      "Q2442",
+      "Q2446",
+      "Q2447",
+      "Q2448",
+      "Q2460",
+      "Q2470",
+      "Q2482",
+      "Q2502",
+      "Q25258",
+      "Q25444",
+      "Q2546",
+      "Q25706",
+      "Q25726",
+      "Q25728",
+      "Q26104",
+      "Q26108",
+      "Q26114",
+      "Q26116",
+      "Q26118",
+      "Q26120",
+      "Q26122",
+      "Q26126",
+      "Q26148",
+      "Q26150",
+      "Q26158",
+      "Q26160",
+      "Q26164",
+      "Q26170",
+      "Q26172",
+      "Q26174",
+      "Q26176",
+      "Q26178",
+      "Q26192",
+      "Q26194",
+      "Q26196",
+      "Q26202",
+      "Q26252",
+      "Q26256",
+      "Q26270",
+      "Q26276",
+      "Q26278",
+      "Q26302",
+      "Q26326",
+      "Q26332",
+      "Q26360",
+      "Q26362",
+      "Q26364",
+      "Q26372",
+      "Q26418",
+      "Q26430",
+      "Q26446",
+      "Q26456",
+      "Q26458",
+      "Q26460",
+      "Q26462",
+      "Q26470",
+      "Q26472",
+      "Q26478",
+      "Q26486",
+      "Q26680",
+      "Q2682",
+      "Q2700",
+      "Q2706",
+      "Q28100",
+      "Q28100`",
+      "Q28104",
+      "Q28108",
+      "Q28110",
+      "Q28114",
+      "Q28116",
+      "Q28118",
+      "Q28120",
+      "Q28122",
+      "Q28126",
+      "Q28130",
+      "Q28132",
+      "Q28134",
+      "Q28136",
+      "Q28138",
+      "Q28140",
+      "Q28142",
+      "Q28144",
+      "Q28146",
+      "Q28150",
+      "Q28154",
+      "Q28158",
+      "Q28160",
+      "Q28162",
+      "Q28164",
+      "Q28168",
+      "Q28170",
+      "Q28172",
+      "Q28174",
+      "Q28176",
+      "Q28178",
+      "Q28180",
+      "Q28184",
+      "Q28190",
+      "Q28194",
+      "Q28196",
+      "Q28202",
+      "Q28208",
+      "Q28222",
+      "Q28226",
+      "Q28240",
+      "Q28246",
+      "Q28250",
+      "Q28252",
+      "Q28254",
+      "Q28264",
+      "Q28266",
+      "Q28268",
+      "Q28270",
+      "Q28272",
+      "Q28274",
+      "Q28276",
+      "Q28280",
+      "Q28282",
+      "Q28284",
+      "Q28286",
+      "Q28300",
+      "Q28302",
+      "Q28320",
+      "Q28322",
+      "Q28324",
+      "Q28326",
+      "Q28440",
+      "Q28442",
+      "Q28444",
+      "Q28446",
+      "Q28450",
+      "Q28452",
+      "Q28456",
+      "Q28458",
+      "Q28460",
+      "Q28462",
+      "Q28470",
+      "Q28472",
+      "Q28476",
+      "Q28480",
+      "Q28680",
+      "Q28682",
+      "Q28684",
+      "Q2956",
+      "Q29732",
+      "Q2OP",
+      "Q2OPC",
+      "Q2OPC2",
+      "Q2ST00"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "8Q-IAB",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "8Q-IAK",
+        "aircraft_type": "DASH8"
+      },
+      {
+        "aircraft_reg": "8Q-IAN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "8Q-IAQ",
+        "aircraft_type": "DASH8"
+      },
+      {
+        "aircraft_reg": "8Q-IAS",
+        "aircraft_type": "DASH8"
+      },
+      {
+        "aircraft_reg": "8Q-IAT",
+        "aircraft_type": "DASH8"
+      },
+      {
+        "aircraft_reg": "8Q-IAV",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "8Q-IAW",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "8Q-IAX",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "8Q-IAY",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "8Q-IAZ",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "8Q-ISK",
+        "aircraft_type": "DHC6"
+      },
+      {
+        "aircraft_reg": "8Q-LAB",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "8Q-RAX",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "MALDIVIAN",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "RA-67216",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-67227",
+        "aircraft_type": "N/A"
+      }
+    ]
+  },
+  {
+    "airline_name": "MANTA AIR",
+    "category": "DOM",
+    "iata": "NR",
+    "icao": "MNT",
+    "flights": [
+      "418",
+      "8QRAY",
+      "NR106",
+      "NR224",
+      "NR330",
+      "NR342",
+      "NR400",
+      "NR402",
+      "NR404",
+      "NR406",
+      "NR408",
+      "NR412",
+      "NR414",
+      "NR418",
+      "NR420",
+      "NR438",
+      "NR448",
+      "NR514",
+      "NR518",
+      "NR520",
+      "NR530",
+      "NR532",
+      "NR534",
+      "NR535",
+      "NR536",
+      "NR537",
+      "NR538",
+      "NR554",
+      "NR555",
+      "NR558",
+      "NR563",
+      "NR660",
+      "NR664",
+      "NR990"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "8Q-IAX",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "8Q-RAX",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "8Q-RAY",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "8Q-RAZ",
+        "aircraft_type": "ATR"
+      }
+    ]
+  },
+  {
+    "airline_name": "VILLA AIR",
+    "category": "DOM",
+    "iata": "VP",
+    "icao": "VLA",
+    "flights": [
+      "VP4600",
+      "VP4604",
+      "VP4606",
+      "VP4612",
+      "VP600",
+      "VP601",
+      "VP602",
+      "VP604",
+      "VP605",
+      "VP606",
+      "VP608",
+      "VP610",
+      "VP8106",
+      "VP8200",
+      "VP8264",
+      "VP8350",
+      "VP8442",
+      "VP8600",
+      "VP8602"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "8Q-VAV",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "8Q-VAW",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "8Q-VAX",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "8Q-VAY",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "8Q-VAZ",
+        "aircraft_type": "ATR"
+      }
+    ]
+  },
+  {
+    "airline_name": "AEROFLOT",
+    "category": "INT",
+    "iata": "SU",
+    "icao": "AFL",
+    "flights": [
+      "AU321",
+      "SU320",
+      "SU321",
+      "SU324",
+      "SU325",
+      "SU327",
+      "SU329",
+      "SU331",
+      "SU573",
+      "SU7787"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "73144",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "73146",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "73158",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "AR73148",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-251417",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-34187",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-7146",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-72133",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-72146",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-72148",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-72150",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-73130",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73131",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73132",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73133",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73134",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "RA-73135",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73136",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73137",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73138",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73139",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73140",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73141",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73142",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-73144",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73145",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-73146",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73147",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73148",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-7315",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "RA-73150",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73151",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "RA-73152",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "RA-73153",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "RA-73154",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "RA-73155",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "RA-73156",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73158",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73174",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-7340",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73411",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-7351",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "RA-73696",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73697",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-73734",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-737789",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-73782",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "RA-73783",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-73784",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-73785",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-73786",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-73787",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-73788",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-73789",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-73A58",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-74144",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "RA-75788",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "RA-76154",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "SU73150",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "VPBFC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VPBFG",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VPBGB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VPBGC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VPBGD",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VPBGF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VPBPG",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VPBQE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VPBYF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VQBFK",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VQBFL",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VQBFR",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VQBQB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VQBQC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VQBQD",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VQBQE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VQBQF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VQBQG",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VQBQM",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VQBUB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VQBUC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VQEFL",
+        "aircraft_type": "N/A"
+      }
+    ]
+  },
+  {
+    "airline_name": "AIR ARABIA",
+    "category": "INT",
+    "iata": "G9",
+    "icao": "ABY",
+    "flights": [
+      "B4092",
+      "G9090",
+      "G9091",
+      "G9092",
+      "G9094",
+      "G992",
+      "G994",
+      "KC200",
+      "SG092"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "4R-ANA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "4R-ANB",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "9M-AOP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-A00",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-A0I",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-A0P",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AEO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AGA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AHY",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ANA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ANB",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ANL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ANM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ANO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ANP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ANQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ANR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ANS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ANT",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ANY",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOB",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-AOC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOE",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOH",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOI",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOJ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOK",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "A6-AOM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AON",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOT",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOU",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOW",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOX",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-APN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ARA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ARB",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ARC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ARD",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ARE",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ARF",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ARG",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ARH",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ARL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ENB",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "EIKGH",
+        "aircraft_type": "A321"
+      }
+    ]
+  },
+  {
+    "airline_name": "AIR FRANCE",
+    "category": "INT",
+    "iata": "AF",
+    "icao": "AFR",
+    "flights": [
+      "AF223",
+      "AF268",
+      "AF271",
+      "AF282",
+      "AF289"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "FGSPY",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "FGZNF",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "FGZNI",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "FGZNJ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "FGZNR",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "FGZNS",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "FGZNT",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "FGZNU",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "FHRBA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "FHRBB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "FHRBC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "FHRBD",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "FHRBE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "FHRBF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "FHRBG",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "FHRBH",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "FHRBI",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "FHRBJ",
+        "aircraft_type": "N/A"
+      }
+    ]
+  },
+  {
+    "airline_name": "AIR INDIA",
+    "category": "INT",
+    "iata": "AI",
+    "icao": "AIC",
+    "flights": [
+      "6E1785",
+      "A1268",
+      "A2274",
+      "AF268",
+      "AI0240",
+      "AI0266",
+      "AI0268",
+      "AI066",
+      "AI1240",
+      "AI1266",
+      "AI2240",
+      "AI226",
+      "AI2272",
+      "AI2274",
+      "AI240",
+      "AI260",
+      "AI264",
+      "AI265",
+      "AI266",
+      "AI2678",
+      "AI268",
+      "AI2774",
+      "AI3193",
+      "AI3202",
+      "AI326",
+      "AI4240",
+      "AIRINDIA",
+      "Q2240",
+      "VTTNU"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "4R-EXQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "9HCIH",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "9HCIP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "9HVTV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "AIEXT",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "TVTQH",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VFTNP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VRCIQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ATV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-CID",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-CIE",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-CIF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-CIG",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-CIH",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-CIM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-CIN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-CIO",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-CIP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-CIQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-CJH",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-EDD",
+        "aircraft_type": "A319"
+      },
+      {
+        "aircraft_reg": "VT-EDE",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-EKN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-EXC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-EXF",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-EXG",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-EXH",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-EXI",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-EXJ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-EXK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-EXL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-EXM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-EXN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-EXO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-EXP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-EXQ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-EXR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-EXS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-EXT",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-EXU",
+        "aircraft_type": "A319"
+      },
+      {
+        "aircraft_reg": "VT-EXV",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-EZQ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-ICE",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ICM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ILF",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-INW",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQT",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-PPH",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-PPI",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-PPJ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-PPK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-PPL",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-PPO",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-PPQ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-PPT",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-PPU",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-PPV",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-PPX",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-RIO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-RTJ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-RTK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-RTL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-RTN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-RTS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-RTT",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-RTU",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-RTV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-SCJ",
+        "aircraft_type": "A319"
+      },
+      {
+        "aircraft_reg": "VT-SCM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-SCP",
+        "aircraft_type": "A319"
+      },
+      {
+        "aircraft_reg": "VT-SCQ",
+        "aircraft_type": "A319"
+      },
+      {
+        "aircraft_reg": "VT-SCR",
+        "aircraft_type": "A319"
+      },
+      {
+        "aircraft_reg": "VT-SCV",
+        "aircraft_type": "A319"
+      },
+      {
+        "aircraft_reg": "VT-TNB",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TNC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TND",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TNF",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TNH",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TNI",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TNJ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TNK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TNP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TNQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TNR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TNS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TNU",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TNV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TNW",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-TNX",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TNY",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TNZ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQD",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQE",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQF",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQG",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQH",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQI",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQJ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQT",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQW",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQX",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TVB",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-TVC",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-TVD",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-TVF",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TVH",
+        "aircraft_type": "A321"
+      }
+    ]
+  },
+  {
+    "airline_name": "AIR SEYCHELLES",
+    "category": "INT",
+    "iata": "HM",
+    "icao": "SEY",
+    "flights": [
+      "HM123",
+      "HM125",
+      "HM9239",
+      "HM9324",
+      "HM9757",
+      "HM9982"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "S7PTI",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "S7VEV",
+        "aircraft_type": "A320"
+      }
+    ]
+  },
+  {
+    "airline_name": "BANGKOK AIRWAYS",
+    "category": "INT",
+    "iata": "PG",
+    "icao": "BKP",
+    "flights": [
+      "PG172",
+      "PG176",
+      "PG711",
+      "PG712",
+      "PG721",
+      "PG9712",
+      "VS385"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "FISPG2",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HS&PGZ",
+        "aircraft_type": "A319"
+      },
+      {
+        "aircraft_reg": "HSBGN",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HSPGK",
+        "aircraft_type": "A319"
+      },
+      {
+        "aircraft_reg": "HSPGN",
+        "aircraft_type": "A319"
+      },
+      {
+        "aircraft_reg": "HSPGS",
+        "aircraft_type": "A319"
+      },
+      {
+        "aircraft_reg": "HSPGV",
+        "aircraft_type": "A319"
+      },
+      {
+        "aircraft_reg": "HSPGW",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSPGX",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSPGY",
+        "aircraft_type": "A319"
+      },
+      {
+        "aircraft_reg": "HSPGZ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSPPD",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HZ-PGZ",
+        "aircraft_type": "A319"
+      }
+    ]
+  },
+  {
+    "airline_name": "BRITISH AIRWAYS",
+    "category": "INT",
+    "iata": "BA",
+    "icao": "BAW",
+    "flights": [
+      "BA060",
+      "BA0606",
+      "BA061",
+      "BA61",
+      "BA70"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "BZBKP",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-STBA",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-STBB",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-STBC",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-STBD",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-STBE",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-STBF",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-STBG",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-STBH",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-STBI",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "G-STBJ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-STBK",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-STBL",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-STBM",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-STBN",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-STBO",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-STBP",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-ZBAH",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-ZBKA",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-ZBKB",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-ZBKC",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-ZBKD",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "G-ZBKE",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-ZBKF",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-ZBKG",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-ZBKH",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-ZBKI",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-ZBKJ",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-ZBKK",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-ZBKL",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "G-ZBKM",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-ZBKN",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-ZBKO",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-ZBKP",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-ZBKR",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-ZBKS",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "GGZBKI",
+        "aircraft_type": "N/A"
+      }
+    ]
+  },
+  {
+    "airline_name": "CHINA EASTERN AIRLINES",
+    "category": "INT",
+    "iata": "MU",
+    "icao": "CES",
+    "flights": [
+      "B9656",
+      "JD456",
+      "MU231",
+      "MU233",
+      "MU236",
+      "MU263",
+      "MU326",
+      "MU5080",
+      "MU713",
+      "MU7381",
+      "MU7382",
+      "MU9565",
+      "MU9656",
+      "MU9660",
+      "SU236"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "B_8971",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B1041",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B1049",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B1066",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "B1073",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B1255",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B1307",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B1308",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B1309",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B1702",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B1703",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B1788",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B1789",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B1792",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B1907",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B208D",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B300P",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B300Q",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B3030",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "B303D",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B304A",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B305R",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5226",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5527",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5592",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5643",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5701",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5756",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5761",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "B5802",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5807",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5809",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5819",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5820",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5822",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5829",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5902",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5903",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5908",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5920",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5921",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5926",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5930",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5931",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5936",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5937",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5938",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5941",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5942",
+        "aircraft_type": "A330."
+      },
+      {
+        "aircraft_reg": "B5943",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5949",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5952",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5961",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5962",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5968",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5973",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5975",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5976",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5983",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B5986",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B6085",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "B6100",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "B6143",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B6145",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B6146",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B6147",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B6148",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B6149",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B6249",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B6537",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B6538",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B6539",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B6543",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B6545",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B6546",
+        "aircraft_type": "A230"
+      },
+      {
+        "aircraft_reg": "B717",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B7170",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "B7590",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B7600",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B8167",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "B8225",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B8226",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B8231",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B8321",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B8862",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "B8863",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B8967",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B8968",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B8970",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B8971",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "B8972",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "BI788",
+        "aircraft_type": "B737"
+      }
+    ]
+  },
+  {
+    "airline_name": "CHONGQING AIRLINES",
+    "category": "INT",
+    "iata": "OQ",
+    "icao": "CQN",
+    "flights": [
+      "OQ2394"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "B302J",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "B302K",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "B302L",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "B305M",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "B305N",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "B305Q",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "B3075",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "B307R",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "B307S",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "B395M",
+        "aircraft_type": "A320"
+      }
+    ]
+  },
+  {
+    "airline_name": "CONDOR",
+    "category": "INT",
+    "iata": "DE",
+    "icao": "CFG",
+    "flights": [
+      "D32321",
+      "DE2320",
+      "DE2321",
+      "DE9459",
+      "SU321"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "DABUA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DABUB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DABUC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DABUD",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DABUE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DABUF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DABUH",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DABUK",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DABUM",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DABUO",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DABUP",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DABUT",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DAHRE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DAIRM",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DAIYA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DAIYB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DAIYC",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DAIYD",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DANDA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DANDR",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANHR",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANPL",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRA",
+        "aircraft_type": "DE2321"
+      },
+      {
+        "aircraft_reg": "DANRB",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRC",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRD",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRE",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRF",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRG",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRH",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRHI",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "DANRI",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRJ",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRK",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRL",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRM",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRN",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRO",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRP",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRQ",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DANRT",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DARNE",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DARNG",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DEANRG",
+        "aircraft_type": "A330"
+      }
+    ]
+  },
+  {
+    "airline_name": "DISCOVER AIRLINES",
+    "category": "INT",
+    "iata": "4Y",
+    "icao": "OEW",
+    "flights": [
+      "4Y155"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "DAFYQ",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DAFYR",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DAIKA",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DAIKB",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DAIKC",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DAIKD",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DAIKE",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DAIKF",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DAIKH",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DAIKK",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DAIKO",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DAXGB",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DAXGE",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "DAXGF",
+        "aircraft_type": "A330"
+      }
+    ]
+  },
+  {
+    "airline_name": "EDELWEISS AIR",
+    "category": "INT",
+    "iata": "WK",
+    "icao": "EDW",
+    "flights": [
+      "SU321",
+      "WK 067",
+      "WK046",
+      "WK066",
+      "WK067",
+      "WK0671",
+      "WK068"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "HB-IHA",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "HB-IHB",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "HB-IHC",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "HB-IHF",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "HB-IMG",
+        "aircraft_type": "A340"
+      },
+      {
+        "aircraft_reg": "HB-JMB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HB-JMC",
+        "aircraft_type": "A340"
+      },
+      {
+        "aircraft_reg": "HB-JMD",
+        "aircraft_type": "A3400"
+      },
+      {
+        "aircraft_reg": "HB-JME",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "HB-JMF",
+        "aircraft_type": "A340"
+      },
+      {
+        "aircraft_reg": "HB-JMG",
+        "aircraft_type": "A340"
+      },
+      {
+        "aircraft_reg": "HB-JMO",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HB-LME",
+        "aircraft_type": "A340"
+      },
+      {
+        "aircraft_reg": "HSJMC",
+        "aircraft_type": "A340"
+      }
+    ]
+  },
+  {
+    "airline_name": "EMIRATES",
+    "category": "INT",
+    "iata": "EK",
+    "icao": "UAE",
+    "flights": [
+      "6E1128",
+      "A6ECK",
+      "A6EPF",
+      "EK2603",
+      "EK567",
+      "EK648",
+      "EK650",
+      "EK651",
+      "EK652",
+      "EK653",
+      "EK653.",
+      "EK656",
+      "EK657",
+      "EK658",
+      "EK659",
+      "EK661",
+      "EK663",
+      "EK674",
+      "EK675",
+      "EK8653",
+      "EK9890",
+      "EK9891",
+      "EKK652",
+      "EY261",
+      "EY279",
+      "EY379",
+      "FZ1208",
+      "QR673",
+      "RQ677"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "46ENM",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-652",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-ABQ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-AGD",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-AGW",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-AHJ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ANS",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-BLN",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BNC",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-CEF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-CGY",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-CJE",
+        "aircraft_type": "A319"
+      },
+      {
+        "aircraft_reg": "A6-EBQ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EBR",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-EBU",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-EBW",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-EBY",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-ECA",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ECC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-ECD",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ECE",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ECF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-ECG",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ECH",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ECI",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ECJ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-ECK",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ECM",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ECN",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-ECO",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ECQ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ECR",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ECS",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ECT",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-ECU",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ECV",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ECW",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ECX",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ECY",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A6-ECZ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-EDG",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-EEK",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGA",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGB",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGC",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGD",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGE",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGF",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGG",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGH",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-EGI",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGJ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGK",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGL",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGM",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGN",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGO",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGP",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGQ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGR",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGS",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGT",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGU",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGV",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGW",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGX",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGY",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EGZ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EMG",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EMP",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-END",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-ENE",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENF",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENG",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENJ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENK",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENL",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENM",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENN",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENO",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENP",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENQ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENR",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENS",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENT",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENU",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENV",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENX",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENY",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ENZ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPA",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPB",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPC",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPD",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPF",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPG",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-EPH",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPI",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPJ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPK",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPL",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPM",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPN",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPO",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPP",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPPM",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-EPQ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-EPR",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-EPS",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPT",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPU",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPV",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPW",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPX",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPY",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EPZ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EQ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-EQA",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EQB",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EQC",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EQD",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EQE",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EQF",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EQG",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EQH",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EQI",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EQJ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EQK",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EQL",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EQM",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EQN",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EQO",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EQP",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ERK",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-EWE",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EWH",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EWI",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-FGD",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-FGZ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-FNB",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A6-FPP",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-LGB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-LGL",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-RGB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-RGI",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-RPI",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-EGD",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-EGM",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-ENC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-ENQ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A9EPP",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "AEGW",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "E6EGR",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "EK653",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "EK657",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "N6EGL",
+        "aircraft_type": "B777"
+      }
+    ]
+  },
+  {
+    "airline_name": "ETIHAD AIRWAYS",
+    "category": "INT",
+    "iata": "EY",
+    "icao": "ETD",
+    "flights": [
+      "EK279",
+      "EK653",
+      "EY261",
+      "EY273",
+      "EY274",
+      "EY277",
+      "EY278",
+      "EY279",
+      "EY298",
+      "EY373",
+      "EY377",
+      "EY379",
+      "EY711",
+      "QY279"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "A6-279",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-ABN",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-AEB",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-AEC",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-AED",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-AEE",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-AEG",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AEH",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-AEI",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AEJ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-AEL",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-AEN",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-AEO",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-AEP",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-B",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BCG",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-BCJ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-BCY",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-BDA",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BELL",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-BIG",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-BLA",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLB",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLC",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLD",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLE",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLF",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLG",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLH",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLI",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLJ",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLK",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLL",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLM",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLN",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLO",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLP",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLQ",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLR",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLS",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLT",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLU",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLV",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLW",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLX",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLY",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BLZ",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BMA",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BMB",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BMC",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BMD",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BME",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BMF",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BMG",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A6-BMH",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BMI",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BMJ",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BML",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BNA",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BNB",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BNC",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BND",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BNE",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BNF",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BNG",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BNH",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BNI",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-BNK",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-DMC",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-EGD",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-EIM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-EIN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-EIP",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-EIS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-EIT",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-EIU",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-EIV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-EIW",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-EIX",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-EIY",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-EJA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-ELJ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-EMA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-ETI",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ETJ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-ETS",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-FNI",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A6-IRF",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-LRA",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-LRB",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-LRC",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-LRD",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-LRE",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-LRF",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-LRG",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-LRH",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-LRI",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-LRJ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-LRK",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-LRL",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A7-AEO",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A7-BMI",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "EY279",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "Q6AEC",
+        "aircraft_type": "a321"
+      },
+      {
+        "aircraft_reg": "Q6BLZ",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "S6BLT",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "VT-EXMA6BNC",
+        "aircraft_type": "B787"
+      }
+    ]
+  },
+  {
+    "airline_name": "FITS AIR",
+    "category": "INT",
+    "iata": "8D",
+    "icao": "EXV",
+    "flights": [
+      "8D312",
+      "8D314",
+      "8D672",
+      "8D812",
+      "8D814",
+      "8D817",
+      "8D819",
+      "8D922",
+      "8D924",
+      "8D942",
+      "EXV312",
+      "EXV314"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "4R-EXG",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "4R-EXP",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "4R-EXQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "4R-EXR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "4R-EXS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "4YEXQ",
+        "aircraft_type": "N/A"
+      }
+    ]
+  },
+  {
+    "airline_name": "GULF AIR",
+    "category": "INT",
+    "iata": "GF",
+    "icao": "GFA",
+    "flights": [
+      "144",
+      "FG145",
+      "GE145",
+      "GF144",
+      "GF145",
+      "GF147",
+      "GF2145",
+      "GF7145",
+      "Q22286"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "9ACNC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A9C-CF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A9C-NA",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A9C-NB",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A9C-NC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A9C-ND",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A9C-NE",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A9C-NF",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A9C-NG",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A9C-NH",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A9C-NO",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A9C-NQ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A9C-TA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A9C-TC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A9C-TD",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A9C-TE",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A9C-TF",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A9C-XB",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A9IND",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A9NCND",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A9ND",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A9NNG",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "GULFAIR",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "Q9CNE",
+        "aircraft_type": "A320"
+      }
+    ]
+  },
+  {
+    "airline_name": "INDIGO",
+    "category": "INT",
+    "iata": "6E",
+    "icao": "IGO",
+    "flights": [
+      "1128",
+      "5483",
+      "5E1132",
+      "6E1123",
+      "6E1127",
+      "6E1128",
+      "6E1130",
+      "6E1132",
+      "6E1134",
+      "6E1138",
+      "6E1144",
+      "6E1228",
+      "6E1759",
+      "6E1781",
+      "6E1782",
+      "6E1784",
+      "6E1785",
+      "6E1786",
+      "6E1787",
+      "6E1788",
+      "6E1789",
+      "6E1795",
+      "6E1796",
+      "6E1798",
+      "6E1814",
+      "6E1887",
+      "6E1934",
+      "6E1985",
+      "6E1989",
+      "6E1992",
+      "6E6624",
+      "6E8408",
+      "6E8409",
+      "6E8412",
+      "6E8413",
+      "6E8415",
+      "6E8504",
+      "6E9001",
+      "6E9010",
+      "6E9902",
+      "G8034",
+      "Q21128",
+      "Q2700",
+      "VTISA"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "300913",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "6E1132",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "6E1134",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "6EIBK",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "6EIBY",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "6EIOK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "9HIIM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "9HIJZ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "9HIMW",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "9HISU",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "9HIXL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "CTIQG",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "CTIQO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "CTIQT",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "IMM",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "IRX",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "LTILL",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "TVILN",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TVILU",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "UTIIS",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "UTILB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "UTILE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "UTIUZ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VFIYF",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VIIZX",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VPIID",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-110",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-BA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-I,K",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IAN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IAO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IAQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IAR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IAS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IAX",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IAY",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IAZ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IBB",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IBC",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IBD",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IBE",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IBF",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IBH",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IBI",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IBJ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IBK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IBL",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IBM",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IBN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IBO",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IBQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IBS",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IBT",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IBU",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IBV",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IBW",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IBX",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IBY",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IBZ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ICB",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ICC",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ICD",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ICG",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ICI",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ICK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ICL",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ICN",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ICO",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ICP",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ICQ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ICR",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ICS",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ICT",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ICV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ICX",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ICY",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-ICZ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IDR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IFF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IFH",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IFI",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IFK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IFL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IFM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IFN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IFP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IFQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IFR",
+        "aircraft_type": "A230"
+      },
+      {
+        "aircraft_reg": "VT-IFS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IFV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IFX",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IFZ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIB",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IID",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIE",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IIF",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIG",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIH",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIJ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIU",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIW",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIX",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IIY",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IIZ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IJA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJB",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IJF",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJG",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJJ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJK",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IJL",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IJM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJT",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJU",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJW",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJX",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJY",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IJZ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IKP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IKQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IKW",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IKX",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IKY",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILB",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILC",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILD",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILE",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILF",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILG",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILH",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILI",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILJ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ILM",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILN",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILO",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILP",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILQ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILR",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILS",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILT",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILU",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-ILV",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILW",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILX",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ILY",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ILZ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IM",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IMB",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IMC",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IMD",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IME",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IMG",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IMH",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IMI",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IMJ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IMK",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IML",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IMM",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IMN",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IMQ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IMR",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IMS",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IMU",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IMV",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IMW",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IMX",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IMY",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IMZ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-INN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-INP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IOF",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IOG",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IOI",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IOK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ION",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPD",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPE",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPF",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPG",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPH",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPI",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPJ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPT",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPU",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPW",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPX",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPY",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IPZ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IQA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQD",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQE",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQF",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQG",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQH",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQI",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQJ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQT",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQU",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQW",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQX",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQY",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IQZ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IRA",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IRB",
+        "aircraft_type": "ATR72600"
+      },
+      {
+        "aircraft_reg": "VT-IRD",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IRE",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IRF",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IRG",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IRH",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IRI",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IRJ",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IRK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IRV",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IRW",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IRX",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IRY",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IRZ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-ISA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ISB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-ISC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-ISD",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-ISE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-ISF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-ISJ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ISK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ISL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ISM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ISN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ISO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ISP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ISQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ISR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ISS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IST",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ISU",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ISV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ISW",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-ISX",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ISY",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ISZ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ITM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ITP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ITR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ITU",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-ITZ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IUB",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IUC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IUD",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IUE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IUF",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IUH",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IUJ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IUK",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IUM",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IUP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IUQ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IUU",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IUV",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IUW",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IUX",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IUZ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IVA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IVB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IVE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IVJ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IVK",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IVL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IVN",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IVO",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IVP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IVQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IVS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IVV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IVW",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IVX",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IVY",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IVZ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IWM",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IWN",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IWR",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-IWX",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IWY",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IXA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IXD",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IXE",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IXF",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IXG",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IXH",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IXI",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IXJ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IXL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IXM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IXN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IXO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IXP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IXQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IXS",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IXW",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IXX",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IXY",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IYA",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IYB",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IYE",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IYF",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IYI",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IYJ",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IYK",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IYL",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IYO",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IYP",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IYQ",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IYS",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IYU",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IYX",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IYY",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IYZ",
+        "aircraft_type": "ATR"
+      },
+      {
+        "aircraft_reg": "VT-IZA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IZB",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IZC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IZD",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IZE",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IZF",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IZH",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IZI",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IZJ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IZK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IZL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IZM",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IZN",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IZO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IZP",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IZQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IZU",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IZV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-IZY",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-IZZ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-NHK",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-NHN",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-NHQ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-NHR",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-NHV",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-TBB",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-TBF",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-TBN",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VT-TLN",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-TMB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-TQC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-TQS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VT-UIZ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-ULQ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VT-WJT",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "VYICY",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "VYIJZ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VYIQC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "VYIVI",
+        "aircraft_type": "N/A"
+      }
+    ]
+  },
+  {
+    "airline_name": "LOT POLISH AIRLINES",
+    "category": "INT",
+    "iata": "LO",
+    "icao": "LOT",
+    "flights": [
+      "LO6290",
+      "LO7230",
+      "LO7238",
+      "LO7242"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "SPLAS",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "SPLRC",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "SPLRG",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "SPLSA",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "SPLSB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "SPLSC",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "SPLSD",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "SPLSE",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "SPLSF",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "SPLSG",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "SPLSR",
+        "aircraft_type": "B787"
+      }
+    ]
+  },
+  {
+    "airline_name": "MALAYSIA AIRLINES",
+    "category": "INT",
+    "iata": "MH",
+    "icao": "MAS",
+    "flights": [
+      "G9092",
+      "MH484",
+      "MH486",
+      "MH8784",
+      "MH8785",
+      "MH8787",
+      "MH8796",
+      "MH8797"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "9HMVA",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-LMR",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-LMS",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MBA",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MLM",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MLN",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MLO",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MLP",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MLQ",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MLR",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MLS",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MLT",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MLU",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MLV",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MUB",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MUH",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MUN",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MVA",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MVB",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MVC",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MVD",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MVE",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MVF",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MVG",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MVH",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MVI",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MVJ",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MVK",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MVL",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MVM",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MVN",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MX0",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9M-MXA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9M-MXB",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXC",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXD",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXE",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9M-MXG",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXH",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXI",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXJ",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXK",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXL",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXM",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXN",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXO",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9M-MXP",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXQ",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXR",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXS",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXT",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXU",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXV",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXW",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXX",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MXY",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MLV",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "MH486",
+        "aircraft_type": "B737"
+      }
+    ]
+  },
+  {
+    "airline_name": "NEOS",
+    "category": "INT",
+    "iata": "NO",
+    "icao": "NOS",
+    "flights": [
+      "N0110",
+      "N0511",
+      "N0711",
+      "NO110",
+      "NO141",
+      "NO265",
+      "NO370",
+      "NO376",
+      "NO451",
+      "NO510",
+      "NO511",
+      "NO512",
+      "NO530",
+      "NO537",
+      "NO611",
+      "NO641",
+      "NO661",
+      "NO710",
+      "NO711",
+      "NO735",
+      "NO865"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "EIEUA",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "EINEO",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "EINEU",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "EINEW",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "EINEY",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "EINNA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "EINUA",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "EINVA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "EINYC",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "EINYE",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "EIXIN",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "ELNEO",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "ELNEW",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "ELNUA",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "LNFNB",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "LNFNC",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "LNFND",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "LNLNO",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "NINYE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-MGG",
+        "aircraft_type": "B777"
+      }
+    ]
+  },
+  {
+    "airline_name": "OMAN AIR",
+    "category": "INT",
+    "iata": "WY",
+    "icao": "OMA",
+    "flights": [
+      "WY238",
+      "WY382",
+      "WY383",
+      "WY384",
+      "WY737"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "A40BAE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A40BI",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A40BL",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A40BQ",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A40BW",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A40BY",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A40MA",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A40MB",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A40MC",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A40MD",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A40ME",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A40MF",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A40MG",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A40MH",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A40MI",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A40MJ",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A40MK",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A40ML",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A40MM",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A4OBAB",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A4OBAE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A4OBL",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A4OBQ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A4OBY",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A4OBZ",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A4OMA",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A4OMB",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A4OMC",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A4OMD",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A4OME",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A4OMF",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A4OMG",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A4OMH",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A4OMI",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A4OMJ",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A4OML",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A4OMM",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A4OMR",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "WY384",
+        "aircraft_type": "B737"
+      }
+    ]
+  },
+  {
+    "airline_name": "QATAR AIRWAYS",
+    "category": "INT",
+    "iata": "QR",
+    "icao": "QTR",
+    "flights": [
+      "A7CGA",
+      "AR7452",
+      "EK657",
+      "EY261",
+      "EY377",
+      "GF145",
+      "Q2673",
+      "Q2940",
+      "Q4657",
+      "Q4673",
+      "Q673",
+      "QE552",
+      "QE796",
+      "QR1671",
+      "QR3163",
+      "QR3226",
+      "QR3265",
+      "QR3292",
+      "QR473",
+      "QR653",
+      "QR657",
+      "QR671",
+      "QR672",
+      "QR673",
+      "QR674",
+      "QR675",
+      "QR677",
+      "QR678",
+      "QR7363",
+      "QR7368",
+      "QR7418",
+      "QR7430",
+      "QR7432",
+      "QR7434",
+      "QR7442",
+      "QR7459",
+      "QR761",
+      "QR8356",
+      "QR873",
+      "QR8808",
+      "QR920",
+      "QR973"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "47AHP",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "47AHT",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "7AALE",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9HBOE",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-AHO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AHQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AHS",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-AHT",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AHU",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-AHW",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-AHY",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-AOH",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-BOA",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-BOB",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-BOC",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-BOD",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-BOF",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-BOH",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A6-BOI",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-_ALV",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-4BOC",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-ABO",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-AH9",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-AHA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-AHC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-AHD",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-AHF",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-AHI",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-AHJ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-AHL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-AHM",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-AHO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-AHP",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-AHQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-AHR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-AHS",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-AHT",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-AHU",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-AHW",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-AHX",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-AHY",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-AKL",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALA",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALC",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALD",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALE",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALF",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALG",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALH",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "A7-ALI",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALJ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-ALK",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALL",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALM",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALN",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALO",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALP",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALQ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-ALR",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALS",
+        "aircraft_type": "A3501"
+      },
+      {
+        "aircraft_reg": "A7-ALT",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALU",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALV",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALW",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALX",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ALY",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-ALZ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-AME",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-AMF",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-AMG",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-AMH",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-AMI",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-AMJ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-AMK",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-AML",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ANI",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-ANL",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-ANM",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-ANR",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-AUH",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-AWH",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-AZM",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A7-B0C",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BAA",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BAB",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BAC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BAE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BAG",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BAH",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BAI",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BAJ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BAK",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BAL",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BAM",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BAN",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BAO",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BAQ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BAS",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BAU",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BAX",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BAZ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BBA",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BBB",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BBC",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BBD",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BBE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BBF",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BBG",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BBH",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BBI",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BCJ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BEA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BEB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BEC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BED",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BEE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BEF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BEG",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BEH",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BEI",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BEJ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BEL",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BEM",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BEN",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BEO",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BEP",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BER",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BES",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BET",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BEV",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BEW",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BEX",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BFA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BFF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BHB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A7-BOA",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BOB",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BOC",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BOD",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BOE",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BOF",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BOG",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BOH",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BOI",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-BTA",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "A7-CGA",
+        "aircraft_type": "GLF6"
+      },
+      {
+        "aircraft_reg": "A7-CGH",
+        "aircraft_type": "G650"
+      },
+      {
+        "aircraft_reg": "A7-CGM",
+        "aircraft_type": "GLF6"
+      },
+      {
+        "aircraft_reg": "A7-DOB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "ATAHY",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "Q7AHR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "Q7AHS",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "Q7AHT",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "Q7AHY",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "Q7BBA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "Q7BOB",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "Q7BOC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "Q7BOD",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "QR671",
+        "aircraft_type": "A320"
+      }
+    ]
+  },
+  {
+    "airline_name": "SAUDIA",
+    "category": "INT",
+    "iata": "SV",
+    "icao": "SVA",
+    "flights": [
+      "SU786",
+      "SU787",
+      "SU788",
+      "SU789",
+      "SU834",
+      "SU839",
+      "SV3629",
+      "SV3631",
+      "SV3633",
+      "SV3639",
+      "SV3791",
+      "SV3838",
+      "SV3839",
+      "SV437",
+      "SV5707",
+      "SV6905",
+      "SV7010",
+      "SV7076",
+      "SV7514",
+      "SV786",
+      "SV787",
+      "SV788",
+      "SV789",
+      "SV825",
+      "SV839",
+      "SV873",
+      "SV875",
+      "SV9063",
+      "SV9069",
+      "SV9601",
+      "SV9603",
+      "SV9605",
+      "SV9607",
+      "SV9609",
+      "SV9611",
+      "SV9661",
+      "SVA7208"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "9HAZC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "AHARH",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "AZARG",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "H2AR23",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "H2AR26",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "H2ARC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HRAR25",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HRAR26",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HSAR33",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HSAS99",
+        "aircraft_type": "A318"
+      },
+      {
+        "aircraft_reg": "HZ-AK11",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HZ-AK13",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HZ-AK22",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HZ-AK25",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "HZ-AK28",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "HZ-AK35",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "HZ-AR11",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-AR12",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-AR13",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-AR22",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-AR23",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-AR24",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-AR25",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HZ-AR26",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-AR27",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-AR28",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-AR29",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-AR32",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-AR33",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-AR42",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "HZ-ARA",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-ARB",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-ARC",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-ARD",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-ARE",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-ARF",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-ARG",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-ARH",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-ARI2",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HZ-ARI3",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-ARII",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-ARO2",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "HZ-ARR",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HZ-ARZ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HZ-ARZZ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HZ-AS99",
+        "aircraft_type": "A318"
+      },
+      {
+        "aircraft_reg": "HZ-MF1",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "ZHAR22",
+        "aircraft_type": "B787"
+      }
+    ]
+  },
+  {
+    "airline_name": "SICHUAN AIRLINES",
+    "category": "INT",
+    "iata": "3U",
+    "icao": "CSC",
+    "flights": [
+      "3U3923",
+      "3U3924",
+      "3U3925",
+      "3U3934"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "3U3924",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "B235H",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "B23AW",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "B31AW",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "B3201",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "B324K",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "B325F",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "B325H",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "B328V",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "B32AW",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "B32D1",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "B32DI",
+        "aircraft_type": "A321"
+      }
+    ]
+  },
+  {
+    "airline_name": "SINGAPORE AIRLINES",
+    "category": "INT",
+    "iata": "SQ",
+    "icao": "SIA",
+    "flights": [
+      "431",
+      "437",
+      "9VMBD",
+      "9VMBG",
+      "FZ1570",
+      "QR673",
+      "SQ321",
+      "SQ341",
+      "SQ403",
+      "SQ431",
+      "SQ432",
+      "SQ437",
+      "SQ438",
+      "SQ451",
+      "SQ457",
+      "SQ471",
+      "SQ731",
+      "SQ9431",
+      "SQ9437"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "9BSHV",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9BSJC",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9HMBN",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9HSHC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9HSHG",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9HSHW",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9HSRK",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9M-MBG",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9M-MBH",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-MBM",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9M-MBN",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-SHM",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9M-SHN",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9M-SHQ",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9M-SHW",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9M-SJI",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9M-SMM",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9M-SMN",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9M-SMQ",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9M-SMR",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9M-SMS",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9M-SMY",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9M-SMZ",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9NMBA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9V-LCS",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-MBA",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MBB",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MBC",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MBD",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MBE",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MBF",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MBG",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MBH",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MBI",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MBJ",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MBK",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MBL",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MBM",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MBN",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MBO",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MBP",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9V-MBS",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9V-MFB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9V-MGA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9V-MGB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9V-MGC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9V-MGD",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9V-MGE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9V-MGK",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9V-MGL",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9V-MGM",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9V-MGN",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9V-MNB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "9V-MSL",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SCA",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCB",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCC",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCD",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCE",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCF",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCG",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCH",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCI",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCJ",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCL",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCM",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCN",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCO",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCP",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCQ",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCR",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCS",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCT",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCU",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCV",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCW",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCY",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SCZ",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SDA",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SHA",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHB",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHC",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "9V-SHD",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHE",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHF",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHG",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHH",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHI",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHJ",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHK",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHL",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHM",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHN",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHO",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHP",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHQ",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "9V-SHR",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHS",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHT",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHU",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHV",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHW",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SHY",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SJA",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SJB",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SJC",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SJD",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SJE",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SJF",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SJG",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SJH",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SJI",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMA",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMB",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMC",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMD",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SME",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMF",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMG",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMH",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMI",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMJ",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMK",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SML",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMM",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMN",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMO",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMP",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMQ",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMR",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMS",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMT",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMU",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMV",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMW",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMY",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9V-SMZ",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "9YSHV",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A350",
+        "aircraft_type": "9VSHO"
+      },
+      {
+        "aircraft_reg": "PVMBB",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "PVMBG",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "PVMBH",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "PVSHA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "SQ431",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "SQ437",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "SVMBK",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "SVSCE",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TVMBO",
+        "aircraft_type": "N/A"
+      }
+    ]
+  },
+  {
+    "airline_name": "SRILANKAN AIRLINES",
+    "category": "INT",
+    "iata": "UL",
+    "icao": "ALK",
+    "flights": [
+      "EL1169",
+      "UL101",
+      "UL102",
+      "UL103",
+      "UL104",
+      "UL110",
+      "UL114",
+      "UL116",
+      "UL401",
+      "UL505",
+      "UL506",
+      "UL7105"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "4LALL",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "4QABM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "4R-ABC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "4R-ABL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "4R-ABM",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "4R-ABN",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "4R-ABO",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "4R-ABQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "4R-ABS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "4R-ABT",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "4R-ABU",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "4R-AHL",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "4R-AII",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "4R-AIN",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "4R-AL11",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "4R-ALA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "4R-ALB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "4R-ALC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "4R-ALH",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "4R-ALL",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "4R-ALM",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "4R-ALN",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "4R-ALO",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "4R-ALP",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "4R-ALQ",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "4R-ALR",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "4R-ALS",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "4R-ALT",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "4R-ANA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "4R-ANB",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "4R-ANC",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "4R-AND",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "4R-ANE",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "4R-ANF",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "4R-ARV",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "4R-EXQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "4R-MR6",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "4R-MRE",
+        "aircraft_type": "A319"
+      },
+      {
+        "aircraft_reg": "4R-MRF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A4ABL",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A4ALP",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "A4ANA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A7-ALL",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "ARABL",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "ARABS",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "ARALH",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "ARANA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "OELAC",
+        "aircraft_type": "A330"
+      }
+    ]
+  },
+  {
+    "airline_name": "THAI AIRASIA",
+    "category": "INT",
+    "iata": "FD",
+    "icao": "AIQ",
+    "flights": [
+      "AK073",
+      "AK176",
+      "FD175",
+      "FD176",
+      "FD178",
+      "FD6002",
+      "FD7176",
+      "FZ176",
+      "HSABW",
+      "PG176"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "9M-ABW",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "9M-AHY",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A320",
+        "aircraft_type": "HSCBB"
+      },
+      {
+        "aircraft_reg": "A7-BOB",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "FD176",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "FDBBT",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HABW",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HB-ABW",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HCCBB",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HCCBF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HSABC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HSABI",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HSABU",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSABV",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSABW",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSABY",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSBBC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSBBL",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HSBBO",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HSBBQ",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSBBT",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "HSBBU",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSCBB",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "HSCBC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSCBE",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSCBF",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSCBG",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSCBI",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HSCBK",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSCBR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSCBS",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HSCGB",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSCRF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HSEAB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HSEAC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSEAD",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSEAG",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "HSLBF",
+        "aircraft_type": "A320"
+      }
+    ]
+  },
+  {
+    "airline_name": "TURKISH AIRLINES",
+    "category": "INT",
+    "iata": "TK",
+    "icao": "THY",
+    "flights": [
+      "AK073",
+      "AK735",
+      "EK653",
+      "OS046",
+      "Q2730",
+      "SQ437",
+      "TC730",
+      "TC731",
+      "TC734",
+      "TCJOA",
+      "TCJOD",
+      "TCLNE",
+      "TCLNG",
+      "TK334",
+      "TK370",
+      "TK371",
+      "TK376",
+      "TK6883",
+      "TK6887",
+      "TK6930",
+      "TK6935",
+      "TK703",
+      "TK725",
+      "TK730",
+      "TK731",
+      "TK732",
+      "TK734",
+      "TK735",
+      "TK738",
+      "TK739",
+      "TK741",
+      "TK765"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "9V-SHS",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "A6-EBM",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "B5319",
+        "aircraft_type": "TCJNR"
+      },
+      {
+        "aircraft_reg": "JCJOH",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "OELPC",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-CNE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-CNF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-HOG",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-IMB",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-INK",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-J",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-J0A",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-J0J",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-JFF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-JIO",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JIP",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JIR",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JIS",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JJ2",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-JJC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-JJE",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJF",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJG",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJH",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJI",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJJ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJK",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJL",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJM",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJN",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJO",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJP",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJR",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJS",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJT",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJU",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJV",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJY",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JJZ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JLL",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-JNA",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JNC",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JND",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JNE",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JNH",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JNI",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JNJ",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JNK",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JNL",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JNM",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JNN",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JNO",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JNP",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JNR",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JNS",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JNT",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JNU",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-JNW",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-JNZ",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JOA",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JOB",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JOD",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JOE",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JOF",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JOG",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JOH",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JOI",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JOJ",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JOK",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JOL",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-JUL",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-LGD",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "TC-LGE",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-LGH",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "TC-LHI",
+        "aircraft_type": "A350"
+      },
+      {
+        "aircraft_reg": "TC-LJA",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-LJB",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-LJC",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-LJD",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-LJE",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-LJF",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-LJG",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-LJH",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-LJI",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-LJJ",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-LJK",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TC-LJT",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-LLA",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLB",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLC",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLD",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLE",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLF",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLG",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLH",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLI",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLJ",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLK",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLM",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLN",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLO",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLP",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLR",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLS",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLT",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLU",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLV",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLY",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LLZ",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LMB",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LMC",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LMD",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LME",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "TC-LNC",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-LND",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-LNE",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-LNF",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-LNG",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-LNO",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-LOA",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-LOB",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-LOD",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-LOL",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TC-NJH",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "TC-VJJ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TK730",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TK731",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TKJJF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TKJJV",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TKLJC",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "TKLNF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "TVJOK",
+        "aircraft_type": "A330"
+      },
+      {
+        "aircraft_reg": "YCJNS",
+        "aircraft_type": "A330"
+      }
+    ]
+  },
+  {
+    "airline_name": "US-BANGLA AIRLINES",
+    "category": "INT",
+    "iata": "BS",
+    "icao": "UBG",
+    "flights": [
+      "BS337",
+      "BS338",
+      "BS339",
+      "BS340",
+      "BS388",
+      "UK272"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "9HSAU",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-AJD",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-AJE",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-AJG",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "9M-SAU",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "BSAJB",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "HSSXA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "LYTFS",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "PKBBG",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "PKBBH",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "S2AID",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "S2AJA",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "S2AJB",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "S2AJC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "S2AJD",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "S2AJE",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "S2AJF",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "S2AJG",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "S2AJH",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "S2AJO",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "S2AJU",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "S2AJZ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "S2SJC",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "S2SJE",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "SZAJA",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "URSQB",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "URSQC",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "URSQF",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "URSQR",
+        "aircraft_type": "B737"
+      }
+    ]
+  },
+  {
+    "airline_name": "UZBEKISTAN AIRWAYS",
+    "category": "INT",
+    "iata": "HY",
+    "icao": "UZB",
+    "flights": [
+      "HY3228",
+      "HY3525",
+      "HY3526",
+      "HY452"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "UK32021",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "UK32022",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "UK32023",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "UK32101",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "UK32102",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "UK32103",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "UK78702",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "UK78703",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "UK78704",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "UK78705",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "UK78706",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "UK8702",
+        "aircraft_type": "B787"
+      }
+    ]
+  },
+  {
+    "airline_name": "VIRGIN ATLANTIC",
+    "category": "INT",
+    "iata": "VS",
+    "icao": "VIR",
+    "flights": [
+      "VS355",
+      "VS384",
+      "VS385"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "BVNYL",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "CVCRU",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VAHH",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VBEL",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VBOW",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VBZZ",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VCRU",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VDIA",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VFAN",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VIDA",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VMAP",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VNEW",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VNYL",
+        "aircraft_type": "B777"
+      },
+      {
+        "aircraft_reg": "G-VOIA",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VOOH",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VOWS",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VSHH",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VSPY",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VWHO",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VWOO",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VYUM",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "G-VZIG",
+        "aircraft_type": "B787"
+      }
+    ]
+  },
+  {
+    "airline_name": "WIZZ AIR",
+    "category": "INT",
+    "iata": "W6",
+    "icao": "WZZ",
+    "flights": [
+      "5W1705",
+      "5W1706",
+      "5W4105",
+      "5W5106",
+      "5W5107",
+      "5W706",
+      "5W7105",
+      "5W7106",
+      "5W7109",
+      "5W7206",
+      "A67106",
+      "SW7106",
+      "W57106",
+      "WZ7106"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "5WWZC",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-AEB",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-FZD",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-KJZD",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-WAZ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-WGZ",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-WZA",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-WZB",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-WZC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-WZD",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "A6-WZE",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-WZF",
+        "aircraft_type": "N/A"
+      },
+      {
+        "aircraft_reg": "A6-WZG",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-WZH",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A6-WZQ",
+        "aircraft_type": "A321"
+      },
+      {
+        "aircraft_reg": "A6-WZR",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A9WZC",
+        "aircraft_type": "A320"
+      },
+      {
+        "aircraft_reg": "A9WZD",
+        "aircraft_type": "N/A"
+      }
+    ]
+  },
+  {
+    "airline_name": "XIAMEN AIR",
+    "category": "INT",
+    "iata": "MF",
+    "icao": "CXA",
+    "flights": [
+      "MF8018",
+      "MF890"
+    ],
+    "aircrafts": [
+      {
+        "aircraft_reg": "B&5388",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B10DX",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B20DU",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B20DV",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B20DW",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B20DX",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B20DY",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B20E0",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B20EI",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B20EK",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B2761",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "B2763",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "B2769",
+        "aircraft_type": "B787"
+      },
+      {
+        "aircraft_reg": "B5151",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5152",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5318",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5319",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5355",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5382",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5383",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5385",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5386",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5388",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5435",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5565",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5595",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5688",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5791",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B579I",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5845",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5846",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "B5847",
+        "aircraft_type": "B737"
+      },
+      {
+        "aircraft_reg": "N5845",
+        "aircraft_type": "B737"
+      }
+    ]
+  }
+]

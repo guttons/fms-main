@@ -96,18 +96,18 @@ const App: React.FC = () => {
     updatePWAManifestAndTheme(theme);
   }, [theme]);
   
-  // Splash screen fadeout
+  // Splash screen fadeout with scale & blur transition
   useEffect(() => {
     const splash = document.getElementById('pwa-splash');
     if (splash) {
-      // Fade out after 1.5 seconds for premium fluid feel
       const timer = setTimeout(() => {
         splash.style.opacity = '0';
+        splash.style.transform = 'scale(1.05)';
+        splash.style.filter = 'blur(8px)';
         splash.style.visibility = 'hidden';
-        // Remove from DOM after transition completes
         const removeTimer = setTimeout(() => {
           splash.remove();
-        }, 500);
+        }, 600);
         return () => clearTimeout(removeTimer);
       }, 1500);
       return () => clearTimeout(timer);
@@ -130,6 +130,24 @@ const App: React.FC = () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
+  }, []);
+
+  // Global haptic feedback listener for radio buttons, checkboxes, and select toggles across all modules
+  useEffect(() => {
+    const handleRadioOrCheckboxClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const isRadio = target.matches('input[type="radio"], [role="radio"], [data-radio]') || target.closest('input[type="radio"], [role="radio"], [data-radio]');
+      const isCheckbox = target.matches('input[type="checkbox"], [role="checkbox"]') || target.closest('input[type="checkbox"], [role="checkbox"]');
+      const isSelect = target.matches('select, option') || target.closest('select');
+      
+      if (isRadio || isCheckbox || isSelect) {
+        haptic('TOGGLE');
+      }
+    };
+
+    window.addEventListener('click', handleRadioOrCheckboxClick, true);
+    return () => window.removeEventListener('click', handleRadioOrCheckboxClick, true);
   }, []);
 
   const handleLogout = () => {

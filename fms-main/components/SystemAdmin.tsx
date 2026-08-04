@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Users, Server, ShieldCheck, Activity, Database,
+  Users, Activity,
   Plus, Pencil, Trash2, X, Check, AlertTriangle,
   Truck, Fuel, ChevronDown, Phone, Mail, IdCard, UserCheck, UserX,
   RefreshCw, Anchor, Plane
@@ -11,7 +11,6 @@ import type { StaffMember, Equipment, Tank, Vessel } from '../types';
 import { MOCK_USERS } from '../constants';
 import { Logo } from './Logo';
 import { useNotification, NotificationType } from '../context/NotificationContext';
-import { seedingService } from '../services/seedingService';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { supabaseService } from '../services/supabaseService';
 import { FlightMasterTab } from './FlightMasterTab';
@@ -1165,22 +1164,6 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
     { key: 'flight-master', label: 'Airline & Aircraft Master', icon: <Plane className="w-4 h-4" /> },
   ];
 
-  const [isSeeding, setIsSeeding] = useState(false);
-
-  const handleSeedData = async () => {
-    confirmAction('This will clear all scheduled flights and briefing data for a fresh FIDS pull, and re-seed equipment and finance data (staff and tanks are preserved). Continue?', async () => {
-      setIsSeeding(true);
-      try {
-        await seedingService.seedDatabase();
-        notify('Database successfully seeded with mock data', 'success');
-      } catch (error) {
-        notify('Failed to seed database. Check console for details.', 'error');
-      } finally {
-        setIsSeeding(false);
-      }
-    });
-  };
-
   return (
     <div className="p-6 lg:p-10 space-y-10">
       {/* Header */}
@@ -1199,58 +1182,9 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
           </div>
         </div>
         <div className="flex items-center gap-4">
-           <button 
-            onClick={handleSeedData}
-            disabled={isSeeding}
-            className="flex items-center gap-2 px-6 py-3 bg-surface-container-low hover:bg-surface-dim border border-outline rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50 shadow-sm"
-          >
-            <Database className={`w-4 h-4 text-primary ${isSeeding ? 'animate-spin' : ''}`} />
-            {isSeeding ? 'SEEDING...' : 'SEED INITIAL DATA'}
-          </button>
           <div className="flex items-center space-x-3 bg-success/10 text-success px-6 py-3 rounded-2xl border border-success/20 font-black text-[10px] uppercase tracking-widest shadow-[0_0_20px_rgba(34,197,94,0.05)]">
             <Activity className="w-4 h-4 animate-pulse" />
             <span>System Status: OPERATIONAL</span>
-          </div>
-        </div>
-      </div>
-
-      {/* System Health Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="card-premium p-6 flex items-center justify-between group hover:scale-[1.02] transition-all">
-          <div>
-            <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 mb-2">Database</p>
-            <h3 className="text-xl font-[900] text-on-surface tracking-tighter italic uppercase">CONNECTED</h3>
-            <p className="text-[10px] font-black text-success mt-2 flex items-center">
-              <span className={`w-1.5 h-1.5 bg-success rounded-full mr-2 shadow-[0_0_8px_rgba(34,197,94,0.4)] transition-opacity duration-500 ${isLive ? 'opacity-100' : 'opacity-30'}`} />
-              FIRESTORE LIVE
-            </p>
-          </div>
-          <div className="p-4 bg-surface-container-low rounded-2xl border-transparent group-hover:border-primary/30 transition-all">
-            <Database className="w-8 h-8 text-primary opacity-60" />
-          </div>
-        </div>
-
-        <div className="card-premium p-6 flex items-center justify-between group hover:scale-[1.02] transition-all">
-          <div>
-            <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 mb-2">Sync Gateway</p>
-            <h3 className="text-xl font-[900] text-on-surface tracking-tighter italic uppercase">ACTIVE</h3>
-            <p className="text-[10px] font-black text-on-surface-dim mt-2 opacity-60 uppercase tracking-widest flex items-center gap-1.5">
-              <RefreshCw className={`w-3 h-3 ${isLive ? 'animate-spin' : ''}`} /> Real-time sync
-            </p>
-          </div>
-          <div className="p-4 bg-surface-container-low rounded-2xl border-transparent group-hover:border-primary/30 transition-all">
-            <Server className="w-8 h-8 text-primary opacity-60" />
-          </div>
-        </div>
-
-        <div className="card-premium p-6 flex items-center justify-between group hover:scale-[1.02] transition-all">
-          <div>
-            <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 mb-2">Security</p>
-            <h3 className="text-xl font-[900] text-on-surface tracking-tighter italic uppercase">SECURE</h3>
-            <p className="text-[10px] font-black text-on-surface-dim mt-2 opacity-60 uppercase tracking-widest">Admin Access Only</p>
-          </div>
-          <div className="p-4 bg-surface-container-low rounded-2xl border-transparent group-hover:border-primary/30 transition-all">
-            <ShieldCheck className="w-8 h-8 text-primary opacity-60" />
           </div>
         </div>
       </div>

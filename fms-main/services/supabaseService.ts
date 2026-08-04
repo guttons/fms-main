@@ -2194,11 +2194,106 @@ export const supabaseService = {
     } catch (e) {}
   },
 
+  async bulkSeedMasterDB(airlineList: Array<{
+    airline_name: string;
+    category: 'INT' | 'DOM';
+    iata?: string;
+    icao?: string;
+    flights: string[];
+    aircrafts: Array<{ aircraft_reg: string; aircraft_type: string }>;
+  }>): Promise<{ airlinesCount: number; flightsCount: number; aircraftsCount: number }> {
+    this.unmigratedTables.add('airlines');
+    this.unmigratedTables.add('flight_master');
+    this.unmigratedTables.add('aircraft_master');
+
+    await this.clearMasterDB();
+
+    const airlinesToPut: AirlineMaster[] = [];
+    const flightsToPut: FlightMaster[] = [];
+    const aircraftsToPut: AircraftMaster[] = [];
+
+    for (const item of airlineList) {
+      const name = (item.airline_name || '').trim();
+      if (!name) continue;
+      const u = name.toUpperCase();
+
+      // Rule 1: Exclude EXTRA / ADHOC, LOCAL SALES, OTHERS, MACL
+      if (u.includes('EXTRA') || u.includes('ADHOC') || u.includes('LOCAL SALES') || u.includes('OTHERS') || u.includes('MALDIVES AIRPORTS') || u.includes('MACL')) continue;
+
+      // Rule 2: Exclude anything with 0 Registered Aircrafts
+      if (!item.aircrafts || item.aircrafts.length === 0) continue;
+
+      const cleanName = (u === 'MALDIVIAN DOMESTIC' || u.includes('ISLAND AVIATION') || u === 'IAS') ? 'Maldivian' : name;
+      const airlineId = `airline-${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+
+      airlinesToPut.push({
+        id: airlineId,
+        name: cleanName,
+        iataCode: item.iata?.toUpperCase().trim() || undefined,
+        icaoCode: item.icao?.toUpperCase().trim() || undefined,
+        category: item.category || 'INT',
+        isActive: true,
+        createdAt: new Date().toISOString()
+      });
+
+      for (const fltNo of (item.flights || [])) {
+        const cleanFlt = fltNo.trim().toUpperCase();
+        if (!cleanFlt) continue;
+        const flightId = `flt-${airlineId}-${cleanFlt}`;
+        flightsToPut.push({
+          id: flightId,
+          airlineId,
+          airlineName: cleanName,
+          flightNumber: cleanFlt,
+          isActive: true,
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      for (const ac of (item.aircrafts || [])) {
+        const reg = ac.aircraft_reg?.trim().toUpperCase();
+        if (!reg) continue;
+        const acId = `ac-${reg.replace(/[^a-z0-9]/gi, '-')}`;
+        aircraftsToPut.push({
+          id: acId,
+          airlineId,
+          airlineName: cleanName,
+          aircraftReg: reg,
+          aircraftType: ac.aircraft_type || 'Unknown',
+          isActive: true,
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+
+    const dedupedAirlines = this.dedupeAirlines(airlinesToPut);
+    const dedupedFlights = this.dedupeFlights(flightsToPut);
+    const dedupedAircrafts = this.dedupeAircrafts(aircraftsToPut);
+
+    await fmsDb.bulkPut('airlines', dedupedAirlines);
+    await fmsDb.bulkPut('flight_master', dedupedFlights);
+    await fmsDb.bulkPut('aircraft_master', dedupedAircrafts);
+
+    try {
+      localStorage.setItem('fms_master_airlines', JSON.stringify(dedupedAirlines));
+      localStorage.setItem('fms_master_flights', JSON.stringify(dedupedFlights));
+      localStorage.setItem('fms_master_aircrafts', JSON.stringify(dedupedAircrafts));
+    } catch (e) {}
+
+    return {
+      airlinesCount: dedupedAirlines.length,
+      flightsCount: dedupedFlights.length,
+      aircraftsCount: dedupedAircrafts.length
+    };
+  },
+
   dedupeAirlines(list: AirlineMaster[]): AirlineMaster[] {
     const map = new Map<string, AirlineMaster>();
     for (const item of list) {
       let name = item.name.trim();
-      if (name.toUpperCase() === 'MALDIVIAN DOMESTIC') name = 'Maldivian';
+      const u = name.toUpperCase();
+      if (u === 'MALDIVIAN DOMESTIC' || u.includes('ISLAND AVIATION') || u === 'IAS') name = 'Maldivian';
+      if (u.includes('FLYME') || u.includes('VILLA AIR')) name = 'Villa Air';
       const key = name.toUpperCase();
       if (!map.has(key)) {
         map.set(key, { ...item, name });
@@ -2353,7 +2448,9 @@ export const supabaseService = {
     const map = new Map<string, FlightMaster>();
     for (const item of list) {
       let airlineName = item.airlineName.trim();
-      if (airlineName.toUpperCase() === 'MALDIVIAN DOMESTIC') airlineName = 'Maldivian';
+      const u = airlineName.toUpperCase();
+      if (u === 'MALDIVIAN DOMESTIC' || u.includes('ISLAND AVIATION') || u === 'IAS') airlineName = 'Maldivian';
+      if (u.includes('FLYME') || u.includes('VILLA AIR')) airlineName = 'Villa Air';
       const key = `${airlineName.toUpperCase()}|${item.flightNumber.trim().toUpperCase()}`;
       if (!map.has(key)) map.set(key, { ...item, airlineName });
     }
@@ -2503,7 +2600,9 @@ export const supabaseService = {
     const map = new Map<string, AircraftMaster>();
     for (const item of list) {
       let airlineName = item.airlineName.trim();
-      if (airlineName.toUpperCase() === 'MALDIVIAN DOMESTIC') airlineName = 'Maldivian';
+      const u = airlineName.toUpperCase();
+      if (u === 'MALDIVIAN DOMESTIC' || u.includes('ISLAND AVIATION') || u === 'IAS') airlineName = 'Maldivian';
+      if (u.includes('FLYME') || u.includes('VILLA AIR')) airlineName = 'Villa Air';
       const key = item.aircraftReg.trim().toUpperCase();
       if (!map.has(key)) map.set(key, { ...item, airlineName });
     }

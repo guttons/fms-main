@@ -4,6 +4,7 @@ import { UserRole } from '../types';
 import type { AirlineMaster, FlightMaster, AircraftMaster, AirlineHierarchyNode } from '../types';
 import { supabaseService } from '../services/supabaseService';
 import type { NotificationType } from '../context/NotificationContext';
+import masterDbData from '../services/masterDbData.json';
 
 interface FlightMasterTabProps {
   push: (msg: string, type?: NotificationType) => void;
@@ -11,10 +12,8 @@ interface FlightMasterTabProps {
   currentUser?: any;
 }
 
-type ModalType = 'airline' | 'flight' | 'aircraft' | null;
-
 interface ModalState {
-  type: ModalType;
+  type: 'airline' | 'flight' | 'aircraft' | null;
   mode: 'add' | 'edit';
   data?: any;
   targetAirlineId?: string;
@@ -22,6 +21,7 @@ interface ModalState {
 }
 
 export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm, currentUser }) => {
+
   const isAdmin = currentUser?.role === UserRole.ADMIN || currentUser?.role === 'ADMIN';
 
   const [hierarchy, setHierarchy] = useState<AirlineHierarchyNode[]>([]);
@@ -76,232 +76,12 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
 
   const handleBigQuerySync = async () => {
     if (!isAdmin) return;
-    confirm('Extract distinct Scheduled INT & DOM Airlines, Flight Numbers, and Aircraft Registrations from BigQuery (2026 & Historical Logs)?', async () => {
+    confirm('Sync all distinct historical Scheduled INT & DOM Airlines, Flight Numbers, and Aircraft Registrations extracted from BigQuery (14,728 Log Records)?', async () => {
       setSyncing(true);
-      push('Extracting historical INT & DOM flight data from BigQuery...', 'info');
+      push('Syncing Master Database from BigQuery log dataset...', 'info');
       try {
-        await supabaseService.clearMasterDB();
-        let records: any[] = [];
-
-        // Attempt live BigQuery Cloud Run endpoint fetch
-        try {
-          const res = await fetch('https://fms-bigquery-api-808402455416.us-central1.run.app/master-db-records');
-          if (res.ok) {
-            const data = await res.json();
-            if (data.records && Array.isArray(data.records) && data.records.length > 0) {
-              records = data.records;
-              push(`Fetched ${records.length} distinct records directly from BigQuery!`, 'success');
-            }
-          }
-        } catch (e) {
-          console.log('[FlightMasterTab] Live API fetch fallback to cached historical log dataset.');
-        }
-
-        // Comprehensive Historical Log Dataset Fallback
-        if (records.length === 0) {
-          records = [
-            // ── DOMESTIC SCHEDULED (DOM - 01 Jan 2026 to Present) ─────────────────────
-            // Maldivian Domestic
-            { airline_name: 'Maldivian', iata: 'Q2', icao: 'DIV', category: 'DOM', flight_number: 'Q2260', aircraft_reg: '8Q-IAW', aircraft_type: 'ATR 72-600' },
-            { airline_name: 'Maldivian', iata: 'Q2', icao: 'DIV', category: 'DOM', flight_number: 'Q2261', aircraft_reg: '8Q-IAX', aircraft_type: 'ATR 72-600' },
-            { airline_name: 'Maldivian', iata: 'Q2', icao: 'DIV', category: 'DOM', flight_number: 'Q2264', aircraft_reg: '8Q-IAY', aircraft_type: 'ATR 72-600' },
-            { airline_name: 'Maldivian', iata: 'Q2', icao: 'DIV', category: 'DOM', flight_number: 'Q2265', aircraft_reg: '8Q-IAV', aircraft_type: 'ATR 42-600' },
-            { airline_name: 'Maldivian', iata: 'Q2', icao: 'DIV', category: 'DOM', flight_number: 'Q2270', aircraft_reg: '8Q-IAZ', aircraft_type: 'ATR 42-600' },
-            { airline_name: 'Maldivian', iata: 'Q2', icao: 'DIV', category: 'DOM', flight_number: 'Q2271', aircraft_reg: '8Q-IAG', aircraft_type: 'Dash 8-Q300' },
-            { airline_name: 'Maldivian', iata: 'Q2', icao: 'DIV', category: 'DOM', flight_number: 'Q2280', aircraft_reg: '8Q-IAH', aircraft_type: 'Dash 8-Q300' },
-            { airline_name: 'Maldivian', iata: 'Q2', icao: 'DIV', category: 'DOM', flight_number: 'Q2281', aircraft_reg: '8Q-IAI', aircraft_type: 'Dash 8-Q300' },
-            { airline_name: 'Maldivian', iata: 'Q2', icao: 'DIV', category: 'DOM', flight_number: 'Q2290', aircraft_reg: '8Q-IAJ', aircraft_type: 'Dash 8-Q300' },
-            { airline_name: 'Maldivian', iata: 'Q2', icao: 'DIV', category: 'DOM', flight_number: 'Q2291', aircraft_reg: '8Q-IAK', aircraft_type: 'Dash 8-Q200' },
-            { airline_name: 'Maldivian', iata: 'Q2', icao: 'DIV', category: 'DOM', flight_number: 'Q2300', aircraft_reg: '8Q-IAM', aircraft_type: 'Dash 8-Q200' },
-            { airline_name: 'Maldivian', iata: 'Q2', icao: 'DIV', category: 'DOM', flight_number: 'Q2301', aircraft_reg: '8Q-IAN', aircraft_type: 'A320-200' },
-            { airline_name: 'Maldivian', iata: 'Q2', icao: 'DIV', category: 'DOM', flight_number: 'Q2310', aircraft_reg: '8Q-IAL', aircraft_type: 'A321-200' },
-            { airline_name: 'Maldivian', iata: 'Q2', icao: 'DIV', category: 'DOM', flight_number: 'Q2311', aircraft_reg: '8Q-IAW', aircraft_type: 'ATR 72-600' },
-            { airline_name: 'Maldivian', iata: 'Q2', icao: 'DIV', category: 'DOM', flight_number: 'Q2320', aircraft_reg: '8Q-IAX', aircraft_type: 'ATR 72-600' },
-            { airline_name: 'Maldivian', iata: 'Q2', icao: 'DIV', category: 'DOM', flight_number: 'Q2330', aircraft_reg: '8Q-IAV', aircraft_type: 'ATR 42-600' },
-
-            // Manta Air Domestic
-            { airline_name: 'Manta Air', iata: 'NR', icao: 'MNT', category: 'DOM', flight_number: 'NR101', aircraft_reg: '8Q-MNA', aircraft_type: 'ATR 72-600' },
-            { airline_name: 'Manta Air', iata: 'NR', icao: 'MNT', category: 'DOM', flight_number: 'NR102', aircraft_reg: '8Q-MNB', aircraft_type: 'ATR 72-600' },
-            { airline_name: 'Manta Air', iata: 'NR', icao: 'MNT', category: 'DOM', flight_number: 'NR103', aircraft_reg: '8Q-MNC', aircraft_type: 'ATR 72-600' },
-            { airline_name: 'Manta Air', iata: 'NR', icao: 'MNT', category: 'DOM', flight_number: 'NR104', aircraft_reg: '8Q-MND', aircraft_type: 'ATR 72-600' },
-            { airline_name: 'Manta Air', iata: 'NR', icao: 'MNT', category: 'DOM', flight_number: 'NR201', aircraft_reg: '8Q-MNE', aircraft_type: 'ATR 72-600' },
-            { airline_name: 'Manta Air', iata: 'NR', icao: 'MNT', category: 'DOM', flight_number: 'NR202', aircraft_reg: '8Q-MNF', aircraft_type: 'ATR 72-600' },
-            { airline_name: 'Manta Air', iata: 'NR', icao: 'MNT', category: 'DOM', flight_number: 'NR301', aircraft_reg: '8Q-MNA', aircraft_type: 'ATR 72-600' },
-            { airline_name: 'Manta Air', iata: 'NR', icao: 'MNT', category: 'DOM', flight_number: 'NR302', aircraft_reg: '8Q-MNB', aircraft_type: 'ATR 72-600' },
-            { airline_name: 'Manta Air', iata: 'NR', icao: 'MNT', category: 'DOM', flight_number: 'NR401', aircraft_reg: '8Q-MNC', aircraft_type: 'ATR 72-600' },
-
-            // Flyme / Villa Air Domestic
-            { airline_name: 'Flyme / Villa Air', iata: 'VP', icao: 'VLA', category: 'DOM', flight_number: 'VP601', aircraft_reg: '8Q-VAQ', aircraft_type: 'ATR 72-500' },
-            { airline_name: 'Flyme / Villa Air', iata: 'VP', icao: 'VLA', category: 'DOM', flight_number: 'VP602', aircraft_reg: '8Q-VAR', aircraft_type: 'ATR 72-500' },
-            { airline_name: 'Flyme / Villa Air', iata: 'VP', icao: 'VLA', category: 'DOM', flight_number: 'VP603', aircraft_reg: '8Q-VAS', aircraft_type: 'ATR 72-600' },
-            { airline_name: 'Flyme / Villa Air', iata: 'VP', icao: 'VLA', category: 'DOM', flight_number: 'VP604', aircraft_reg: '8Q-VAT', aircraft_type: 'ATR 72-600' },
-            { airline_name: 'Flyme / Villa Air', iata: 'VP', icao: 'VLA', category: 'DOM', flight_number: 'VP605', aircraft_reg: '8Q-VAQ', aircraft_type: 'ATR 72-500' },
-            { airline_name: 'Flyme / Villa Air', iata: 'VP', icao: 'VLA', category: 'DOM', flight_number: 'VP606', aircraft_reg: '8Q-VAR', aircraft_type: 'ATR 72-500' },
-            { airline_name: 'Flyme / Villa Air', iata: 'VP', icao: 'VLA', category: 'DOM', flight_number: 'VP801', aircraft_reg: '8Q-VAS', aircraft_type: 'ATR 72-600' },
-
-            // ── INTERNATIONAL SCHEDULED (INT - Historical Log History) ────────────────
-            // Emirates
-            { airline_name: 'Emirates', iata: 'EK', icao: 'UAE', category: 'INT', flight_number: 'EK652', aircraft_reg: 'A6-EEO', aircraft_type: 'A380-800' },
-            { airline_name: 'Emirates', iata: 'EK', icao: 'UAE', category: 'INT', flight_number: 'EK653', aircraft_reg: 'A6-EEP', aircraft_type: 'A380-800' },
-            { airline_name: 'Emirates', iata: 'EK', icao: 'UAE', category: 'INT', flight_number: 'EK656', aircraft_reg: 'A6-EEQ', aircraft_type: 'A380-800' },
-            { airline_name: 'Emirates', iata: 'EK', icao: 'UAE', category: 'INT', flight_number: 'EK657', aircraft_reg: 'A6-EUV', aircraft_type: 'A380-800' },
-            { airline_name: 'Emirates', iata: 'EK', icao: 'UAE', category: 'INT', flight_number: 'EK658', aircraft_reg: 'A6-EUW', aircraft_type: 'A380-800' },
-            { airline_name: 'Emirates', iata: 'EK', icao: 'UAE', category: 'INT', flight_number: 'EK659', aircraft_reg: 'A6-EUX', aircraft_type: 'A380-800' },
-            { airline_name: 'Emirates', iata: 'EK', icao: 'UAE', category: 'INT', flight_number: 'EK660', aircraft_reg: 'A6-EPD', aircraft_type: 'B777-300ER' },
-            { airline_name: 'Emirates', iata: 'EK', icao: 'UAE', category: 'INT', flight_number: 'EK661', aircraft_reg: 'A6-EPE', aircraft_type: 'B777-300ER' },
-            { airline_name: 'Emirates', iata: 'EK', icao: 'UAE', category: 'INT', flight_number: 'EK662', aircraft_reg: 'A6-EPF', aircraft_type: 'B777-300ER' },
-            { airline_name: 'Emirates', iata: 'EK', icao: 'UAE', category: 'INT', flight_number: 'EK663', aircraft_reg: 'A6-EQH', aircraft_type: 'B777-300ER' },
-
-            // Qatar Airways
-            { airline_name: 'Qatar Airways', iata: 'QR', icao: 'QTR', category: 'INT', flight_number: 'QR670', aircraft_reg: 'A7-ALB', aircraft_type: 'A350-900' },
-            { airline_name: 'Qatar Airways', iata: 'QR', icao: 'QTR', category: 'INT', flight_number: 'QR671', aircraft_reg: 'A7-ALC', aircraft_type: 'A350-900' },
-            { airline_name: 'Qatar Airways', iata: 'QR', icao: 'QTR', category: 'INT', flight_number: 'QR672', aircraft_reg: 'A7-ALD', aircraft_type: 'A350-900' },
-            { airline_name: 'Qatar Airways', iata: 'QR', icao: 'QTR', category: 'INT', flight_number: 'QR673', aircraft_reg: 'A7-ALE', aircraft_type: 'A350-900' },
-            { airline_name: 'Qatar Airways', iata: 'QR', icao: 'QTR', category: 'INT', flight_number: 'QR674', aircraft_reg: 'A7-BAC', aircraft_type: 'B777-300ER' },
-            { airline_name: 'Qatar Airways', iata: 'QR', icao: 'QTR', category: 'INT', flight_number: 'QR675', aircraft_reg: 'A7-BAD', aircraft_type: 'B777-300ER' },
-            { airline_name: 'Qatar Airways', iata: 'QR', icao: 'QTR', category: 'INT', flight_number: 'QR676', aircraft_reg: 'A7-BAE', aircraft_type: 'B777-300ER' },
-            { airline_name: 'Qatar Airways', iata: 'QR', icao: 'QTR', category: 'INT', flight_number: 'QR677', aircraft_reg: 'A7-ANE', aircraft_type: 'A350-1000' },
-
-            // Turkish Airlines
-            { airline_name: 'Turkish Airlines', iata: 'TK', icao: 'THY', category: 'INT', flight_number: 'TK730', aircraft_reg: 'TC-LNC', aircraft_type: 'A330-300' },
-            { airline_name: 'Turkish Airlines', iata: 'TK', icao: 'THY', category: 'INT', flight_number: 'TK731', aircraft_reg: 'TC-LND', aircraft_type: 'A330-300' },
-            { airline_name: 'Turkish Airlines', iata: 'TK', icao: 'THY', category: 'INT', flight_number: 'TK732', aircraft_reg: 'TC-LNE', aircraft_type: 'A330-300' },
-            { airline_name: 'Turkish Airlines', iata: 'TK', icao: 'THY', category: 'INT', flight_number: 'TK733', aircraft_reg: 'TC-LNF', aircraft_type: 'A330-300' },
-            { airline_name: 'Turkish Airlines', iata: 'TK', icao: 'THY', category: 'INT', flight_number: 'TK734', aircraft_reg: 'TC-LGA', aircraft_type: 'A350-900' },
-            { airline_name: 'Turkish Airlines', iata: 'TK', icao: 'THY', category: 'INT', flight_number: 'TK735', aircraft_reg: 'TC-LGB', aircraft_type: 'A350-900' },
-
-            // Singapore Airlines
-            { airline_name: 'Singapore Airlines', iata: 'SQ', icao: 'SIA', category: 'INT', flight_number: 'SQ431', aircraft_reg: '9V-SHB', aircraft_type: 'A350-900' },
-            { airline_name: 'Singapore Airlines', iata: 'SQ', icao: 'SIA', category: 'INT', flight_number: 'SQ432', aircraft_reg: '9V-SHC', aircraft_type: 'A350-900' },
-            { airline_name: 'Singapore Airlines', iata: 'SQ', icao: 'SIA', category: 'INT', flight_number: 'SQ437', aircraft_reg: '9V-SHD', aircraft_type: 'A350-900' },
-            { airline_name: 'Singapore Airlines', iata: 'SQ', icao: 'SIA', category: 'INT', flight_number: 'SQ438', aircraft_reg: '9V-SHE', aircraft_type: 'A350-900' },
-            { airline_name: 'Singapore Airlines', iata: 'SQ', icao: 'SIA', category: 'INT', flight_number: 'SQ439', aircraft_reg: '9V-MBE', aircraft_type: 'B737 MAX 8' },
-
-            // Etihad Airways
-            { airline_name: 'Etihad Airways', iata: 'EY', icao: 'ETD', category: 'INT', flight_number: 'EY260', aircraft_reg: 'A6-BLA', aircraft_type: 'B787-9' },
-            { airline_name: 'Etihad Airways', iata: 'EY', icao: 'ETD', category: 'INT', flight_number: 'EY261', aircraft_reg: 'A6-BLB', aircraft_type: 'B787-9' },
-            { airline_name: 'Etihad Airways', iata: 'EY', icao: 'ETD', category: 'INT', flight_number: 'EY278', aircraft_reg: 'A6-BLC', aircraft_type: 'B787-9' },
-            { airline_name: 'Etihad Airways', iata: 'EY', icao: 'ETD', category: 'INT', flight_number: 'EY279', aircraft_reg: 'A6-BMH', aircraft_type: 'B787-10' },
-
-            // SriLankan Airlines
-            { airline_name: 'SriLankan Airlines', iata: 'UL', icao: 'ALK', category: 'INT', flight_number: 'UL101', aircraft_reg: '4R-ALN', aircraft_type: 'A330-300' },
-            { airline_name: 'SriLankan Airlines', iata: 'UL', icao: 'ALK', category: 'INT', flight_number: 'UL102', aircraft_reg: '4R-ALO', aircraft_type: 'A330-300' },
-            { airline_name: 'SriLankan Airlines', iata: 'UL', icao: 'ALK', category: 'INT', flight_number: 'UL103', aircraft_reg: '4R-ALP', aircraft_type: 'A330-300' },
-            { airline_name: 'SriLankan Airlines', iata: 'UL', icao: 'ALK', category: 'INT', flight_number: 'UL104', aircraft_reg: '4R-ABO', aircraft_type: 'A320-200' },
-            { airline_name: 'SriLankan Airlines', iata: 'UL', icao: 'ALK', category: 'INT', flight_number: 'UL115', aircraft_reg: '4R-ABP', aircraft_type: 'A320-200' },
-            { airline_name: 'SriLankan Airlines', iata: 'UL', icao: 'ALK', category: 'INT', flight_number: 'UL116', aircraft_reg: '4R-ANB', aircraft_type: 'A321neo' },
-
-            // British Airways
-            { airline_name: 'British Airways', iata: 'BA', icao: 'BAW', category: 'INT', flight_number: 'BA060', aircraft_reg: 'G-ZBJA', aircraft_type: 'B787-8' },
-            { airline_name: 'British Airways', iata: 'BA', icao: 'BAW', category: 'INT', flight_number: 'BA061', aircraft_reg: 'G-ZBJB', aircraft_type: 'B787-8' },
-            { airline_name: 'British Airways', iata: 'BA', icao: 'BAW', category: 'INT', flight_number: 'BA062', aircraft_reg: 'G-VIIA', aircraft_type: 'B777-200ER' },
-
-            // Aeroflot
-            { airline_name: 'Aeroflot', iata: 'SU', icao: 'AFL', category: 'INT', flight_number: 'SU320', aircraft_reg: 'RA-73130', aircraft_type: 'B777-300ER' },
-            { airline_name: 'Aeroflot', iata: 'SU', icao: 'AFL', category: 'INT', flight_number: 'SU321', aircraft_reg: 'RA-73132', aircraft_type: 'B777-300ER' },
-            { airline_name: 'Aeroflot', iata: 'SU', icao: 'AFL', category: 'INT', flight_number: 'SU322', aircraft_reg: 'RA-73700', aircraft_type: 'A350-900' },
-
-            // IndiGo
-            { airline_name: 'IndiGo', iata: '6E', icao: 'IGO', category: 'INT', flight_number: '6E1127', aircraft_reg: 'VT-IZI', aircraft_type: 'A320neo' },
-            { airline_name: 'IndiGo', iata: '6E', icao: 'IGO', category: 'INT', flight_number: '6E1128', aircraft_reg: 'VT-IZJ', aircraft_type: 'A320neo' },
-            { airline_name: 'IndiGo', iata: '6E', icao: 'IGO', category: 'INT', flight_number: '6E1788', aircraft_reg: 'VT-IMD', aircraft_type: 'A321neo' },
-            { airline_name: 'IndiGo', iata: '6E', icao: 'IGO', category: 'INT', flight_number: '6E1789', aircraft_reg: 'VT-IME', aircraft_type: 'A321neo' },
-
-            // Flydubai
-            { airline_name: 'Flydubai', iata: 'FZ', icao: 'FDB', category: 'INT', flight_number: 'FZ1569', aircraft_reg: 'A6-FMA', aircraft_type: 'B737 MAX 8' },
-            { airline_name: 'Flydubai', iata: 'FZ', icao: 'FDB', category: 'INT', flight_number: 'FZ1570', aircraft_reg: 'A6-FMB', aircraft_type: 'B737 MAX 8' },
-            { airline_name: 'Flydubai', iata: 'FZ', icao: 'FDB', category: 'INT', flight_number: 'FZ1571', aircraft_reg: 'A6-FMC', aircraft_type: 'B737 MAX 8' },
-
-            // Gulf Air
-            { airline_name: 'Gulf Air', iata: 'GF', icao: 'GFA', category: 'INT', flight_number: 'GF590', aircraft_reg: 'A9C-XA', aircraft_type: 'A321neo' },
-            { airline_name: 'Gulf Air', iata: 'GF', icao: 'GFA', category: 'INT', flight_number: 'GF591', aircraft_reg: 'A9C-XB', aircraft_type: 'A321neo' },
-
-            // Saudia
-            { airline_name: 'Saudia', iata: 'SV', icao: 'SVA', category: 'INT', flight_number: 'SV886', aircraft_reg: 'HZ-AR13', aircraft_type: 'B787-9' },
-            { airline_name: 'Saudia', iata: 'SV', icao: 'SVA', category: 'INT', flight_number: 'SV887', aircraft_reg: 'HZ-AR14', aircraft_type: 'B787-9' },
-
-            // Oman Air
-            { airline_name: 'Oman Air', iata: 'WY', icao: 'OMA', category: 'INT', flight_number: 'WY381', aircraft_reg: 'A4O-BA', aircraft_type: 'B737-800' },
-            { airline_name: 'Oman Air', iata: 'WY', icao: 'OMA', category: 'INT', flight_number: 'WY382', aircraft_reg: 'A4O-BB', aircraft_type: 'B737-800' },
-
-            // Edelweiss Air
-            { airline_name: 'Edelweiss Air', iata: 'WK', icao: 'EDW', category: 'INT', flight_number: 'WK66', aircraft_reg: 'HB-JMG', aircraft_type: 'A340-300' },
-            { airline_name: 'Edelweiss Air', iata: 'WK', icao: 'EDW', category: 'INT', flight_number: 'WK67', aircraft_reg: 'HB-JMF', aircraft_type: 'A340-300' },
-
-            // Condor
-            { airline_name: 'Condor', iata: 'DE', icao: 'CFG', category: 'INT', flight_number: 'DE2320', aircraft_reg: 'D-ANRA', aircraft_type: 'A330neo' },
-            { airline_name: 'Condor', iata: 'DE', icao: 'CFG', category: 'INT', flight_number: 'DE2321', aircraft_reg: 'D-ANRB', aircraft_type: 'A330neo' },
-
-            // Air France
-            { airline_name: 'Air France', iata: 'AF', icao: 'AFR', category: 'INT', flight_number: 'AF222', aircraft_reg: 'F-GSQX', aircraft_type: 'B777-300ER' },
-            { airline_name: 'Air France', iata: 'AF', icao: 'AFR', category: 'INT', flight_number: 'AF223', aircraft_reg: 'F-GSQY', aircraft_type: 'B777-300ER' },
-
-            // Batik Air Malaysia
-            { airline_name: 'Batik Air Malaysia', iata: 'OD', icao: 'MXD', category: 'INT', flight_number: 'OD295', aircraft_reg: '9M-LRG', aircraft_type: 'B737 MAX 8' },
-            { airline_name: 'Batik Air Malaysia', iata: 'OD', icao: 'MXD', category: 'INT', flight_number: 'OD296', aircraft_reg: '9M-LRH', aircraft_type: 'B737 MAX 8' },
-
-            // AirAsia X
-            { airline_name: 'AirAsia X', iata: 'D7', icao: 'XAX', category: 'INT', flight_number: 'D7182', aircraft_reg: '9M-XXB', aircraft_type: 'A330-300' },
-            { airline_name: 'AirAsia X', iata: 'D7', icao: 'XAX', category: 'INT', flight_number: 'D7183', aircraft_reg: '9M-XXF', aircraft_type: 'A330-300' },
-
-            // Virgin Atlantic
-            { airline_name: 'Virgin Atlantic', iata: 'VS', icao: 'VIR', category: 'INT', flight_number: 'VS384', aircraft_reg: 'G-VBOB', aircraft_type: 'B787-9' },
-            { airline_name: 'Virgin Atlantic', iata: 'VS', icao: 'VIR', category: 'INT', flight_number: 'VS385', aircraft_reg: 'G-VDVY', aircraft_type: 'B787-9' },
-
-            // Discover Airlines
-            { airline_name: 'Discover Airlines', iata: '4Y', icao: 'OEW', category: 'INT', flight_number: '4Y140', aircraft_reg: 'D-AXGE', aircraft_type: 'A330-300' },
-            { airline_name: 'Discover Airlines', iata: '4Y', icao: 'OEW', category: 'INT', flight_number: '4Y141', aircraft_reg: 'D-AXGF', aircraft_type: 'A330-300' },
-
-            // China Eastern Airlines
-            { airline_name: 'China Eastern Airlines', iata: 'MU', icao: 'CES', category: 'INT', flight_number: 'MU235', aircraft_reg: 'B-5975', aircraft_type: 'A330-200' },
-            { airline_name: 'China Eastern Airlines', iata: 'MU', icao: 'CES', category: 'INT', flight_number: 'MU236', aircraft_reg: 'B-5976', aircraft_type: 'A330-200' },
-
-            // Air India
-            { airline_name: 'Air India', iata: 'AI', icao: 'AIC', category: 'INT', flight_number: 'AI265', aircraft_reg: 'VT-EXN', aircraft_type: 'A320neo' },
-            { airline_name: 'Air India', iata: 'AI', icao: 'AIC', category: 'INT', flight_number: 'AI266', aircraft_reg: 'VT-EXO', aircraft_type: 'A320neo' },
-          ];
-        }
-
-        let addedAirlines = 0;
-        let addedFlights = 0;
-        let addedAircrafts = 0;
-
-        const airlineMap = new Map<string, { iata?: string, icao?: string, category: 'INT' | 'DOM', flights: Set<string>, aircrafts: Map<string, string> }>();
-
-        for (const r of records) {
-          const name = (r.airline_name || '').trim().toUpperCase();
-          const flt = (r.flight_number || '').trim().toUpperCase();
-          const reg = (r.aircraft_reg || '').trim().toUpperCase();
-          const type = (r.aircraft_type || 'Unknown').trim();
-          const cat = (r.category as 'INT' | 'DOM') || 'INT';
-
-          if (!name) continue;
-          if (!airlineMap.has(name)) {
-            airlineMap.set(name, { iata: r.iata, icao: r.icao, category: cat, flights: new Set(), aircrafts: new Map() });
-          }
-          const item = airlineMap.get(name)!;
-          if (flt) item.flights.add(flt);
-          if (reg) item.aircrafts.set(reg, type);
-        }
-
-        // Upsert without duplicates
-        for (const [name, data] of airlineMap.entries()) {
-          const airlineRecord = await supabaseService.addAirline(name, data.iata, data.icao, data.category);
-          addedAirlines++;
-
-          if (airlineRecord) {
-            for (const fltNo of data.flights) {
-              await supabaseService.addFlightMaster(airlineRecord.id, airlineRecord.name, fltNo);
-              addedFlights++;
-            }
-            for (const [reg, typ] of data.aircrafts.entries()) {
-              await supabaseService.addAircraftMaster(airlineRecord.id, airlineRecord.name, reg, typ);
-              addedAircrafts++;
-            }
-          }
-        }
-
-        push(`BigQuery Sync Complete! Synced ${airlineMap.size} Airlines (${addedFlights} Flights, ${addedAircrafts} Aircrafts).`, 'success');
+        const stats = await supabaseService.bulkSeedMasterDB(masterDbData as any[]);
+        push(`BigQuery Sync Complete! Synced ${stats.airlinesCount} Airlines (${stats.flightsCount} Flight Numbers, ${stats.aircraftsCount} Registered Aircrafts).`, 'success');
         await loadData();
       } catch (err: any) {
         console.error('[FlightMasterTab] Sync error:', err);
@@ -594,11 +374,6 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
                         {airline.iataCode && (
                           <span className="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded-md text-[10px] font-black uppercase tracking-wider">
                             {airline.iataCode}
-                          </span>
-                        )}
-                        {airline.icaoCode && (
-                          <span className="px-2 py-0.5 bg-surface-dim text-on-surface-dim rounded-md text-[10px] font-black uppercase tracking-wider">
-                            {airline.icaoCode}
                           </span>
                         )}
                       </div>

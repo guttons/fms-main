@@ -10,6 +10,7 @@ import { useOperationalData } from '../context/OperationalDataContext';
 import { FuelType, FlightLog, User } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell, ScatterChart, Scatter, ZAxis, AreaChart, Area, ComposedChart, LineChart, Line } from 'recharts';
 import { lookupDipSync, preloadCalibrationData } from '../services/calibrationService';
+import { PIT_MAPPING } from '../constants';
 
 interface FuelReportsProps {
   user?: User | null;
@@ -97,6 +98,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
   const [dayOfWeekJet, setDayOfWeekJet] = useState<string>('All Weekdays');
   const [airlineJet, setAirlineJet] = useState<string>('All Airlines');
   const [flightNoJet, setFlightNoJet] = useState<string>('');
+  const [showUnusedPits, setShowUnusedPits] = useState<boolean>(false);
 
   // DIESEL & PETROL specific filter states
   const [startDateGround, setStartDateGround] = useState<string>('2026-04-14');
@@ -522,21 +524,36 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
 
     const pitTable = filteredLogs
       .reduce((acc: any[], l) => {
-        const pit = l.pitNumber || 'N/A';
-        const existing = acc.find(x => x.pit === pit && x.stand === l.stand);
+        const pit = (l.pitNumber || '').trim();
+        const stand = (l.stand || '').trim();
+        if (!pit || pit === '-' || pit.toUpperCase() === 'N/A') return acc;
+        if (!stand || stand === '-' || stand.toUpperCase() === 'N/A') return acc;
+
+        const existing = acc.find(x => x.pit === pit && x.stand === stand);
         if (existing) {
           existing.volume += (l.volume || 0);
           existing.reps += 1;
         } else {
           acc.push({
             pit,
-            stand: l.stand || 'N/A',
+            stand,
             volume: l.volume || 0,
             reps: 1
           });
         }
         return acc;
       }, []).sort((a, b) => b.volume - a.volume);
+
+    const usedSet = new Set(pitTable.map(row => `${row.pit}-${row.stand}`));
+    const unusedPitsTable = PIT_MAPPING.filter(mapping => {
+      const key = `${mapping.pit}-${mapping.stand}`;
+      return !usedSet.has(key);
+    }).map(mapping => ({
+      pit: mapping.pit,
+      stand: mapping.stand,
+      volume: 0,
+      reps: 0
+    }));
 
     return {
       kpi: { totalVolume, international, domestic, adhocInt, adhocDom, seaplane, localSales },
@@ -577,7 +594,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       topCustomers,
       topFlights,
       pieData,
-      tables: { intAirlinesTable, flightTable, pitTable }
+      tables: { intAirlinesTable, flightTable, pitTable, unusedPitsTable }
     };
   }, [startDateJet, endDateJet, categoryJet, airlineJet, flightNoJet, dayOfWeekJet, flightLogs, equipment]);
 
@@ -2099,7 +2116,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
           {/* Segmented control for Fuel Type switcher with slide animation */}
           <div className="relative flex bg-surface-dim p-1.5 rounded-2xl border border-outline shrink-0 overflow-hidden w-full max-w-[420px] shadow-inner mb-6">
             <div 
-              className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] rounded-xl bg-gradient-to-r from-[#56c8eb] to-[#0ea5e9] transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform
+              className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] rounded-xl kinetic-gradient transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform
                 ${salesFuelType === 'JET_A1' ? 'left-1.5 translate-x-[0%]' : 'left-1.5 translate-x-[100%]'}
               `}
             />
@@ -2250,7 +2267,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                     setStartDateJet(tempStartDateJet);
                     setEndDateJet(tempEndDateJet);
                   }}
-                  className="w-12 py-2 bg-gradient-to-br from-[#0ea5e9] to-[#2563eb] hover:from-[#38bdf8] hover:to-[#3b82f6] text-white rounded-lg flex items-center justify-center transition-all active:scale-95 shadow-md border-0 h-[34px]" 
+                  className="w-12 py-2 kinetic-gradient text-white rounded-lg flex items-center justify-center transition-all active:scale-95 shadow-md border-none h-[34px]" 
                   title="Search"
                 >
                   <Search className="w-4 h-4" />
@@ -2354,7 +2371,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                       setStartDateGround(tempStartDateGround);
                       setEndDateGround(tempEndDateGround);
                     }}
-                    className="px-3 py-2 bg-gradient-to-br from-[#0ea5e9] to-[#2563eb] hover:from-[#38bdf8] hover:to-[#3b82f6] text-white rounded-lg flex items-center justify-center transition-all active:scale-95 border-0 h-[34px] w-12" 
+                    className="px-3 py-2 kinetic-gradient text-white rounded-lg flex items-center justify-center transition-all active:scale-95 border-none h-[34px] w-12" 
                     title="Search"
                   >
                     <Search className="w-4 h-4" />
@@ -2615,7 +2632,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                   {/* Segmented slider view switcher */}
                   <div className="relative flex bg-surface-dim p-1 rounded-xl border border-outline shrink-0 overflow-hidden w-[220px] shadow-inner">
                     <div 
-                      className="absolute top-1 bottom-1 left-1 rounded-lg bg-gradient-to-r from-[#56c8eb] to-[#0ea5e9] shadow-md transition-all duration-300 ease-out"
+                      className="absolute top-1 bottom-1 left-1 rounded-lg kinetic-gradient shadow-md transition-all duration-300 ease-out"
                       style={{
                         width: 'calc(50% - 4px)',
                         transform: `translateX(${turnaroundViewJet === 'aggregate' ? '100%' : '0%'})`
@@ -2875,15 +2892,40 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                   </div>
                 </div>
 
-                {/* Table 3: Pit Usage */}
+                {/* Table 3: Pit & Stand Usage */}
                 <div className="card-premium overflow-hidden">
-                  <div className="px-6 py-4 border-b border-outline bg-surface-dim/40">
+                  <div className="px-6 py-3 border-b border-outline bg-surface-dim/40 flex items-center justify-between gap-4">
                     <h3 className="text-[10px] font-black text-on-surface uppercase tracking-wider">Pit & Stand Usage</h3>
+                    <div className="flex bg-surface-dim p-0.5 rounded-lg relative w-40 h-[24px] items-center border border-outline/30 shrink-0">
+                      <div 
+                        className="absolute h-[18px] kinetic-gradient rounded transition-transform duration-300 ease-out shadow-md"
+                        style={{
+                          width: 'calc(50% - 2px)',
+                          transform: `translateX(${showUnusedPits ? '100%' : '0%'})`
+                        }}
+                      ></div>
+                      <button 
+                        onClick={() => setShowUnusedPits(false)}
+                        className={`flex-1 text-center text-[8px] font-black uppercase tracking-wider relative z-10 transition-colors duration-200 h-full flex items-center justify-center ${
+                          !showUnusedPits ? 'text-white' : 'text-on-surface hover:text-primary'
+                        }`}
+                      >
+                        Active
+                      </button>
+                      <button 
+                        onClick={() => setShowUnusedPits(true)}
+                        className={`flex-1 text-center text-[8px] font-black uppercase tracking-wider relative z-10 transition-colors duration-200 h-full flex items-center justify-center ${
+                          showUnusedPits ? 'text-white' : 'text-on-surface hover:text-primary'
+                        }`}
+                      >
+                        Unused
+                      </button>
+                    </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
                       <thead>
-                        <tr className="bg-surface-dim/60 border-b border-outline text-[9px] font-black text-on-surface-dim uppercase">
+                        <tr className="bg-surface-dim/60 border-b border-outline text-[9px] font-black text-on-surface-dim uppercase sticky top-0 z-20">
                           <th className="px-4 py-2.5">Pit ID</th>
                           <th className="px-4 py-2.5">Stand</th>
                           <th className="px-4 py-2.5 text-right">Vol (L)</th>
@@ -2891,12 +2933,16 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-outline">
-                        {jetData.tables.pitTable.map((row) => (
+                        {(showUnusedPits ? jetData.tables.unusedPitsTable : jetData.tables.pitTable).map((row) => (
                           <tr key={`${row.pit}-${row.stand}`} className="hover:bg-primary/[0.01]">
                             <td className="px-4 py-2 font-black uppercase font-mono">{row.pit}</td>
                             <td className="px-4 py-2 font-bold text-on-surface-dim">{row.stand}</td>
-                            <td className="px-4 py-2 text-right font-mono font-bold">{row.volume.toLocaleString()}</td>
-                            <td className="px-4 py-2 text-center font-bold">{row.reps}</td>
+                            <td className="px-4 py-2 text-right font-mono font-bold">
+                              {row.volume > 0 ? row.volume.toLocaleString() : '0'}
+                            </td>
+                            <td className="px-4 py-2 text-center font-bold">
+                              {row.reps > 0 ? row.reps : '0'}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -3118,7 +3164,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                   {/* Segmented slider view switcher */}
                   <div className="relative flex bg-surface-dim p-1 rounded-xl border border-outline shrink-0 overflow-hidden w-[220px] shadow-inner">
                     <div 
-                      className="absolute top-1 bottom-1 left-1 rounded-lg bg-gradient-to-r from-[#56c8eb] to-[#0ea5e9] shadow-md transition-all duration-300 ease-out"
+                      className="absolute top-1 bottom-1 left-1 rounded-lg kinetic-gradient shadow-md transition-all duration-300 ease-out"
                       style={{
                         width: 'calc(50% - 4px)',
                         transform: `translateX(${turnaroundViewGround === 'aggregate' ? '100%' : '0%'})`
@@ -3478,7 +3524,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
               />
               <button
                 onClick={handleExportPDF}
-                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-700 hover:to-sky-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-premium hover:scale-[1.02] active:scale-95 duration-200"
+                className="flex items-center gap-2 px-5 py-2.5 kinetic-gradient text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-premium hover:scale-[1.02] active:scale-95 duration-200 border-none"
               >
                 <FileText className="w-3.5 h-3.5" />
                 Export PDF

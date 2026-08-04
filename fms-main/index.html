@@ -135,7 +135,7 @@
       .splash-hex-draw {
         stroke-dasharray: 400;
         stroke-dashoffset: 400;
-        animation: drawHex 3.5s cubic-bezier(0.4, 0, 0.2, 1) forwards infinite;
+        animation: drawHex 2.4s cubic-bezier(0.4, 0, 0.2, 1) forwards infinite;
       }
       
       @keyframes drawHex {
@@ -146,12 +146,12 @@
       
       .splash-drop-pulse {
         transform-origin: 60px 60px;
-        animation: breathe 2s ease-in-out infinite;
+        animation: breathe 1.8s ease-in-out infinite;
       }
       
       @keyframes breathe {
-        0%, 100% { transform: scale(0.9); opacity: 0.85; }
-        50% { transform: scale(1.04); opacity: 1; }
+        0%, 100% { transform: scale(0.92); opacity: 0.85; filter: drop-shadow(0 0 4px rgba(1, 155, 201, 0.4)); }
+        50% { transform: scale(1.06); opacity: 1; filter: drop-shadow(0 0 14px rgba(1, 155, 201, 0.9)); }
       }
       
       .splash-glow-pulse {
@@ -160,12 +160,24 @@
       }
       
       @keyframes glowPulse {
-        0%, 100% { transform: scale(0.75); opacity: 0.35; }
-        50% { transform: scale(1.2); opacity: 0.75; }
+        0%, 100% { transform: scale(0.7); opacity: 0.25; }
+        50% { transform: scale(1.25); opacity: 0.7; }
       }
       
+      .splash-wave {
+        transform-origin: 60px 60px;
+        animation: sonarWave 2.4s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+      }
+      .wave-2 { animation-delay: 1.2s; }
+
+      @keyframes sonarWave {
+        0% { transform: scale(0.5); opacity: 0.8; stroke-width: 3px; }
+        100% { transform: scale(1.5); opacity: 0; stroke-width: 0.5px; }
+      }
+
       .splash-bar {
-        animation: slideBar 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        animation: slideBar 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        box-shadow: 0 0 10px #019BC9, 0 0 20px #019BC9;
       }
       
       @keyframes slideBar {
@@ -174,54 +186,67 @@
       }
       
       .splash-node {
-        opacity: 0.3;
-        animation: nodePulse 1.8s ease-in-out infinite;
+        opacity: 0.4;
+        animation: nodePulse 1.5s ease-in-out infinite;
       }
       .node-1 { animation-delay: 0s; transform-origin: 60px 22px; }
-      .node-2 { animation-delay: 0.3s; transform-origin: 94px 41px; }
-      .node-3 { animation-delay: 0.6s; transform-origin: 94px 79px; }
-      .node-4 { animation-delay: 0.9s; transform-origin: 60px 98px; }
-      .node-5 { animation-delay: 1.2s; transform-origin: 26px 79px; }
-      .node-6 { animation-delay: 1.5s; transform-origin: 26px 41px; }
+      .node-2 { animation-delay: 0.25s; transform-origin: 94px 41px; }
+      .node-3 { animation-delay: 0.5s; transform-origin: 94px 79px; }
+      .node-4 { animation-delay: 0.75s; transform-origin: 60px 98px; }
+      .node-5 { animation-delay: 1.0s; transform-origin: 26px 79px; }
+      .node-6 { animation-delay: 1.25s; transform-origin: 26px 41px; }
       
       @keyframes nodePulse {
-        0%, 100% { opacity: 0.3; transform: scale(0.9); }
-        50% { opacity: 1; transform: scale(1.4); }
+        0%, 100% { opacity: 0.3; transform: scale(0.9); fill: #019BC9; }
+        50% { opacity: 1; transform: scale(1.4); fill: #56c8eb; filter: drop-shadow(0 0 6px #019BC9); }
+      }
+
+      .splash-text-anim {
+        animation: trackingIn 1.2s cubic-bezier(0.215, 0.61, 0.355, 1) both;
+      }
+
+      @keyframes trackingIn {
+        0% { opacity: 0; transform: translateY(6px); letter-spacing: 0.4em; }
+        100% { opacity: 1; transform: translateY(0); letter-spacing: 0.25em; }
       }
     </style>
 </head>
   <body class="font-sans antialiased overflow-hidden bg-[#0b121f]">
-    <div id="pwa-splash" style="position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: var(--splash-bg, #0b121f); transition: opacity 0.5s ease, visibility 0.5s ease;">
-      <div style="display: flex; flex-direction: column; align-items: center; gap: 24px;">
-        <!-- Animated SVG Logo (Scaled to prevent corner circle clipping) -->
-        <div style="width: 100px; height: 100px; position: relative;">
-          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: 100%;">
+    <div id="pwa-splash" style="position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: var(--splash-bg, #0b121f); transition: opacity 0.6s ease, transform 0.6s ease, filter 0.6s ease, visibility 0.6s ease; transform-gpu: true;">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 28px;">
+        <!-- Animated SVG Logo with Sonar Waves & Laser Hex Stroke -->
+        <div style="width: 110px; height: 110px; position: relative;">
+          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: 100%; overflow: visible;">
             <defs>
               <radialGradient id="splash-glow" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stop-color="#019BC9" stop-opacity="0.4" />
+                <stop offset="0%" stop-color="#019BC9" stop-opacity="0.5" />
                 <stop offset="100%" stop-color="#019BC9" stop-opacity="0" />
               </radialGradient>
             </defs>
+            
+            <!-- Sonar Expanding Rings -->
+            <circle cx="60" cy="60" r="40" stroke="#019BC9" class="splash-wave wave-1" />
+            <circle cx="60" cy="60" r="40" stroke="#019BC9" class="splash-wave wave-2" />
             <circle cx="60" cy="60" r="52" fill="url(#splash-glow)" class="splash-glow-pulse" />
             
-            <!-- Hexagon frame -->
+            <!-- Hexagon frame with laser draw -->
             <path 
               d="M60 22 L94 41 V79 L60 98 L26 79 V41 Z" 
               stroke="#019BC9" 
-              stroke-width="6" 
+              stroke-width="5.5" 
               stroke-linecap="round" 
               stroke-linejoin="round"
               class="splash-hex-draw"
             />
             
-            <!-- Droplet -->
+            <!-- Droplet with liquid pulse -->
             <path 
               d="M60 38 C60 38 48 54 48 62 C48 68.6 53.4 74 60 74 C66.6 74 72 68.6 72 62 C72 54 60 38 60 38 Z" 
               fill="#019BC9" 
               class="splash-drop-pulse"
             />
             
-            <!-- Hexagon Nodes (Unclipped) -->
+            <!-- Hexagon Nodes with Staggered Energy Glowing Pulse -->
             <circle cx="60" cy="22" r="4.5" fill="#019BC9" class="splash-node node-1" />
             <circle cx="94" cy="41" r="4.5" fill="#019BC9" class="splash-node node-2" />
             <circle cx="94" cy="79" r="4.5" fill="#019BC9" class="splash-node node-3" />
@@ -231,12 +256,12 @@
           </svg>
         </div>
         
-        <!-- Loading Text -->
+        <!-- Loading Text with Kinetic Entrance -->
         <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-          <span style="font-size: 8px; font-weight: 900; letter-spacing: 0.35em; text-transform: uppercase; color: #019BC9; opacity: 0.8; font-family: 'Inter', system-ui, sans-serif;">MALDIVES AIRPORTS CO LTD</span>
-          <h2 style="font-size: 13px; font-weight: 900; letter-spacing: 0.25em; text-transform: uppercase; color: var(--splash-text, #ffffff); margin: 0; font-family: 'Inter', system-ui, sans-serif;">AVIATION FUEL SERVICES</h2>
-          <div style="width: 72px; height: 2.5px; background-color: rgba(1, 155, 201, 0.15); border-radius: 9999px; overflow: hidden; position: relative; margin-top: 4px;">
-            <div style="position: absolute; top: 0; bottom: 0; background-color: #019BC9; width: 36px; border-radius: 9999px;" class="splash-bar"></div>
+          <span style="font-size: 8px; font-weight: 900; letter-spacing: 0.35em; text-transform: uppercase; color: #019BC9; opacity: 0.85; font-family: 'Inter', system-ui, sans-serif;">MALDIVES AIRPORTS CO LTD</span>
+          <h2 class="splash-text-anim" style="font-size: 13px; font-weight: 900; letter-spacing: 0.25em; text-transform: uppercase; color: var(--splash-text, #ffffff); margin: 0; font-family: 'Inter', system-ui, sans-serif; text-shadow: 0 0 12px rgba(1,155,201,0.3);">AVIATION FUEL SERVICES</h2>
+          <div style="width: 80px; height: 3px; background-color: rgba(1, 155, 201, 0.15); border-radius: 9999px; overflow: hidden; position: relative; margin-top: 6px;">
+            <div style="position: absolute; top: 0; bottom: 0; background-color: #019BC9; width: 40px; border-radius: 9999px;" class="splash-bar"></div>
           </div>
         </div>
       </div>

@@ -350,12 +350,29 @@ const ScreenDashboard: React.FC<{
   const intlJobsMap = new Map<string, any>();
   liveIntlList.forEach(f => {
     const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-    const flightDate = f.date || selectedBriefingDate;
+    const flightDate = f.date ? f.date.split('T')[0] : selectedBriefingDate;
     const computedStatus = getStatusForFlightDate(cleanNo, flightDate, f.status || 'PENDING');
+    
+    const dbJob = (rawFlightJobs || []).find(j => {
+      if (!j || !j.flightNumber) return false;
+      const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      if (jNo !== cleanNo) return false;
+      const jDate = j.date ? j.date.split('T')[0] : '';
+      return !jDate || !flightDate || jDate === flightDate;
+    });
+
+    const existing = intlJobsMap.get(cleanNo);
+
     intlJobsMap.set(cleanNo, {
+      ...(existing || {}),
       ...f,
+      id: dbJob?.id || f.id || existing?.id,
       status: computedStatus,
-      fidsStatus: f.status
+      fidsStatus: f.status,
+      assignedTo: dbJob?.assignedTo || f.assignedTo || existing?.assignedTo || '',
+      assignedOfficer: dbJob?.assignedOfficer || f.assignedOfficer || existing?.assignedOfficer || '',
+      vehicleId: dbJob?.vehicleId || f.vehicleId || existing?.vehicleId,
+      equipmentUsage: dbJob?.equipmentUsage || f.equipmentUsage || existing?.equipmentUsage || 'HYDRANT',
     });
   });
 
@@ -363,13 +380,27 @@ const ScreenDashboard: React.FC<{
     frozenFlights.intl.forEach((ff: any) => {
       const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
       const existing = intlJobsMap.get(cleanNo);
-      const flightDate = ff.date || selectedBriefingDate;
+      const flightDate = ff.date ? ff.date.split('T')[0] : selectedBriefingDate;
       const computedStatus = getStatusForFlightDate(cleanNo, flightDate, existing?.status || ff.status || 'PENDING');
+
+      const dbJob = (rawFlightJobs || []).find(j => {
+        if (!j || !j.flightNumber) return false;
+        const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        if (jNo !== cleanNo) return false;
+        const jDate = j.date ? j.date.split('T')[0] : '';
+        return !jDate || !flightDate || jDate === flightDate;
+      });
+
       intlJobsMap.set(cleanNo, {
         ...(existing || {}),
         ...ff,
+        id: dbJob?.id || ff.id || existing?.id,
         status: computedStatus,
-        fidsStatus: existing?.fidsStatus || ff.status
+        fidsStatus: existing?.fidsStatus || ff.status,
+        assignedTo: dbJob?.assignedTo || ff.assignedTo || existing?.assignedTo || '',
+        assignedOfficer: dbJob?.assignedOfficer || ff.assignedOfficer || existing?.assignedOfficer || '',
+        vehicleId: dbJob?.vehicleId || ff.vehicleId || existing?.vehicleId,
+        equipmentUsage: dbJob?.equipmentUsage || ff.equipmentUsage || existing?.equipmentUsage || 'HYDRANT',
       });
     });
   }

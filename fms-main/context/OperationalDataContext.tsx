@@ -336,10 +336,14 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
     liveIntl.forEach((lf: any) => {
       const lfNumNorm = (lf.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      const lfDateStr = lf.date ? lf.date.split('T')[0] : '';
       const existingJobIdx = merged.findIndex(
-        (job) => 
-          (job.flightNumber || '').replace(/\s+/g, '').toLowerCase() === lfNumNorm &&
-          (!job.date || job.date === lf.date)
+        (job) => {
+          const jobNumNorm = (job.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+          if (jobNumNorm !== lfNumNorm) return false;
+          const jobDateStr = job.date ? job.date.split('T')[0] : '';
+          return !jobDateStr || !lfDateStr || jobDateStr === lfDateStr;
+        }
       );
 
       let staVal = lf.type === 'arrival' ? lf.scheduledTime : '';
@@ -756,7 +760,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         supabaseService.getShiftBriefingInfo(selectedBriefingDate, selectedBriefingShift),
         supabaseService.getAlerts(),
         supabaseService.getEquipment(),
-        supabaseService.getFlightLogs(),
+        supabaseService.getFlightLogs({ limit: 10000 }),
         supabaseService.getStaff(),
         supabaseService.getDomesticAssignments(selectedBriefingDate)
       ]);
@@ -799,7 +803,13 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         });
       }
       if (fetchedAlerts && Array.isArray(fetchedAlerts)) setAlerts(fetchedAlerts);
-      if (fetchedLogs && Array.isArray(fetchedLogs)) setFlightLogs(fetchedLogs);
+      if (fetchedLogs) {
+        if (Array.isArray(fetchedLogs)) {
+          setFlightLogs(fetchedLogs);
+        } else if (fetchedLogs.logs && Array.isArray(fetchedLogs.logs)) {
+          setFlightLogs(fetchedLogs.logs);
+        }
+      }
       if (fetchedStaff && fetchedStaff.length > 0) setStaff(fetchedStaff);
       // Fetch service tank setting
       try {

@@ -53,10 +53,43 @@ export interface DailyConsumptionResult {
   dailyAvg: number;
   dayCount: number;
   byDay: { date: string; volume: number; count: number }[];
+  byCategory: {
+    category: 'INT' | 'DOM' | 'SEA' | 'LOCAL';
+    label: string;
+    volume: number;
+    mass: number;
+    count: number;
+    percentage: number;
+  }[];
   topFlights: { flightNumber: string; totalVolume: number; count: number }[];
   confidence: ConfidenceLevel;
   confidenceNote: string;
   dateRange: { start: string; end: string; label: string };
+}
+
+export function detectLogCategory(log: FlightLog): 'INT' | 'DOM' | 'SEA' | 'LOCAL' {
+  const cat = String(
+    (log as any).category ||
+    (log as any).flightCategory ||
+    (log as any).flight_category ||
+    ''
+  ).toUpperCase().trim();
+
+  if (cat === 'INT' || cat === 'INTERNATIONAL') return 'INT';
+  if (cat === 'DOM' || cat === 'DOMESTIC') return 'DOM';
+  if (cat === 'SEA' || cat === 'SEAPLANE') return 'SEA';
+  if (cat === 'LOCAL' || cat === 'MARINE' || cat === 'GROUND') return 'LOCAL';
+
+  const logType = String((log as any).logType || (log as any).log_type || '').toUpperCase();
+  if (logType === 'SEAPLANE') return 'SEA';
+  if (logType === 'MARINE') return 'LOCAL';
+
+  const fn = String(log.flightNumber || '').toUpperCase().replace(/\s+/g, '');
+  if (fn.includes('TMA') || fn.includes('SEAPLANE') || fn.startsWith('8Q')) return 'SEA';
+  if (fn.startsWith('Q21') || fn.startsWith('Q22') || fn.startsWith('Q23') || fn.startsWith('Q25') || fn.startsWith('Q26') || fn.startsWith('Q28')) return 'DOM';
+  if (fn.includes('LOCAL') || fn.includes('VESSEL') || fn.includes('BARGE') || fn.includes('GSE') || fn.includes('DEFUEL')) return 'LOCAL';
+
+  return 'INT';
 }
 
 export interface BridgingStats {
@@ -290,16 +323,25 @@ export const aiDataEngine = {
         searchTerm,
         logType: filters?.logType,
         equipmentId: filters?.vehicleId,
-        limit: 500, // Reasonable cap for AI analysis
+        limit: 1000,
       });
       
-      let logs = result.logs;
+      let logs = result.logs || [];
+
+      // Apply strict client-side date filtering to guarantee precision across Netlify & local endpoints
+      if (dateRange.startDate && dateRange.endDate && logs.length > 0) {
+        logs = logs.filter(l => {
+          const logDate = getLogDate(l);
+          if (!logDate) return true;
+          return logDate >= dateRange.startDate && logDate <= dateRange.endDate;
+        });
+      }
 
       // Apply additional client-side filters if needed
       if (filters?.flightNumber) {
         const code = filters.flightNumber.toUpperCase().replace(/\s+/g, '');
         logs = logs.filter(l => {
-          const logCode = l.flightNumber.toUpperCase().replace(/\s+/g, '');
+          const logCode = l.flightNumber ? l.flightNumber.toUpperCase().replace(/\s+/g, '') : '';
           return logCode === code || logCode.includes(code);
         });
       }
@@ -308,7 +350,7 @@ export const aiDataEngine = {
         const prefix = (filters.airlinePrefix || '').toUpperCase().trim();
         const name = (filters.airlineName || '').toLowerCase().trim();
         logs = logs.filter(l => {
-          const fn = l.flightNumber.toUpperCase().replace(/\s+/g, '');
+          const fn = l.flightNumber ? l.flightNumber.toUpperCase().replace(/\s+/g, '') : '';
           const al = (l.airline || '').toLowerCase();
           const matchesPrefix = prefix ? fn.startsWith(prefix) : false;
           const matchesName = name ? al.includes(name) || fn.toLowerCase().includes(name) : false;
@@ -523,10 +565,49 @@ export const aiDataEngine = {
 
     const dayCount = byDay.length || 1;
 
-    // Top flights by volume
+    // Group by category (INT, DOM, SEA, LOCAL)
+    const byCategoryMap: Record<string, { volume: number; count: number }> = {
+      INT: { volume: 0, count: 0 },
+      DOM: { volume: 0, count: 0 },
+      SEA: { volume: 0, count: 0 },
+      LOCAL: { volume: 0, count: 0 }
+    };
+
+    logs.forEach(l => {
+      const cat = detectLogCategory(l);
+      if (!byCategoryMap[cat]) {
+        byCategoryMap[cat] = { volume: 0, count: 0 };
+      }
+      const vol = getLogVolume(l);
+      byCategoryMap[cat].volume += vol;
+      byCategoryMap[cat].count += 1;
+    });
+
+    const categoryLabels: Record<string, string> = {
+      INT: 'International (INT)',
+      DOM: 'Domestic (DOM)',
+      SEA: 'Seaplane (SEA)',
+      LOCAL: 'Local Sales & Marine (LOCAL)'
+    };
+
+    const totalVolForPct = totalVolume || 1;
+    const byCategory = Object.entries(byCategoryMap)
+      .filter(([_, data]) => data.count > 0 || data.volume > 0)
+      .map(([cat, data]) => ({
+        category: cat as any,
+        label: categoryLabels[cat] || `${cat} Operations`,
+        volume: Math.round(data.volume),
+        mass: Math.round(data.volume * 0.80),
+        count: data.count,
+        percentage: Math.round((data.volume / totalVolForPct) * 1000) / 10
+      }))
+      .sort((a, b) => b.volume - a.volume);
+
+    // Top flights by volume (excluding N/A or empty numbers)
     const byFlightMap: Record<string, { totalVolume: number; count: number }> = {};
     logs.forEach(l => {
-      const fn = l.flightNumber.toUpperCase().replace(/\s+/g, '');
+      const fn = l.flightNumber ? l.flightNumber.toUpperCase().replace(/\s+/g, '') : '';
+      if (!fn || fn === 'N/A') return;
       if (!byFlightMap[fn]) byFlightMap[fn] = { totalVolume: 0, count: 0 };
       byFlightMap[fn].totalVolume += getLogVolume(l);
       byFlightMap[fn].count += 1;
@@ -548,6 +629,7 @@ export const aiDataEngine = {
       dailyAvg: Math.round(totalVolume / dayCount),
       dayCount,
       byDay,
+      byCategory,
       topFlights,
       confidence: level,
       confidenceNote: note,
