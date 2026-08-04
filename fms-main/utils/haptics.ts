@@ -10,14 +10,14 @@
 
 // ── Vibration Patterns (Refined & Lightened for Premium Feel) ────────────────
 export const HapticPattern = {
-  TAP:          [4],                      // Ultra-crisp 4ms tick
-  SUCCESS:      [6, 35, 6],               // Light double tick
-  WARNING:      [12, 25, 18],             // Subtle warning pulse
+  TAP:          [10],                     // Crisp 10ms tick
+  SUCCESS:      [12, 35, 12],             // Light double tick
+  WARNING:      [16, 25, 18],             // Subtle warning pulse
   ERROR:        [25, 30, 25],             // Gentle error double pulse
-  PULL_REFRESH: [3],                      // Micro tick
-  LONG_PRESS:   [10],                     // Soft hold tick
-  SELECTION:    [3],                      // Micro selection tick
-  TOGGLE:       [5],                      // Soft switch toggle
+  PULL_REFRESH: [8],                      // Micro tick
+  LONG_PRESS:   [15],                     // Soft hold tick
+  SELECTION:    [10],                     // Micro selection tick
+  TOGGLE:       [14, 25, 14],             // Crisp double toggle tick
 } as const;
 
 export type HapticType = keyof typeof HapticPattern;

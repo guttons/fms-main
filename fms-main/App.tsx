@@ -134,20 +134,48 @@ const App: React.FC = () => {
 
   // Global haptic feedback listener for radio buttons, checkboxes, and select toggles across all modules
   useEffect(() => {
-    const handleRadioOrCheckboxClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
+    const triggerHapticForTarget = (target: HTMLElement | null) => {
       if (!target) return;
-      const isRadio = target.matches('input[type="radio"], [role="radio"], [data-radio]') || target.closest('input[type="radio"], [role="radio"], [data-radio]');
-      const isCheckbox = target.matches('input[type="checkbox"], [role="checkbox"]') || target.closest('input[type="checkbox"], [role="checkbox"]');
-      const isSelect = target.matches('select, option') || target.closest('select');
-      
-      if (isRadio || isCheckbox || isSelect) {
-        haptic('TOGGLE');
+
+      // 1. Direct or parent input[type="radio"], input[type="checkbox"], select, role="radio", role="checkbox", role="switch"
+      const input = target.closest('input[type="radio"], input[type="checkbox"], select, [role="radio"], [role="checkbox"], [role="switch"], [data-radio], [data-toggle]') as HTMLElement | null;
+      if (input) {
+        haptic('TOGGLE', input);
+        return;
+      }
+
+      // 2. Label element wrapping or referencing a radio/checkbox input
+      const label = target.closest('label') as HTMLLabelElement | null;
+      if (label) {
+        const associatedInput = label.querySelector('input[type="radio"], input[type="checkbox"]') as HTMLElement | null;
+        if (associatedInput) {
+          haptic('TOGGLE', associatedInput);
+          return;
+        }
       }
     };
 
-    window.addEventListener('click', handleRadioOrCheckboxClick, true);
-    return () => window.removeEventListener('click', handleRadioOrCheckboxClick, true);
+    const handleChange = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.matches('input[type="radio"], input[type="checkbox"], select') || target.closest('input[type="radio"], input[type="checkbox"], select'))) {
+        haptic('TOGGLE', target);
+      }
+    };
+
+    const handleGesture = (e: Event) => {
+      triggerHapticForTarget(e.target as HTMLElement | null);
+    };
+
+    // Attach capture-phase listeners for change, click, and touchstart
+    window.addEventListener('change', handleChange, true);
+    window.addEventListener('click', handleGesture, true);
+    window.addEventListener('touchstart', handleGesture, { capture: true, passive: true });
+
+    return () => {
+      window.removeEventListener('change', handleChange, true);
+      window.removeEventListener('click', handleGesture, true);
+      window.removeEventListener('touchstart', handleGesture, true);
+    };
   }, []);
 
   const handleLogout = () => {
