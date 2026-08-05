@@ -5,6 +5,7 @@ import { TANKS, MOCK_USERS, EQUIPMENT } from '../constants';
 import { INITIAL_STAFF_LIST } from '../constants/staffList';
 import { fmsDb } from './db';
 import { syncEngine } from './syncEngine';
+import masterDbData from './masterDbData.json';
 
 const localBridgingLogs: BridgingLog[] = [
   {
@@ -483,10 +484,14 @@ export const supabaseService = {
 
   // ── BigQuery Cloud Run API Helper & Operations Logs ────────────────────────
   _bqBase(): string {
-    return (
-      import.meta.env.VITE_BIGQUERY_API_URL ||
-      'https://fms-bigquery-api-808402455416.us-central1.run.app'
-    );
+    const envUrl = import.meta.env.VITE_BIGQUERY_API_URL;
+    const isLocalhost = typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    if (envUrl && envUrl.includes('localhost') && !isLocalhost) {
+      return 'https://fms-bigquery-api-808402455416.us-central1.run.app';
+    }
+    return envUrl || 'https://fms-bigquery-api-808402455416.us-central1.run.app';
   },
 
   async _bqAuthHeaders(): Promise<Record<string, string>> {
@@ -2174,10 +2179,14 @@ export const supabaseService = {
     if (cached && cached.length > 0) return this.dedupeAirlines(cached);
     try {
       const raw = localStorage.getItem('fms_master_airlines');
-      return this.dedupeAirlines(raw ? JSON.parse(raw) : []);
-    } catch (e) {
-      return [];
-    }
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (parsed && parsed.length > 0) return this.dedupeAirlines(parsed);
+    } catch (e) {}
+
+    // Auto-seed from bundled master dataset for initial cross-device load
+    await this.bulkSeedMasterDB(masterDbData as any[]);
+    const freshlySeeded = await fmsDb.getAll<AirlineMaster>('airlines');
+    return this.dedupeAirlines(freshlySeeded);
   },
 
   async clearMasterDB(): Promise<void> {
@@ -2202,10 +2211,6 @@ export const supabaseService = {
     flights: string[];
     aircrafts: Array<{ aircraft_reg: string; aircraft_type: string }>;
   }>): Promise<{ airlinesCount: number; flightsCount: number; aircraftsCount: number }> {
-    this.unmigratedTables.add('airlines');
-    this.unmigratedTables.add('flight_master');
-    this.unmigratedTables.add('aircraft_master');
-
     await this.clearMasterDB();
 
     const airlinesToPut: AirlineMaster[] = [];
@@ -2279,6 +2284,63 @@ export const supabaseService = {
       localStorage.setItem('fms_master_flights', JSON.stringify(dedupedFlights));
       localStorage.setItem('fms_master_aircrafts', JSON.stringify(dedupedAircrafts));
     } catch (e) {}
+
+    // Attempt Supabase cloud batch upsert for central cross-device sync
+    if (!this.unmigratedTables.has('airlines')) {
+      try {
+        const aRows = dedupedAirlines.map(a => ({
+          id: a.id,
+          name: a.name,
+          iata_code: a.iataCode || null,
+          icao_code: a.icaoCode || null,
+          category: a.category || 'INT',
+          is_active: a.isActive
+        }));
+        const { error: aErr } = await supabase.from('airlines').upsert(aRows);
+        if (aErr && (aErr.code === 'PGRST205' || aErr.message?.includes('schema cache'))) {
+          this.unmigratedTables.add('airlines');
+        }
+      } catch (e) {
+        this.unmigratedTables.add('airlines');
+      }
+    }
+
+    if (!this.unmigratedTables.has('flight_master')) {
+      try {
+        const fRows = dedupedFlights.map(f => ({
+          id: f.id,
+          airline_id: f.airlineId,
+          airline_name: f.airlineName,
+          flight_number: f.flightNumber,
+          is_active: f.isActive
+        }));
+        const { error: fErr } = await supabase.from('flight_master').upsert(fRows);
+        if (fErr && (fErr.code === 'PGRST205' || fErr.message?.includes('schema cache'))) {
+          this.unmigratedTables.add('flight_master');
+        }
+      } catch (e) {
+        this.unmigratedTables.add('flight_master');
+      }
+    }
+
+    if (!this.unmigratedTables.has('aircraft_master')) {
+      try {
+        const acRows = dedupedAircrafts.map(ac => ({
+          id: ac.id,
+          airline_id: ac.airlineId,
+          airline_name: ac.airlineName,
+          aircraft_reg: ac.aircraftReg,
+          aircraft_type: ac.aircraftType,
+          is_active: ac.isActive
+        }));
+        const { error: acErr } = await supabase.from('aircraft_master').upsert(acRows);
+        if (acErr && (acErr.code === 'PGRST205' || acErr.message?.includes('schema cache'))) {
+          this.unmigratedTables.add('aircraft_master');
+        }
+      } catch (e) {
+        this.unmigratedTables.add('aircraft_master');
+      }
+    }
 
     return {
       airlinesCount: dedupedAirlines.length,

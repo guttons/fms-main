@@ -66,8 +66,19 @@ export function setReducedMotion(enabled: boolean): void {
  * @param type - The haptic pattern name (TAP, SUCCESS, WARNING, etc.)
  * @param element - Optional DOM element to apply visual fallback on iOS
  */
+let lastHapticTime = 0;
+let lastHapticType = '';
+
 export function haptic(type: HapticType, element?: HTMLElement | null): void {
   if (!isHapticEnabled()) return;
+
+  const now = Date.now();
+  // Prevent duplicate rapid calls (e.g. touchstart followed immediately by click/change within 60ms) from cancelling Android vibration
+  if (now - lastHapticTime < 60 && lastHapticType === type) {
+    return;
+  }
+  lastHapticTime = now;
+  lastHapticType = type;
 
   const pattern = HapticPattern[type];
 

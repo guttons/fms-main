@@ -19,6 +19,7 @@
 :root, [data-theme='light'] {
   --color-surface: #f7f9fb;
   --color-surface-dim: #eceff1;
+  --color-surface-container: var(--color-surface-container-lowest);
   --color-surface-container-low: #f2f4f6;
   --color-surface-container-lowest: #ffffff;
   --color-surface-container-highest: #e0e3e5;
@@ -46,6 +47,7 @@
 [data-theme='dark'] {
   --color-surface: #0f1623;
   --color-surface-dim: #161e2e;
+  --color-surface-container: var(--color-surface-container-low);
   --color-surface-container-low: #151e32;
   --color-surface-container-lowest: #0b121f;
   --color-surface-container-highest: #202945;
@@ -73,6 +75,7 @@
 [data-theme='black'] {
   --color-surface: #0E0E0E;
   --color-surface-dim: #121212;
+  --color-surface-container: var(--color-surface-container-low);
   --color-surface-container-low: #161616;
   --color-surface-container-lowest: #0E0E0E;
   --color-surface-container-highest: #1B1B1B;

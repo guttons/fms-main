@@ -244,7 +244,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
         const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
         const liveJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
         return liveJob ? { ...ff, status: liveJob.status } : ff;
-      }).filter((f: any) => f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED')
+      }).filter((f: any) => isHistoricalView || (f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED'))
     : (flightJobs || []).filter(f => {
         const isDep = f.type ? f.type === 'departure' : !!f.std;
         return isDep && isFlightInShift(f.std) && f.date === selectedBriefingDate && f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED';
@@ -255,7 +255,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
         const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
         const liveJob = (domesticFlights || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
         return liveJob ? { ...ff, status: liveJob.status } : ff;
-      }).filter((f: any) => f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED')
+      }).filter((f: any) => isHistoricalView || (f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED'))
     : (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && f.date === selectedBriefingDate && f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED')
       .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
 
@@ -279,9 +279,9 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
   const [isUnfreezeConfirmOpen, setIsUnfreezeConfirmOpen] = useState(false);
   
   // Collapse states for Flight cards
-  const [isIntlCollapsed, setIsIntlCollapsed] = useState(false);
-  const [isDomesticCollapsed, setIsDomesticCollapsed] = useState(false);
-  const [isAdhocCollapsed, setIsAdhocCollapsed] = useState(false);
+  const [isIntlCollapsed, setIsIntlCollapsed] = useState(true);
+  const [isDomesticCollapsed, setIsDomesticCollapsed] = useState(true);
+  const [isAdhocCollapsed, setIsAdhocCollapsed] = useState(true);
 
   // Collapse states for other cards
   const [isOperatorsCollapsed, setIsOperatorsCollapsed] = useState(false);
@@ -665,7 +665,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                 className={`bg-transparent text-[13px] font-bold text-on-surface outline-none appearance-none flex-1 py-2 ${!canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
               >
                 <option value="" className="bg-surface-dim text-on-surface-dim italic">Select Staff...</option>
-                {roleUsers.map(u => (
+                {roleUsers.filter(u => !values.includes(u.id) || u.id === val).map(u => (
                   <option key={u.id} value={u.id} className="bg-surface-dim text-on-surface font-normal not-italic">{u.name}</option>
                 ))}
               </select>
@@ -747,7 +747,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                 </button>
               )}
             </div>
-            {val && roleUsers.some(u => u.id === val) && (() => {
+            {val && roleUsers.some(u => u.id === val) && staffStatuses[val] === 'LATE' && (() => {
               const hist = staffHistory.find(h => h.staffId === val);
               if (hist) {
                 const domRank = getRankInRoles(val, roles, 'DOM');
@@ -1334,7 +1334,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                 <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-200">
                   {renderStaffSelectArray(
                     staffAssignments.dutySupervisors || [],
-                    [UserRole.ITP_MANAGER, UserRole.ITP_SUPERVISOR],
+                    [UserRole.ITP_SUPERVISOR],
                     "Duty Supervisor",
                     "bg-primary shadow-[0_0_10px_rgba(14,165,233,0.4)]",
                     'primary',
@@ -1342,7 +1342,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   )}
                   {renderStaffSelectArray(
                     staffAssignments.shiftInCharges || [],
-                    [UserRole.ITP_MANAGER, UserRole.ITP_SUPERVISOR],
+                    [UserRole.ITP_MANAGER],
                     "Shift In-Charge",
                     "bg-primary shadow-[0_0_10px_rgba(14,165,233,0.4)]",
                     'primary',

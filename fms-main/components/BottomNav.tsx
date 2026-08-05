@@ -225,18 +225,19 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
       case UserRole.FUEL_MANAGEMENT:
         return [
-          { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
+          { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'history', label: 'Log History', icon: History },
+          { id: 'executive', label: 'Executive Module', icon: Briefcase },
           { id: 'commercial-reports', label: 'Commercial Reports', icon: Coins },
           { id: 'finance', label: 'Finance & Billing', icon: Receipt },
         ];
 
       case UserRole.ADMIN:
         return [
+          { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'history', label: 'Log History', icon: History },
-          { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'bridging', label: 'Transfer Oversight', icon: Droplet },
           { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
           { id: 'marine', label: 'Marine Oversight', icon: Anchor },
@@ -244,8 +245,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
           { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
           { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
-          { id: 'commercial-reports', label: 'Commercial Reports', icon: Coins },
           { id: 'executive', label: 'Executive Module', icon: Briefcase },
+          { id: 'commercial-reports', label: 'Commercial Reports', icon: Coins },
           { id: 'finance', label: 'Finance & Billing', icon: Receipt },
         ];
 

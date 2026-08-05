@@ -33,6 +33,7 @@ import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, A
 import { updatePWAManifestAndTheme, requestNotificationPermission, sendNativeNotification } from './utils/pwa';
 import { haptic, isHapticEnabled, setHapticEnabled, isReducedMotion, setReducedMotion } from './utils/haptics';
 import { syncEngine } from './services/syncEngine';
+import { PredictiveBackWrapper } from './components/PredictiveBackWrapper';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -132,38 +133,57 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // Global haptic feedback listener for radio buttons, checkboxes, and select toggles across all modules
+  // Global haptic feedback listener for radio buttons, checkboxes, and segmented toggles across all modules (excluding dropdowns)
   useEffect(() => {
-    const triggerHapticForTarget = (target: HTMLElement | null) => {
-      if (!target) return;
+    const isRadioOrToggle = (target: HTMLElement | null): HTMLElement | null => {
+      if (!target) return null;
 
-      // 1. Direct or parent input[type="radio"], input[type="checkbox"], select, role="radio", role="checkbox", role="switch"
-      const input = target.closest('input[type="radio"], input[type="checkbox"], select, [role="radio"], [role="checkbox"], [role="switch"], [data-radio], [data-toggle]') as HTMLElement | null;
-      if (input) {
-        haptic('TOGGLE', input);
-        return;
+      // Do NOT trigger haptics on dropdowns / select fields
+      if (target.closest('select, option')) {
+        return null;
       }
+
+      // 1. Direct or parent input[type="radio"], input[type="checkbox"], [role="radio"], [role="checkbox"], [role="switch"]
+      const input = target.closest('input[type="radio"], input[type="checkbox"], [role="radio"], [role="checkbox"], [role="switch"], [data-radio], [data-toggle]') as HTMLElement | null;
+      if (input) return input;
 
       // 2. Label element wrapping or referencing a radio/checkbox input
       const label = target.closest('label') as HTMLLabelElement | null;
       if (label) {
         const associatedInput = label.querySelector('input[type="radio"], input[type="checkbox"]') as HTMLElement | null;
-        if (associatedInput) {
-          haptic('TOGGLE', associatedInput);
-          return;
+        if (associatedInput) return associatedInput;
+      }
+
+      // 3. Segmented control / radio option buttons
+      const button = target.closest('button') as HTMLElement | null;
+      if (button) {
+        const parent = button.parentElement;
+        if (parent && (
+          parent.getAttribute('role') === 'radiogroup' ||
+          parent.classList.contains('segmented') ||
+          button.getAttribute('role') === 'radio' ||
+          button.hasAttribute('data-radio') ||
+          button.hasAttribute('aria-checked')
+        )) {
+          return button;
         }
       }
+
+      return null;
     };
 
     const handleChange = (e: Event) => {
-      const target = e.target as HTMLElement | null;
-      if (target && (target.matches('input[type="radio"], input[type="checkbox"], select') || target.closest('input[type="radio"], input[type="checkbox"], select'))) {
-        haptic('TOGGLE', target);
+      const match = isRadioOrToggle(e.target as HTMLElement | null);
+      if (match) {
+        haptic('TOGGLE', match);
       }
     };
 
     const handleGesture = (e: Event) => {
-      triggerHapticForTarget(e.target as HTMLElement | null);
+      const match = isRadioOrToggle(e.target as HTMLElement | null);
+      if (match) {
+        haptic('TOGGLE', match);
+      }
     };
 
     // Attach capture-phase listeners for change, click, and touchstart
@@ -833,8 +853,8 @@ const AppContextContent: React.FC<any> = ({
   const unacknowledgedCount = (userAlerts || []).filter(a => a && !a.acknowledged).length;
   const activeCriticalAlerts = userAlerts.filter(a => a && !a.acknowledged && a.severity === 'critical');
 
-  const renderContent = () => {
-    switch (activeView) {
+  const renderContent = (viewToRender = activeView) => {
+    switch (viewToRender) {
       case 'dashboard':
         return (
           <Dashboard 
@@ -1554,16 +1574,22 @@ const AppContextContent: React.FC<any> = ({
             </header>
             </div>
 
-            <div 
-              key={activeView} 
-              className="animate-in fade-in duration-200 ease-out transform-gpu will-change-transform"
-              style={{
-                filter: blurAmount > 0 ? `blur(${blurAmount}px)` : 'none',
-                transition: pullingRef.current ? 'none' : 'filter 0.3s ease'
-              }}
+            <PredictiveBackWrapper
+              activeView={activeView}
+              setActiveView={setActiveView}
+              renderContent={renderContent}
             >
-              {renderContent()}
-            </div>
+              <div 
+                key={activeView} 
+                className="animate-in fade-in duration-200 ease-out transform-gpu will-change-transform"
+                style={{
+                  filter: blurAmount > 0 ? `blur(${blurAmount}px)` : 'none',
+                  transition: pullingRef.current ? 'none' : 'filter 0.3s ease'
+                }}
+              >
+                {renderContent()}
+              </div>
+            </PredictiveBackWrapper>
           </main>
 
           {/* Bottom Navigation */}

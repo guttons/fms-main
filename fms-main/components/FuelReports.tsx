@@ -39,6 +39,19 @@ const getPrimaryColor = () => {
   return '#002046';
 };
 
+const chartTooltipProps = {
+  contentStyle: {
+    backgroundColor: 'var(--color-surface-container)',
+    borderRadius: '12px',
+    border: '1px solid var(--color-outline)',
+    color: 'var(--color-on-surface)'
+  },
+  itemStyle: { color: 'var(--color-on-surface)' },
+  labelStyle: { color: 'var(--color-on-surface-dim)' },
+  cursor: { fill: 'var(--color-surface-dim)', opacity: 0.15 },
+  formatter: (value: any, name: any) => [typeof value === 'number' ? value.toLocaleString() : value, name]
+};
+
 const CustomScatterTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
@@ -54,7 +67,7 @@ const CustomScatterTooltip = ({ active, payload }: any) => {
 
     return (
       <div className="bg-[#1e293b]/95 text-white px-3 py-2 rounded-xl text-xs font-sans flex items-center gap-2 border border-outline shadow-premium backdrop-blur-md">
-        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: payload[0].color || '#f59e0b' }} />
+        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: data.color || payload[0].color || '#f59e0b' }} />
         <span className="font-extrabold uppercase tracking-wide">
           {labelText}: <span className="font-mono text-white">{volStr} L</span> in <span className="font-mono text-white">{durationStr} mins</span>{dateStr}
         </span>
@@ -63,6 +76,73 @@ const CustomScatterTooltip = ({ active, payload }: any) => {
   }
   return null;
 };
+
+const PitAndStandUsageTable: React.FC<{ pitTable: any[]; unusedPitsTable: any[] }> = React.memo(({ pitTable, unusedPitsTable }) => {
+  const [showUnusedPits, setShowUnusedPits] = useState<boolean>(false);
+
+  return (
+    <div className="card-premium overflow-hidden">
+      <div className="px-6 py-3 border-b border-outline bg-surface-dim/40 flex items-center justify-between gap-4">
+        <h3 className="text-[10px] font-black text-on-surface uppercase tracking-wider">Pit & Stand Usage</h3>
+        <div className="flex bg-surface-dim p-0.5 rounded-lg relative w-40 h-[24px] items-center border border-outline/30 shrink-0">
+          <div 
+            className="absolute h-[18px] kinetic-gradient rounded transition-transform duration-300 ease-out shadow-md"
+            style={{
+              width: 'calc(50% - 2px)',
+              transform: `translateX(${showUnusedPits ? '100%' : '0%'})`
+            }}
+          ></div>
+          <button 
+            onClick={() => setShowUnusedPits(false)}
+            className={`flex-1 text-center text-[8px] font-black uppercase tracking-wider relative z-10 transition-colors duration-200 h-full flex items-center justify-center ${
+              !showUnusedPits ? 'text-white' : 'text-on-surface hover:text-primary'
+            }`}
+          >
+            Active
+          </button>
+          <button 
+            onClick={() => setShowUnusedPits(true)}
+            className={`flex-1 text-center text-[8px] font-black uppercase tracking-wider relative z-10 transition-colors duration-200 h-full flex items-center justify-center ${
+              showUnusedPits ? 'text-white' : 'text-on-surface hover:text-primary'
+            }`}
+          >
+            Unused
+          </button>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-xs">
+          <thead>
+            <tr className="bg-surface-dim/60 border-b border-outline text-[9px] font-black text-on-surface-dim uppercase sticky top-0 z-20">
+              <th className="px-4 py-2.5">Pit ID</th>
+              <th className="px-4 py-2.5">Stand</th>
+              {!showUnusedPits && <th className="px-4 py-2.5 text-right">Vol (L)</th>}
+              {!showUnusedPits && <th className="px-4 py-2.5 text-center">Reps</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-outline">
+            {(showUnusedPits ? unusedPitsTable : pitTable).map((row) => (
+              <tr key={`${row.pit}-${row.stand}`} className="hover:bg-primary/[0.01]">
+                <td className="px-4 py-2 font-black uppercase font-mono">{row.pit}</td>
+                <td className="px-4 py-2 font-bold text-on-surface-dim">{row.stand}</td>
+                {!showUnusedPits && (
+                  <td className="px-4 py-2 text-right font-mono font-bold">
+                    {row.volume > 0 ? row.volume.toLocaleString() : '0'}
+                  </td>
+                )}
+                {!showUnusedPits && (
+                  <td className="px-4 py-2 text-center font-bold">
+                    {row.reps > 0 ? row.reps : '0'}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+});
 
 export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
   const { flightLogs, tanks, equipment } = useOperationalData();
@@ -123,8 +203,46 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
     return Array.from(set).sort();
   }, [flightLogs]);
 
+const emptyJetData = {
+  kpi: { totalVolume: 0, international: 0, domestic: 0, adhocInt: 0, adhocDom: 0, seaplane: 0, localSales: 0 },
+  growth: { volume: 0, refueling: 0, avgVol: 0, peakDay: 0, occupiedTime: 0, refuelingTime: 0, activeHrsOccupied: 0, activeHrsFuelling: 0, currentVol: 0, prevVol: 0, currentRefuel: 0, prevRefuel: 0, currentAvg: 0, prevAvg: 0, currentPeak: 0, prevPeak: 0, currentOccupiedTime: 0, prevOccupiedTime: 0, currentRefuelTime: 0, prevRefuelTime: 0, currentActiveOccupied: 0, prevActiveOccupied: 0, currentActiveFuelling: 0, prevActiveFuelling: 0 },
+  dailyPattern: [],
+  sales30Days: [],
+  turnaroundIndividual: [],
+  turnaroundAggregate: [],
+  hourlyPattern: [],
+  eqUsage: [],
+  weeklyPattern: [],
+  standUtilization: [],
+  topCustomers: [],
+  topFlights: [],
+  pieData: [],
+  tables: { intAirlinesTable: [], flightTable: [], pitTable: [], unusedPitsTable: [] }
+};
+
+const emptyGroundData = {
+  kpi: { totalVolume: 0, dieselVolume: 0, petrolVolume: 0, gseConsumption: 0, depotGenerator: 0, vesselMarine: 0, localSales: 0 },
+  growth: { volume: 0, transactions: 0, avgVol: 0, peakDay: 0, activeHrs: 0, currentVol: 0, prevVol: 0, currentTransactions: 0, prevTransactions: 0, currentAvg: 0, prevAvg: 0, currentPeak: 0, prevPeak: 0, currentActiveHrs: 0, prevActiveHrs: 0 },
+  dailyPattern: [],
+  sales30Days: [],
+  turnaroundIndividual: [],
+  turnaroundAggregate: [],
+  hourlyPattern: [],
+  eqUsage: [],
+  weeklyPattern: [],
+  stationUtilization: [],
+  topCustomers: [],
+  topVehicles: [],
+  pieData: [],
+  tables: { deptTable: [], assetTable: [], stationTable: [] }
+};
+
   // JET A-1 Dashboard Dataset Generator
   const jetData = useMemo(() => {
+    if (activeTab !== 'sales' || salesFuelType !== 'JET_A1') {
+      return emptyJetData;
+    }
+
     const start = new Date(startDateJet);
     const end = new Date(endDateJet);
     const diffTime = Math.abs(end.getTime() - start.getTime());
@@ -357,7 +475,8 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
         y: l.volume || 0,
         name: l.flightNumber || 'Flight',
         airline: l.co || l.airline || 'Other Airlines',
-        date: l.operationalDate ? formatDateShort(l.operationalDate) : ''
+        date: l.operationalDate ? formatDateShort(l.operationalDate) : '',
+        color: '#f59e0b'
       };
     });
 
@@ -378,7 +497,8 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       name: key,
       airline: key,
       count: groups[key].count,
-      date: ''
+      date: '',
+      color: '#3b82f6'
     }));
 
     const hourlyPatternMap: { [hour: number]: { volume: number, count: number } } = {};
@@ -416,6 +536,9 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
         volume: eqUsageMap[vId].volume,
         count: eqUsageMap[vId].count
       };
+    }).filter(item => {
+      const n = (item.name || '').toUpperCase().trim();
+      return n !== 'SCADA' && n !== 'UNKNOWN EQUIPMENT' && n !== 'UNKNOWN' && n !== '-';
     });
 
     const weeklyPatternMap: { [weekStr: string]: number } = {};
@@ -451,10 +574,15 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       standMap[standName][category] = (standMap[standName][category] || 0) + (l.volume || 0);
     });
 
-    const standUtilization = Object.keys(standMap).map(stand => ({
-      stand,
-      ...standMap[stand]
-    }));
+    const standUtilization = Object.keys(standMap)
+      .filter(stand => {
+        const s = (stand || '').toUpperCase().trim();
+        return s !== '-' && s !== 'UNKNOWN' && s !== 'UNKNOWN STAND' && s !== 'N/A' && s !== '';
+      })
+      .map(stand => ({
+        stand,
+        ...standMap[stand]
+      }));
 
     const topCustomersMap: { [airline: string]: number } = {};
     filteredLogs.forEach(l => {
@@ -596,10 +724,14 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       pieData,
       tables: { intAirlinesTable, flightTable, pitTable, unusedPitsTable }
     };
-  }, [startDateJet, endDateJet, categoryJet, airlineJet, flightNoJet, dayOfWeekJet, flightLogs, equipment]);
+  }, [startDateJet, endDateJet, categoryJet, airlineJet, flightNoJet, dayOfWeekJet, flightLogs, equipment, activeTab, salesFuelType]);
 
   // Combined DIESEL & PETROL Dashboard Dataset Generator
   const groundData = useMemo(() => {
+    if (activeTab !== 'sales' || salesFuelType !== 'GROUND_FUELS') {
+      return emptyGroundData;
+    }
+
     const start = new Date(startDateGround);
     const end = new Date(endDateGround);
     const diffTime = Math.abs(end.getTime() - start.getTime());
@@ -790,7 +922,8 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
         y: l.volume || 0,
         name: l.aircraftReg || l.flightNumber || 'Asset',
         airline: l.co || l.airline || 'Ground Operations',
-        date: l.operationalDate ? formatDateShort(l.operationalDate) : ''
+        date: l.operationalDate ? formatDateShort(l.operationalDate) : '',
+        color: '#8b5cf6'
       };
     });
 
@@ -811,7 +944,8 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       name: key,
       airline: key,
       count: groups[key].count,
-      date: ''
+      date: '',
+      color: '#3b82f6'
     }));
 
     const hourlyPatternMap: { [hour: number]: { volume: number, count: number } } = {};
@@ -845,7 +979,10 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       name: src,
       volume: eqUsageMap[src].volume,
       count: eqUsageMap[src].count
-    }));
+    })).filter(item => {
+      const n = (item.name || '').toUpperCase().trim();
+      return n !== 'SCADA' && n !== 'UNKNOWN EQUIPMENT' && n !== 'UNKNOWN' && n !== '-';
+    });
 
     const weeklyPatternMap: { [weekStr: string]: number } = {};
     filteredLogs.forEach(l => {
@@ -964,10 +1101,10 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       kpi: { totalVolume, dieselVolume, petrolVolume, gseConsumption, depotGenerator, vesselMarine, localSales },
       growth: {
         volume: volumeGrowth,
-        transactions: currentTransactions,
+        transactions: transactionsGrowth,
         avgVol: avgGrowth,
         peakDay: peakGrowth,
-        activeHrs: currentTotalActiveHrs,
+        activeHrs: activeHrsGrowth,
         currentVol: totalVolume,
         prevVol: prevTotalVolume,
         currentTransactions,
@@ -992,7 +1129,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       pieData,
       tables: { deptTable, assetTable, stationTable }
     };
-  }, [startDateGround, endDateGround, compareGround, fuelGradeGround, facilityGround, deptGround, searchGround, flightLogs, equipment]);
+  }, [startDateGround, endDateGround, compareGround, fuelGradeGround, facilityGround, deptGround, searchGround, flightLogs, equipment, activeTab, salesFuelType]);
 
   // Fluctuates volume deterministically based on date to simulate historical reports
   const getHistoricalLevel = (id: string, currentLevel: number, capacity: number, dateStr: string) => {
@@ -1805,35 +1942,53 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
       .reduce((acc, l) => acc + (l.volume || 0), 0) + 9800; // Adding seed petrol
 
     return {
-      jet: totalJetSales > 0 ? totalJetSales : 12450000, // Fallback to premium mockup scales
+      jet: totalJetSales,
       diesel: totalDieselSales,
       petrol: totalPetrolSales,
-      total: (totalJetSales > 0 ? totalJetSales : 12450000) + totalDieselSales + totalPetrolSales
+      total: totalJetSales + totalDieselSales + totalPetrolSales
     };
   }, [flightLogs]);
 
-  // Monthly breakdowns for Recharts
-  const monthlySalesData = useMemo(() => {
-    return [
-      { month: 'Jan', jet: 10800000, diesel: 180000, petrol: 92000 },
-      { month: 'Feb', jet: 11200000, diesel: 195000, petrol: 95000 },
-      { month: 'Mar', jet: 12500000, diesel: 210000, petrol: 102000 },
-      { month: 'Apr', jet: 11900000, diesel: 175000, petrol: 89000 },
-      { month: 'May', jet: 12100000, diesel: 190000, petrol: 93000 },
-      { month: 'Jun', jet: salesSummary.jet, diesel: salesSummary.diesel, petrol: salesSummary.petrol }
-    ];
-  }, [salesSummary]);
+  const renderKpiCard = (
+    title: string,
+    growthValue: number,
+    currentValStr: string | number,
+    prevValStr: string | number,
+    unit: string = '',
+    reverseColor: boolean = false
+  ) => {
+    const isPositive = growthValue >= 0;
+    const isGood = reverseColor ? !isPositive : isPositive;
+    
+    const colorClass = isGood ? 'text-green-500 font-black' : 'text-red-500 font-black';
+    const bgClass = isGood ? 'bg-green-500/[0.03] border-green-500/20' : 'bg-red-500/[0.03] border-red-500/20';
+    const borderTopClass = isGood ? 'border-t-green-500' : 'border-t-red-500';
+    
+    const Icon = isPositive ? TrendingUp : TrendingDown;
+    const sign = isPositive ? '+' : '';
 
-  // Carrier based sales report
-  const airlineSalesData = useMemo(() => {
-    return [
-      { airline: 'Emirates', volume: 4500000, flights: 75, share: '36.1%' },
-      { airline: 'Qatar Airways', volume: 3200000, flights: 58, share: '25.7%' },
-      { airline: 'Singapore Airlines', volume: 2100000, flights: 35, share: '16.8%' },
-      { airline: 'British Airways', volume: 1450000, flights: 22, share: '11.6%' },
-      { airline: 'SriLankan Airlines', volume: 1200000, flights: 48, share: '9.8%' }
-    ];
-  }, []);
+    return (
+      <div className={`p-4 rounded-xl border border-outline/50 border-t-2 ${borderTopClass} ${bgClass} flex flex-col justify-between transition-all duration-300 hover:shadow-md`}>
+        <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider">{title}</span>
+        <div className="mt-2.5 flex items-baseline justify-between">
+          <span className={`text-2xl font-black ${colorClass} font-mono flex items-center`}>
+            <Icon className="w-5 h-5 mr-1 shrink-0" />
+            {sign}{growthValue}%
+          </span>
+        </div>
+        <div className="mt-3.5 pt-2 border-t border-outline/20 text-[10px] font-bold space-y-1 text-on-surface-dim">
+          <div className="flex justify-between items-center">
+            <span className="opacity-75 font-sans">Current:</span>
+            <span className="font-mono text-on-surface font-black">{currentValStr}{unit}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="opacity-75 font-sans">Previous:</span>
+            <span className="font-mono text-on-surface-dim">{prevValStr}{unit}</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // COLORS FOR CELL CHART
   const COLORS = ['var(--color-primary)', 'var(--color-success)', 'var(--color-warning)', '#8884d8', '#ff7300'];
@@ -2389,46 +2544,46 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
               
               {/* KPI Cards (7 cards row) */}
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-                <div className="card-premium p-4 border-l-4 border-l-primary flex flex-col justify-between">
+                <div className="card-premium p-4 border-l-4 border-l-primary bg-primary/[0.03] flex flex-col justify-between">
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Total Volume</span>
                   <div className="mt-2">
-                    <span className="text-xl font-black text-on-surface font-mono">{jetData.kpi.totalVolume.toLocaleString()} L</span>
+                    <span className="text-xl font-black text-sky-400 font-mono">{jetData.kpi.totalVolume.toLocaleString()} L</span>
                   </div>
                 </div>
-                <div className="card-premium p-4 border-l-4 border-l-blue-600 flex flex-col justify-between">
+                <div className="card-premium p-4 border-l-4 border-l-blue-600 bg-blue-600/[0.03] flex flex-col justify-between">
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">International</span>
                   <div className="mt-2">
-                    <span className="text-xl font-black text-on-surface font-mono">{jetData.kpi.international.toLocaleString()} L</span>
+                    <span className="text-xl font-black text-blue-400 font-mono">{jetData.kpi.international.toLocaleString()} L</span>
                   </div>
                 </div>
-                <div className="card-premium p-4 border-l-4 border-l-green-600 flex flex-col justify-between">
+                <div className="card-premium p-4 border-l-4 border-l-green-600 bg-green-600/[0.03] flex flex-col justify-between">
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Domestic</span>
                   <div className="mt-2">
-                    <span className="text-xl font-black text-on-surface font-mono">{jetData.kpi.domestic.toLocaleString()} L</span>
+                    <span className="text-xl font-black text-green-400 font-mono">{jetData.kpi.domestic.toLocaleString()} L</span>
                   </div>
                 </div>
-                <div className="card-premium p-4 border-l-4 border-l-orange-500 flex flex-col justify-between">
+                <div className="card-premium p-4 border-l-4 border-l-orange-500 bg-orange-500/[0.03] flex flex-col justify-between">
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Ad-hoc Int</span>
                   <div className="mt-2">
-                    <span className="text-xl font-black text-on-surface font-mono">{jetData.kpi.adhocInt.toLocaleString()} L</span>
+                    <span className="text-xl font-black text-orange-400 font-mono">{jetData.kpi.adhocInt.toLocaleString()} L</span>
                   </div>
                 </div>
-                <div className="card-premium p-4 border-l-4 border-l-red-500 flex flex-col justify-between">
+                <div className="card-premium p-4 border-l-4 border-l-red-500 bg-red-500/[0.03] flex flex-col justify-between">
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Ad-hoc Dom</span>
                   <div className="mt-2">
-                    <span className="text-xl font-black text-on-surface font-mono">{jetData.kpi.adhocDom.toLocaleString()} L</span>
+                    <span className="text-xl font-black text-red-400 font-mono">{jetData.kpi.adhocDom.toLocaleString()} L</span>
                   </div>
                 </div>
-                <div className="card-premium p-4 border-l-4 border-l-purple-500 flex flex-col justify-between">
+                <div className="card-premium p-4 border-l-4 border-l-purple-500 bg-purple-500/[0.03] flex flex-col justify-between">
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Seaplane</span>
                   <div className="mt-2">
-                    <span className="text-xl font-black text-on-surface font-mono">{jetData.kpi.seaplane.toLocaleString()} L</span>
+                    <span className="text-xl font-black text-purple-400 font-mono">{jetData.kpi.seaplane.toLocaleString()} L</span>
                   </div>
                 </div>
-                <div className="card-premium p-4 border-l-4 border-l-gray-500 flex flex-col justify-between bg-surface-container">
+                <div className="card-premium p-4 border-l-4 border-l-gray-500 bg-slate-500/[0.03] flex flex-col justify-between">
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Local Sales</span>
                   <div className="mt-2">
-                    <span className="text-xl font-black text-on-surface font-mono">{jetData.kpi.localSales.toLocaleString()} L</span>
+                    <span className="text-xl font-black text-slate-400 font-mono">{jetData.kpi.localSales.toLocaleString()} L</span>
                   </div>
                 </div>
               </div>
@@ -2441,127 +2596,14 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                   </h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  
-                  {/* Card 1: Total Volume Growth */}
-                  <div className="bg-surface-dim/30 p-4 rounded-xl border border-outline/65 flex flex-col justify-between">
-                    <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider">Total Volume Growth</span>
-                    <div className="mt-2 flex items-baseline justify-between">
-                      <span className="text-2xl font-black text-green-600 font-mono flex items-center">
-                        <TrendingUp className="w-5 h-5 mr-1" />
-                        +{jetData.growth.volume}%
-                      </span>
-                    </div>
-                    <div className="mt-2 text-[9px] font-bold text-on-surface-dim">
-                      <p>Current: <span className="font-mono text-on-surface">{jetData.growth.currentVol.toLocaleString()} L</span></p>
-                      <p>Previous: <span className="font-mono text-on-surface-dim">{jetData.growth.prevVol.toLocaleString()} L</span></p>
-                    </div>
-                  </div>
-
-                  {/* Card 2: Refueling Count */}
-                  <div className="bg-surface-dim/30 p-4 rounded-xl border border-outline/65 flex flex-col justify-between">
-                    <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider">Refueling Count</span>
-                    <div className="mt-2 flex items-baseline justify-between">
-                      <span className="text-2xl font-black text-red-600 font-mono flex items-center">
-                        <TrendingDown className="w-5 h-5 mr-1" />
-                        {jetData.growth.refueling}%
-                      </span>
-                    </div>
-                    <div className="mt-2 text-[9px] font-bold text-on-surface-dim">
-                      <p>Current: <span className="font-mono text-on-surface">{jetData.growth.currentRefuel.toLocaleString()}</span></p>
-                      <p>Previous: <span className="font-mono text-on-surface-dim">{jetData.growth.prevRefuel.toLocaleString()}</span></p>
-                    </div>
-                  </div>
-
-                  {/* Card 3: Avg Volume */}
-                  <div className="bg-surface-dim/30 p-4 rounded-xl border border-outline/65 flex flex-col justify-between">
-                    <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider">Avg Volume</span>
-                    <div className="mt-2 flex items-baseline justify-between">
-                      <span className="text-2xl font-black text-green-600 font-mono flex items-center">
-                        <TrendingUp className="w-5 h-5 mr-1" />
-                        +{jetData.growth.avgVol}%
-                      </span>
-                    </div>
-                    <div className="mt-2 text-[9px] font-bold text-on-surface-dim">
-                      <p>Current: <span className="font-mono text-on-surface">{jetData.growth.currentAvg.toLocaleString()} L</span></p>
-                      <p>Previous: <span className="font-mono text-on-surface-dim">{jetData.growth.prevAvg.toLocaleString()} L</span></p>
-                    </div>
-                  </div>
-
-                  {/* Card 4: Peak Single Day */}
-                  <div className="bg-surface-dim/30 p-4 rounded-xl border border-outline/65 flex flex-col justify-between">
-                    <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider">Peak Single Day</span>
-                    <div className="mt-2 flex items-baseline justify-between">
-                      <span className="text-2xl font-black text-red-600 font-mono flex items-center">
-                        <TrendingDown className="w-5 h-5 mr-1" />
-                        {jetData.growth.peakDay}%
-                      </span>
-                    </div>
-                    <div className="mt-2 text-[9px] font-bold text-on-surface-dim">
-                      <p>Current: <span className="font-mono text-on-surface">{jetData.growth.currentPeak.toLocaleString()} L</span></p>
-                      <p>Previous: <span className="font-mono text-on-surface-dim">{jetData.growth.prevPeak.toLocaleString()} L</span></p>
-                    </div>
-                  </div>
-
-                  {/* Card 5: Avg Occupied Time */}
-                  <div className="bg-surface-dim/30 p-4 rounded-xl border border-outline/65 flex flex-col justify-between">
-                    <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider">Avg Occupied Time</span>
-                    <div className="mt-2 flex items-baseline justify-between">
-                      <span className="text-2xl font-black text-green-600 font-mono flex items-center">
-                        <TrendingUp className="w-5 h-5 mr-1" />
-                        +{jetData.growth.occupiedTime}%
-                      </span>
-                    </div>
-                    <div className="mt-2 text-[9px] font-bold text-on-surface-dim">
-                      <p>Current: <span className="font-mono text-on-surface">{jetData.growth.currentOccupiedTime} mins</span></p>
-                      <p>Previous: <span className="font-mono text-on-surface-dim">{jetData.growth.prevOccupiedTime} mins</span></p>
-                    </div>
-                  </div>
-
-                  {/* Card 6: Avg Refueling Time */}
-                  <div className="bg-surface-dim/30 p-4 rounded-xl border border-outline/65 flex flex-col justify-between">
-                    <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider">Avg Refueling Time</span>
-                    <div className="mt-2 flex items-baseline justify-between">
-                      <span className="text-2xl font-black text-green-600 font-mono flex items-center">
-                        <TrendingUp className="w-5 h-5 mr-1" />
-                        +{jetData.growth.refuelingTime}%
-                      </span>
-                    </div>
-                    <div className="mt-2 text-[9px] font-bold text-on-surface-dim">
-                      <p>Current: <span className="font-mono text-on-surface">{jetData.growth.currentRefuelTime} mins</span></p>
-                      <p>Previous: <span className="font-mono text-on-surface-dim">{jetData.growth.prevRefuelTime} mins</span></p>
-                    </div>
-                  </div>
-
-                  {/* Card 7: Active Hrs (Occupied) */}
-                  <div className="bg-surface-dim/30 p-4 rounded-xl border border-outline/65 flex flex-col justify-between">
-                    <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider">Active Hrs (Occupied)</span>
-                    <div className="mt-2 flex items-baseline justify-between">
-                      <span className="text-2xl font-black text-green-600 font-mono flex items-center">
-                        <TrendingUp className="w-5 h-5 mr-1" />
-                        +{jetData.growth.activeHrsOccupied}%
-                      </span>
-                    </div>
-                    <div className="mt-2 text-[9px] font-bold text-on-surface-dim">
-                      <p>Current: <span className="font-mono text-on-surface">{jetData.growth.currentActiveOccupied} hrs</span></p>
-                      <p>Previous: <span className="font-mono text-on-surface-dim">{jetData.growth.prevActiveOccupied} hrs</span></p>
-                    </div>
-                  </div>
-
-                  {/* Card 8: Active Hrs (Fuelling) */}
-                  <div className="bg-surface-dim/30 p-4 rounded-xl border border-outline/65 flex flex-col justify-between">
-                    <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider">Active Hrs (Fuelling)</span>
-                    <div className="mt-2 flex items-baseline justify-between">
-                      <span className="text-2xl font-black text-green-600 font-mono flex items-center">
-                        <TrendingUp className="w-5 h-5 mr-1" />
-                        +{jetData.growth.activeHrsFuelling}%
-                      </span>
-                    </div>
-                    <div className="mt-2 text-[9px] font-bold text-on-surface-dim">
-                      <p>Current: <span className="font-mono text-on-surface">{jetData.growth.currentActiveFuelling} hrs</span></p>
-                      <p>Previous: <span className="font-mono text-on-surface-dim">{jetData.growth.prevActiveFuelling} hrs</span></p>
-                    </div>
-                  </div>
-
+                  {renderKpiCard("Total Volume Growth", jetData.growth.volume, jetData.growth.currentVol.toLocaleString(), jetData.growth.prevVol.toLocaleString(), " L")}
+                  {renderKpiCard("Refueling Count", jetData.growth.refueling, jetData.growth.currentRefuel.toLocaleString(), jetData.growth.prevRefuel.toLocaleString())}
+                  {renderKpiCard("Avg Volume", jetData.growth.avgVol, jetData.growth.currentAvg.toLocaleString(), jetData.growth.prevAvg.toLocaleString(), " L")}
+                  {renderKpiCard("Peak Single Day", jetData.growth.peakDay, jetData.growth.currentPeak.toLocaleString(), jetData.growth.prevPeak.toLocaleString(), " L")}
+                  {renderKpiCard("Avg Occupied Time", jetData.growth.occupiedTime, jetData.growth.currentOccupiedTime, jetData.growth.prevOccupiedTime, " mins", true)}
+                  {renderKpiCard("Avg Refueling Time", jetData.growth.refuelingTime, jetData.growth.currentRefuelTime, jetData.growth.prevRefuelTime, " mins", true)}
+                  {renderKpiCard("Active Hrs (Occupied)", jetData.growth.activeHrsOccupied, jetData.growth.currentActiveOccupied, jetData.growth.prevActiveOccupied, " hrs")}
+                  {renderKpiCard("Active Hrs (Fuelling)", jetData.growth.activeHrsFuelling, jetData.growth.currentActiveFuelling, jetData.growth.prevActiveFuelling, " hrs")}
                 </div>
               </div>
 
@@ -2584,11 +2626,11 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
                         <XAxis dataKey="date" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
                         <YAxis tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900 }} iconType="circle" />
-                        <Area type="monotone" dataKey="volume" name="All Volume" stroke="#0ea5e9" strokeWidth={2} fillOpacity={1} fill="url(#colorJetVolume)" />
-                        <Line type="monotone" dataKey="avg7Day" name="7-Day Avg" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
-                        <Line type="monotone" dataKey="prevPeriod" name="Previous Period" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="3 3" dot={false} />
+                        <Tooltip {...chartTooltipProps} />
+                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900, color: 'var(--color-on-surface)' }} iconType="circle" />
+                        <Area isAnimationActive={false} type="monotone" dataKey="volume" name="All Volume" stroke="#0ea5e9" strokeWidth={2} fillOpacity={1} fill="url(#colorJetVolume)" />
+                        <Line isAnimationActive={false} type="monotone" dataKey="avg7Day" name="7-Day Avg" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
+                        <Line isAnimationActive={false} type="monotone" dataKey="prevPeriod" name="Previous Period" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="3 3" dot={false} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -2611,11 +2653,11 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
                         <XAxis dataKey="date" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
                         <YAxis tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900 }} iconType="circle" />
-                        <Area type="monotone" dataKey="volume" name="Daily Volume" stroke="#8b5cf6" strokeWidth={2} fillOpacity={1} fill="url(#colorJet30Days)" />
-                        <Line type="monotone" dataKey="avg7Day" name="7-Day Avg" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
-                        <Line type="monotone" dataKey="prevPeriod" name="Previous Period" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="3 3" dot={false} />
+                        <Tooltip {...chartTooltipProps} />
+                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900, color: 'var(--color-on-surface)' }} iconType="circle" />
+                        <Area isAnimationActive={false} type="monotone" dataKey="volume" name="Daily Volume" stroke="#8b5cf6" strokeWidth={2} fillOpacity={1} fill="url(#colorJet30Days)" />
+                        <Line isAnimationActive={false} type="monotone" dataKey="avg7Day" name="7-Day Avg" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
+                        <Line isAnimationActive={false} type="monotone" dataKey="prevPeriod" name="Previous Period" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="3 3" dot={false} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -2660,11 +2702,12 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                   <ResponsiveContainer width="100%" height="100%">
                     <ScatterChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--color-outline-dim)" />
-                      <XAxis type="number" dataKey="x" name="Duration" unit="m" tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                      <YAxis type="number" dataKey="y" name="Volume" unit="L" tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} tick={{fontSize: 9}} axisLine={false} tickLine={false} />
+                      <XAxis type="number" dataKey="x" name="Duration" unit="m" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                      <YAxis type="number" dataKey="y" name="Volume" unit="L" tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
                       <ZAxis type="number" range={[40, 40]} />
                       <Tooltip content={<CustomScatterTooltip />} cursor={{ strokeDasharray: '3 3' }} />
                       <Scatter 
+                        isAnimationActive={false}
                         name={turnaroundViewJet === 'individual' ? "Individual Flight" : "Carrier / Group"} 
                         data={turnaroundViewJet === 'individual' ? jetData.turnaroundIndividual : jetData.turnaroundAggregate} 
                         fill={turnaroundViewJet === 'individual' ? "#f59e0b" : "#3b82f6"} 
@@ -2685,13 +2728,13 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={jetData.hourlyPattern}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
-                        <XAxis dataKey="hour" tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <YAxis yAxisId="left" tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${(v/1000000).toFixed(1)}M`} tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900 }} />
-                        <Bar yAxisId="left" dataKey="count" name="Refuel Count" fill="#ef4444" opacity={0.6} radius={[4, 4, 0, 0]} />
-                        <Line yAxisId="right" type="monotone" dataKey="volume" name="Volume (L)" stroke="#0ea5e9" strokeWidth={2} dot={false} />
+                        <XAxis dataKey="hour" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="left" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${(v/1000000).toFixed(1)}M`} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <Tooltip {...chartTooltipProps} />
+                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900, color: 'var(--color-on-surface)' }} />
+                        <Bar isAnimationActive={false} yAxisId="left" dataKey="count" name="Refuel Count" fill="#ef4444" opacity={0.6} radius={[4, 4, 0, 0]} />
+                        <Line isAnimationActive={false} yAxisId="right" type="monotone" dataKey="volume" name="Volume (L)" stroke="#0ea5e9" strokeWidth={2} dot={false} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
@@ -2706,13 +2749,13 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={jetData.eqUsage}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
-                        <XAxis dataKey="name" tick={{fontSize: 8}} axisLine={false} tickLine={false} />
-                        <YAxis yAxisId="left" tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${(v/1000000).toFixed(1)}M`} tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900 }} />
-                        <Bar yAxisId="left" dataKey="count" name="Refueling Count" fill="#f59e0b" opacity={0.7} radius={[4, 4, 0, 0]} />
-                        <Line yAxisId="right" type="monotone" dataKey="volume" name="Total Volume (L)" stroke="#0ea5e9" strokeWidth={2} dot={false} />
+                        <XAxis dataKey="name" tick={{fontSize: 8, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="left" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${(v/1000000).toFixed(1)}M`} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <Tooltip {...chartTooltipProps} />
+                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900, color: 'var(--color-on-surface)' }} />
+                        <Bar isAnimationActive={false} yAxisId="left" dataKey="count" name="Refueling Count" fill="#f59e0b" opacity={0.7} radius={[4, 4, 0, 0]} />
+                        <Line isAnimationActive={false} yAxisId="right" type="monotone" dataKey="volume" name="Total Volume (L)" stroke="#0ea5e9" strokeWidth={2} dot={false} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
@@ -2730,10 +2773,10 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={jetData.weeklyPattern}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
-                        <XAxis dataKey="week" tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <YAxis tickFormatter={(v) => `${(v/1000000).toFixed(1)}M`} tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Bar dataKey="volume" name="Weekly Volume (L)" fill="none" stroke="#10b981" strokeWidth={1.5} radius={[2, 2, 0, 0]} />
+                        <XAxis dataKey="week" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <YAxis tickFormatter={(v) => `${(v/1000000).toFixed(1)}M`} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <Tooltip {...chartTooltipProps} />
+                        <Bar isAnimationActive={false} dataKey="volume" name="Weekly Volume (L)" fill="none" stroke="#10b981" strokeWidth={1.5} radius={[2, 2, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2748,15 +2791,15 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={jetData.standUtilization}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
-                        <XAxis dataKey="stand" tick={{fontSize: 8}} axisLine={false} tickLine={false} />
-                        <YAxis tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '8px', fontWeight: 900 }} />
-                        <Bar dataKey="International" stackId="a" fill="#002046" />
-                        <Bar dataKey="Domestic" stackId="a" fill="#22c55e" />
-                        <Bar dataKey="Ad-hoc Int" stackId="a" fill="#f59e0b" />
-                        <Bar dataKey="Ad-hoc Dom" stackId="a" fill="#ef4444" />
-                        <Bar dataKey="Seaplane" stackId="a" fill="#8884d8" />
+                        <XAxis dataKey="stand" tick={{fontSize: 8, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <YAxis tickFormatter={(v) => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : (v >= 1000 ? `${(v/1000).toFixed(0)}k` : v.toLocaleString())} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <Tooltip {...chartTooltipProps} />
+                        <Legend wrapperStyle={{ fontSize: '8px', fontWeight: 900, color: 'var(--color-on-surface)' }} />
+                        <Bar isAnimationActive={false} dataKey="International" stackId="a" fill="#002046" />
+                        <Bar isAnimationActive={false} dataKey="Domestic" stackId="a" fill="#22c55e" />
+                        <Bar isAnimationActive={false} dataKey="Ad-hoc Int" stackId="a" fill="#f59e0b" />
+                        <Bar isAnimationActive={false} dataKey="Ad-hoc Dom" stackId="a" fill="#ef4444" />
+                        <Bar isAnimationActive={false} dataKey="Seaplane" stackId="a" fill="#8884d8" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2772,10 +2815,10 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={jetData.topCustomers} layout="vertical" margin={{ left: 10, right: 10 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-outline-dim)" />
-                        <XAxis type="number" tickFormatter={(v) => `${(v/1000000).toFixed(1)}M`} tick={{fontSize: 8}} axisLine={false} tickLine={false} />
-                        <YAxis dataKey="airline" type="category" tick={{fontSize: 7, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Bar dataKey="volume" name="Volume (L)" fill="#002046" radius={[0, 4, 4, 0]} />
+                        <XAxis type="number" tickFormatter={(v) => `${(v/1000000).toFixed(1)}M`} tick={{fontSize: 8, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <YAxis dataKey="airline" type="category" tick={{fontSize: 7, fontWeight: 'bold', fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <Tooltip {...chartTooltipProps} />
+                        <Bar isAnimationActive={false} dataKey="volume" name="Volume (L)" fill="#002046" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2788,10 +2831,10 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={jetData.topFlights} layout="vertical" margin={{ left: 10, right: 10 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-outline-dim)" />
-                        <XAxis type="number" tickFormatter={(v) => `${(v/1000000).toFixed(1)}M`} tick={{fontSize: 8}} axisLine={false} tickLine={false} />
-                        <YAxis dataKey="flight" type="category" tick={{fontSize: 8, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Bar dataKey="volume" name="Volume (L)" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                        <XAxis type="number" tickFormatter={(v) => `${(v/1000000).toFixed(1)}M`} tick={{fontSize: 8, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <YAxis dataKey="flight" type="category" tick={{fontSize: 8, fontWeight: 'bold', fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <Tooltip {...chartTooltipProps} />
+                        <Bar isAnimationActive={false} dataKey="volume" name="Volume (L)" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2817,7 +2860,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                             <Cell key={`cell-${idx}`} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip />
+                        <Tooltip {...chartTooltipProps} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -2833,9 +2876,9 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
               </div>
 
               {/* Detail Tables Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Table 1: International Airlines */}
-                <div className="card-premium overflow-hidden">
+                <div className="lg:col-span-5 card-premium overflow-hidden">
                   <div className="px-6 py-4 border-b border-outline bg-surface-dim/40">
                     <h3 className="text-[10px] font-black text-on-surface uppercase tracking-wider">International Airline Breakdown</h3>
                   </div>
@@ -2852,7 +2895,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                       <tbody className="divide-y divide-outline">
                         {jetData.tables.intAirlinesTable.map((row) => (
                           <tr key={row.airline} className="hover:bg-primary/[0.01]">
-                            <td className="px-4 py-2 font-black uppercase truncate max-w-[120px]">{row.airline}</td>
+                            <td className="px-4 py-2 font-black uppercase truncate max-w-[220px]">{row.airline}</td>
                             <td className="px-4 py-2 text-right font-mono font-bold">{row.volume.toLocaleString()}</td>
                             <td className="px-4 py-2 text-center font-bold">{row.reps}</td>
                             <td className="px-4 py-2 text-right font-mono text-on-surface-dim">{row.avg.toLocaleString()}</td>
@@ -2864,7 +2907,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                 </div>
 
                 {/* Table 2: Flight Number */}
-                <div className="card-premium overflow-hidden">
+                <div className="lg:col-span-3 card-premium overflow-hidden">
                   <div className="px-6 py-4 border-b border-outline bg-surface-dim/40">
                     <h3 className="text-[10px] font-black text-on-surface uppercase tracking-wider">Flight Number Breakdown</h3>
                   </div>
@@ -2893,61 +2936,8 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                 </div>
 
                 {/* Table 3: Pit & Stand Usage */}
-                <div className="card-premium overflow-hidden">
-                  <div className="px-6 py-3 border-b border-outline bg-surface-dim/40 flex items-center justify-between gap-4">
-                    <h3 className="text-[10px] font-black text-on-surface uppercase tracking-wider">Pit & Stand Usage</h3>
-                    <div className="flex bg-surface-dim p-0.5 rounded-lg relative w-40 h-[24px] items-center border border-outline/30 shrink-0">
-                      <div 
-                        className="absolute h-[18px] kinetic-gradient rounded transition-transform duration-300 ease-out shadow-md"
-                        style={{
-                          width: 'calc(50% - 2px)',
-                          transform: `translateX(${showUnusedPits ? '100%' : '0%'})`
-                        }}
-                      ></div>
-                      <button 
-                        onClick={() => setShowUnusedPits(false)}
-                        className={`flex-1 text-center text-[8px] font-black uppercase tracking-wider relative z-10 transition-colors duration-200 h-full flex items-center justify-center ${
-                          !showUnusedPits ? 'text-white' : 'text-on-surface hover:text-primary'
-                        }`}
-                      >
-                        Active
-                      </button>
-                      <button 
-                        onClick={() => setShowUnusedPits(true)}
-                        className={`flex-1 text-center text-[8px] font-black uppercase tracking-wider relative z-10 transition-colors duration-200 h-full flex items-center justify-center ${
-                          showUnusedPits ? 'text-white' : 'text-on-surface hover:text-primary'
-                        }`}
-                      >
-                        Unused
-                      </button>
-                    </div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="bg-surface-dim/60 border-b border-outline text-[9px] font-black text-on-surface-dim uppercase sticky top-0 z-20">
-                          <th className="px-4 py-2.5">Pit ID</th>
-                          <th className="px-4 py-2.5">Stand</th>
-                          <th className="px-4 py-2.5 text-right">Vol (L)</th>
-                          <th className="px-4 py-2.5 text-center">Reps</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-outline">
-                        {(showUnusedPits ? jetData.tables.unusedPitsTable : jetData.tables.pitTable).map((row) => (
-                          <tr key={`${row.pit}-${row.stand}`} className="hover:bg-primary/[0.01]">
-                            <td className="px-4 py-2 font-black uppercase font-mono">{row.pit}</td>
-                            <td className="px-4 py-2 font-bold text-on-surface-dim">{row.stand}</td>
-                            <td className="px-4 py-2 text-right font-mono font-bold">
-                              {row.volume > 0 ? row.volume.toLocaleString() : '0'}
-                            </td>
-                            <td className="px-4 py-2 text-center font-bold">
-                              {row.reps > 0 ? row.reps : '0'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                <div className="lg:col-span-4">
+                  <PitAndStandUsageTable pitTable={jetData.tables.pitTable} unusedPitsTable={jetData.tables.unusedPitsTable} />
                 </div>
 
               </div>
@@ -2963,46 +2953,46 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
               
               {/* KPI Cards (7 cards row) */}
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-                <div className="card-premium p-4 border-l-4 border-l-primary flex flex-col justify-between">
+                <div className="card-premium p-4 border-l-4 border-l-primary bg-primary/[0.03] flex flex-col justify-between">
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Total volume</span>
                   <div className="mt-2">
-                    <span className="text-xl font-black text-on-surface font-mono">{groundData.kpi.totalVolume.toLocaleString()} L</span>
+                    <span className="text-xl font-black text-sky-400 font-mono">{groundData.kpi.totalVolume.toLocaleString()} L</span>
                   </div>
                 </div>
-                <div className="card-premium p-4 border-l-4 border-l-success flex flex-col justify-between">
+                <div className="card-premium p-4 border-l-4 border-l-success bg-success/[0.03] flex flex-col justify-between">
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Diesel volume</span>
                   <div className="mt-2">
-                    <span className="text-xl font-black text-on-surface font-mono">{groundData.kpi.dieselVolume.toLocaleString()} L</span>
+                    <span className="text-xl font-black text-emerald-400 font-mono">{groundData.kpi.dieselVolume.toLocaleString()} L</span>
                   </div>
                 </div>
-                <div className="card-premium p-4 border-l-4 border-l-warning flex flex-col justify-between">
+                <div className="card-premium p-4 border-l-4 border-l-warning bg-warning/[0.03] flex flex-col justify-between">
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Petrol volume</span>
                   <div className="mt-2">
-                    <span className="text-xl font-black text-on-surface font-mono">{groundData.kpi.petrolVolume.toLocaleString()} L</span>
+                    <span className="text-xl font-black text-amber-400 font-mono">{groundData.kpi.petrolVolume.toLocaleString()} L</span>
                   </div>
                 </div>
-                <div className="card-premium p-4 border-l-4 border-l-blue-500 flex flex-col justify-between">
+                <div className="card-premium p-4 border-l-4 border-l-blue-500 bg-blue-500/[0.03] flex flex-col justify-between">
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">GSE Services</span>
                   <div className="mt-2">
-                    <span className="text-xl font-black text-on-surface font-mono">{groundData.kpi.gseConsumption.toLocaleString()} L</span>
+                    <span className="text-xl font-black text-blue-400 font-mono">{groundData.kpi.gseConsumption.toLocaleString()} L</span>
                   </div>
                 </div>
-                <div className="card-premium p-4 border-l-4 border-l-purple-500 flex flex-col justify-between">
+                <div className="card-premium p-4 border-l-4 border-l-purple-500 bg-purple-500/[0.03] flex flex-col justify-between">
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Depot Generator</span>
                   <div className="mt-2">
-                    <span className="text-xl font-black text-on-surface font-mono">{groundData.kpi.depotGenerator.toLocaleString()} L</span>
+                    <span className="text-xl font-black text-purple-400 font-mono">{groundData.kpi.depotGenerator.toLocaleString()} L</span>
                   </div>
                 </div>
-                <div className="card-premium p-4 border-l-4 border-l-orange-500 flex flex-col justify-between">
+                <div className="card-premium p-4 border-l-4 border-l-orange-500 bg-orange-500/[0.03] flex flex-col justify-between">
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Vessels / Marine</span>
                   <div className="mt-2">
-                    <span className="text-xl font-black text-on-surface font-mono">{groundData.kpi.vesselMarine.toLocaleString()} L</span>
+                    <span className="text-xl font-black text-orange-400 font-mono">{groundData.kpi.vesselMarine.toLocaleString()} L</span>
                   </div>
                 </div>
-                <div className="card-premium p-4 border-l-4 border-l-gray-500 flex flex-col justify-between bg-surface-container">
+                <div className="card-premium p-4 border-l-4 border-l-gray-500 bg-slate-500/[0.03] flex flex-col justify-between">
                   <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Local Sales</span>
                   <div className="mt-2">
-                    <span className="text-xl font-black text-on-surface font-mono">{groundData.kpi.localSales.toLocaleString()} L</span>
+                    <span className="text-xl font-black text-slate-400 font-mono">{groundData.kpi.localSales.toLocaleString()} L</span>
                   </div>
                 </div>
               </div>
@@ -3015,82 +3005,11 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                   </h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                  
-                  {/* Card 1: Volume Growth */}
-                  <div className="bg-surface-dim/30 p-4 rounded-xl border border-outline/65 flex flex-col justify-between">
-                    <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider">Volume Growth</span>
-                    <div className="mt-2 flex items-baseline justify-between">
-                      <span className="text-2xl font-black text-green-600 font-mono flex items-center">
-                        <TrendingUp className="w-5 h-5 mr-1" />
-                        +8.2%
-                      </span>
-                    </div>
-                    <div className="mt-2 text-[9px] font-bold text-on-surface-dim">
-                      <p>Current: <span className="font-mono text-on-surface">{groundData.growth.currentVol.toLocaleString()} L</span></p>
-                      <p>Previous: <span className="font-mono text-on-surface-dim">{groundData.growth.prevVol.toLocaleString()} L</span></p>
-                    </div>
-                  </div>
-
-                  {/* Card 2: Fill Transactions */}
-                  <div className="bg-surface-dim/30 p-4 rounded-xl border border-outline/65 flex flex-col justify-between">
-                    <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider">Fill Count</span>
-                    <div className="mt-2 flex items-baseline justify-between">
-                      <span className="text-2xl font-black text-green-600 font-mono flex items-center">
-                        <TrendingUp className="w-5 h-5 mr-1" />
-                        +4.5%
-                      </span>
-                    </div>
-                    <div className="mt-2 text-[9px] font-bold text-on-surface-dim">
-                      <p>Current: <span className="font-mono text-on-surface">{groundData.growth.currentTransactions.toLocaleString()}</span></p>
-                      <p>Previous: <span className="font-mono text-on-surface-dim">{groundData.growth.prevTransactions.toLocaleString()}</span></p>
-                    </div>
-                  </div>
-
-                  {/* Card 3: Avg Fill Volume */}
-                  <div className="bg-surface-dim/30 p-4 rounded-xl border border-outline/65 flex flex-col justify-between">
-                    <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider">Avg Fill Volume</span>
-                    <div className="mt-2 flex items-baseline justify-between">
-                      <span className="text-2xl font-black text-green-600 font-mono flex items-center">
-                        <TrendingUp className="w-5 h-5 mr-1" />
-                        +3.5%
-                      </span>
-                    </div>
-                    <div className="mt-2 text-[9px] font-bold text-on-surface-dim">
-                      <p>Current: <span className="font-mono text-on-surface">{groundData.growth.currentAvg.toLocaleString()} L</span></p>
-                      <p>Previous: <span className="font-mono text-on-surface-dim">{groundData.growth.prevAvg.toLocaleString()} L</span></p>
-                    </div>
-                  </div>
-
-                  {/* Card 4: Peak Single Day */}
-                  <div className="bg-surface-dim/30 p-4 rounded-xl border border-outline/65 flex flex-col justify-between">
-                    <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider">Peak Single Day</span>
-                    <div className="mt-2 flex items-baseline justify-between">
-                      <span className="text-2xl font-black text-green-600 font-mono flex items-center">
-                        <TrendingUp className="w-5 h-5 mr-1" />
-                        +12.0%
-                      </span>
-                    </div>
-                    <div className="mt-2 text-[9px] font-bold text-on-surface-dim">
-                      <p>Current: <span className="font-mono text-on-surface">{groundData.growth.currentPeak.toLocaleString()} L</span></p>
-                      <p>Previous: <span className="font-mono text-on-surface-dim">{groundData.growth.prevPeak.toLocaleString()} L</span></p>
-                    </div>
-                  </div>
-
-                  {/* Card 5: Active Hrs */}
-                  <div className="bg-surface-dim/30 p-4 rounded-xl border border-outline/65 flex flex-col justify-between">
-                    <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-wider">Dispense Activity</span>
-                    <div className="mt-2 flex items-baseline justify-between">
-                      <span className="text-2xl font-black text-green-600 font-mono flex items-center">
-                        <TrendingUp className="w-5 h-5 mr-1" />
-                        +5.0%
-                      </span>
-                    </div>
-                    <div className="mt-2 text-[9px] font-bold text-on-surface-dim">
-                      <p>Current: <span className="font-mono text-on-surface">{groundData.growth.currentActiveHrs} hrs</span></p>
-                      <p>Previous: <span className="font-mono text-on-surface-dim">{groundData.growth.prevActiveHrs} hrs</span></p>
-                    </div>
-                  </div>
-
+                  {renderKpiCard("Volume Growth", groundData.growth.volume, groundData.growth.currentVol.toLocaleString(), groundData.growth.prevVol.toLocaleString(), " L")}
+                  {renderKpiCard("Fill Count", groundData.growth.transactions, groundData.growth.currentTransactions.toLocaleString(), groundData.growth.prevTransactions.toLocaleString())}
+                  {renderKpiCard("Avg Fill Volume", groundData.growth.avgVol, groundData.growth.currentAvg.toLocaleString(), groundData.growth.prevAvg.toLocaleString(), " L")}
+                  {renderKpiCard("Peak Single Day", groundData.growth.peakDay, groundData.growth.currentPeak.toLocaleString(), groundData.growth.prevPeak.toLocaleString(), " L")}
+                  {renderKpiCard("Dispense Activity", groundData.growth.activeHrs, groundData.growth.currentActiveHrs, groundData.growth.prevActiveHrs, " hrs")}
                 </div>
               </div>
 
@@ -3113,11 +3032,11 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
                         <XAxis dataKey="date" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
                         <YAxis tickFormatter={(v) => `${(v/1000).toFixed(1)}k`} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900 }} iconType="circle" />
-                        <Area type="monotone" dataKey="volume" name="All Volume" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorGroundVolume)" />
-                        <Line type="monotone" dataKey="avg7Day" name="7-Day Avg" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
-                        <Line type="monotone" dataKey="prevPeriod" name="Previous Period" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="3 3" dot={false} />
+                        <Tooltip {...chartTooltipProps} />
+                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900, color: 'var(--color-on-surface)' }} iconType="circle" />
+                        <Area isAnimationActive={false} type="monotone" dataKey="volume" name="All Volume" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorGroundVolume)" />
+                        <Line isAnimationActive={false} type="monotone" dataKey="avg7Day" name="7-Day Avg" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
+                        <Line isAnimationActive={false} type="monotone" dataKey="prevPeriod" name="Previous Period" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="3 3" dot={false} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -3144,10 +3063,10 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
                         <XAxis dataKey="date" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
                         <YAxis tickFormatter={(v) => `${(v/1000).toFixed(1)}k`} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900 }} iconType="circle" />
-                        <Area type="monotone" stackId="1" dataKey="diesel" name="Diesel (Gasoil)" stroke="#22c55e" strokeWidth={2} fillOpacity={1} fill="url(#colorDiesel)" />
-                        <Area type="monotone" stackId="1" dataKey="petrol" name="Petrol (Mogas)" stroke="#f59e0b" strokeWidth={2} fillOpacity={1} fill="url(#colorPetrol)" />
+                        <Tooltip {...chartTooltipProps} />
+                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900, color: 'var(--color-on-surface)' }} iconType="circle" />
+                        <Area isAnimationActive={false} type="monotone" stackId="1" dataKey="diesel" name="Diesel (Gasoil)" stroke="#22c55e" strokeWidth={2} fillOpacity={1} fill="url(#colorDiesel)" />
+                        <Area isAnimationActive={false} type="monotone" stackId="1" dataKey="petrol" name="Petrol (Mogas)" stroke="#f59e0b" strokeWidth={2} fillOpacity={1} fill="url(#colorPetrol)" />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -3192,11 +3111,12 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                   <ResponsiveContainer width="100%" height="100%">
                     <ScatterChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--color-outline-dim)" />
-                      <XAxis type="number" dataKey="x" name="Duration" unit="m" tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                      <YAxis type="number" dataKey="y" name="Volume" unit="L" tickFormatter={(v) => `${v}`} tick={{fontSize: 9}} axisLine={false} tickLine={false} />
+                      <XAxis type="number" dataKey="x" name="Duration" unit="m" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                      <YAxis type="number" dataKey="y" name="Volume" unit="L" tickFormatter={(v) => `${v}`} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
                       <ZAxis type="number" range={[45, 45]} />
                       <Tooltip content={<CustomScatterTooltip />} cursor={{ strokeDasharray: '3 3' }} />
                       <Scatter 
+                        isAnimationActive={false}
                         name={turnaroundViewGround === 'individual' ? "Individual Dispense" : "Facility / Group"} 
                         data={turnaroundViewGround === 'individual' ? groundData.turnaroundIndividual : groundData.turnaroundAggregate} 
                         fill={turnaroundViewGround === 'individual' ? "#8b5cf6" : "#3b82f6"} 
@@ -3217,13 +3137,13 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={groundData.hourlyPattern}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
-                        <XAxis dataKey="hour" tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <YAxis yAxisId="left" tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${v}`} tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900 }} />
-                        <Bar yAxisId="left" dataKey="count" name="Transaction Count" fill="#3b82f6" opacity={0.6} radius={[4, 4, 0, 0]} />
-                        <Line yAxisId="right" type="monotone" dataKey="volume" name="Volume (L)" stroke="#10b981" strokeWidth={2} dot={false} />
+                        <XAxis dataKey="hour" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="left" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${v}`} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <Tooltip {...chartTooltipProps} />
+                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900, color: 'var(--color-on-surface)' }} />
+                        <Bar isAnimationActive={false} yAxisId="left" dataKey="count" name="Transaction Count" fill="#3b82f6" opacity={0.6} radius={[4, 4, 0, 0]} />
+                        <Line isAnimationActive={false} yAxisId="right" type="monotone" dataKey="volume" name="Volume (L)" stroke="#10b981" strokeWidth={2} dot={false} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
@@ -3238,13 +3158,13 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={groundData.eqUsage}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
-                        <XAxis dataKey="name" tick={{fontSize: 8}} axisLine={false} tickLine={false} />
-                        <YAxis yAxisId="left" tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900 }} />
-                        <Bar yAxisId="left" dataKey="count" name="Dispenses" fill="#eab308" opacity={0.7} radius={[4, 4, 0, 0]} />
-                        <Line yAxisId="right" type="monotone" dataKey="volume" name="Liters Dispensed" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                        <XAxis dataKey="name" tick={{fontSize: 8, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="left" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <Tooltip {...chartTooltipProps} />
+                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900, color: 'var(--color-on-surface)' }} />
+                        <Bar isAnimationActive={false} yAxisId="left" dataKey="count" name="Dispenses" fill="#eab308" opacity={0.7} radius={[4, 4, 0, 0]} />
+                        <Line isAnimationActive={false} yAxisId="right" type="monotone" dataKey="volume" name="Liters Dispensed" stroke="#3b82f6" strokeWidth={2} dot={false} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
@@ -3262,10 +3182,10 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={groundData.weeklyPattern}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
-                        <XAxis dataKey="week" tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <YAxis tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Bar dataKey="volume" name="Weekly Volume (L)" fill="none" stroke="#f59e0b" strokeWidth={1.5} radius={[2, 2, 0, 0]} />
+                        <XAxis dataKey="week" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <YAxis tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <Tooltip {...chartTooltipProps} />
+                        <Bar isAnimationActive={false} dataKey="volume" name="Weekly Volume (L)" fill="none" stroke="#f59e0b" strokeWidth={1.5} radius={[2, 2, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -3280,12 +3200,12 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={groundData.stationUtilization}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-dim)" />
-                        <XAxis dataKey="name" tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <YAxis tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900 }} />
-                        <Bar dataKey="Diesel" stackId="a" fill="#22c55e" />
-                        <Bar dataKey="Petrol" stackId="a" fill="#f59e0b" />
+                        <XAxis dataKey="name" tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <YAxis tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} tick={{fontSize: 9, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <Tooltip {...chartTooltipProps} />
+                        <Legend wrapperStyle={{ fontSize: '9px', fontWeight: 900, color: 'var(--color-on-surface)' }} />
+                        <Bar isAnimationActive={false} dataKey="Diesel" stackId="a" fill="#22c55e" />
+                        <Bar isAnimationActive={false} dataKey="Petrol" stackId="a" fill="#f59e0b" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -3301,10 +3221,10 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={groundData.topCustomers} layout="vertical" margin={{ left: 10, right: 10 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-outline-dim)" />
-                        <XAxis type="number" tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} tick={{fontSize: 8}} axisLine={false} tickLine={false} />
-                        <YAxis dataKey="name" type="category" tick={{fontSize: 7, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Bar dataKey="volume" name="Volume (L)" fill="#002046" radius={[0, 4, 4, 0]} />
+                        <XAxis type="number" tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} tick={{fontSize: 8, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <YAxis dataKey="name" type="category" tick={{fontSize: 7, fontWeight: 'bold', fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <Tooltip {...chartTooltipProps} />
+                        <Bar isAnimationActive={false} dataKey="volume" name="Volume (L)" fill="#002046" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -3317,10 +3237,10 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={groundData.topVehicles} layout="vertical" margin={{ left: 10, right: 10 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-outline-dim)" />
-                        <XAxis type="number" tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} tick={{fontSize: 8}} axisLine={false} tickLine={false} />
-                        <YAxis dataKey="name" type="category" tick={{fontSize: 8, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Bar dataKey="volume" name="Volume (L)" fill="#10b981" radius={[0, 4, 4, 0]} />
+                        <XAxis type="number" tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} tick={{fontSize: 8, fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <YAxis dataKey="name" type="category" tick={{fontSize: 8, fontWeight: 'bold', fill: 'var(--color-on-surface-dim)'}} axisLine={false} tickLine={false} />
+                        <Tooltip {...chartTooltipProps} />
+                        <Bar isAnimationActive={false} dataKey="volume" name="Volume (L)" fill="#10b981" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -3346,7 +3266,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                             <Cell key={`cell-${idx}`} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip />
+                        <Tooltip {...chartTooltipProps} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -3362,9 +3282,9 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
               </div>
 
               {/* Detail Tables Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Table 1: Departmental Consumption */}
-                <div className="card-premium overflow-hidden">
+                <div className="lg:col-span-5 card-premium overflow-hidden">
                   <div className="px-6 py-4 border-b border-outline bg-surface-dim/40">
                     <h3 className="text-[10px] font-black text-on-surface uppercase tracking-wider">Departmental Consumption</h3>
                   </div>
@@ -3381,7 +3301,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                       <tbody className="divide-y divide-outline">
                         {groundData.tables.deptTable.map((row) => (
                           <tr key={row.dept} className="hover:bg-primary/[0.01]">
-                            <td className="px-4 py-2 font-black uppercase truncate max-w-[120px]">{row.dept}</td>
+                            <td className="px-4 py-2 font-black uppercase truncate max-w-[220px]">{row.dept}</td>
                             <td className="px-4 py-2 text-right font-mono font-bold">{row.volume.toLocaleString()}</td>
                             <td className="px-4 py-2 text-center font-bold">{row.reps}</td>
                             <td className="px-4 py-2 text-right font-mono text-on-surface-dim">{row.avg.toLocaleString()}</td>
@@ -3393,7 +3313,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                 </div>
 
                 {/* Table 2: Asset Consumption */}
-                <div className="card-premium overflow-hidden">
+                <div className="lg:col-span-3 card-premium overflow-hidden">
                   <div className="px-6 py-4 border-b border-outline bg-surface-dim/40">
                     <h3 className="text-[10px] font-black text-on-surface uppercase tracking-wider">Asset Consumption</h3>
                   </div>
@@ -3422,7 +3342,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
                 </div>
 
                 {/* Table 3: Station/Pump Utilization */}
-                <div className="card-premium overflow-hidden">
+                <div className="lg:col-span-4 card-premium overflow-hidden">
                   <div className="px-6 py-4 border-b border-outline bg-surface-dim/40">
                     <h3 className="text-[10px] font-black text-on-surface uppercase tracking-wider">Station & Dispenser Sales</h3>
                   </div>

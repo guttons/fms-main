@@ -57,10 +57,13 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
     };
   }, [isRendered]);
 
-  // Touch drag handlers with zero-lag requestAnimationFrame throttling
+  const dragStartTime = useRef<number>(0);
+
+  // Touch drag handlers with zero-lag requestAnimationFrame throttling and spring physics
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     isDragging.current = true;
     dragStartY.current = e.touches[0].clientY;
+    dragStartTime.current = Date.now();
     currentTranslateY.current = 0;
     if (sheetRef.current) {
       sheetRef.current.style.transition = 'none';
@@ -82,19 +85,39 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
     if (!isDragging.current) return;
     isDragging.current = false;
     
+    const deltaY = currentTranslateY.current;
+    const sheetHeight = sheetRef.current?.offsetHeight || 380;
+    const timeElapsed = Math.max(Date.now() - dragStartTime.current, 1);
+    const velocity = deltaY / timeElapsed; // in px/ms
+
+    // Dismiss if swiped past 35% height OR flicked downward quickly (>0.4 px/ms)
+    const shouldDismiss = deltaY > sheetHeight * 0.35 || velocity > 0.4;
+
     if (sheetRef.current) {
-      sheetRef.current.style.transition = '';
+      sheetRef.current.style.transition = 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
     }
 
-    if (currentTranslateY.current > 80) {
-      haptic('TAP');
-      onClose();
-    } else {
+    if (shouldDismiss) {
       if (sheetRef.current) {
-        sheetRef.current.style.transform = '';
+        sheetRef.current.style.transform = 'translate3d(0, 100%, 0)';
       }
+      haptic('TAP');
+      setTimeout(() => {
+        onClose();
+        currentTranslateY.current = 0;
+      }, 200);
+    } else {
+      // Smooth spring snap-back to fully expanded state
+      if (sheetRef.current) {
+        sheetRef.current.style.transform = 'translate3d(0, 0, 0)';
+      }
+      setTimeout(() => {
+        if (sheetRef.current) {
+          sheetRef.current.style.transition = '';
+        }
+        currentTranslateY.current = 0;
+      }, 300);
     }
-    currentTranslateY.current = 0;
   }, [onClose]);
 
   if (!isRendered) return null;
