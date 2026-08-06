@@ -495,28 +495,27 @@ export const supabaseService = {
   },
 
   async _bqAuthHeaders(): Promise<Record<string, string>> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6eXJzdGVob2VzbWh3a2h0b3hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMzc3NzUsImV4cCI6MjA5NDkxMzc3NX0.itHESCbXktM7ZVUuB4BhI_UB7qH8IGVM1ZYnml8pxBk';
+    const headers: Record<string, string> = { 
+      'Content-Type': 'application/json',
+      'apikey': anonKey
+    };
+
     try {
       let { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        console.log('[BigQuery] No active session found. Attempting on-the-fly anonymous sign-in...');
         const { data, error } = await supabase.auth.signInAnonymously();
         if (!error && data?.session) {
           session = data.session;
-          console.log('[BigQuery] Anonymous session established successfully.');
-        } else if (error) {
-          console.warn('[BigQuery] On-the-fly anonymous sign-in failed:', error.message);
         }
       }
-      if (session) {
+      if (session?.access_token) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       } else {
-        console.warn(
-          '[BigQuery] No active Supabase session found and anonymous fallback failed. The Authorization header is empty.'
-        );
+        headers['Authorization'] = `Bearer ${anonKey}`;
       }
     } catch (e) {
-      console.warn('[BigQuery] Could not get Supabase access token:', e);
+      headers['Authorization'] = `Bearer ${anonKey}`;
     }
     return headers;
   },

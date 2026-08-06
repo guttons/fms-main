@@ -1691,7 +1691,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                               ) : (
                                 <button
                                   onClick={() => handleImportClick(flight)}
-                                  className="px-4 py-2 bg-gradient-to-r from-primary to-primary-container text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:scale-105 active:scale-95 transition-all shadow-sm"
+                                  className="px-4 py-2 kinetic-gradient text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:scale-105 active:scale-95 transition-all shadow-premium"
                                 >
                                   Import to FMS
                                 </button>

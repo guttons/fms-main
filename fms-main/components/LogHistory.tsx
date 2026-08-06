@@ -362,7 +362,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           fetchedLogsList = fetchedLogsList.filter(log => {
             if (!log || !log.vehicleId) return false;
             const veh = log.vehicleId.toUpperCase();
-            if (veh === 'N/A' || veh.includes('SCADA') || veh.startsWith('PUMP')) return false;
+            if (veh === 'N/A' || veh.includes('SCADA') || veh.startsWith('PUMP') || veh.includes('/')) return false;
+            if (log.meterOpen === undefined || log.meterOpen === null || isNaN(log.meterOpen)) return false;
             return veh.startsWith('RF') || veh.startsWith('HD');
           });
           if (fetchedLogsList.length < originalLen) {

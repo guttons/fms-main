@@ -1021,88 +1021,177 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
     );
   };
 
-  const renderItpDashboard = () => (
+   const formatDateDisplay = (dateStr?: string) => {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.split('-');
+    if (!y || !m || !d) return dateStr;
+    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const monthIdx = parseInt(m, 10) - 1;
+    const monthName = months[monthIdx] || m;
+    return `${d}-${monthName}-${y}`;
+  };
+
+  const renderItpDashboard = () => {
+    // 1. Scheduled Flights calculation
+    const allShiftJobs = [...intlJobs, ...domesticJobs, ...adhocJobs];
+    const totalScheduledCount = allShiftJobs.length;
+    const pendingCount = allShiftJobs.filter(j => j.status === 'PENDING' || j.status === 'SCHEDULED' || j.status === 'LANDED' || !j.status).length;
+    const inProgressCount = allShiftJobs.filter(j => j.status === 'IN_PROGRESS' || j.status === 'ACTIVE').length;
+    const completedCount = allShiftJobs.filter(j => j.status === 'COMPLETED').length;
+
+    // 2. Total Volume calculation (from flightLogs for selectedBriefingDate, with fallback to latest log date)
+    let logsForSelectedDate = (flightLogs || []).filter(log => {
+      if (!log || log.status !== 'COMPLETED' || !log.volume) return false;
+      const logDate = log.operationalDate || (log.timestampFinalEnd ? log.timestampFinalEnd.split('T')[0] : (log.timestampStart ? log.timestampStart.split('T')[0] : ''));
+      return logDate ? logDate === selectedBriefingDate : true;
+    });
+
+    if (logsForSelectedDate.length === 0 && (flightLogs || []).length > 0) {
+      const dates = (flightLogs || [])
+        .filter(log => log && log.status === 'COMPLETED' && log.volume)
+        .map(log => log.operationalDate || (log.timestampFinalEnd ? log.timestampFinalEnd.split('T')[0] : (log.timestampStart ? log.timestampStart.split('T')[0] : '')))
+        .filter(Boolean)
+        .sort();
+      if (dates.length > 0) {
+        const latestDate = dates[dates.length - 1];
+        logsForSelectedDate = (flightLogs || []).filter(log => {
+          if (!log || log.status !== 'COMPLETED' || !log.volume) return false;
+          const logDate = log.operationalDate || (log.timestampFinalEnd ? log.timestampFinalEnd.split('T')[0] : (log.timestampStart ? log.timestampStart.split('T')[0] : ''));
+          return logDate === latestDate;
+        });
+      }
+    }
+    const totalVolumeLiters = logsForSelectedDate.reduce((sum, log) => sum + (log.volume || 0), 0);
+
+    // 3. Active Staff calculation (from Briefing module staffAssignments)
+    const assignments = briefingInfo?.staffAssignments;
+    const activeOperatorsList = assignments?.activeOperators || [];
+    const activeOfficersList = assignments?.activeOfficers || [];
+    const hydrantOpsOfficersList = assignments?.hydrantOpsOfficers || [];
+    const dutySupervisorsList = assignments?.dutySupervisors || (assignments?.dutySupervisor ? [assignments.dutySupervisor] : []);
+    const shiftInChargesList = assignments?.shiftInCharges || (assignments?.shiftInCharge ? [assignments.shiftInCharge] : []);
+
+    const uniqueBriefingStaff = Array.from(new Set([
+      ...activeOperatorsList,
+      ...activeOfficersList,
+      ...hydrantOpsOfficersList,
+      ...dutySupervisorsList,
+      ...shiftInChargesList
+    ].filter(Boolean)));
+
+    const totalActiveStaffCount = uniqueBriefingStaff.length > 0 ? uniqueBriefingStaff.length : operators.length;
+
+    // Role breakdown
+    const rfOpsCount = activeOperatorsList.length;
+    const officerCount = activeOfficersList.length;
+    const hdOpsCount = hydrantOpsOfficersList.length;
+
+    const usersList = staff && staff.length > 0 ? staff : MOCK_USERS;
+    const mgrSupStaff = Array.from(new Set([...dutySupervisorsList, ...shiftInChargesList].filter(Boolean)));
+    let dutyManagerCount = 0;
+    let supervisorCount = 0;
+
+    mgrSupStaff.forEach(id => {
+      const u = usersList.find(s => s.id === id);
+      if (u?.role === UserRole.ITP_MANAGER || u?.role === UserRole.ADMIN || u?.role === UserRole.EXECUTIVE) {
+        dutyManagerCount++;
+      } else {
+        supervisorCount++;
+      }
+    });
+
+    if (mgrSupStaff.length > 0 && dutyManagerCount === 0 && supervisorCount === 0) {
+      supervisorCount = mgrSupStaff.length;
+    }
+
+    // 4. Avg Turnaround calculation
+    const durations = logsForSelectedDate.map(log => {
+      if (!log.timestampArrived || (!log.timestampFinalEnd && !log.timestampClearance)) return null;
+      const start = new Date(log.timestampArrived).getTime();
+      const end = new Date(log.timestampClearance || log.timestampFinalEnd!).getTime();
+      const mins = (end - start) / 60000;
+      return (mins > 0 && mins < 480) ? mins : null;
+    }).filter((m): m is number => m !== null);
+
+    const avgTurnaroundMins = durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 32;
+    const diffVsTarget = avgTurnaroundMins - 35;
+    const diffString = diffVsTarget <= 0 ? `${diffVsTarget}m vs Target` : `+${diffVsTarget}m vs Target`;
+
+    return (
       <div className="space-y-10 animate-in fade-in slide-in-from-left-4 duration-500 ease-out">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
            <div>
               <h2 className="headline-lg text-on-surface">Into-Plane Operations Center</h2>
               <p className="text-on-surface-dim font-medium">Real-time tactical flight refueling oversight</p>
            </div>
-            <div className="px-5 py-2.5 badge-custom-primary rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] w-fit">
-               Shift: {selectedBriefingShift || 'Morning'} ({selectedBriefingShift === 'Evening' ? '15:00 - 23:30' : selectedBriefingShift === 'Night' ? '22:30 - 08:30' : '07:30 - 16:00'})
+            <div className="px-5 py-2.5 badge-custom-primary rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] w-fit flex items-center gap-2">
+               <span>Shift: {selectedBriefingShift || 'Morning'} ({selectedBriefingShift === 'Evening' ? '15:00 - 23:30' : selectedBriefingShift === 'Night' ? '22:30 - 08:30' : '07:30 - 16:00'})</span>
+               <span className="opacity-40">•</span>
+               <span className="text-primary font-black">{formatDateDisplay(selectedBriefingDate)}</span>
             </div>
         </div>
 
         {/* ITP Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          {/* Card 1: Scheduled Flights */}
           <div className="card-premium p-8 group hover:border-primary/30 animate-in fade-in slide-in-from-bottom-2 duration-500 stagger-1">
              <div className="flex justify-between items-start">
                 <div>
                    <p className="label-sm text-on-surface-dim font-bold opacity-60">Scheduled Flights</p>
-                   <h3 className="text-4xl font-[900] text-on-surface mt-2 tracking-tighter">42</h3>
+                   <h3 className="text-4xl font-[900] text-on-surface mt-2 tracking-tighter">{totalScheduledCount}</h3>
                 </div>
                 <div className="p-3 bg-primary/10 rounded-xl group-hover:scale-110 transition-transform"><Plane className="w-6 h-6 text-primary" /></div>
              </div>
-             <div className="mt-4 text-[10px] font-bold opacity-40 uppercase tracking-widest text-on-surface">12 Pending / 8 In-Progress</div>
+             <div className="mt-4 text-[10px] font-bold opacity-60 uppercase tracking-widest text-on-surface">
+               {pendingCount} Pending / {inProgressCount} In-Progress / {completedCount} Done
+             </div>
           </div>
-          {(() => {
-            const categories = [
-              { label: 'Total Volume', value: '164K L', subtext: '+5.2% vs Forecast', color: 'text-success', bg: 'bg-success/10', icon: Droplet, border: 'hover:border-success/30' },
-              { label: 'International', value: '94.2K L', subtext: '+6.1% vs Forecast', color: 'text-primary', bg: 'bg-primary/10', icon: Globe, border: 'hover:border-primary/30' },
-              { label: 'Domestic', value: '34.8K L', subtext: '+2.4% vs Forecast', color: 'text-warning', bg: 'bg-warning/10', icon: MapPin, border: 'hover:border-warning/30' },
-              { label: 'Seaplane', value: '18.5K L', subtext: '+8.7% vs Forecast', color: 'text-primary', bg: 'bg-primary/10', icon: Anchor, border: 'hover:border-primary/30' },
-              { label: 'Local Sales', value: '16.5K L', subtext: '-1.2% vs Forecast', color: 'text-error', bg: 'bg-error/10', icon: ShoppingBag, border: 'hover:border-error/30' },
-            ];
-            const current = categories[rotationIndex];
-            const Icon = current.icon;
 
-            return (
-              <div className={`card-premium p-8 group transition-all duration-500 ${current.border} relative overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-500 stagger-2`}>
-                <div className="flex justify-between items-start relative z-10 animate-in fade-in slide-in-from-right-4 duration-500">
-                  <div>
-                    <p className="label-sm text-on-surface-dim font-bold opacity-60 flex items-center">
-                      {current.label}
-                      {rotationIndex === 0 && <span className="ml-2 w-1.5 h-1.5 bg-success rounded-full animate-pulse"></span>}
-                    </p>
-                    <h3 className="text-4xl font-[900] text-on-surface mt-2 tracking-tighter">{current.value}</h3>
-                  </div>
-                  <div className={`p-3 ${current.bg} rounded-xl group-hover:scale-110 transition-transform`}>
-                    <Icon className={`w-6 h-6 ${current.color}`} />
-                  </div>
+          {/* Card 2: Total Volume (Live data) */}
+          <div className="card-premium p-8 group hover:border-success/30 animate-in fade-in slide-in-from-bottom-2 duration-500 stagger-2">
+             <div className="flex justify-between items-start">
+                <div>
+                   <p className="label-sm text-on-surface-dim font-bold opacity-60 flex items-center">
+                     Total Volume
+                     <span className="ml-2 w-1.5 h-1.5 bg-success rounded-full animate-pulse"></span>
+                   </p>
+                   <h3 className="text-4xl font-[900] text-on-surface mt-2 tracking-tighter">
+                     {totalVolumeLiters >= 1000 ? `${(totalVolumeLiters / 1000).toFixed(1)}K L` : `${totalVolumeLiters.toLocaleString()} L`}
+                   </h3>
                 </div>
-                <div className="mt-4 flex justify-between items-end relative z-10 animate-in fade-in slide-in-from-bottom-2 duration-700">
-                  <div className={`text-[10px] font-black ${current.color} uppercase tracking-widest`}>{current.subtext}</div>
-                  <div className="flex space-x-1">
-                    {categories.map((_, i) => (
-                      <div key={i} className={`w-1 h-1 rounded-full transition-all duration-300 ${i === rotationIndex ? `w-3 ${current.bg.replace('/10', '')}` : 'bg-outline-variant'}`}></div>
-                    ))}
-                  </div>
-                </div>
-                
-                {/* Decorative background element */}
-                <div className={`absolute -right-4 -bottom-4 w-24 h-24 ${current.bg} rounded-full blur-3xl opacity-50 group-hover:opacity-80 transition-opacity`}></div>
-              </div>
-            );
-          })()}
-           <div className="card-premium p-8 group hover:border-primary/30 animate-in fade-in slide-in-from-bottom-2 duration-500 stagger-3">
+                <div className="p-3 bg-success/10 rounded-xl group-hover:scale-110 transition-transform"><Droplet className="w-6 h-6 text-success" /></div>
+             </div>
+             <div className="mt-4 text-[10px] font-bold text-success uppercase tracking-widest">
+               From {logsForSelectedDate.length} Completed Flights
+             </div>
+          </div>
+
+          {/* Card 3: Active Staff (Briefing assignments) */}
+          <div className="card-premium p-8 group hover:border-primary/30 animate-in fade-in slide-in-from-bottom-2 duration-500 stagger-3">
              <div className="flex justify-between items-start">
                 <div>
                    <p className="label-sm text-on-surface-dim font-bold opacity-60">Active Staff</p>
-                   <h3 className="text-4xl font-[900] text-on-surface mt-2 tracking-tighter">{operators.length}</h3>
+                   <h3 className="text-4xl font-[900] text-on-surface mt-2 tracking-tighter">{totalActiveStaffCount}</h3>
                 </div>
                 <div className="p-3 bg-primary/10 rounded-xl group-hover:scale-110 transition-transform"><Users className="w-6 h-6 text-primary" /></div>
              </div>
-             <div className="mt-4 text-[10px] font-bold opacity-40 uppercase tracking-widest text-success">All operators online</div>
+             <div className="mt-4 text-[9px] font-black opacity-70 uppercase tracking-wider text-primary truncate" title={`${officerCount} Officer • ${rfOpsCount} RF Ops • ${hdOpsCount} HD Ops • ${dutyManagerCount} DM • ${supervisorCount} Sup`}>
+               {officerCount} OFF • {rfOpsCount} RF • {hdOpsCount} HD • {dutyManagerCount} DM • {supervisorCount} SUP
+             </div>
           </div>
+
+          {/* Card 4: Avg. Turnaround */}
           <div className="card-premium p-8 group hover:border-warning/30 animate-in fade-in slide-in-from-bottom-2 duration-500 stagger-4">
              <div className="flex justify-between items-start">
                 <div>
                    <p className="label-sm text-on-surface-dim font-bold opacity-60">Avg. Turnaround</p>
-                   <h3 className="text-4xl font-[900] text-on-surface mt-2 tracking-tighter">32m</h3>
+                   <h3 className="text-4xl font-[900] text-on-surface mt-2 tracking-tighter">{avgTurnaroundMins}m</h3>
                 </div>
                 <div className="p-3 bg-warning/10 rounded-xl group-hover:scale-110 transition-transform"><Clock className="w-6 h-6 text-warning" /></div>
              </div>
-             <div className="mt-4 text-[10px] font-black text-success uppercase tracking-widest">-2m vs Target</div>
+             <div className={`mt-4 text-[10px] font-black uppercase tracking-widest ${diffVsTarget <= 0 ? 'text-success' : 'text-error'}`}>
+               {diffString}
+             </div>
           </div>
         </div>
 
@@ -1433,7 +1522,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
            </div>
         </div>
       </div>
-  );
+    );
+  };
 
   // --- Sub-Component: Depot Dashboard (FUEL SERVICES Style) ---
   const renderDepotDashboard = () => {

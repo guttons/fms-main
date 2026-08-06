@@ -834,11 +834,12 @@ app.get('/operations-log', requireAuth, async (req: Request, res: Response) => {
       AND vehicle_id != 'N/A' 
       AND UPPER(vehicle_id) != 'N/A'
       AND NOT UPPER(vehicle_id) LIKE '%SCADA%' 
+      AND NOT vehicle_id LIKE '%/%'
       AND (STARTS_WITH(UPPER(vehicle_id), 'RF') OR STARTS_WITH(UPPER(vehicle_id), 'HD'))
-      AND (meter_open IS NOT NULL OR meter_close IS NOT NULL OR (volume > 0))
+      AND meter_open IS NOT NULL
     )`);
     if (equipmentId && equipmentId !== 'ALL') {
-      filterClauses.push("vehicle_id = @equipmentId");
+      filterClauses.push("(vehicle_id = @equipmentId OR REPLACE(vehicle_id, '-', '') = REPLACE(@equipmentId, '-', ''))");
       queryParams.equipmentId = equipmentId;
     }
   }

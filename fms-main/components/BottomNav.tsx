@@ -205,9 +205,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       case UserRole.DEPOT_MANAGER:
         return [
           { id: 'marine-loading', label: 'Marine Provisioning', icon: Ship },
-          { id: 'marine', label: 'Marine Oversight', icon: Anchor },
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
           { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
+          { id: 'marine', label: 'Marine Oversight', icon: Anchor },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'history', label: 'Log History', icon: History },
         ];
@@ -240,9 +240,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           { id: 'history', label: 'Log History', icon: History },
           { id: 'bridging', label: 'Transfer Oversight', icon: Droplet },
           { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
-          { id: 'marine', label: 'Marine Oversight', icon: Anchor },
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
           { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
+          { id: 'marine', label: 'Marine Oversight', icon: Anchor },
           { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
           { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
           { id: 'executive', label: 'Executive Module', icon: Briefcase },
@@ -263,12 +263,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   const hasOverflow = overflowItems.length > 0 || onSettingsClick || onLogout;
 
   const handleNavClick = useCallback((viewId: string) => {
-    haptic('TAP');
+    haptic('NAV_TAP');
     setActiveView(viewId);
   }, [setActiveView]);
 
   const handleOverflowOpen = useCallback(() => {
-    haptic('TAP');
+    haptic('NAV_TAP');
     setIsSheetOpen(true);
   }, []);
 

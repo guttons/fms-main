@@ -154,7 +154,7 @@ const App: React.FC = () => {
         if (associatedInput) return associatedInput;
       }
 
-      // 3. Segmented control / radio option buttons
+      // 3. Segmented control / radio option buttons (with explicit ARIA or data attributes)
       const button = target.closest('button') as HTMLElement | null;
       if (button) {
         const parent = button.parentElement;
@@ -166,6 +166,19 @@ const App: React.FC = () => {
           button.hasAttribute('aria-checked')
         )) {
           return button;
+        }
+
+        // 4. Custom pill/tab selectors: detect grouped sibling buttons in a container
+        //    Pattern: parent has 2+ button children and contains a sliding indicator div (position: absolute)
+        if (parent) {
+          const siblingButtons = parent.querySelectorAll(':scope > button');
+          if (siblingButtons.length >= 2) {
+            // Check for sliding indicator (absolute-positioned child div = animated pill highlight)
+            const hasIndicator = parent.querySelector(':scope > div[class*="absolute"], :scope > div[class*="kinetic"]');
+            if (hasIndicator) {
+              return button;
+            }
+          }
         }
       }
 
@@ -179,22 +192,20 @@ const App: React.FC = () => {
       }
     };
 
-    const handleGesture = (e: Event) => {
+    const handleClick = (e: Event) => {
       const match = isRadioOrToggle(e.target as HTMLElement | null);
       if (match) {
         haptic('TOGGLE', match);
       }
     };
 
-    // Attach capture-phase listeners for change, click, and touchstart
+    // Use only change + click (capture phase). No touchstart to avoid double-firing.
     window.addEventListener('change', handleChange, true);
-    window.addEventListener('click', handleGesture, true);
-    window.addEventListener('touchstart', handleGesture, { capture: true, passive: true });
+    window.addEventListener('click', handleClick, true);
 
     return () => {
       window.removeEventListener('change', handleChange, true);
-      window.removeEventListener('click', handleGesture, true);
-      window.removeEventListener('touchstart', handleGesture, true);
+      window.removeEventListener('click', handleClick, true);
     };
   }, []);
 
@@ -1598,12 +1609,12 @@ const AppContextContent: React.FC<any> = ({
             activeView={activeView} 
             setActiveView={setActiveView}
             onMenuClick={() => {
-              haptic('TAP');
+              haptic('NAV_TAP');
               setIsMobileMenuOpen(true);
             }}
             isVisible={showHeader && !isKeyboardVisible}
             onSettingsClick={() => {
-              haptic('TAP');
+              haptic('NAV_TAP');
               if (currentUser?.role === UserRole.ADMIN) {
                 setActiveView('admin');
               } else {
@@ -1613,7 +1624,7 @@ const AppContextContent: React.FC<any> = ({
             onLogout={wrappedLogout}
             theme={theme}
             onThemeToggle={() => {
-              haptic('TAP');
+              haptic('NAV_TAP');
               setTheme(prev => prev === 'light' ? 'dark' : prev === 'dark' ? 'black' : 'light');
             }}
           />
@@ -1627,7 +1638,7 @@ const AppContextContent: React.FC<any> = ({
               : 'opacity-0 pointer-events-none'
           }`}
           onClick={() => {
-            haptic('TAP');
+            haptic('NAV_TAP');
             setIsMobileMenuOpen(false);
           }}
         />

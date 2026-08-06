@@ -11,13 +11,14 @@
 // ── Vibration Patterns (Refined & Lightened for Premium Feel) ────────────────
 export const HapticPattern = {
   TAP:          [10],                     // Crisp 10ms tick
+  NAV_TAP:      [5],                      // Ultra-light 5ms tick for nav/sidebar
   SUCCESS:      [12, 35, 12],             // Light double tick
   WARNING:      [16, 25, 18],             // Subtle warning pulse
   ERROR:        [25, 30, 25],             // Gentle error double pulse
   PULL_REFRESH: [8],                      // Micro tick
   LONG_PRESS:   [15],                     // Soft hold tick
-  SELECTION:    [10],                     // Micro selection tick
-  TOGGLE:       [14, 25, 14],             // Crisp double toggle tick
+  SELECTION:    [6],                      // Micro selection tick
+  TOGGLE:       [8, 20, 8],              // Light double toggle tick
 } as const;
 
 export type HapticType = keyof typeof HapticPattern;
@@ -128,6 +129,7 @@ function applyVisualFeedback(element: HTMLElement, type: HapticType): void {
 function getVisualIntensity(type: HapticType): number {
   switch (type) {
     case 'TAP':
+    case 'NAV_TAP':
     case 'SELECTION':
     case 'PULL_REFRESH':
       return 0.988;
@@ -146,6 +148,7 @@ function getVisualIntensity(type: HapticType): number {
 function getVisualDuration(type: HapticType): number {
   switch (type) {
     case 'TAP':
+    case 'NAV_TAP':
     case 'SELECTION':
     case 'PULL_REFRESH':
       return 80;

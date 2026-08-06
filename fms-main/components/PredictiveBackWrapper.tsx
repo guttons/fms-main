@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import { haptic } from '../utils/haptics';
 
 interface PredictiveBackWrapperProps {
@@ -14,41 +14,48 @@ export const PredictiveBackWrapper: React.FC<PredictiveBackWrapperProps> = ({
   renderContent,
   children,
 }) => {
-  const [viewHistory, setViewHistory] = useState<string[]>([activeView]);
+  // Navigation history stack (ref-only, no state re-renders)
   const viewHistoryRef = useRef<string[]>([activeView]);
-  
-  // Track navigation stack history
+
   useEffect(() => {
     const history = viewHistoryRef.current;
     if (history[history.length - 1] !== activeView) {
-      // Check if user went back or forward
-      const existingIdx = history.lastIndexOf(activeView);
-      if (existingIdx !== -1 && existingIdx === history.length - 2) {
-        // User popped back
+      const prevIdx = history.lastIndexOf(activeView);
+      if (prevIdx !== -1 && prevIdx === history.length - 2) {
         history.pop();
       } else {
-        // Forward navigation
         history.push(activeView);
       }
-      setViewHistory([...history]);
     }
   }, [activeView]);
 
-  const [isSwiping, setIsSwiping] = useState(false);
-  const [swipeProgress, setSwipeProgress] = useState(0);
-  const [dragDeltaX, setDragDeltaX] = useState(0);
-  const [previousView, setPreviousView] = useState<string | null>(null);
+  // All gesture state lives in refs to avoid re-renders during drag
+  const isGestureActiveRef = useRef(false);
+  const startXRef = useRef(0);
+  const startYRef = useRef(0);
+  const startTimeRef = useRef(0);
+  const directionLockedRef = useRef<'horizontal' | 'vertical' | null>(null);
+  const currentDeltaRef = useRef(0);
+  const previousViewRef = useRef<string | null>(null);
+  const swipeEdgeRef = useRef<'left' | 'right' | null>(null);
 
-  const startXRef = useRef<number>(0);
-  const startTimeRef = useRef<number>(0);
-  const isGestureActiveRef = useRef<boolean>(false);
   const activeContainerRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const EDGE_ZONE = 24; // px from edge to initiate gesture
+  const LOCK_THRESHOLD = 8; // px of movement before locking direction
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    // Only allow swipe from left edge (0px to 28px) on mobile
     const touch = e.touches[0];
-    if (touch.clientX > 28) return;
+    const screenWidth = window.innerWidth || 390;
+
+    // Check if touch started in left or right edge zone
+    const isLeftEdge = touch.clientX <= EDGE_ZONE;
+    const isRightEdge = touch.clientX >= screenWidth - EDGE_ZONE;
+
+    if (!isLeftEdge && !isRightEdge) return;
 
     const history = viewHistoryRef.current;
     if (history.length < 2) return;
@@ -56,159 +63,213 @@ export const PredictiveBackWrapper: React.FC<PredictiveBackWrapperProps> = ({
     const prevView = history[history.length - 2];
     if (!prevView || prevView === activeView) return;
 
-    isGestureActiveRef.current = true;
+    // Mark gesture as potential (not yet locked)
     startXRef.current = touch.clientX;
+    startYRef.current = touch.clientY;
     startTimeRef.current = Date.now();
-    setPreviousView(prevView);
-    setIsSwiping(true);
-    setSwipeProgress(0);
-    setDragDeltaX(0);
+    directionLockedRef.current = null;
+    currentDeltaRef.current = 0;
+    previousViewRef.current = prevView;
+    swipeEdgeRef.current = isLeftEdge ? 'left' : 'right';
+  }, [activeView]);
 
+  const activateGesture = useCallback(() => {
+    isGestureActiveRef.current = true;
+
+    // Show preview layer & overlay
+    if (previewContainerRef.current) {
+      previewContainerRef.current.style.display = 'block';
+      previewContainerRef.current.style.transition = 'none';
+      previewContainerRef.current.style.transform = 'translate3d(-25%, 0, 0)';
+      previewContainerRef.current.style.opacity = '1';
+    }
+    if (overlayRef.current) {
+      overlayRef.current.style.display = 'block';
+      overlayRef.current.style.transition = 'none';
+    }
     if (activeContainerRef.current) {
       activeContainerRef.current.style.transition = 'none';
     }
-    if (previewContainerRef.current) {
-      previewContainerRef.current.style.transition = 'none';
+    // Lock body scroll during horizontal gesture
+    if (wrapperRef.current) {
+      wrapperRef.current.style.overflow = 'hidden';
     }
-  }, [activeView]);
+  }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!isGestureActiveRef.current) return;
+    if (swipeEdgeRef.current === null) return;
 
     const touch = e.touches[0];
-    const deltaX = touch.clientX - startXRef.current;
+    const rawDeltaX = touch.clientX - startXRef.current;
+    const rawDeltaY = touch.clientY - startYRef.current;
 
-    if (deltaX > 0) {
-      const screenWidth = window.innerWidth || 390;
-      const progress = Math.min(deltaX / (screenWidth * 0.85), 1);
-      
-      setDragDeltaX(deltaX);
-      setSwipeProgress(progress);
+    // Direction lock: determine if this is a horizontal or vertical gesture
+    if (directionLockedRef.current === null) {
+      const absX = Math.abs(rawDeltaX);
+      const absY = Math.abs(rawDeltaY);
+      if (absX < LOCK_THRESHOLD && absY < LOCK_THRESHOLD) return;
 
-      // Active view slides right, scales down slightly, gets rounded corners
-      if (activeContainerRef.current) {
-        const scale = 1 - progress * 0.05;
-        const borderRadius = Math.min(progress * 24, 24);
-        activeContainerRef.current.style.transform = `translate3d(${deltaX}px, 0, 0) scale(${scale})`;
-        activeContainerRef.current.style.borderRadius = `${borderRadius}px`;
-        activeContainerRef.current.style.boxShadow = `-16px 0 40px rgba(0, 0, 0, ${0.35 * (1 - progress)})`;
+      if (absY > absX * 1.2) {
+        // Vertical scroll — abort gesture entirely
+        directionLockedRef.current = 'vertical';
+        swipeEdgeRef.current = null;
+        return;
       }
+      directionLockedRef.current = 'horizontal';
+      activateGesture();
+    }
 
-      // Preview view behind slides in from left (-30% -> 0%) with subtle scale
-      if (previewContainerRef.current) {
-        const previewTranslate = -30 + progress * 30;
-        const previewScale = 0.95 + progress * 0.05;
-        previewContainerRef.current.style.transform = `translate3d(${previewTranslate}%, 0, 0) scale(${previewScale})`;
-      }
+    if (directionLockedRef.current !== 'horizontal' || !isGestureActiveRef.current) return;
+
+    // Compute effective delta (only positive = swiping inward from edge)
+    const effectiveDelta = swipeEdgeRef.current === 'left'
+      ? Math.max(0, rawDeltaX)
+      : Math.max(0, -rawDeltaX);
+
+    currentDeltaRef.current = effectiveDelta;
+    const screenWidth = window.innerWidth || 390;
+    const progress = Math.min(effectiveDelta / screenWidth, 1);
+
+    // Move active view: simple translateX
+    if (activeContainerRef.current) {
+      const translateX = swipeEdgeRef.current === 'left' ? effectiveDelta : -effectiveDelta;
+      activeContainerRef.current.style.transform = `translate3d(${translateX}px, 0, 0)`;
+    }
+
+    // Move preview: from -25% toward 0%
+    if (previewContainerRef.current) {
+      const previewTranslate = -25 + progress * 25;
+      previewContainerRef.current.style.transform = `translate3d(${previewTranslate}%, 0, 0)`;
+    }
+
+    // Dim overlay fades as you swipe
+    if (overlayRef.current) {
+      overlayRef.current.style.opacity = String(0.3 * (1 - progress));
+    }
+  }, [activateGesture]);
+
+  const resetGesture = useCallback(() => {
+    isGestureActiveRef.current = false;
+    directionLockedRef.current = null;
+    currentDeltaRef.current = 0;
+    previousViewRef.current = null;
+    swipeEdgeRef.current = null;
+
+    if (activeContainerRef.current) {
+      activeContainerRef.current.style.transition = '';
+      activeContainerRef.current.style.transform = '';
+    }
+    if (previewContainerRef.current) {
+      previewContainerRef.current.style.transition = '';
+      previewContainerRef.current.style.transform = '';
+      previewContainerRef.current.style.display = 'none';
+    }
+    if (overlayRef.current) {
+      overlayRef.current.style.transition = '';
+      overlayRef.current.style.opacity = '';
+      overlayRef.current.style.display = 'none';
+    }
+    if (wrapperRef.current) {
+      wrapperRef.current.style.overflow = '';
     }
   }, []);
 
   const handleTouchEnd = useCallback(() => {
-    if (!isGestureActiveRef.current) return;
-    isGestureActiveRef.current = false;
+    if (!isGestureActiveRef.current) {
+      // Gesture never activated (was vertical or too small)
+      swipeEdgeRef.current = null;
+      directionLockedRef.current = null;
+      return;
+    }
 
     const screenWidth = window.innerWidth || 390;
-    const deltaX = dragDeltaX;
-    const progress = swipeProgress;
+    const delta = currentDeltaRef.current;
     const timeElapsed = Math.max(Date.now() - startTimeRef.current, 1);
-    const velocity = deltaX / timeElapsed; // px/ms
+    const velocity = delta / timeElapsed;
+    const progress = delta / screenWidth;
 
-    // Threshold: > 35% drag distance OR fast rightward flick (>0.35 px/ms)
-    const shouldNavigateBack = progress > 0.35 || velocity > 0.35;
+    const shouldNavigateBack = progress > 0.3 || velocity > 0.4;
+    const edge = swipeEdgeRef.current;
+    const targetView = previousViewRef.current;
 
-    if (activeContainerRef.current) {
-      activeContainerRef.current.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-radius 0.25s ease, box-shadow 0.25s ease';
-    }
-    if (previewContainerRef.current) {
-      previewContainerRef.current.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
-    }
+    const TRANSITION = 'transform 0.22s cubic-bezier(0.2, 0.9, 0.3, 1)';
+    const OVERLAY_TRANSITION = 'opacity 0.22s ease';
 
-    if (shouldNavigateBack && previousView) {
-      // Complete back gesture: animate active view off-screen to right
+    if (shouldNavigateBack && targetView) {
+      // Complete: slide active view fully off-screen
       if (activeContainerRef.current) {
-        activeContainerRef.current.style.transform = `translate3d(${screenWidth}px, 0, 0) scale(0.95)`;
+        activeContainerRef.current.style.transition = TRANSITION;
+        const dir = edge === 'left' ? screenWidth : -screenWidth;
+        activeContainerRef.current.style.transform = `translate3d(${dir}px, 0, 0)`;
       }
       if (previewContainerRef.current) {
-        previewContainerRef.current.style.transform = 'translate3d(0%, 0, 0) scale(1)';
+        previewContainerRef.current.style.transition = TRANSITION;
+        previewContainerRef.current.style.transform = 'translate3d(0%, 0, 0)';
       }
-      
+      if (overlayRef.current) {
+        overlayRef.current.style.transition = OVERLAY_TRANSITION;
+        overlayRef.current.style.opacity = '0';
+      }
+
       haptic('SELECTION');
 
       setTimeout(() => {
-        const targetView = previousView;
-        setIsSwiping(false);
-        setPreviousView(null);
-        setDragDeltaX(0);
-        setSwipeProgress(0);
-
-        if (activeContainerRef.current) {
-          activeContainerRef.current.style.transition = '';
-          activeContainerRef.current.style.transform = '';
-          activeContainerRef.current.style.borderRadius = '';
-          activeContainerRef.current.style.boxShadow = '';
-        }
-
-        // Pop history and navigate to previous view
         viewHistoryRef.current.pop();
-        setViewHistory([...viewHistoryRef.current]);
+        resetGesture();
         setActiveView(targetView);
-      }, 220);
+      }, 200);
     } else {
-      // Revert gesture: spring snap back to 0px (same page)
+      // Revert: snap everything back
       if (activeContainerRef.current) {
-        activeContainerRef.current.style.transform = 'translate3d(0px, 0, 0) scale(1)';
-        activeContainerRef.current.style.borderRadius = '0px';
-        activeContainerRef.current.style.boxShadow = 'none';
+        activeContainerRef.current.style.transition = TRANSITION;
+        activeContainerRef.current.style.transform = 'translate3d(0, 0, 0)';
       }
       if (previewContainerRef.current) {
-        previewContainerRef.current.style.transform = 'translate3d(-30%, 0, 0) scale(0.95)';
+        previewContainerRef.current.style.transition = TRANSITION;
+        previewContainerRef.current.style.transform = 'translate3d(-25%, 0, 0)';
+      }
+      if (overlayRef.current) {
+        overlayRef.current.style.transition = OVERLAY_TRANSITION;
+        overlayRef.current.style.opacity = '0.3';
       }
 
       setTimeout(() => {
-        setIsSwiping(false);
-        setPreviousView(null);
-        setDragDeltaX(0);
-        setSwipeProgress(0);
-
-        if (activeContainerRef.current) {
-          activeContainerRef.current.style.transition = '';
-          activeContainerRef.current.style.transform = '';
-          activeContainerRef.current.style.borderRadius = '';
-          activeContainerRef.current.style.boxShadow = '';
-        }
-      }, 250);
+        resetGesture();
+      }, 220);
     }
-  }, [dragDeltaX, swipeProgress, previousView, setActiveView]);
+  }, [setActiveView, resetGesture]);
+
+  // Memoize previous view content to avoid re-rendering during drag
+  const prevViewContent = previousViewRef.current ? renderContent(previousViewRef.current) : null;
 
   return (
-    <div 
-      className={`relative w-full min-h-full touch-pan-y ${isSwiping ? 'overflow-hidden' : ''}`}
+    <div
+      ref={wrapperRef}
+      className="relative w-full min-h-full"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Returning Previous View Preview Layer */}
-      {isSwiping && previousView && (
-        <div 
-          ref={previewContainerRef}
-          className="absolute inset-0 z-0 overflow-y-auto pointer-events-none transform-gpu will-change-transform bg-surface"
-          style={{
-            transform: 'translate3d(-30%, 0, 0) scale(0.95)',
-          }}
-        >
-          {renderContent(previousView)}
-          {/* Dimming Overlay */}
-          <div 
-            className="absolute inset-0 bg-black pointer-events-none transition-opacity duration-75"
-            style={{ opacity: 0.35 * (1 - swipeProgress) }}
-          />
-        </div>
-      )}
+      {/* Previous view preview (hidden by default, shown during gesture) */}
+      <div
+        ref={previewContainerRef}
+        className="absolute inset-0 z-0 overflow-hidden transform-gpu will-change-transform bg-surface"
+        style={{ display: 'none', transform: 'translate3d(-25%, 0, 0)' }}
+      >
+        {prevViewContent}
+      </div>
 
-      {/* Active Current View Layer */}
-      <div 
+      {/* Dimming overlay between layers */}
+      <div
+        ref={overlayRef}
+        className="absolute inset-0 z-[1] bg-black pointer-events-none"
+        style={{ display: 'none', opacity: 0.3 }}
+      />
+
+      {/* Active view */}
+      <div
         ref={activeContainerRef}
-        className="relative z-10 w-full min-h-full transform-gpu will-change-transform bg-surface"
+        className="relative z-[2] w-full min-h-full transform-gpu will-change-transform bg-surface"
       >
         {children || renderContent(activeView)}
       </div>

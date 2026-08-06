@@ -169,10 +169,10 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
   const [turnaroundViewGround, setTurnaroundViewGround] = useState<'individual' | 'aggregate'>('individual');
 
   // JET A-1 specific filter states
-  const [startDateJet, setStartDateJet] = useState<string>('2026-04-14');
-  const [endDateJet, setEndDateJet] = useState<string>('2026-07-14');
-  const [tempStartDateJet, setTempStartDateJet] = useState<string>('2026-04-14');
-  const [tempEndDateJet, setTempEndDateJet] = useState<string>('2026-07-14');
+  const [startDateJet, setStartDateJet] = useState<string>('2026-01-01');
+  const [endDateJet, setEndDateJet] = useState<string>('2026-12-31');
+  const [tempStartDateJet, setTempStartDateJet] = useState<string>('2026-01-01');
+  const [tempEndDateJet, setTempEndDateJet] = useState<string>('2026-12-31');
   const [compareJet, setCompareJet] = useState<string>('Previous Year');
   const [categoryJet, setCategoryJet] = useState<string>('All Categories');
   const [dayOfWeekJet, setDayOfWeekJet] = useState<string>('All Weekdays');
@@ -181,15 +181,39 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
   const [showUnusedPits, setShowUnusedPits] = useState<boolean>(false);
 
   // DIESEL & PETROL specific filter states
-  const [startDateGround, setStartDateGround] = useState<string>('2026-04-14');
-  const [endDateGround, setEndDateGround] = useState<string>('2026-07-14');
-  const [tempStartDateGround, setTempStartDateGround] = useState<string>('2026-04-14');
-  const [tempEndDateGround, setTempEndDateGround] = useState<string>('2026-07-14');
+  const [startDateGround, setStartDateGround] = useState<string>('2026-01-01');
+  const [endDateGround, setEndDateGround] = useState<string>('2026-12-31');
+  const [tempStartDateGround, setTempStartDateGround] = useState<string>('2026-01-01');
+  const [tempEndDateGround, setTempEndDateGround] = useState<string>('2026-12-31');
   const [compareGround, setCompareGround] = useState<string>('Previous Year');
   const [fuelGradeGround, setFuelGradeGround] = useState<string>('All Grades');
   const [facilityGround, setFacilityGround] = useState<string>('All Facilities');
   const [deptGround, setDeptGround] = useState<string>('All Departments');
   const [searchGround, setSearchGround] = useState<string>('');
+
+  // Auto-sync date range to encompass actual available flight log dates on initial load
+  const hasAutoSyncedDates = React.useRef(false);
+  useEffect(() => {
+    if (flightLogs && flightLogs.length > 0 && !hasAutoSyncedDates.current) {
+      const dates = flightLogs
+        .map(l => l.operationalDate || (l.timestampStart ? l.timestampStart.split('T')[0] : ''))
+        .filter(Boolean)
+        .sort();
+      if (dates.length > 0) {
+        const minDate = dates[0];
+        const maxDate = dates[dates.length - 1];
+        setStartDateJet(minDate);
+        setEndDateJet(maxDate);
+        setTempStartDateJet(minDate);
+        setTempEndDateJet(maxDate);
+        setStartDateGround(minDate);
+        setEndDateGround(maxDate);
+        setTempStartDateGround(minDate);
+        setTempEndDateGround(maxDate);
+        hasAutoSyncedDates.current = true;
+      }
+    }
+  }, [flightLogs]);
 
   // Unique list of airlines populated from actual flightLogs
   const uniqueAirlines = useMemo(() => {

@@ -98,9 +98,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'stock', label: 'Tank Levels', icon: Database },
           { id: 'bridging', label: 'Refueler Loading', icon: Droplet },
           { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
-          { id: 'marine', label: 'Tanker Discharge', icon: Anchor },
           { id: 'seaplane', label: 'Seaplane Ops', icon: Sailboat },
           { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
+          { id: 'marine', label: 'Tanker Discharge', icon: Anchor },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
         ];
 
@@ -110,9 +110,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'stock', label: 'Stock Reconciliation', icon: Database },
           { id: 'bridging', label: 'Transfer Oversight', icon: Droplet },
           { id: 'marine-loading', label: 'Marine Provisioning', icon: Ship },
-          { id: 'marine', label: 'Marine Oversight', icon: Anchor },
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
           { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
+          { id: 'marine', label: 'Marine Oversight', icon: Anchor },
           { id: 'forecasting', label: 'Stock Forecasting', icon: TrendingUp },
           { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
@@ -174,9 +174,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'stock', label: 'Stock Management', icon: Database },
           { id: 'bridging', label: 'Transfer Oversight', icon: Droplet },
           { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
-          { id: 'marine', label: 'Marine Oversight', icon: Anchor },
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
           { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
+          { id: 'marine', label: 'Marine Oversight', icon: Anchor },
           { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
           { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
           { id: 'executive', label: 'Executive Module', icon: Briefcase },
@@ -207,7 +207,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Brand */}
         <button 
           onClick={() => {
-            haptic('TAP');
+            haptic('NAV_TAP');
             if (window.innerWidth < 1024) {
               onCloseMobileMenu?.();
             } else {
@@ -244,7 +244,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div key={item.id} className="relative group w-full flex justify-center">
                 <button
                   onClick={() => {
-                    haptic('TAP');
+                    haptic('NAV_TAP');
                     setActiveView(item.id);
                   }}
                   onMouseEnter={(e) => {
@@ -286,7 +286,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Help Center */}
             <div className="relative group w-full flex justify-center">
               <button 
-                onClick={() => haptic('TAP')}
+                onClick={() => haptic('NAV_TAP')}
                 onMouseEnter={(e) => {
                   if (!isCollapsed) return;
                   const rect = e.currentTarget.getBoundingClientRect();
@@ -310,7 +310,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="relative group w-full flex justify-center">
               <button 
                 onClick={() => {
-                  haptic('TAP');
+                  haptic('NAV_TAP');
                   onSettingsClick();
                 }}
                 onMouseEnter={(e) => {
@@ -341,7 +341,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="relative group w-full flex justify-center">
               <button 
                 onClick={() => {
-                  haptic('TAP');
+                  haptic('NAV_TAP');
                   onLogout();
                 }}
                 onMouseEnter={(e) => {
