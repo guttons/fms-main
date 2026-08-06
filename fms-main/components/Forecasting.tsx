@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Line 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Line, BarChart, Bar 
 } from 'recharts';
 import { FORECAST_DATA } from '../constants';
 import { 
   RefreshCw, Download, Layers, Calendar, ChevronRight, Fuel, AlertTriangle, 
-  CheckCircle, TrendingUp, Info, Clock, ShieldAlert, Zap, BarChart2 
+  CheckCircle, TrendingUp, Info, Clock, ShieldAlert, Zap, BarChart2, Globe 
 } from 'lucide-react';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { FuelType, EquipmentType } from '../types';
@@ -22,7 +22,18 @@ const getScenarioGradient = (id: string) => {
 export const Forecasting: React.FC = () => {
   const [activeScenarioId, setActiveScenarioId] = useState<string>('nominal');
   const activeScenario = FORECAST_DATA.find(s => s.id === activeScenarioId) || FORECAST_DATA[0];
-  const { tanks = [], equipment = [], shipments = [] } = useOperationalData();
+  const { 
+    tanks = [], 
+    equipment = [], 
+    shipments = [], 
+    internationalSchedules = [],
+    getPredictiveUpliftForecast 
+  } = useOperationalData();
+
+  // Predictive International & Domestic Schedule Horizon & Model State
+  const [forecastDaysCount, setForecastDaysCount] = useState<number>(14);
+  const [predictionModelMode, setPredictionModelMode] = useState<'hybrid' | 'schedule' | 'historical'>('hybrid');
+  const [forecastCategoryFilter, setForecastCategoryFilter] = useState<'ALL' | 'INT' | 'DOM'>('ALL');
 
   // Stock Order Estimator State
   const [selectedFuelType, setSelectedFuelType] = useState<FuelType>(FuelType.JET_A1);
@@ -345,6 +356,152 @@ export const Forecasting: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ── NEW: PREDICTIVE INTERNATIONAL SCHEDULE UPLIFT FORECAST ENGINE ── */}
+      {selectedFuelType === FuelType.JET_A1 && (
+        <div className="bg-surface/80 backdrop-blur-xl border border-outline/55 rounded-3xl p-6 lg:p-8 shadow-premium space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-outline/40 pb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-primary/10 border border-primary/20">
+                <Globe className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.2em]">
+                  Flight Schedule Predictive Uplift Engine
+                </h3>
+                <p className="text-xs text-on-surface-dim opacity-70 mt-0.5">
+                  Generatively projecting Jet A-1 fuel uplift demand by blending uploaded seasonal flight frequencies (international & domestic) with historical log baselines ({internationalSchedules.length} Active Master Schedules).
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* Model Mode Switcher */}
+              <div className="flex items-center bg-surface-container-low p-1 rounded-xl border border-outline text-xs">
+                <button
+                  onClick={() => setPredictionModelMode('hybrid')}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                    predictionModelMode === 'hybrid'
+                      ? 'kinetic-gradient text-white shadow-premium border-none'
+                      : 'text-on-surface-dim hover:text-on-surface'
+                  }`}
+                >
+                  Hybrid Generative (65/35)
+                </button>
+                <button
+                  onClick={() => setPredictionModelMode('schedule')}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                    predictionModelMode === 'schedule'
+                      ? 'kinetic-gradient text-white shadow-premium border-none'
+                      : 'text-on-surface-dim hover:text-on-surface'
+                  }`}
+                >
+                  Schedule Target Only
+                </button>
+                <button
+                  onClick={() => setPredictionModelMode('historical')}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                    predictionModelMode === 'historical'
+                      ? 'kinetic-gradient text-white shadow-premium border-none'
+                      : 'text-on-surface-dim hover:text-on-surface'
+                  }`}
+                >
+                  Historical Baseline
+                </button>
+              </div>
+
+              {/* Flight Category Selector */}
+              <select
+                value={forecastCategoryFilter}
+                onChange={e => setForecastCategoryFilter(e.target.value as any)}
+                className="px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-xs text-on-surface font-black uppercase tracking-wider focus:outline-none focus:border-primary"
+              >
+                <option value="ALL">All Flight Schedules</option>
+                <option value="INT">International Only</option>
+                <option value="DOM">Domestic Only</option>
+              </select>
+
+              {/* Horizon Selector */}
+              <select
+                value={forecastDaysCount}
+                onChange={e => setForecastDaysCount(Number(e.target.value))}
+                className="px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-xs text-on-surface font-black uppercase tracking-wider focus:outline-none focus:border-primary"
+              >
+                <option value={7}>7-Day Forecast</option>
+                <option value={14}>14-Day Forecast</option>
+                <option value={30}>30-Day Forecast</option>
+                <option value={90}>90-Day Forecast</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Predictive Data Chart */}
+          {(() => {
+            const intlForecastData = getPredictiveUpliftForecast ? getPredictiveUpliftForecast(new Date().toISOString().split('T')[0], forecastDaysCount, forecastCategoryFilter) : [];
+            const totalProjectedVolume = intlForecastData.reduce((sum, item) => {
+              const val = predictionModelMode === 'hybrid' ? item.blendedEstimateUplift :
+                          predictionModelMode === 'schedule' ? item.predictedScheduleUplift : item.historicalBaselineUplift;
+              return sum + val;
+            }, 0);
+            const avgDailyVolume = intlForecastData.length > 0 ? Math.round(totalProjectedVolume / intlForecastData.length) : 0;
+            const totalScheduledFlights = intlForecastData.reduce((sum, item) => sum + item.scheduledFlightCount, 0);
+
+            return (
+              <div className="space-y-6">
+                {/* Summary Metrics */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-surface-container-low/60 border border-outline/40 rounded-2xl p-4">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-on-surface-dim opacity-70">
+                      Total Projected Uplift ({forecastDaysCount} Days)
+                    </div>
+                    <div className="text-xl font-mono font-black text-primary mt-1">
+                      {totalProjectedVolume.toLocaleString()} Liters
+                    </div>
+                  </div>
+
+                  <div className="bg-surface-container-low/60 border border-outline/40 rounded-2xl p-4">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-on-surface-dim opacity-70">
+                      Avg Daily Uplift Demand
+                    </div>
+                    <div className="text-xl font-mono font-black text-success mt-1">
+                      {avgDailyVolume.toLocaleString()} L / Day
+                    </div>
+                  </div>
+
+                  <div className="bg-surface-container-low/60 border border-outline/40 rounded-2xl p-4">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-on-surface-dim opacity-70">
+                      Scheduled Flight Operations
+                    </div>
+                    <div className="text-xl font-mono font-black text-on-surface mt-1">
+                      {totalScheduledFlights} Flights ({Math.round(totalScheduledFlights / Math.max(1, forecastDaysCount))} / Day)
+                    </div>
+                  </div>
+                </div>
+
+                {/* Uplift Recharts Visualization */}
+                <div className="h-64 w-full pt-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={intlForecastData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="date" stroke="rgba(255,255,255,0.4)" tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.6)' }} />
+                      <YAxis stroke="rgba(255,255,255,0.4)" tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.6)' }} tickFormatter={(val) => `${(val/1000).toFixed(0)}kL`} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#18181b', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '11px' }} 
+                        formatter={(value: any) => [`${Number(value).toLocaleString()} Liters`, 'Predicted Uplift']}
+                      />
+                      <Bar 
+                        dataKey={predictionModelMode === 'hybrid' ? 'blendedEstimateUplift' : predictionModelMode === 'schedule' ? 'predictedScheduleUplift' : 'historicalBaselineUplift'} 
+                        fill="#0284c7" 
+                        radius={[6, 6, 0, 0]} 
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Scenario Toggles */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">

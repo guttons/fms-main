@@ -1,8 +1,9 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightLog, StaffMember, UserRole, Vessel, ShipmentData } from '../types';
+import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightLog, StaffMember, UserRole, Vessel, ShipmentData, InternationalSchedule, ScheduleCrossCheckResult, PredictiveUpliftForecast } from '../types';
 import { EQUIPMENT, TANKS, MOCK_ALERTS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
+import { scheduleImportService } from '../services/scheduleImportService';
 import { supabase } from '../supabase';
 import { sendNativeNotification } from '../utils/pwa';
 
@@ -85,6 +86,13 @@ interface OperationalDataContextType {
   deleteVessel: (id: string) => Promise<void>;
   serviceTankId: string;
   setServiceTankId: (tankId: string) => Promise<void>;
+  internationalSchedules: InternationalSchedule[];
+  importInternationalSchedules: (schedules: InternationalSchedule[]) => Promise<void>;
+  saveInternationalSchedule: (schedule: InternationalSchedule) => Promise<void>;
+  deleteInternationalSchedule: (id: string) => Promise<void>;
+  toggleInternationalScheduleActive: (id: string, isActive: boolean) => Promise<void>;
+  crossCheckDailyFlights: (dateStr?: string) => ScheduleCrossCheckResult[];
+  getPredictiveUpliftForecast: (startDateStr?: string, daysCount?: number, categoryFilter?: 'ALL' | 'INT' | 'DOM') => PredictiveUpliftForecast[];
 }
 
 const OperationalDataContext = createContext<OperationalDataContextType | undefined>(undefined);
@@ -605,6 +613,19 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   });
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [isAlertsLoading, setIsAlertsLoading] = useState(false);
+  const [internationalSchedules, setInternationalSchedules] = useState<InternationalSchedule[]>([]);
+
+  useEffect(() => {
+    const loadIntlSchedules = async () => {
+      try {
+        const data = await supabaseService.getInternationalSchedules();
+        setInternationalSchedules(data);
+      } catch (e) {
+        console.error('Failed to load international schedules:', e);
+      }
+    };
+    loadIntlSchedules();
+  }, []);
 
   const [serviceTankId, setServiceTankIdState] = useState<string>(() => {
     try {
@@ -1371,6 +1392,50 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     await supabaseService.deleteVessel(id);
   };
 
+  const importInternationalSchedules = async (schedules: InternationalSchedule[]) => {
+    await supabaseService.bulkSaveInternationalSchedules(schedules);
+    const updated = await supabaseService.getInternationalSchedules();
+    setInternationalSchedules(updated);
+  };
+
+  const saveInternationalSchedule = async (schedule: InternationalSchedule) => {
+    await supabaseService.saveInternationalSchedule(schedule);
+    const updated = await supabaseService.getInternationalSchedules();
+    setInternationalSchedules(updated);
+  };
+
+  const deleteInternationalSchedule = async (id: string) => {
+    await supabaseService.deleteInternationalSchedule(id);
+    const updated = await supabaseService.getInternationalSchedules();
+    setInternationalSchedules(updated);
+  };
+
+  const toggleInternationalScheduleActive = async (id: string, isActive: boolean) => {
+    await supabaseService.toggleInternationalScheduleActive(id, isActive);
+    const updated = await supabaseService.getInternationalSchedules();
+    setInternationalSchedules(updated);
+  };
+
+  const crossCheckDailyFlights = (dateStr?: string): ScheduleCrossCheckResult[] => {
+    const targetDate = dateStr || selectedBriefingDate || new Date().toISOString().split('T')[0];
+    return scheduleImportService.crossCheckDailyFlights(
+      targetDate,
+      mergedFlightJobs || [],
+      internationalSchedules || []
+    );
+  };
+
+  const getPredictiveUpliftForecast = (startDateStr?: string, daysCount: number = 14, categoryFilter: 'ALL' | 'INT' | 'DOM' = 'ALL'): PredictiveUpliftForecast[] => {
+    const targetDate = startDateStr || new Date().toISOString().split('T')[0];
+    return scheduleImportService.generatePredictiveUpliftForecast(
+      targetDate,
+      daysCount,
+      internationalSchedules || [],
+      flightLogs || [],
+      categoryFilter
+    );
+  };
+
   return (
     <OperationalDataContext.Provider value={{
       equipment: equipment || [],
@@ -1423,7 +1488,14 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       addShipment,
       removeShipment,
       serviceTankId,
-      setServiceTankId
+      setServiceTankId,
+      internationalSchedules: internationalSchedules || [],
+      importInternationalSchedules,
+      saveInternationalSchedule,
+      deleteInternationalSchedule,
+      toggleInternationalScheduleActive,
+      crossCheckDailyFlights,
+      getPredictiveUpliftForecast
     }}>
       {children}
     </OperationalDataContext.Provider>

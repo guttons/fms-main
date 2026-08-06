@@ -1,11 +1,12 @@
 import { supabase } from '../supabase';
-import { User, Tank, FlightLog, BridgingLog, Alert, FlightJob, Equipment, StaffMember, UserRole, EquipmentStatus, Vessel, AirlineMaster, FlightMaster, AircraftMaster, AirlineHierarchyNode } from '../types';
+import { User, Tank, FlightLog, BridgingLog, Alert, FlightJob, Equipment, StaffMember, UserRole, EquipmentStatus, Vessel, AirlineMaster, FlightMaster, AircraftMaster, AirlineHierarchyNode, InternationalSchedule } from '../types';
 import { CustomerAccount, UpcomingPayment, Invoice, Receipt, ProformaRecord, FuelRequest, MonthEndVariance, ProcurementPR, SurchargeRecord, MpdSale, CustomsShipment } from '../context/FinanceDataContext';
 import { TANKS, MOCK_USERS, EQUIPMENT } from '../constants';
 import { INITIAL_STAFF_LIST } from '../constants/staffList';
 import { fmsDb } from './db';
 import { syncEngine } from './syncEngine';
 import masterDbData from './masterDbData.json';
+import { INITIAL_MOCK_SCHEDULES } from './scheduleImportService';
 
 const localBridgingLogs: BridgingLog[] = [
   {
@@ -2798,6 +2799,94 @@ export const supabaseService = {
     });
 
     return hierarchy;
+  },
+
+  // ── International Flight Schedules ──────────────────────────────────────────
+  async getInternationalSchedules(): Promise<InternationalSchedule[]> {
+    try {
+      const local = await fmsDb.getAll<InternationalSchedule>('international_schedules');
+      if (local && local.length >= INITIAL_MOCK_SCHEDULES.length) {
+        return local;
+      }
+      if (local && local.length > 0 && local.length < INITIAL_MOCK_SCHEDULES.length) {
+        // Re-seed updated initial mock schedules
+        const existingIds = new Set(local.map(s => s.id));
+        const newMocks = INITIAL_MOCK_SCHEDULES.filter(s => !existingIds.has(s.id));
+        const merged = [...local, ...newMocks];
+        for (const sch of newMocks) {
+          await fmsDb.put('international_schedules', sch);
+        }
+        localStorage.setItem('fms_intl_schedules', JSON.stringify(merged));
+        return merged;
+      }
+    } catch (e) {}
+
+    try {
+      const stored = localStorage.getItem('fms_intl_schedules');
+      if (stored) {
+        const parsed: InternationalSchedule[] = JSON.parse(stored);
+        if (parsed.length >= INITIAL_MOCK_SCHEDULES.length) return parsed;
+        const existingIds = new Set(parsed.map(s => s.id));
+        const newMocks = INITIAL_MOCK_SCHEDULES.filter(s => !existingIds.has(s.id));
+        const merged = [...parsed, ...newMocks];
+        localStorage.setItem('fms_intl_schedules', JSON.stringify(merged));
+        return merged;
+      }
+    } catch (e) {}
+
+    // Seed default mock schedules
+    try {
+      for (const sch of INITIAL_MOCK_SCHEDULES) {
+        await fmsDb.put('international_schedules', sch);
+      }
+      localStorage.setItem('fms_intl_schedules', JSON.stringify(INITIAL_MOCK_SCHEDULES));
+    } catch (e) {}
+
+    return INITIAL_MOCK_SCHEDULES;
+  },
+
+  async saveInternationalSchedule(sch: InternationalSchedule): Promise<void> {
+    try {
+      await fmsDb.put('international_schedules', sch);
+    } catch (e) {}
+    const existing = await this.getInternationalSchedules();
+    const idx = existing.findIndex(s => s.id === sch.id);
+    let updated: InternationalSchedule[];
+    if (idx !== -1) {
+      updated = [...existing];
+      updated[idx] = sch;
+    } else {
+      updated = [sch, ...existing];
+    }
+    try { localStorage.setItem('fms_intl_schedules', JSON.stringify(updated)); } catch (e) {}
+  },
+
+  async bulkSaveInternationalSchedules(schedules: InternationalSchedule[]): Promise<void> {
+    for (const sch of schedules) {
+      try { await fmsDb.put('international_schedules', sch); } catch (e) {}
+    }
+    const existing = await this.getInternationalSchedules();
+    const existingIds = new Set(existing.map(s => s.id));
+    const newItems = schedules.filter(s => !existingIds.has(s.id));
+    const updated = [...newItems, ...existing];
+    try { localStorage.setItem('fms_intl_schedules', JSON.stringify(updated)); } catch (e) {}
+  },
+
+  async deleteInternationalSchedule(id: string): Promise<void> {
+    try { await fmsDb.delete('international_schedules', id); } catch (e) {}
+    const existing = await this.getInternationalSchedules();
+    const filtered = existing.filter(s => s.id !== id);
+    try { localStorage.setItem('fms_intl_schedules', JSON.stringify(filtered)); } catch (e) {}
+  },
+
+  async toggleInternationalScheduleActive(id: string, isActive: boolean): Promise<void> {
+    const existing = await this.getInternationalSchedules();
+    const target = existing.find(s => s.id === id);
+    if (target) {
+      target.isActive = isActive;
+      await this.saveInternationalSchedule(target);
+    }
   }
 };
+
 

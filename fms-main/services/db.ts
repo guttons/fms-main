@@ -30,7 +30,7 @@ export interface FlightCustomerMapping {
 }
 
 const DB_NAME = 'MACL_FMS_OFFLINE_DB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 class FMSDatabase {
   private dbPromise: Promise<IDBDatabase> | null = null;
@@ -93,6 +93,11 @@ class FMSDatabase {
           const amStore = db.createObjectStore('aircraft_master', { keyPath: 'id' });
           amStore.createIndex('airlineName', 'airlineName', { unique: false });
           amStore.createIndex('aircraftReg', 'aircraftReg', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('international_schedules')) {
+          const isStore = db.createObjectStore('international_schedules', { keyPath: 'id' });
+          isStore.createIndex('flightNumber', 'flightNumber', { unique: false });
+          isStore.createIndex('airlineName', 'airlineName', { unique: false });
         }
         if (!db.objectStoreNames.contains('outbox')) {
           const outboxStore = db.createObjectStore('outbox', { keyPath: 'id' });

@@ -936,35 +936,37 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   ))}
                 </div>
 
-                {/* Date Picker */}
-                <div className={`relative flex items-center border rounded-xl shadow-inner focus-within:border-primary transition-colors w-full md:w-auto ${
-                  isHistoricalView 
-                    ? 'bg-amber-500/5 border-amber-500/30 focus-within:border-amber-500' 
-                    : 'bg-surface-dim border-outline'
-                }`}>
-                  <Calendar className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none shrink-0 ${isHistoricalView ? 'text-amber-400' : 'text-primary'}`} />
-                  <input 
-                    type="date"
-                    id="briefing-date-picker"
-                    value={selectedBriefingDate}
-                    max={todayStr}
-                    onChange={(e) => setSelectedBriefingDate(e.target.value)}
-                    onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
-                    className="bg-transparent text-[11px] font-black text-on-surface outline-none cursor-pointer w-full md:w-auto min-w-[130px] pl-9 pr-3 py-2"
-                    style={{ colorScheme: 'dark' }}
-                  />
-                </div>
+                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full md:w-auto">
+                  {/* Date Picker */}
+                  <div className={`relative flex items-center border rounded-xl shadow-inner focus-within:border-primary transition-colors flex-1 md:flex-none ${
+                    isHistoricalView 
+                      ? 'bg-amber-500/5 border-amber-500/30 focus-within:border-amber-500' 
+                      : 'bg-surface-dim border-outline'
+                  }`}>
+                    <Calendar className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none shrink-0 ${isHistoricalView ? 'text-amber-400' : 'text-primary'}`} />
+                    <input 
+                      type="date"
+                      id="briefing-date-picker"
+                      value={selectedBriefingDate}
+                      max={todayStr}
+                      onChange={(e) => setSelectedBriefingDate(e.target.value)}
+                      onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                      className="bg-transparent text-[11px] font-black text-on-surface outline-none cursor-pointer w-full min-w-[120px] sm:min-w-[130px] pl-9 pr-2 sm:pr-3 py-2.5"
+                      style={{ colorScheme: 'dark' }}
+                    />
+                  </div>
 
-                {/* Return to Today button — shown only in history mode */}
-                {isHistoricalView && (
-                  <button
-                    onClick={() => setSelectedBriefingDate(todayStr)}
-                    className="flex items-center space-x-2 px-4 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/50 rounded-xl text-amber-400 transition-all shrink-0"
-                  >
-                    <Clock className="w-3.5 h-3.5" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Return to Today</span>
-                  </button>
-                )}
+                  {/* Return to Today button — shown only in history mode */}
+                  {isHistoricalView && (
+                    <button
+                      onClick={() => setSelectedBriefingDate(todayStr)}
+                      className="flex items-center space-x-2 px-3 sm:px-4 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/50 rounded-xl text-amber-400 transition-all shrink-0"
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Return to Today</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

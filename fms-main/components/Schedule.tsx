@@ -29,11 +29,19 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
     refreshExternalFlights,
     domesticFlights,
     selectedBriefingDate,
-    setSelectedBriefingDate
+    setSelectedBriefingDate,
+    crossCheckDailyFlights
   } = useOperationalData();
   const todayDate = selectedBriefingDate;
   const todayStr = new Date().toISOString().split('T')[0];
   const isHistoricalView = selectedBriefingDate < todayStr;
+
+  const crossCheckResults = crossCheckDailyFlights ? crossCheckDailyFlights(todayDate) : [];
+  const retimedCount = crossCheckResults.filter(r => r.status === 'RETIMED').length;
+  const swapCount = crossCheckResults.filter(r => r.status === 'AIRCRAFT_SWAP').length;
+  const missingCount = crossCheckResults.filter(r => r.status === 'CANCELLED_OR_MISSING').length;
+  const matchedCount = crossCheckResults.filter(r => r.status === 'MATCHED').length;
+  const compliancePct = crossCheckResults.length > 0 ? Math.round((matchedCount / crossCheckResults.length) * 100) : 100;
   const [activeTab, setActiveTab] = useState<'international' | 'domestic' | 'adhoc' | 'equipment' | 'status' | 'live'>('international');
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
   const tooltipTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -533,39 +541,50 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
           <h1 className="headline-lg tracking-tighter mb-2 uppercase flex items-center">
             SHIFT <span className="text-primary italic font-medium ml-3">OPERATIONS</span>
           </h1>
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-[0.3em]">FUEL SERVICES HUB</span>
             <div className="h-1 w-1 rounded-full bg-on-surface-dim opacity-20"></div>
             <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Fleet Deployment Active</span>
+            {isHistoricalView && (
+              <>
+                <div className="h-1 w-1 rounded-full bg-on-surface-dim opacity-20"></div>
+                <div className="flex items-center space-x-2 px-2.5 py-1 bg-amber-500/10 rounded-full border border-amber-500/30">
+                  <Calendar className="w-3 h-3 text-amber-400" />
+                  <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">HISTORY MODE — READ ONLY</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-          {/* Date Picker */}
-          <div className={`relative flex items-center border rounded-xl shadow-inner focus-within:border-primary transition-colors ${isHistoricalView ? 'bg-amber-500/5 border-amber-500/30 focus-within:border-amber-500' : 'bg-surface-dim border-outline'}`}>
-            <Calendar className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none shrink-0 ${isHistoricalView ? 'text-amber-400' : 'text-primary'}`} />
-            <input
-              type="date"
-              id="schedule-date-picker"
-              value={selectedBriefingDate}
-              max={todayStr}
-              onChange={(e) => setSelectedBriefingDate(e.target.value)}
-              onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
-              className="bg-transparent text-[11px] font-black text-on-surface outline-none cursor-pointer min-w-[130px] pl-9 pr-3 py-2.5"
-              style={{ colorScheme: 'dark' }}
-            />
-          </div>
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            {/* Date Picker */}
+            <div className={`relative flex items-center border rounded-xl shadow-inner focus-within:border-primary transition-colors ${isHistoricalView ? 'bg-amber-500/5 border-amber-500/30 focus-within:border-amber-500' : 'bg-surface-dim border-outline'}`}>
+              <Calendar className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none shrink-0 ${isHistoricalView ? 'text-amber-400' : 'text-primary'}`} />
+              <input
+                type="date"
+                id="schedule-date-picker"
+                value={selectedBriefingDate}
+                max={todayStr}
+                onChange={(e) => setSelectedBriefingDate(e.target.value)}
+                onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                className="bg-transparent text-[11px] font-black text-on-surface outline-none cursor-pointer min-w-[120px] sm:min-w-[130px] pl-9 pr-2 sm:pr-3 py-2.5"
+                style={{ colorScheme: 'dark' }}
+              />
+            </div>
 
-          {/* Return to Today */}
-          {isHistoricalView && (
-            <button
-              onClick={() => setSelectedBriefingDate(todayStr)}
-              className="flex items-center space-x-2 px-4 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/50 rounded-xl text-amber-400 transition-all shrink-0"
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span className="text-[10px] font-black uppercase tracking-widest">Return to Today</span>
-            </button>
-          )}
+            {/* Return to Today */}
+            {isHistoricalView && (
+              <button
+                onClick={() => setSelectedBriefingDate(todayStr)}
+                className="flex items-center space-x-2 px-3 sm:px-4 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/50 rounded-xl text-amber-400 transition-all shrink-0"
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Return to Today</span>
+              </button>
+            )}
+          </div>
 
           {/* Shift Selector */}
           <div className="relative">
@@ -583,15 +602,6 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
           </div>
         </div>
       </div>
-
-      {/* History Mode Banner */}
-      {isHistoricalView && (
-        <div className="flex items-center justify-center space-x-3 px-5 py-3 bg-amber-500/10 rounded-2xl border border-amber-500/30 mb-2">
-          <Calendar className="w-4 h-4 text-amber-400" />
-          <span className="text-[11px] font-black text-amber-400 uppercase tracking-widest">HISTORY MODE — READ ONLY</span>
-          <span className="text-[10px] font-bold text-amber-400/60">{selectedBriefingDate}</span>
-        </div>
-      )}
 
       {/* Tabs */}
       <div className="relative">
@@ -726,7 +736,48 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
         <div key={activeTab}>
           {/* International Ops */}
           {activeTab === 'international' && (
-            <div className="animate-in fade-in slide-in-from-left-4 duration-500">
+            <div className="animate-in fade-in slide-in-from-left-4 duration-500 space-y-4">
+              {/* Schedule Cross-Check Banner */}
+              {crossCheckResults.length > 0 && (
+                <div className="p-4 mx-4 mt-4 rounded-2xl bg-surface-container-low/80 border border-outline/50 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-primary/10 border border-primary/20">
+                      <Globe className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <div className="font-black uppercase tracking-wider text-on-surface flex items-center gap-2">
+                        <span>Master Schedule Adherence: {compliancePct}%</span>
+                        <span className="text-[10px] font-bold text-on-surface-dim opacity-60">({todayDate})</span>
+                      </div>
+                      <p className="text-[11px] text-on-surface-dim opacity-70 mt-0.5">
+                        Cross-referencing active operational flights against seasonal master schedule baseline.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap text-[11px] font-bold">
+                    <span className="px-2.5 py-1 rounded-lg bg-success/10 text-success border border-success/20">
+                      {matchedCount} Confirmed
+                    </span>
+                    {retimedCount > 0 && (
+                      <span className="px-2.5 py-1 rounded-lg bg-warning/10 text-warning border border-warning/20">
+                        {retimedCount} Retimed (&gt;15m)
+                      </span>
+                    )}
+                    {swapCount > 0 && (
+                      <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20">
+                        {swapCount} Aircraft Swap
+                      </span>
+                    )}
+                    {missingCount > 0 && (
+                      <span className="px-2.5 py-1 rounded-lg bg-error/10 text-error border border-error/20">
+                        {missingCount} Missing in FIDS
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Desktop View */}
               <div className="hidden md:block overflow-x-auto">
                 <table className="min-w-full divide-y divide-outline">

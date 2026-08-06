@@ -253,3 +253,54 @@ export interface AirlineHierarchyNode {
   aircrafts: AircraftMaster[];
 }
 
+export interface InternationalSchedule {
+  id: string;
+  flightNumber: string;
+  airlineCode?: string;
+  airlineName: string;
+  origin: string;
+  destination: string;
+  sta: string; // Scheduled Time Arrival HH:mm
+  std: string; // Scheduled Time Departure HH:mm
+  daysOfWeek: number[]; // 1=Mon, 2=Tue ... 7=Sun
+  aircraftType: string;
+  estimatedUpliftLiters: number;
+  effectiveFrom: string; // YYYY-MM-DD
+  effectiveTo: string;   // YYYY-MM-DD
+  isActive: boolean;
+  isDomestic?: boolean;
+  uploadedAt: string;
+  uploadedBy?: string;
+  sourceFilename?: string;
+}
+
+export type CrossCheckStatus = 'MATCHED' | 'RETIMED' | 'AIRCRAFT_SWAP' | 'UNSCHEDULED_ADDITION' | 'CANCELLED_OR_MISSING';
+
+export interface ScheduleCrossCheckResult {
+  id: string;
+  date: string;
+  flightNumber: string;
+  airlineName: string;
+  status: CrossCheckStatus;
+  scheduledSta?: string;
+  actualSta?: string;
+  scheduledStd?: string;
+  actualStd?: string;
+  scheduledAircraft?: string;
+  actualAircraft?: string;
+  scheduledUplift?: number;
+  timeVarianceMins?: number;
+  notes: string;
+}
+
+export interface PredictiveUpliftForecast {
+  date: string;
+  dayName: string;
+  scheduledFlightCount: number;
+  predictedScheduleUplift: number; // Based on uploaded schedule
+  historicalBaselineUplift: number; // Based on historical logs
+  blendedEstimateUplift: number;   // Hybrid model estimate
+  airlineBreakdown: { airline: string; flightCount: number; estimatedUplift: number }[];
+}
+
+
