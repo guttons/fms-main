@@ -355,11 +355,11 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
     const s = briefingInfo?.staffAssignments;
     if (!s) {
       return {
-        activeOperators: ['u3b'],
-        activeOfficers: ['u3'],
-        hydrantOpsOfficers: ['u7'],
-        dutySupervisors: ['u2'],
-        shiftInCharges: ['u11']
+        activeOperators: [],
+        activeOfficers: [],
+        hydrantOpsOfficers: [],
+        dutySupervisors: [],
+        shiftInCharges: []
       };
     }
     
@@ -435,21 +435,32 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
             ? [s.shiftInCharge] 
             : [];
 
-        setStaffAssignments({
+        const normalized: StaffAssignments = {
           ...s,
           dutySupervisors,
           shiftInCharges
+        };
+
+        setStaffAssignments(prev => {
+          if (JSON.stringify(prev) === JSON.stringify(normalized)) return prev;
+          return normalized;
         });
-        setAttendees(s.attendees || []);
-        setDailyCompleted(s.dailyCompleted || []);
-        setStaffStatuses(s.staffStatuses || {});
+        setAttendees(prev => {
+          const next = s.attendees || [];
+          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+        });
+        setDailyCompleted(prev => {
+          const next = s.dailyCompleted || [];
+          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+        });
+        setStaffStatuses(prev => {
+          const next = s.staffStatuses || {};
+          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+        });
       } else {
-        setStaffAssignments({
-          activeOperators: [],
-          activeOfficers: [],
-          hydrantOpsOfficers: [],
-          dutySupervisors: [],
-          shiftInCharges: []
+        setStaffAssignments(prev => {
+          const empty = { activeOperators: [], activeOfficers: [], hydrantOpsOfficers: [], dutySupervisors: [], shiftInCharges: [] };
+          return JSON.stringify(prev) === JSON.stringify(empty) ? prev : empty;
         });
         setAttendees([]);
         setDailyCompleted([]);
@@ -457,6 +468,21 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
       }
     }
   }, [briefingInfo]);
+
+  const handleStaffAssignmentsUpdate = (updater: (prev: StaffAssignments) => StaffAssignments) => {
+    setStaffAssignments(prev => {
+      const updated = updater(prev);
+      updateBriefingInfo(additionalInfo, dieselNeeds, {
+        ...updated,
+        attendees,
+        staffStatuses,
+        dailyCompleted,
+        frozenFlights: briefingInfo?.staffAssignments?.frozenFlights || null,
+        adhocFlights: briefingInfo?.staffAssignments?.adhocFlights || []
+      });
+      return updated;
+    });
+  };
 
 
 
@@ -866,6 +892,12 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
   };
 
   const getUserName = (id: string) => activeStaff.find(u => u.id === id)?.name || 'Unassigned';
+  const isValidStaff = (id?: string) => !!id && id.trim() !== '' && activeStaff.some(u => u.id === id);
+
+  const activeOperatorsCount = (staffAssignments.activeOperators || []).filter(isValidStaff).length;
+  const activeOfficersCount = (staffAssignments.activeOfficers || []).filter(isValidStaff).length;
+  const hydrantOpsOfficersCount = (staffAssignments.hydrantOpsOfficers || []).filter(isValidStaff).length;
+  const staffingManagementCount = (staffAssignments.dutySupervisors || []).filter(isValidStaff).length + (staffAssignments.shiftInCharges || []).filter(isValidStaff).length;
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 space-y-6 sm:space-y-10 animate-in fade-in duration-700 min-h-screen relative overflow-y-auto overflow-x-hidden custom-scrollbar transition-colors">
@@ -1260,11 +1292,11 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   </button>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Active Operators</h3>
                 </div>
-                <span className="badge-custom-success px-3 py-1 rounded-full text-[10px] font-black whitespace-nowrap shrink-0">{staffAssignments.activeOperators.length} STAFF</span>
+                <span className="badge-custom-success px-3 py-1 rounded-full text-[10px] font-black whitespace-nowrap shrink-0">{activeOperatorsCount} STAFF</span>
               </div>
               {!isOperatorsCollapsed && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                  {renderStaffSelectArray(staffAssignments.activeOperators, [UserRole.ITP_OPERATOR], "Operators", "bg-success shadow-[0_0_10px_rgba(34,197,94,0.4)]", 'success', (newVals) => setStaffAssignments(prev => ({...prev, activeOperators: newVals})))}
+                  {renderStaffSelectArray(staffAssignments.activeOperators, [UserRole.ITP_OPERATOR], "Operators", "bg-success shadow-[0_0_10px_rgba(34,197,94,0.4)]", 'success', (newVals) => handleStaffAssignmentsUpdate(prev => ({...prev, activeOperators: newVals})))}
                 </div>
               )}
             </div>
@@ -1282,11 +1314,11 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   </button>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Active Officers</h3>
                 </div>
-                <span className="badge-custom-primary px-3 py-1 rounded-full text-[10px] font-black whitespace-nowrap shrink-0">{staffAssignments.activeOfficers.length} STAFF</span>
+                <span className="badge-custom-primary px-3 py-1 rounded-full text-[10px] font-black whitespace-nowrap shrink-0">{activeOfficersCount} STAFF</span>
               </div>
               {!isOfficersCollapsed && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                  {renderStaffSelectArray(staffAssignments.activeOfficers, [UserRole.ITP_OFFICER], "Officers", "bg-primary shadow-[0_0_10px_rgba(14,165,233,0.4)]", 'primary', (newVals) => setStaffAssignments(prev => ({...prev, activeOfficers: newVals})))}
+                  {renderStaffSelectArray(staffAssignments.activeOfficers, [UserRole.ITP_OFFICER], "Officers", "bg-primary shadow-[0_0_10px_rgba(14,165,233,0.4)]", 'primary', (newVals) => handleStaffAssignmentsUpdate(prev => ({...prev, activeOfficers: newVals})))}
                 </div>
               )}
             </div>
@@ -1304,11 +1336,11 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   </button>
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Hydrant Ops Officers</h3>
                 </div>
-                <span className="badge-custom-warning px-3 py-1 rounded-full text-[10px] font-black whitespace-nowrap shrink-0">{staffAssignments.hydrantOpsOfficers.length} STAFF</span>
+                <span className="badge-custom-warning px-3 py-1 rounded-full text-[10px] font-black whitespace-nowrap shrink-0">{hydrantOpsOfficersCount} STAFF</span>
               </div>
               {!isHydrantCollapsed && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                  {renderStaffSelectArray(staffAssignments.hydrantOpsOfficers, [UserRole.ITP_HD_OPERATOR], "Hydrant Officers", "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]", 'warning', (newVals) => setStaffAssignments(prev => ({...prev, hydrantOpsOfficers: newVals})))}
+                  {renderStaffSelectArray(staffAssignments.hydrantOpsOfficers, [UserRole.ITP_HD_OPERATOR], "Hydrant Officers", "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]", 'warning', (newVals) => handleStaffAssignmentsUpdate(prev => ({...prev, hydrantOpsOfficers: newVals})))}
                 </div>
               )}
             </div>
@@ -1329,7 +1361,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Staffing Management</h3>
                 </div>
                 <span className="badge-custom-primary px-3 py-1 rounded-full text-[10px] font-black whitespace-nowrap shrink-0">
-                  {((staffAssignments.dutySupervisors || []).length + (staffAssignments.shiftInCharges || []).length)} STAFF
+                  {staffingManagementCount} STAFF
                 </span>
               </div>
               {!isStaffingCollapsed && (
@@ -1340,7 +1372,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                     "Duty Supervisor",
                     "bg-primary shadow-[0_0_10px_rgba(14,165,233,0.4)]",
                     'primary',
-                    (newVals) => setStaffAssignments(prev => ({ ...prev, dutySupervisors: newVals }))
+                    (newVals) => handleStaffAssignmentsUpdate(prev => ({ ...prev, dutySupervisors: newVals }))
                   )}
                   {renderStaffSelectArray(
                     staffAssignments.shiftInCharges || [],
@@ -1348,7 +1380,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                     "Shift In-Charge",
                     "bg-primary shadow-[0_0_10px_rgba(14,165,233,0.4)]",
                     'primary',
-                    (newVals) => setStaffAssignments(prev => ({ ...prev, shiftInCharges: newVals }))
+                    (newVals) => handleStaffAssignmentsUpdate(prev => ({ ...prev, shiftInCharges: newVals }))
                   )}
                 </div>
               )}

@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Upload, Download, FileSpreadsheet, Plus, Trash2, CheckCircle2, 
   AlertTriangle, RefreshCw, Search, Calendar, Globe, Clock, Plane, 
@@ -25,6 +26,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
     importInternationalSchedules,
     saveInternationalSchedule,
     deleteInternationalSchedule,
+    deleteAllInternationalSchedules,
     toggleInternationalScheduleActive,
     crossCheckDailyFlights,
     selectedBriefingDate
@@ -66,13 +68,17 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
 
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'INT' | 'DOM'>('ALL');
 
-  const uniqueAirlines = Array.from(new Set(internationalSchedules.map(s => s.airlineName))).sort();
+  const uniqueAirlines = Array.from(
+    new Set(internationalSchedules.map(s => scheduleImportService.normalizeAirlineName(s.airlineName)))
+  ).sort();
 
   const filteredSchedules = internationalSchedules.filter(s => {
     const q = searchQuery.toLowerCase();
+    const normalizedAirline = scheduleImportService.normalizeAirlineName(s.airlineName);
     const matchesSearch = 
       s.flightNumber.toLowerCase().includes(q) ||
       s.airlineName.toLowerCase().includes(q) ||
+      normalizedAirline.toLowerCase().includes(q) ||
       s.aircraftType.toLowerCase().includes(q) ||
       s.origin.toLowerCase().includes(q) ||
       s.destination.toLowerCase().includes(q);
@@ -86,13 +92,52 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
       (categoryFilter === 'DOM' && isDomestic) ||
       (categoryFilter === 'INT' && !isDomestic);
 
-    const matchesAirline = airlineFilter === 'ALL' || s.airlineName === airlineFilter;
+    const matchesAirline = airlineFilter === 'ALL' || normalizedAirline === airlineFilter;
     const matchesStatus = statusFilter === 'ALL' || 
       (statusFilter === 'ACTIVE' && s.isActive) || 
       (statusFilter === 'INACTIVE' && !s.isActive);
 
     return matchesSearch && matchesCategory && matchesAirline && matchesStatus;
   });
+
+  const renderRouteBadge = (sch: InternationalSchedule) => {
+    const orig = (sch.origin || 'INT').toUpperCase();
+    const dest = (sch.destination || 'MLE').toUpperCase();
+
+    if (orig !== 'MLE' && dest === 'MLE') {
+      return (
+        <span className="px-2.5 py-1 rounded-xl bg-surface-container-low border border-outline/40 text-[10px] font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shadow-sm">
+          <span className="text-on-surface">{orig}</span>
+          <span className="text-[8.5px] font-semibold text-on-surface-dim opacity-40">➔ MLE ➔</span>
+          <span className="text-on-surface">{orig}</span>
+        </span>
+      );
+    }
+    if (orig === 'MLE' && dest !== 'MLE') {
+      return (
+        <span className="px-2.5 py-1 rounded-xl bg-surface-container-low border border-outline/40 text-[10px] font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shadow-sm">
+          <span className="text-[8.5px] font-semibold text-on-surface-dim opacity-40">MLE ➔</span>
+          <span className="text-on-surface">{dest}</span>
+        </span>
+      );
+    }
+    if (orig !== 'MLE' && dest !== 'MLE') {
+      return (
+        <span className="px-2.5 py-1 rounded-xl bg-surface-container-low border border-outline/40 text-[10px] font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shadow-sm">
+          <span className="text-on-surface">{orig}</span>
+          <span className="text-[8.5px] font-semibold text-on-surface-dim opacity-40">➔ MLE ➔</span>
+          <span className="text-on-surface">{dest}</span>
+        </span>
+      );
+    }
+    return (
+      <span className="px-2.5 py-1 rounded-xl bg-surface-container-low border border-outline/40 text-[10px] font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shadow-sm">
+        <span className="text-on-surface">{orig}</span>
+        <span className="text-[8.5px] font-semibold text-on-surface-dim opacity-40">➔</span>
+        <span className="text-on-surface">{dest}</span>
+      </span>
+    );
+  };
 
   // Download Sample CSV Template
   const handleDownloadTemplate = () => {
@@ -127,8 +172,9 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
             setParsedSchedules(schedules);
             const domCount = schedules.filter(s => s.isDomestic).length;
             const intlCount = schedules.length - domCount;
+            const seasonTag = stats.season && stats.season !== 'UNKNOWN' ? ` [${stats.season}]` : '';
             setParseErrors(errors.length > 0 ? errors : [
-              `Scanned MACL Excel workbook: extracted ${schedules.length} total schedules (${intlCount} International, ${domCount} Domestic) across ${stats.airlineCount} airlines.`
+              `Parsed MACL Schedule${seasonTag}: ${schedules.length} flights (${intlCount} International, ${domCount} Domestic) across ${stats.airlineCount} airlines from Days of OPS & Domestic tabs.`
             ]);
             setPreviewModalOpen(true);
           } catch (err: any) {
@@ -165,6 +211,20 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
     } catch (err: any) {
       push('Failed to import schedules: ' + err.message, 'error');
     }
+  };
+
+  const handleClearAllSchedules = () => {
+    confirm(
+      'Are you sure you want to delete ALL flight schedules? This will wipe the current schedule registry so you can upload a clean new seasonal schedule.',
+      async () => {
+        try {
+          await deleteAllInternationalSchedules();
+          push('All flight schedules cleared successfully.', 'info');
+        } catch (err: any) {
+          push('Failed to clear schedules: ' + err.message, 'error');
+        }
+      }
+    );
   };
 
   const handleOpenAddModal = () => {
@@ -291,7 +351,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               </div>
               <div>
                 <h2 className="text-lg font-black text-on-surface uppercase tracking-wider">
-                  International Flight Schedules
+                  Flight Schedules
                 </h2>
                 <p className="text-xs text-on-surface-dim opacity-70 mt-0.5">
                   Import seasonal master schedules, cross-check live daily flights, and generate predictive fuel uplift forecasts.
@@ -300,7 +360,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
             <input 
               type="file" 
               ref={fileInputRef}
@@ -310,38 +370,47 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl kinetic-gradient text-white text-xs font-black uppercase tracking-wider transition-all shadow-premium hover:scale-[1.02] active:scale-95 border-none"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl kinetic-gradient text-white text-xs font-black uppercase tracking-wider transition-all shadow-premium hover:scale-[1.02] active:scale-95 border-none shrink-0 whitespace-nowrap"
             >
-              <Upload className="w-4 h-4" /> Import Schedule (.xlsx / .csv)
+              <Upload className="w-4 h-4" /> Import Schedule
             </button>
 
             <button
               onClick={handleDownloadTemplate}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-surface-container-low hover:bg-surface-container text-on-surface text-xs font-black uppercase tracking-wider border border-outline transition-all active:scale-95"
+              className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl bg-surface-container-low/50 hover:bg-surface-container text-on-surface-dim text-[10px] font-semibold uppercase tracking-wider border border-outline/30 transition-all active:scale-95 opacity-80 hover:opacity-100 shrink-0 whitespace-nowrap"
+              title="Download CSV template for manual schedule entry (optional fallback)"
             >
-              <Download className="w-4 h-4 text-primary" /> CSV Template
+              <Download className="w-3.5 h-3.5 text-on-surface-dim" /> CSV Fallback
             </button>
 
             <button
               onClick={handleOpenAddModal}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-surface-container-low hover:bg-surface-container text-on-surface text-xs font-black uppercase tracking-wider border border-outline transition-all active:scale-95"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-surface-container-low hover:bg-surface-container text-on-surface text-xs font-black uppercase tracking-wider border border-outline transition-all active:scale-95 shrink-0 whitespace-nowrap"
             >
               <Plus className="w-4 h-4 text-success" /> Add Schedule
+            </button>
+
+            <button
+              onClick={handleClearAllSchedules}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-error/10 hover:bg-error/20 text-error text-xs font-black uppercase tracking-wider border border-error/30 transition-all active:scale-95 shrink-0 whitespace-nowrap"
+              title="Delete all schedules to upload a clean new schedule"
+            >
+              <Trash2 className="w-4 h-4 text-error" /> Clear All Schedules
             </button>
           </div>
         </div>
 
         {/* Sub Navigation Bar */}
-        <div className="flex items-center gap-2 mt-6 pt-6 border-t border-outline/30">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-6 pt-6 border-t border-outline/30">
           <button
             onClick={() => setActiveSubTab('master')}
-            className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all border-none ${
+            className={`px-5 py-2.5 rounded-2xl sm:rounded-full text-xs font-black uppercase tracking-wider transition-all border-none ${
               activeSubTab === 'master'
                 ? 'kinetic-gradient text-white shadow-premium'
                 : 'text-on-surface-dim hover:text-on-surface bg-surface-container-low/50 hover:bg-surface-container-low'
             }`}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center gap-2">
               <Layers className="w-4 h-4" />
               <span>Schedule Registry ({internationalSchedules.length})</span>
             </div>
@@ -349,17 +418,17 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
 
           <button
             onClick={() => setActiveSubTab('crosscheck')}
-            className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all relative border-none ${
+            className={`px-5 py-2.5 rounded-2xl sm:rounded-full text-xs font-black uppercase tracking-wider transition-all relative border-none ${
               activeSubTab === 'crosscheck'
                 ? 'kinetic-gradient text-white shadow-premium'
                 : 'text-on-surface-dim hover:text-on-surface bg-surface-container-low/50 hover:bg-surface-container-low'
             }`}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center gap-2">
               <Clock className="w-4 h-4" />
               <span>Daily Flight Cross-Check</span>
               {retimedCount + swapCount + missingCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-warning text-on-warning">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-warning text-on-warning shrink-0">
                   {retimedCount + swapCount + missingCount} Alerts
                 </span>
               )}
@@ -372,7 +441,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
       {activeSubTab === 'master' && (
         <div className="space-y-4">
           {/* Controls & Filters */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface/60 backdrop-blur-md p-4 rounded-2xl border border-outline/40">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-surface/60 backdrop-blur-md p-4 rounded-2xl border border-outline/40">
             <div className="relative w-full sm:w-80">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-dim" />
               <input
@@ -384,11 +453,11 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               />
             </div>
 
-            <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
               <select
                 value={categoryFilter}
                 onChange={e => setCategoryFilter(e.target.value as any)}
-                className="px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-xs text-on-surface focus:outline-none focus:border-primary font-semibold"
+                className="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-xs text-on-surface focus:outline-none focus:border-primary font-semibold"
               >
                 <option value="ALL">All Categories</option>
                 <option value="INT">International Only</option>
@@ -398,7 +467,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               <select
                 value={airlineFilter}
                 onChange={e => setAirlineFilter(e.target.value)}
-                className="px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-xs text-on-surface focus:outline-none focus:border-primary"
+                className="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-xs text-on-surface focus:outline-none focus:border-primary"
               >
                 <option value="ALL">All Airlines ({uniqueAirlines.length})</option>
                 {uniqueAirlines.map(a => (
@@ -409,7 +478,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               <select
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value as any)}
-                className="px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-xs text-on-surface focus:outline-none focus:border-primary"
+                className="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-xs text-on-surface focus:outline-none focus:border-primary"
               >
                 <option value="ALL">All Status</option>
                 <option value="ACTIVE">Active Only</option>
@@ -421,7 +490,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
           {/* Schedules Data Table */}
           <div className="bg-surface/80 backdrop-blur-xl border border-outline/55 rounded-3xl overflow-hidden shadow-premium">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-on-surface border-collapse">
+              <table className="min-w-[850px] w-full text-left text-xs text-on-surface border-collapse">
                 <thead>
                   <tr className="bg-surface-container-low/80 border-b border-outline/50 text-[11px] font-black uppercase tracking-widest text-on-surface-dim">
                     <th className="py-4 px-6">Flight #</th>
@@ -451,7 +520,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                         </td>
                         <td className="py-4 px-6 font-bold">
                           <div className="flex items-center gap-2">
-                            <span>{sch.airlineName}</span>
+                            <span>{scheduleImportService.normalizeAirlineName(sch.airlineName)}</span>
                             <span className="opacity-50 text-[10px]">({sch.airlineCode})</span>
                             {sch.isDomestic ? (
                               <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-secondary/15 text-secondary border border-secondary/30">
@@ -465,9 +534,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                           </div>
                         </td>
                         <td className="py-4 px-6 font-medium">
-                          <span className="px-2 py-1 rounded bg-surface-container-low border border-outline text-[10px] font-bold">
-                            {sch.origin} ➔ {sch.destination}
-                          </span>
+                          {renderRouteBadge(sch)}
                         </td>
                         <td className="py-4 px-6 font-mono font-semibold text-on-surface">
                           {sch.sta} / {sch.std}
@@ -668,24 +735,25 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
       )}
 
       {/* PRE-IMPORT PREVIEW MODAL */}
-      {previewModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
-          <div className="bg-surface border border-outline rounded-3xl max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col shadow-premium">
-            <div className="p-6 border-b border-outline/50 flex items-center justify-between">
+      {previewModalOpen && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-xl p-4 sm:p-6 overflow-y-auto">
+          <div className="bg-surface border border-outline/60 rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl my-auto">
+            <div className="p-5 sm:p-6 border-b border-outline/50 flex items-center justify-between bg-surface-container-low/40">
               <div>
-                <h3 className="text-sm font-black uppercase tracking-wider text-on-surface">
+                <h3 className="text-sm font-black uppercase tracking-wider text-on-surface flex items-center gap-2">
+                  <FileSpreadsheet className="w-5 h-5 text-primary" />
                   Schedule Import Preview - {uploadFilename}
                 </h3>
                 <p className="text-xs text-on-surface-dim mt-0.5">
                   Review parsed rows before committing to system master database.
                 </p>
               </div>
-              <button onClick={() => setPreviewModalOpen(false)} className="p-2 rounded-xl hover:bg-surface-container">
+              <button onClick={() => setPreviewModalOpen(false)} className="p-2 rounded-xl hover:bg-surface-container transition-colors">
                 <X className="w-5 h-5 text-on-surface-dim" />
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-4 flex-1">
               {parseErrors.length > 0 && (
                 <div className="p-4 rounded-2xl bg-error/10 border border-error/20 text-xs text-error space-y-1">
                   <div className="font-black uppercase tracking-wider flex items-center gap-2">
@@ -699,18 +767,21 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                 </div>
               )}
 
-              <div className="text-xs font-bold text-on-surface-dim">
-                Parsed {parsedSchedules.length} valid flight schedule entries ready for import:
+              <div className="text-xs font-bold text-on-surface-dim flex items-center justify-between">
+                <span>Parsed {parsedSchedules.length} valid flight schedule entries ready for import:</span>
+                <span className="px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[11px] font-black uppercase">
+                  {parsedSchedules.filter(s => s.isDomestic).length} Domestic / {parsedSchedules.filter(s => !s.isDomestic).length} Intl
+                </span>
               </div>
 
-              <div className="border border-outline/40 rounded-2xl overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-surface-container-low font-black text-[10px] uppercase text-on-surface-dim">
+              <div className="border border-outline/40 rounded-2xl overflow-x-auto max-h-[50vh] overflow-y-auto">
+                <table className="w-full text-left text-xs min-w-[700px]">
+                  <thead className="sticky top-0 z-10 bg-surface-container-low font-black text-[10px] uppercase text-on-surface-dim border-b border-outline/40">
                     <tr>
                       <th className="p-3">Flight #</th>
                       <th className="p-3">Airline</th>
                       <th className="p-3">Route</th>
-                      <th className="p-3">STA/STD</th>
+                      <th className="p-3">STA / STD</th>
                       <th className="p-3">Days</th>
                       <th className="p-3">Aircraft</th>
                       <th className="p-3 text-right">Est. Uplift</th>
@@ -718,14 +789,16 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                   </thead>
                   <tbody className="divide-y divide-outline/30 font-medium">
                     {parsedSchedules.map((sch, i) => (
-                      <tr key={i} className="hover:bg-surface-container-low/40">
+                      <tr key={i} className="hover:bg-surface-container-low/40 transition-colors">
                         <td className="p-3 font-bold text-primary">{sch.flightNumber}</td>
-                        <td className="p-3">{sch.airlineName}</td>
-                        <td className="p-3">{sch.origin} ➔ {sch.destination}</td>
-                        <td className="p-3 font-mono">{sch.sta} / {sch.std}</td>
+                        <td className="p-3 font-semibold">{scheduleImportService.normalizeAirlineName(sch.airlineName)}</td>
+                        <td className="p-3">
+                          {renderRouteBadge(sch)}
+                        </td>
+                        <td className="p-3 font-mono">{sch.sta || '--:--'} / {sch.std || '--:--'}</td>
                         <td className="p-3 font-mono">{sch.daysOfWeek.join(', ')}</td>
                         <td className="p-3">{sch.aircraftType}</td>
-                        <td className="p-3 text-right font-mono text-success">{sch.estimatedUpliftLiters.toLocaleString()} L</td>
+                        <td className="p-3 text-right font-mono font-bold text-success">{sch.estimatedUpliftLiters.toLocaleString()} L</td>
                       </tr>
                     ))}
                   </tbody>
@@ -733,29 +806,30 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               </div>
             </div>
 
-            <div className="p-6 border-t border-outline/50 flex justify-end gap-3 bg-surface-container-low/40">
+            <div className="p-5 sm:p-6 border-t border-outline/50 flex justify-end gap-3 bg-surface-container-low/40">
               <button
                 onClick={() => setPreviewModalOpen(false)}
-                className="px-5 py-2.5 rounded-xl border border-outline text-xs font-black uppercase tracking-wider text-on-surface hover:bg-surface-container"
+                className="px-5 py-2.5 rounded-xl border border-outline text-xs font-black uppercase tracking-wider text-on-surface hover:bg-surface-container transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmImport}
                 disabled={parsedSchedules.length === 0}
-                className="px-5 py-2.5 rounded-xl kinetic-gradient text-white text-xs font-black uppercase tracking-wider hover:scale-[1.02] active:scale-95 shadow-premium border-none disabled:opacity-50"
+                className="px-5 py-2.5 rounded-xl kinetic-gradient text-white text-xs font-black uppercase tracking-wider hover:scale-[1.02] active:scale-95 shadow-premium border-none disabled:opacity-50 transition-all"
               >
                 Confirm & Save {parsedSchedules.length} Schedules
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ADD / EDIT MANUAL MODAL */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
-          <div className="bg-surface border border-outline rounded-3xl max-w-lg w-full p-6 shadow-premium space-y-6">
+      {modalOpen && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-xl p-4 sm:p-6 overflow-y-auto">
+          <div className="bg-surface border border-outline/60 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-6 my-auto">
             <div className="flex items-center justify-between border-b border-outline/40 pb-4">
               <h3 className="text-sm font-black uppercase tracking-wider text-on-surface">
                 {editingSchedule ? 'Edit International Schedule' : 'Add International Schedule'}
@@ -926,24 +1000,25 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-outline/40 flex justify-end gap-3">
+              <div className="flex justify-end gap-3 pt-4 border-t border-outline/40">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-outline font-black uppercase text-on-surface hover:bg-surface-container"
+                  className="px-5 py-2.5 rounded-xl border border-outline text-xs font-black uppercase tracking-wider text-on-surface hover:bg-surface-container"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl kinetic-gradient text-white font-black uppercase hover:scale-[1.02] active:scale-95 shadow-premium border-none"
+                  className="px-5 py-2.5 rounded-xl kinetic-gradient text-white text-xs font-black uppercase tracking-wider hover:scale-[1.02] active:scale-95 shadow-premium border-none"
                 >
                   Save Schedule
                 </button>
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

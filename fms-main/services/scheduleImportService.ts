@@ -3,28 +3,28 @@ import { InternationalSchedule, ScheduleCrossCheckResult, PredictiveUpliftForeca
 
 export const INITIAL_MOCK_SCHEDULES: InternationalSchedule[] = [
   // ── INTERNATIONAL FLIGHT SCHEDULES ──
-  { id: 'intl-sch-101', flightNumber: 'EK652', airlineCode: 'EK', airlineName: 'Emirates', origin: 'DXB', destination: 'MLE', sta: '08:30', std: '10:00', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 48000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-102', flightNumber: 'EK656', airlineCode: 'EK', airlineName: 'Emirates', origin: 'DXB', destination: 'MLE', sta: '07:35', std: '09:05', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 48000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-103', flightNumber: 'EK658', airlineCode: 'EK', airlineName: 'Emirates', origin: 'DXB', destination: 'MLE', sta: '09:25', std: '10:55', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 48000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-104', flightNumber: 'QR672', airlineCode: 'QR', airlineName: 'Qatar Airways', origin: 'DOH', destination: 'MLE', sta: '08:05', std: '19:50', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 48000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-105', flightNumber: 'QR676', airlineCode: 'QR', airlineName: 'Qatar Airways', origin: 'DOH', destination: 'MLE', sta: '07:50', std: '09:40', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 48000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-106', flightNumber: 'QR670', airlineCode: 'QR', airlineName: 'Qatar Airways', origin: 'DOH', destination: 'MLE', sta: '08:25', std: '20:45', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320-200', estimatedUpliftLiters: 16500, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-107', flightNumber: 'FZ1207', airlineCode: 'FZ', airlineName: 'Fly Dubai', origin: 'DXB', destination: 'MLE', sta: '06:45', std: '10:10', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B737 MAX 8', estimatedUpliftLiters: 17000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-108', flightNumber: 'FZ1025', airlineCode: 'FZ', airlineName: 'Fly Dubai', origin: 'DXB', destination: 'MLE', sta: '07:15', std: '08:15', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B737 MAX 8', estimatedUpliftLiters: 17000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-109', flightNumber: 'SU320-1', airlineCode: 'SU', airlineName: 'Aeroflot', origin: 'SVO', destination: 'MLE', sta: '09:20', std: '11:00', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 52000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-110', flightNumber: 'EY378-9', airlineCode: 'EY', airlineName: 'Etihad Airways', origin: 'AUH', destination: 'MLE', sta: '05:05', std: '09:35', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B787-10', estimatedUpliftLiters: 42000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-111', flightNumber: 'EY372-3', airlineCode: 'EY', airlineName: 'Etihad Airways', origin: 'AUH', destination: 'MLE', sta: '07:25', std: '09:10', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B787-10', estimatedUpliftLiters: 42000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-112', flightNumber: 'SQ438', airlineCode: 'SQ', airlineName: 'Singapore Airlines', origin: 'SIN', destination: 'MLE', sta: '22:10', std: '23:25', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B787-10', estimatedUpliftLiters: 39000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-113', flightNumber: 'BA061-0', airlineCode: 'BA', airlineName: 'British Airways', origin: 'LHR', destination: 'MLE', sta: '09:40', std: '11:40', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-200ER', estimatedUpliftLiters: 56000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-114', flightNumber: 'UL101-2', airlineCode: 'UL', airlineName: 'SriLankan Airlines', origin: 'CMB', destination: 'MLE', sta: '08:15', std: '09:25', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A330-300', estimatedUpliftLiters: 32000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-115', flightNumber: 'G9093-4', airlineCode: 'G9', airlineName: 'Air Arabia', origin: 'SHJ', destination: 'MLE', sta: '08:10', std: '09:10', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320-200', estimatedUpliftLiters: 15500, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-116', flightNumber: 'G9091-2', airlineCode: 'G9', airlineName: 'Air Arabia', origin: 'SHJ', destination: 'MLE', sta: '13:20', std: '14:20', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320-200', estimatedUpliftLiters: 15500, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-117', flightNumber: 'AK074-5', airlineCode: 'AK', airlineName: 'Air Asia', origin: 'KUL', destination: 'MLE', sta: '09:50', std: '10:45', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320neo', estimatedUpliftLiters: 18000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-118', flightNumber: 'AK072-3', airlineCode: 'AK', airlineName: 'Air Asia', origin: 'KUL', destination: 'MLE', sta: '20:30', std: '21:30', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320neo', estimatedUpliftLiters: 18000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-119', flightNumber: 'TK740-1', airlineCode: 'TK', airlineName: 'Turkish Airlines', origin: 'IST', destination: 'MLE', sta: '07:40', std: '09:00', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B787-9', estimatedUpliftLiters: 44000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-101', flightNumber: 'EK657', airlineCode: 'EK', airlineName: 'Emirates', origin: 'DXB', destination: 'MLE', sta: '08:30', std: '10:00', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 48000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-102', flightNumber: 'EK657', airlineCode: 'EK', airlineName: 'Emirates', origin: 'DXB', destination: 'MLE', sta: '07:35', std: '09:05', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 48000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-103', flightNumber: 'EK659', airlineCode: 'EK', airlineName: 'Emirates', origin: 'DXB', destination: 'MLE', sta: '09:25', std: '10:55', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 48000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-104', flightNumber: 'QR673', airlineCode: 'QR', airlineName: 'Qatar Airways', origin: 'DOH', destination: 'MLE', sta: '08:05', std: '19:50', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 48000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-105', flightNumber: 'QR677', airlineCode: 'QR', airlineName: 'Qatar Airways', origin: 'DOH', destination: 'MLE', sta: '07:50', std: '09:40', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 48000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-106', flightNumber: 'QR671', airlineCode: 'QR', airlineName: 'Qatar Airways', origin: 'DOH', destination: 'MLE', sta: '08:25', std: '20:45', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320-200', estimatedUpliftLiters: 16500, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-107', flightNumber: 'FZ1208', airlineCode: 'FZ', airlineName: 'Fly Dubai', origin: 'DXB', destination: 'MLE', sta: '06:45', std: '10:10', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B737 MAX 8', estimatedUpliftLiters: 17000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-108', flightNumber: 'FZ1026', airlineCode: 'FZ', airlineName: 'Fly Dubai', origin: 'DXB', destination: 'MLE', sta: '07:15', std: '08:15', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B737 MAX 8', estimatedUpliftLiters: 17000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-109', flightNumber: 'SU321', airlineCode: 'SU', airlineName: 'Aeroflot', origin: 'SVO', destination: 'MLE', sta: '09:20', std: '11:00', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 75000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-110', flightNumber: 'EY379', airlineCode: 'EY', airlineName: 'Etihad Airways', origin: 'AUH', destination: 'MLE', sta: '05:05', std: '09:35', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B787-10', estimatedUpliftLiters: 42000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-111', flightNumber: 'EY373', airlineCode: 'EY', airlineName: 'Etihad Airways', origin: 'AUH', destination: 'MLE', sta: '07:25', std: '09:10', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B787-10', estimatedUpliftLiters: 42000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-112', flightNumber: 'SQ437', airlineCode: 'SQ', airlineName: 'Singapore Airlines', origin: 'SIN', destination: 'MLE', sta: '22:10', std: '23:25', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B787-10', estimatedUpliftLiters: 39000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-113', flightNumber: 'BA060', airlineCode: 'BA', airlineName: 'British Airways', origin: 'LHR', destination: 'MLE', sta: '09:40', std: '11:40', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-200ER', estimatedUpliftLiters: 72000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-114', flightNumber: 'UL102', airlineCode: 'UL', airlineName: 'SriLankan Airlines', origin: 'CMB', destination: 'MLE', sta: '08:15', std: '09:25', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A330-300', estimatedUpliftLiters: 28000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-115', flightNumber: 'G9094', airlineCode: 'G9', airlineName: 'Air Arabia', origin: 'SHJ', destination: 'MLE', sta: '08:10', std: '09:10', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320-200', estimatedUpliftLiters: 16500, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-116', flightNumber: 'G9092', airlineCode: 'G9', airlineName: 'Air Arabia', origin: 'SHJ', destination: 'MLE', sta: '13:20', std: '14:20', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320-200', estimatedUpliftLiters: 16500, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-117', flightNumber: 'AK075', airlineCode: 'AK', airlineName: 'Air Asia', origin: 'KUL', destination: 'MLE', sta: '09:50', std: '10:45', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320neo', estimatedUpliftLiters: 18000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-118', flightNumber: 'AK073', airlineCode: 'AK', airlineName: 'Air Asia', origin: 'KUL', destination: 'MLE', sta: '20:30', std: '21:30', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320neo', estimatedUpliftLiters: 18000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-119', flightNumber: 'TK741', airlineCode: 'TK', airlineName: 'Turkish Airlines', origin: 'IST', destination: 'MLE', sta: '07:40', std: '09:00', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B787-9', estimatedUpliftLiters: 44000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
   { id: 'intl-sch-120', flightNumber: 'GF144', airlineCode: 'GF', airlineName: 'Gulf Air', origin: 'BAH', destination: 'MLE', sta: '06:35', std: '07:35', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320neo', estimatedUpliftLiters: 16000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-121', flightNumber: 'AI2239-40', airlineCode: 'AI', airlineName: 'Air India', origin: 'DEL', destination: 'MLE', sta: '11:50', std: '12:50', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320neo', estimatedUpliftLiters: 14500, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-122', flightNumber: 'MH485-4', airlineCode: 'MH', airlineName: 'Malaysia Airlines', origin: 'KUL', destination: 'MLE', sta: '10:55', std: '12:00', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B737 MAX 8', estimatedUpliftLiters: 17500, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-121', flightNumber: 'AI2240', airlineCode: 'AI', airlineName: 'Air India', origin: 'DEL', destination: 'MLE', sta: '11:50', std: '12:50', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320neo', estimatedUpliftLiters: 14500, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
+  { id: 'intl-sch-122', flightNumber: 'MH484', airlineCode: 'MH', airlineName: 'Malaysia Airlines', origin: 'KUL', destination: 'MLE', sta: '10:55', std: '12:00', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B737 MAX 8', estimatedUpliftLiters: 17500, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
 
   // ── DOMESTIC FLIGHT SCHEDULES ──
   { id: 'dom-sch-101', flightNumber: 'NR418', airlineCode: 'NR', airlineName: 'Manta Air', origin: 'MLE', destination: 'DDD', sta: '', std: '07:30', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'ATR72-600', estimatedUpliftLiters: 1850, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' },
@@ -59,17 +59,36 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
   },
 
   /**
-   * MACL Days of Ops decoder (e.g., 1234567, 1030507, 500, 7, 4000, 200507)
+   * MACL Days of Ops positional decoder.
+   * MACL uses a 7-digit string where each position represents a day of the week (Mon=1 to Sun=7).
+   * If the digit at position N equals N, that day is active; 0 means inactive.
+   * Examples:
+   *   1234567 → all days [1,2,3,4,5,6,7]
+   *   0030507 → Wed/Fri/Sun [3,5,7]
+   *   0004060 → Thu/Sat [4,6]
+   *   0030000 → Wed only [3]
+   *   1000000 → Mon only [1]
+   *   0200000 → Tue only [2]
+   *   1204060 → Mon/Tue/Thu/Sat [1,2,4,6]
    */
   parseDaysOfOps(raw: any): number[] {
     if (raw === undefined || raw === null) return [1, 2, 3, 4, 5, 6, 7];
     const str = String(raw).trim();
     if (!str) return [1, 2, 3, 4, 5, 6, 7];
 
+    // Handle dash-separated format (e.g., "1-2-3-4-5-6-7" from CSV)
+    if (str.includes('-')) {
+      const parts = str.split('-').map(p => parseInt(p.trim(), 10)).filter(n => n >= 1 && n <= 7);
+      return parts.length > 0 ? parts : [1, 2, 3, 4, 5, 6, 7];
+    }
+
+    // MACL 7-digit positional encoding
+    const padded = str.padStart(7, '0');
     const days: number[] = [];
-    for (let d = 1; d <= 7; d++) {
-      if (str.includes(String(d))) {
-        days.push(d);
+    for (let i = 0; i < 7; i++) {
+      const ch = parseInt(padded[i], 10);
+      if (ch === i + 1) {
+        days.push(ch);
       }
     }
     return days.length > 0 ? days : [1, 2, 3, 4, 5, 6, 7];
@@ -134,56 +153,357 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
   },
 
   /**
-   * Auto-estimate Jet A-1 fuel uplift in liters based on seat capacity & aircraft model
+   * Standardizes MACL paired turnaround flight numbers to Departure Flight Number
+   * e.g. BA061-0 -> BA060 (Departure leg to LHR)
+   * e.g. AK074-5 -> AK075 (Departure leg to KUL)
+   * e.g. G9091-2 -> G9092 (Departure leg to SHJ)
+   * e.g. EY378-9 -> EY379 (Departure leg to AUH)
+   * e.g. SU320-1 -> SU321 (Departure leg to SVO)
+   * e.g. QR676-7 -> QR677 (Departure leg to DOH)
+   * e.g. AI2239-40 -> AI2240 (Departure leg to DEL)
    */
-  estimateUpliftFromSeats(seats: number, acType: string): number {
-    const cleanType = (acType || '').toUpperCase();
-    if (seats <= 0 || isNaN(seats)) {
-      if (cleanType.includes('777') || cleanType.includes('77W') || cleanType.includes('350') || cleanType.includes('359') || cleanType.includes('787') || cleanType.includes('330')) {
-        return 48000;
+  parseMaclDepartureFlightNo(rawFlt: string): string {
+    const clean = (rawFlt || '').trim().replace(/\s+/g, '').toUpperCase();
+    if (clean.includes('-')) {
+      const parts = clean.split('-');
+      const arr = parts[0];
+      const depSuffix = parts[1];
+      if (depSuffix && /^\d+$/.test(depSuffix)) {
+        const match = arr.match(/^([A-Z0-9]{2,3})(\d+)$/);
+        if (match) {
+          const code = match[1];
+          const arrDigits = match[2];
+          const suffixLen = depSuffix.length;
+          const depDigits = arrDigits.slice(0, arrDigits.length - suffixLen) + depSuffix;
+          return code + depDigits;
+        }
       }
-      if (cleanType.includes('320') || cleanType.includes('321') || cleanType.includes('32Q') || cleanType.includes('737') || cleanType.includes('73H')) {
-        return 18000;
-      }
-      return 35000;
+      return parts[0]; // Fallback to first flight number
     }
-
-    if (cleanType.includes('777') || cleanType.includes('77W') || cleanType.includes('350') || cleanType.includes('359') || cleanType.includes('787') || cleanType.includes('330')) {
-      return Math.round(seats * 115);
-    }
-    if (cleanType.includes('320') || cleanType.includes('321') || cleanType.includes('32Q') || cleanType.includes('737') || cleanType.includes('73H')) {
-      return Math.round(seats * 85);
-    }
-    if (cleanType.includes('ATR') || cleanType.includes('DASH')) {
-      return Math.round(seats * 25);
-    }
-    return Math.round(seats * 95);
+    return clean;
   },
 
   /**
-   * Native Excel (.xlsx / .xls) reader supporting raw MACL Slot Coordination workbooks
+   * Auto-estimate Jet A-1 fuel uplift in liters based on route distance, seat capacity & aircraft model
+   */
+  estimateUpliftByRouteAndAircraft(seats: number, acType: string, route: string = '', isDomestic: boolean = false): number {
+    const uAC = (acType || '').toUpperCase();
+    const uRoute = (route || '').toUpperCase();
+
+    if (isDomestic) {
+      if (uAC.includes('A330')) return 14000;
+      if (uAC.includes('ATR')) return Math.max(1800, Math.round((seats || 64) * 28));
+      if (uAC.includes('DH8') || uAC.includes('DASH')) return Math.max(1300, Math.round((seats || 50) * 26));
+      return Math.max(1500, Math.round((seats || 50) * 30));
+    }
+
+    // European / Russian / American Long-Haul (> 9 - 11 hrs flight time)
+    const isLongHaul = ['LHR', 'LGW', 'CDG', 'FRA', 'ZRH', 'SVO', 'VKO', 'ORY', 'MXP', 'FCO', 'VIE', 'MAN', 'MAD', 'BRU', 'BER'].some(d => uRoute.includes(d));
+    if (isLongHaul) {
+      if (uAC.includes('777') || uAC.includes('77W') || uAC.includes('772') || uAC.includes('350') || uAC.includes('359') || uAC.includes('340') || uAC.includes('787') || uAC.includes('330')) {
+        return seats > 0 ? Math.round(seats * 200) : 72000;
+      }
+    }
+
+    // Middle East / Far East / China Medium-Haul (4 - 6 hrs flight time)
+    const isMediumHaul = ['DXB', 'DOH', 'AUH', 'SHJ', 'KUL', 'SIN', 'PVG', 'CAN', 'HKG', 'ICN', 'NRT', 'IST', 'NQZ', 'ALA', 'CGK', 'BKK'].some(d => uRoute.includes(d));
+    if (isMediumHaul) {
+      if (uAC.includes('777') || uAC.includes('77W') || uAC.includes('350') || uAC.includes('359') || uAC.includes('787') || uAC.includes('330')) {
+        return seats > 0 ? Math.round(seats * 125) : 48000;
+      }
+      if (uAC.includes('320') || uAC.includes('321') || uAC.includes('32Q') || uAC.includes('737') || uAC.includes('73H') || uAC.includes('73M') || uAC.includes('B73M')) {
+        return seats > 0 ? Math.round(seats * 95) : 17500;
+      }
+    }
+
+    // Regional Short-Haul (1.5 - 3 hrs flight time)
+    const isRegional = ['CMB', 'DEL', 'TRV', 'COK', 'MAA', 'BOM', 'BLR', 'GAN', 'DAC'].some(d => uRoute.includes(d));
+    if (isRegional) {
+      if (uAC.includes('330') || uAC.includes('787')) return seats > 0 ? Math.round(seats * 90) : 28000;
+      return seats > 0 ? Math.round(seats * 75) : 14000;
+    }
+
+    // Fallback by aircraft model
+    if (uAC.includes('777') || uAC.includes('77W') || uAC.includes('350') || uAC.includes('359') || uAC.includes('340') || uAC.includes('787') || uAC.includes('330')) {
+      return seats > 0 ? Math.round(seats * 140) : 52000;
+    }
+    if (uAC.includes('320') || uAC.includes('321') || uAC.includes('32Q') || uAC.includes('737') || uAC.includes('73H')) {
+      return seats > 0 ? Math.round(seats * 85) : 16500;
+    }
+    return 35000;
+  },
+
+  /**
+   * Normalizes and cleans up airline names (fixing typos like CHINA EASTHERN AIRLINES -> China Eastern Airlines)
+   * and standardizes naming to prevent duplicated dropdown entries.
+   */
+  normalizeAirlineName(raw: string): string {
+    if (!raw) return 'International Carrier';
+    const clean = raw.trim().replace(/\s+/g, ' ');
+    const upper = clean.toUpperCase();
+
+    if (upper.includes('CHINA EASTHERN') || upper.includes('CHINA EASTERN')) return 'China Eastern Airlines';
+    if (upper.includes('MAVDIVIAN') || upper.includes('MALDIVIAN')) return 'Maldivian';
+    if (upper.includes('BRITISH AIRWAY')) return 'British Airways';
+    if (upper.includes('EMIRATE')) return 'Emirates';
+    if (upper.includes('ETIHAD')) return 'Etihad Airways';
+    if (upper.includes('QATAR')) return 'Qatar Airways';
+    if (upper.includes('AEROFLOT')) return 'Aeroflot';
+    if (upper.includes('SRILANKAN') || upper.includes('SRI LANKAN')) return 'SriLankan Airlines';
+    if (upper.includes('FLY DUBAI') || upper.includes('FLYDUBAI')) return 'Fly Dubai';
+    if (upper.includes('AIR ARABIA')) return 'Air Arabia';
+    if (upper.includes('AIR ASIA') || upper.includes('AIRASIA')) return 'Air Asia';
+    if (upper.includes('MANTA')) return 'Manta Air';
+    if (upper.includes('FLYME') || upper.includes('VILLA')) return 'Flyme';
+    if (upper.includes('GULF AIR')) return 'Gulf Air';
+    if (upper.includes('AIR INDIA')) return 'Air India';
+    if (upper.includes('MALAYSIA AIRLINES')) return 'Malaysia Airlines';
+    if (upper.includes('SINGAPORE AIRLINES')) return 'Singapore Airlines';
+    if (upper.includes('TURKISH AIRLINES')) return 'Turkish Airlines';
+    if (upper.includes('CENTRUM AIR')) return 'Centrum Air';
+    if (upper.includes('BEIJING CAPITAL')) return 'Beijing Capital Airlines';
+    if (upper.includes('BATIK AIR')) return 'Batik Air';
+    if (upper.includes('BANGKOK AIRWAYS')) return 'Bangkok Airways';
+    if (upper.includes('BELAVIA')) return 'Belavia Airlines';
+    if (upper.includes('CHONGQING')) return 'Chongqing Airlines';
+    if (upper.includes('CONDOR')) return 'Condor';
+    if (upper.includes('EDELWEISS')) return 'Edelweiss Air';
+    if (upper.includes('EUROWINGS')) return 'Eurowings';
+    if (upper.includes('FITS AIR')) return 'Fits Air';
+    if (upper.includes('BEOND')) return 'Beond';
+    if (upper.includes('SICHUAN') || upper.includes('SUCHUAN')) return 'Sichuan Airlines';
+    if (upper.includes('SAUDIA') || upper.includes('SAUDI')) return 'Saudia';
+    if (upper.includes('AIR FRANCE')) return 'Air France';
+    if (upper.includes('LUFTHANSA')) return 'Lufthansa';
+    if (upper.includes('LOT POLISH')) return 'LOT Polish Airlines';
+    if (upper.includes('NEOS')) return 'Neos';
+    if (upper.includes('US-BANGLA') || upper.includes('USBANGLA')) return 'US-Bangla Airlines';
+
+    return clean.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  },
+
+  /**
+   * Normalizes aircraft ICAO/IATA shorthand codes (e.g. B77W -> B777, A32Q -> A321, A32N -> A320, 7M8 -> B737)
+   * into clean standard aircraft model names.
+   */
+  normalizeAircraftType(raw: string): string {
+    if (!raw || raw.toUpperCase().includes('WIDEBODY')) return 'A320';
+    const u = raw.trim().toUpperCase();
+
+    // Airbus A321 variations (A32Q, 32Q, A21N, 321N, A321N, A321NEO, A321, 321)
+    if (u.includes('A32Q') || u.includes('32Q') || u.includes('A21N') || u.includes('321N') || u.includes('A321N') || u.includes('A321') || u.includes('321')) return 'A321';
+
+    // Airbus A320 variations (A32N, A20N, 32N, 320N, A320N, A320NEO, A320, 320)
+    if (u.includes('A32N') || u.includes('A20N') || u.includes('32N') || u.includes('320N') || u.includes('A320N') || u.includes('A320') || u.includes('320')) return 'A320';
+
+    // Boeing 777 variations (B77W, 77W, B773, B772, B777, 773, 772, 777)
+    if (u.includes('77W') || u.includes('B773') || u.includes('773') || u.includes('772') || u.includes('777')) return 'B777';
+
+    // Airbus A350 variations (A359, A351, 359, 351, 350, A350)
+    if (u.includes('A359') || u.includes('A351') || u.includes('359') || u.includes('351') || u.includes('350')) return 'A350';
+
+    // Boeing 737 variations (7M8, 7M9, 7M7, 738, B738, B737, 737)
+    if (u.includes('7M8') || u.includes('7M9') || u.includes('7M7') || u.includes('738') || u.includes('B738') || u.includes('737')) return 'B737';
+
+    // Airbus A330 variations (A332, A333, A339, A330, 332, 333, 339, 330)
+    if (u.includes('A332') || u.includes('A333') || u.includes('A339') || u.includes('332') || u.includes('333') || u.includes('339') || u.includes('330')) return 'A330';
+
+    // Boeing 787 variations (B788, B789, B78X, B787, 788, 789, 78X, 787)
+    if (u.includes('B788') || u.includes('B789') || u.includes('B78X') || u.includes('B787') || u.includes('788') || u.includes('789') || u.includes('787')) return 'B787';
+
+    // ATR variations (AT76, AT7, ATR, ATR72, ATR-72)
+    if (u.includes('AT7') || u.includes('ATR')) return 'ATR72';
+
+    // Dash 8 variations (DH8, DH8D, DASH8, DASH)
+    if (u.includes('DH8') || u.includes('DASH')) return 'Dash 8';
+
+    // Embraer variations (E190, E195, EMB)
+    if (u.includes('E190') || u.includes('E195') || u.includes('EMB')) return 'Embraer 190';
+
+    return u;
+  },
+
+  /**
+   * Intelligently estimates aircraft model based on airline IATA code and route length
+   * when no explicit master schedule entry is found, avoiding generic "Widebody" fallback.
+   */
+  getSmartAircraftFallback(flightNo: string, routeStr: string = ''): string {
+    const code = (flightNo || '').trim().replace(/[^A-Z0-9]/g, '').slice(0, 2).toUpperCase();
+    const route = (routeStr || '').toUpperCase();
+
+    // Specific airline fleet mappings for Velana International Airport operations
+    if (code === 'OD') return 'B737'; // Batik Air B737 MAX 8 / B738
+    if (code === 'AK' || code === 'FD') return 'A320'; // AirAsia A320
+    if (code === '6E') return 'A320'; // IndiGo A320neo / A321neo
+    if (code === 'G9' || code === 'FZ' || code === 'BS') return 'B737'; // Air Arabia / Flydubai / US-Bangla B737
+    if (code === '8D' || code === 'C6') return 'A320'; // Fits Air / Centrum Air A320
+    if (code === 'Q2' || code === 'NR' || code === 'VP') return 'ATR72'; // Domestic Maldivian / Manta / Flyme
+    if (code === 'BA' || code === 'EK') return 'B777'; // British Airways / Emirates B777
+    if (code === 'SQ' || code === 'EY') return 'B787'; // Singapore Airlines / Etihad B787
+    if (code === 'SU') return 'B777'; // Aeroflot B777-300ER
+    if (code === 'UL' || code === 'JD' || code === '3U' || code === 'MU') return 'A330'; // SriLankan / Beijing Capital / Sichuan / China Eastern A330
+    if (code === 'TK') return 'A350'; // Turkish Airlines A350
+    if (code === 'NO') return 'B787'; // Neos B787
+
+    // Route distance heuristic if airline code is unrecognized
+    const isLongHaul = ['LHR', 'CDG', 'FRA', 'SVO', 'VKO', 'FCO', 'MXP', 'ZRH'].some(k => route.includes(k));
+    if (isLongHaul) return 'B777';
+
+    return 'A320';
+  },
+
+  /**
+   * Intelligently formats route to show legs to and from MLE only.
+   * e.g., XMN-DAC-MLE-DAC-XMN -> DAC-MLE-DAC
+   * e.g., LHR-MLE-LHR -> LHR-MLE-LHR
+   * e.g., MLE-DDD -> MLE-DDD
+   */
+  formatMleRoute(rawRoute: string): { routeStr: string; origin: string; destination: string; departureDest: string } {
+    if (!rawRoute || !rawRoute.includes('-')) {
+      return { routeStr: rawRoute || 'INT-MLE', origin: 'INT', destination: 'MLE', departureDest: 'MLE' };
+    }
+
+    const legs = rawRoute.split('-').map(l => l.trim().toUpperCase()).filter(Boolean);
+    const mleIdx = legs.indexOf('MLE');
+
+    if (mleIdx === -1) {
+      const origin = legs[0] || 'INT';
+      const destination = legs[legs.length - 1] || 'MLE';
+      return { routeStr: `${origin}-${destination}`, origin, destination, departureDest: destination };
+    }
+
+    const prevLeg = mleIdx > 0 ? legs[mleIdx - 1] : null;
+    const nextLeg = mleIdx < legs.length - 1 ? legs[mleIdx + 1] : null;
+
+    if (prevLeg && nextLeg) {
+      // Round trip via MLE e.g. XMN-DAC-MLE-DAC-XMN -> DAC-MLE-DAC
+      return { routeStr: `${prevLeg}-MLE-${nextLeg}`, origin: prevLeg, destination: 'MLE', departureDest: nextLeg };
+    } else if (prevLeg) {
+      // Inbound flight e.g. DAC-MLE
+      return { routeStr: `${prevLeg}-MLE`, origin: prevLeg, destination: 'MLE', departureDest: 'MLE' };
+    } else if (nextLeg) {
+      // Outbound flight e.g. MLE-DAC
+      return { routeStr: `MLE-${nextLeg}`, origin: 'MLE', destination: nextLeg, departureDest: nextLeg };
+    }
+
+    return { routeStr: rawRoute, origin: 'INT', destination: 'MLE', departureDest: 'MLE' };
+  },
+
+  /**
+   * Returns full formatted route display string (e.g. SVO ➔ MLE ➔ SVO)
+   */
+  getFullRouteDisplay(sch: InternationalSchedule): string {
+    const orig = (sch.origin || 'INT').toUpperCase();
+    const dest = (sch.destination || 'MLE').toUpperCase();
+    if (orig !== 'MLE' && dest === 'MLE') {
+      return `${orig} ➔ MLE ➔ ${orig}`;
+    }
+    if (orig === 'MLE' && dest !== 'MLE') {
+      return `MLE ➔ ${dest}`;
+    }
+    if (orig !== 'MLE' && dest !== 'MLE') {
+      return `${orig} ➔ MLE ➔ ${dest}`;
+    }
+    return `${orig} ➔ ${dest}`;
+  },
+
+  /**
+   * Checks if a row in SheetJS worksheet is highlighted red (signifying a cancelled flight)
+   */
+  isRowHighlightedRed(sheet: any, r: number, maxCol: number = 12): boolean {
+    if (!sheet) return false;
+    for (let c = 0; c < maxCol; c++) {
+      const cellAddress = XLSX.utils.encode_cell({ r, c });
+      const cell = sheet[cellAddress];
+      if (!cell) continue;
+
+      // Check text for explicit cancellation keywords
+      const valStr = String(cell.v || '').toUpperCase();
+      if (valStr.includes('CANCEL') || valStr.includes('CANCELLED') || valStr.includes('CNL')) {
+        return true;
+      }
+
+      // Check cell styling for red background/foreground fills or red font
+      if (cell.s) {
+        const s = cell.s;
+        const fgRgb = s.fgColor?.rgb || s.fill?.fgColor?.rgb || s.fill?.bgColor?.rgb;
+        const bgRgb = s.bgColor?.rgb;
+        const fontRgb = s.font?.color?.rgb;
+
+        const isRedHex = (rgb: any) => {
+          if (!rgb) return false;
+          const str = String(rgb).toUpperCase();
+          return str.includes('FF0000') || str.includes('C00000') || str.includes('FFC7CE') ||
+                 str.includes('FF9999') || str.includes('E6B8B8') || str.includes('E74C3C') ||
+                 str.includes('CB4335') || str.includes('B03A2E') || str.includes('922B21') ||
+                 str.includes('78281F') || str.includes('F44336') || str.includes('EF5350') ||
+                 str.includes('E57373') || str.includes('FF5252') || str.includes('D32F2F');
+        };
+
+        if (isRedHex(fgRgb) || isRedHex(bgRgb) || isRedHex(fontRgb) || s.font?.strike) {
+          return true;
+        }
+      }
+    }
+    return false;
+  },
+
+  /**
+   * Legacy alias for backward compatibility
+   */
+  estimateUpliftFromSeats(seats: number, acType: string): number {
+    return this.estimateUpliftByRouteAndAircraft(seats, acType, '', false);
+  },
+
+  /**
+   * Native Excel (.xlsx / .xls) reader supporting raw MACL Slot Coordination workbooks.
+   * Parses the "Days of OPS" tab (international) and "Domestic" tab exactly as they appear
+   * in the SUMMER/WINTER schedule files — no custom template or column rearrangement needed.
+   *
+   * Days of OPS tab layout:
+   *   B=AIRLINE, C=DAYS OF OPS, D=A/C TYPE, E=ROUTE, F=FLT NO, G=STA, H=STD, I=EFFECTIVE, J=SEATS
+   *
+   * Domestic tab layout:
+   *   A=#, C=AIRLINE, D=Days Of Ops, E=A/C TYPE, F=ROUTE, G=FLT NO, H=STA or STD (per sub-table), I=EFFECTIVE, J=SEATS
+   *   Each airline has separate arrival (STA) and departure (STD) sub-tables with their own header rows.
    */
   parseScheduleExcel(fileBuffer: ArrayBuffer, fileName: string, uploader: string = 'Admin'): { 
     schedules: InternationalSchedule[]; 
     errors: string[];
-    stats: { totalRows: number; parsedCount: number; airlineCount: number }
+    stats: { totalRows: number; parsedCount: number; airlineCount: number; season: string }
   } {
-    const workbook = XLSX.read(fileBuffer, { type: 'array' });
+    const workbook = XLSX.read(fileBuffer, { type: 'array', cellStyles: true, cellFormulas: true });
     const schedules: InternationalSchedule[] = [];
     const errors: string[] = [];
     const airlinesSet = new Set<string>();
 
-    // Sheet priority order: "Days of OPS", "Domestic", "MON", "TUE", etc.
+    // Auto-detect season from filename (e.g., "SUMMER 2026 Ver.08.xlsx", "WINTER 2026-27 Ver.01.xlsx")
+    const fileUpper = fileName.toUpperCase();
+    let season = 'UNKNOWN';
+    if (fileUpper.includes('SUMMER')) season = 'SUMMER';
+    else if (fileUpper.includes('WINTER')) season = 'WINTER';
+    const yearMatch = fileName.match(/(\d{4})/);
+    if (yearMatch) season += ` ${yearMatch[1]}`;
+
+    // Sheet priority: "Days of OPS" and "Domestic" tabs
     let sheetNamesToProcess = workbook.SheetNames.filter(n => 
       n.toLowerCase().includes('days of ops') || n.toLowerCase().includes('domestic')
     );
 
     if (sheetNamesToProcess.length === 0) {
-      // Fallback to day sheets or all non-cover sheets
-      sheetNamesToProcess = workbook.SheetNames.filter(n => !n.toLowerCase().includes('cover'));
+      // Fallback to all non-cover, non-day-of-week sheets
+      sheetNamesToProcess = workbook.SheetNames.filter(n => {
+        const lower = n.toLowerCase();
+        return !lower.includes('cover') && !['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].includes(lower.trim());
+      });
     }
 
     let totalRowsProcessed = 0;
+
+    // Keywords that indicate a row is a column header, not a data row or airline title
+    const HEADER_KEYWORDS = ['AIRLINE', 'DAYS OF OPS', 'DAYS OF OPS', 'A/C TYPE', 'ROUTE', 'FLT NO', 'FLIGHT', 'STA', 'STD', 'EFFECTIVE', 'SEATS'];
+    // Keywords that indicate a row is NOT an airline section title
+    const NON_TITLE_KEYWORDS = ['AIRLINE', 'SLOT', 'VELANA', 'DAYS OF OPS', 'LAST UPDATED', 'COVER', 'FLT NO', 'ROUTE', 'A/C TYPE', 'STA', 'STD', 'EFFECTIVE', 'SEATS', '#', 'EQUIPMENT'];
 
     for (const sname of sheetNamesToProcess) {
       const sheet = workbook.Sheets[sname];
@@ -192,132 +512,165 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
       const rawGrid: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
       if (!rawGrid || rawGrid.length === 0) continue;
 
-      let currentAirline = 'International Carrier';
-      let colIdxMap: Record<string, number> = {};
+      const isDomSheet = sname.toLowerCase().includes('domestic');
+      let currentAirline = isDomSheet ? 'Domestic Carrier' : 'International Carrier';
+
+      // Per-sub-table column index map — rebuilt each time a header row is detected
+      let colIdx: Record<string, number> = {};
+      // Track whether current domestic sub-table is STA (arrival) or STD (departure)
+      let currentTimeMode: 'sta' | 'std' = 'std';
       let headerFound = false;
 
       for (let r = 0; r < rawGrid.length; r++) {
         totalRowsProcessed++;
-        const row = rawGrid[r].map(c => String(c).trim());
-        if (row.every(c => !c)) continue;
+        const row = rawGrid[r].map((c: any) => String(c).trim());
+        if (row.every((c: string) => !c)) continue;
 
-        // Check if row is a section header (e.g. B8: "AEROFLOT", "AIR ASIA", "EMIRATES")
-        const bVal = row[1] || row[0] || '';
-        const isHeaderRow = row.some(c => {
+        // ─── Step 1: Is this a COLUMN HEADER row? ───
+        // A row is a header if it contains 3+ header keywords
+        const headerKeywordCount = row.filter((c: string) => {
           const u = c.toUpperCase();
-          return u.includes('AIRLINE') || u.includes('DAYS OF OPS') || u.includes('A/C TYPE') || u.includes('ROUTE') || u.includes('FLT NO');
-        });
+          return HEADER_KEYWORDS.some(kw => u.includes(kw));
+        }).length;
 
-        if (isHeaderRow) {
+        if (headerKeywordCount >= 3) {
           headerFound = true;
-          colIdxMap = {};
-          row.forEach((cell, idx) => {
+          colIdx = {};
+          row.forEach((cell: string, idx: number) => {
             const u = cell.toUpperCase();
-            if (u.includes('AIRLINE')) colIdxMap['airline'] = idx;
-            else if (u.includes('DAYS OF OPS') || u.includes('DAYS')) colIdxMap['days'] = idx;
-            else if (u.includes('A/C TYPE') || u.includes('EQUIPMENT')) colIdxMap['aircraft'] = idx;
-            else if (u.includes('ROUTE')) colIdxMap['route'] = idx;
-            else if (u.includes('FLT NO') || u.includes('FLIGHT')) colIdxMap['fltNo'] = idx;
-            else if (u.includes('STA')) colIdxMap['sta'] = idx;
-            else if (u.includes('STD')) colIdxMap['std'] = idx;
-            else if (u.includes('EFFECTIVE')) colIdxMap['effective'] = idx;
-            else if (u.includes('SEATS')) colIdxMap['seats'] = idx;
-            else if (u.includes('UPLIFT')) colIdxMap['uplift'] = idx;
+            if (u.includes('AIRLINE')) colIdx['airline'] = idx;
+            if (u.includes('DAYS OF OPS') || u === 'DAYS' || u.includes('DAYS OF OPS')) colIdx['days'] = idx;
+            if (u.includes('A/C TYPE') || u.includes('EQUIPMENT') || u.includes('AC TYPE')) colIdx['aircraft'] = idx;
+            if (u.includes('ROUTE')) colIdx['route'] = idx;
+            if (u.includes('FLT NO') || u.includes('FLIGHT NO')) colIdx['fltNo'] = idx;
+            // Track STA and STD as separate indices for international Days of OPS tab
+            if (u === 'STA') colIdx['sta'] = idx;
+            if (u === 'STD') colIdx['std'] = idx;
+            // Also set 'time' for domestic sub-table mode (STA or STD is in same column)
+            if (u === 'STA' || u === 'STD') colIdx['time'] = idx;
+            if (u.includes('EFFECTIVE')) colIdx['effective'] = idx;
+            if (u.includes('SEATS')) colIdx['seats'] = idx;
+            if (u.includes('UPLIFT')) colIdx['uplift'] = idx;
           });
+
+          // Detect STA vs STD mode for domestic sub-tables
+          const hasSTD = row.some((c: string) => c.toUpperCase() === 'STD');
+          const hasSTA = row.some((c: string) => c.toUpperCase() === 'STA');
+          if (hasSTD) currentTimeMode = 'std';
+          else if (hasSTA) currentTimeMode = 'sta';
+
           continue;
         }
 
-        // Section Title Detection (e.g. Row B8: "AEROFLOT")
-        if (bVal && !bVal.toUpperCase().includes('AIRLINE') && !bVal.toUpperCase().includes('SLOT') && !bVal.toUpperCase().includes('VELANA') && !bVal.toUpperCase().includes('DAYS OF OPS') && !bVal.toUpperCase().includes('LAST UPDATED') && bVal.length > 2 && row.filter(c => c).length <= 2) {
-          currentAirline = bVal;
-          airlinesSet.add(currentAirline);
-          continue;
-        }
-
-        // Extract values using header map or MACL standard column positions
-        // Days of OPS: B=Airline(1), C=Days(2), D=AC(3), E=Route(4), F=FltNo(5), G=STA(6), H=STD(7), I=Effective(8), J=Seats(9)
-        // Domestic: C=Airline(2), D=Days(3), E=AC(4), F=Route(5), G=FltNo(6), H=Time(7), I=Effective(8), J=Seats(9)
-        const isDomSheet = sname.toLowerCase().includes('domestic');
-
-        const getVal = (key: string, defaultIntlCol: number, defaultDomCol: number): string => {
-          if (colIdxMap[key] !== undefined && row[colIdxMap[key]]) {
-            return row[colIdxMap[key]];
+        // ─── Step 2: Is this an AIRLINE SECTION TITLE row? ───
+        // E.g., a row with just "BRITISH AIRWAYS" or "MANTA AIR" in 1-2 cells
+        const populatedCells = row.filter((c: string) => c.length > 0);
+        const populatedText = populatedCells.join(' ').toUpperCase();
+        const isNonTitle = NON_TITLE_KEYWORDS.some(kw => populatedText.includes(kw));
+        const isNumericOnly = populatedCells.every((c: string) => /^\d+$/.test(c));
+        
+        if (populatedCells.length >= 1 && populatedCells.length <= 3 && !isNonTitle && !isNumericOnly) {
+          // Check that the longest cell looks like an airline name (all-alpha, > 3 chars)
+          const longestCell = populatedCells.reduce((a: string, b: string) => a.length >= b.length ? a : b, '');
+          if (longestCell.length > 3 && /[A-Za-z]/.test(longestCell)) {
+            currentAirline = this.normalizeAirlineName(longestCell);
+            airlinesSet.add(currentAirline);
+            continue;
           }
-          const col = isDomSheet ? defaultDomCol : defaultIntlCol;
-          return row[col] || '';
+        }
+
+        // ─── Step 3: This should be a DATA ROW — extract flight schedule ───
+        if (!headerFound) continue;
+
+        // Skip rows highlighted red (cancelled flights)
+        if (this.isRowHighlightedRed(sheet, r, row.length)) {
+          continue;
+        }
+
+        // Helper to get value from detected column index
+        const getCol = (key: string): string => {
+          const idx = colIdx[key];
+          if (idx !== undefined && row[idx]) return row[idx];
+          return '';
         };
 
-        const flightNoRaw = getVal('fltNo', 5, 6);
-        if (!flightNoRaw || flightNoRaw.toUpperCase().includes('FLT NO') || flightNoRaw.toUpperCase().includes('FLIGHT')) continue;
+        const flightNoRaw = getCol('fltNo');
+        if (!flightNoRaw) continue;
+        // Skip if the cell still looks like a header keyword
+        if (flightNoRaw.toUpperCase().includes('FLT NO') || flightNoRaw.toUpperCase().includes('FLIGHT')) continue;
 
-        const airlineNameRow = getVal('airline', 1, 2) || currentAirline;
+        const rawAirline = getCol('airline') || currentAirline;
+        const airlineNameRow = this.normalizeAirlineName(rawAirline);
         if (airlineNameRow && airlineNameRow.length > 2) {
           airlinesSet.add(airlineNameRow);
         }
 
-        const daysRaw = getVal('days', 2, 3);
+        const daysRaw = getCol('days');
         const daysOfWeek = this.parseDaysOfOps(daysRaw);
 
-        const acType = getVal('aircraft', 3, 4) || (isDomSheet ? 'ATR72-600' : 'Widebody');
-        const route = getVal('route', 4, 5) || (isDomSheet ? 'MLE-DDD' : 'INT-MLE');
+        const acTypeRaw = getCol('aircraft') || (isDomSheet ? 'ATR72' : 'B777');
+        const acType = this.normalizeAircraftType(acTypeRaw);
+        const rawRouteStr = getCol('route') || (isDomSheet ? 'MLE-DOM' : 'INT-MLE');
 
-        // Parse Route
-        let origin = isDomSheet ? 'MLE' : 'INT';
-        let destination = isDomSheet ? 'DOM' : 'MLE';
-        if (route.includes('-')) {
-          const legs = route.split('-').map(l => l.trim().toUpperCase());
-          if (legs.length >= 2) {
-            origin = legs[0];
-            destination = legs[1];
+        // ─── Parse Route → format to/from MLE only (e.g. XMN-DAC-MLE-DAC-XMN -> DAC-MLE-DAC) ───
+        const routeParsed = this.formatMleRoute(rawRouteStr);
+        const route = routeParsed.routeStr;
+        const origin = routeParsed.origin;
+        const destination = routeParsed.destination;
+        const departureDest = routeParsed.departureDest;
+
+        // ─── Parse time based on current sub-table mode (STA vs STD) ───
+        let sta = '';
+        let std = '';
+        if (isDomSheet) {
+          // Domestic tab: single time column (STA or STD), mode tracked per sub-table header
+          const timeRaw = getCol('time');
+          const timeValue = this.parseMaclTime(timeRaw);
+          if (currentTimeMode === 'sta') {
+            sta = timeValue;
+          } else {
+            std = timeValue;
+          }
+        } else {
+          // International Days of OPS tab: separate STA and STD columns
+          if (colIdx['sta'] !== undefined) {
+            sta = this.parseMaclTime(row[colIdx['sta']]);
+          }
+          if (colIdx['std'] !== undefined) {
+            std = this.parseMaclTime(row[colIdx['std']]);
           }
         }
 
-        const staRaw = getVal('sta', 6, 7);
-        const stdRaw = getVal('std', 7, 7);
-        const sta = this.parseMaclTime(staRaw);
-        const std = this.parseMaclTime(stdRaw);
-
-        const effectiveRaw = getVal('effective', 8, 8);
-        
-        let effectiveFrom = '2026-03-29';
-        let effectiveTo = '2027-03-27';
-
+        // ─── Parse Effective Period ───
+        const effectiveRaw = getCol('effective');
+        let effectiveFrom = season.includes('SUMMER') ? '2026-03-29' : '2026-10-25';
+        let effectiveTo = season.includes('SUMMER') ? '2026-10-24' : '2027-03-27';
         if (effectiveRaw && effectiveRaw !== '-' && effectiveRaw.trim() !== '') {
           const parsed = this.parseMaclDateRange(effectiveRaw);
           effectiveFrom = parsed.effectiveFrom;
           effectiveTo = parsed.effectiveTo;
-        } else if (!isDomSheet) {
-          const parsed = this.parseMaclDateRange(effectiveRaw);
-          effectiveFrom = parsed.effectiveFrom;
-          effectiveTo = parsed.effectiveTo;
         }
 
-        const seatsRaw = getVal('seats', 9, 9);
+        // ─── Parse Seats ───
+        const seatsRaw = getCol('seats');
         const seats = parseInt(seatsRaw, 10) || 0;
 
-        const upliftRaw = getVal('uplift', -1, -1);
-        
-        // Standardize flight number
-        const flightNumber = flightNoRaw.replace(/\s+/g, '').toUpperCase();
-        const airlineCode = flightNumber.slice(0, 2);
+        // ─── Standardize flight number (MACL paired → departure flight no) ───
+        const flightNumber = this.parseMaclDepartureFlightNo(flightNoRaw);
+        const airlineCode = flightNumber.replace(/\d+/g, '').slice(0, 2).toUpperCase() || flightNumber.slice(0, 2).toUpperCase();
 
-        // Detect Domestic Flight
+        // ─── Detect Domestic Flight ───
         const isDomAirline = ['MANTA', 'FLYME', 'MALDIVIAN', 'MAVDIVIAN', 'VILLA'].some(name => airlineNameRow.toUpperCase().includes(name));
         const isDomCode = ['NR', 'VP', 'Q2'].some(code => flightNumber.startsWith(code));
         const isDomestic = isDomSheet || isDomAirline || isDomCode;
 
-        // Custom uplift estimation for domestic vs international
+        // ─── Estimate Fuel Uplift using route-distance-aware calculator ───
+        const upliftRaw = getCol('uplift');
         let estimatedUplift = upliftRaw ? parseFloat(upliftRaw) : 0;
         if (!estimatedUplift || isNaN(estimatedUplift)) {
-          if (isDomestic) {
-            const uAC = acType.toUpperCase();
-            if (uAC.includes('A330')) estimatedUplift = 14000;
-            else if (uAC.includes('ATR')) estimatedUplift = Math.max(1600, Math.round((seats || 64) * 28));
-            else if (uAC.includes('DH8') || uAC.includes('DASH')) estimatedUplift = Math.max(1200, Math.round((seats || 50) * 26));
-            else estimatedUplift = Math.max(1500, Math.round((seats || 50) * 30));
-          } else {
-            estimatedUplift = this.estimateUpliftFromSeats(seats, acType);
-          }
+          // Use departure destination for fuel estimation (e.g., LHR for long-haul)
+          const routeForEstimation = departureDest || destination || route;
+          estimatedUplift = this.estimateUpliftByRouteAndAircraft(seats, acType, routeForEstimation, isDomestic);
         }
 
         const item: InternationalSchedule = {
@@ -327,8 +680,8 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
           airlineName: airlineNameRow,
           origin,
           destination,
-          sta: sta || '12:00',
-          std: std || '13:30',
+          sta: sta || '',
+          std: std || '',
           daysOfWeek,
           aircraftType: acType,
           estimatedUpliftLiters: estimatedUplift,
@@ -362,7 +715,8 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
       stats: {
         totalRows: totalRowsProcessed,
         parsedCount: deduplicated.length,
-        airlineCount: airlinesSet.size
+        airlineCount: airlinesSet.size,
+        season
       }
     };
   },
@@ -430,7 +784,7 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
         sta: staIdx !== -1 && row[staIdx] ? row[staIdx] : '12:00',
         std: stdIdx !== -1 && row[stdIdx] ? row[stdIdx] : '13:30',
         daysOfWeek,
-        aircraftType: acIdx !== -1 && row[acIdx] ? row[acIdx] : 'Widebody Heavy',
+        aircraftType: this.normalizeAircraftType(acIdx !== -1 && row[acIdx] ? row[acIdx] : 'Widebody Heavy'),
         estimatedUpliftLiters: estimatedUplift,
         effectiveFrom: fromIdx !== -1 && row[fromIdx] ? row[fromIdx] : todayStr,
         effectiveTo: toIdx !== -1 && row[toIdx] ? row[toIdx] : nextMonthStr,
@@ -459,19 +813,47 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
     const dayOfWeek = jsDay === 0 ? 7 : jsDay;
 
     const activeSchedules = schedules.filter(sch => {
-      if (!sch.isActive) return false;
-      if (sch.effectiveFrom && dateStr < sch.effectiveFrom) return false;
-      if (sch.effectiveTo && dateStr > sch.effectiveTo) return false;
-      return sch.daysOfWeek.includes(dayOfWeek);
+      if (sch.isActive === false) return false;
+      
+      const normFrom = sch.effectiveFrom ? sch.effectiveFrom.split('T')[0] : '';
+      const normTo = sch.effectiveTo ? sch.effectiveTo.split('T')[0] : '';
+      
+      if (normFrom && normFrom.length === 10 && dateStr < normFrom) return false;
+      if (normTo && normTo.length === 10 && dateStr > normTo) return false;
+      
+      return sch.daysOfWeek && sch.daysOfWeek.length > 0 ? sch.daysOfWeek.includes(dayOfWeek) : true;
     });
 
     const results: ScheduleCrossCheckResult[] = [];
     const matchedJobIds = new Set<string>();
-    const cleanNo = (no?: string) => (no || '').replace(/\s+/g, '').toUpperCase();
+
+    const cleanNo = (no?: string) => (no || '').replace(/[\s\-\/]/g, '').toUpperCase();
+
+    const isFlightMatching = (schFlt: string, jobFlt: string): boolean => {
+      const cleanA = cleanNo(schFlt);
+      const cleanB = cleanNo(jobFlt);
+      if (!cleanA || !cleanB) return false;
+      if (cleanA === cleanB) return true;
+
+      const depA = cleanNo(this.parseMaclDepartureFlightNo(schFlt));
+      const depB = cleanNo(this.parseMaclDepartureFlightNo(jobFlt));
+      if (depA && depB && depA === depB) return true;
+
+      // Check airline code + turnaround leg pair (+/- 1 digit)
+      const codeA = cleanA.slice(0, 2);
+      const codeB = cleanB.slice(0, 2);
+      if (codeA === codeB) {
+        const numA = parseInt(cleanA.slice(2), 10);
+        const numB = parseInt(cleanB.slice(2), 10);
+        if (!isNaN(numA) && !isNaN(numB) && Math.abs(numA - numB) <= 1) {
+          return true;
+        }
+      }
+      return false;
+    };
 
     for (const sch of activeSchedules) {
-      const schNo = cleanNo(sch.flightNumber);
-      const matchingJob = dailyJobs.find(j => cleanNo(j.flightNumber) === schNo);
+      const matchingJob = dailyJobs.find(j => isFlightMatching(sch.flightNumber, j.flightNumber));
 
       if (matchingJob) {
         matchedJobIds.add(matchingJob.id);
@@ -550,7 +932,7 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
         id: `xcheck-adhoc-${job.id}-${dateStr}`,
         date: dateStr,
         flightNumber: job.flightNumber,
-        airlineName: job.flightNumber.slice(0, 2) + ' Airlines',
+        airlineName: this.normalizeAirlineName(job.flightNumber.slice(0, 2)),
         status: 'UNSCHEDULED_ADDITION',
         scheduledSta: 'Unscheduled',
         actualSta: job.sta || 'N/A',

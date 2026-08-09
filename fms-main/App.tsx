@@ -662,103 +662,83 @@ const AppContextContent: React.FC<any> = ({
     };
   }, [mainElement]);
 
-  // --- Mobile Back Button Gesture Navigation Support (Stack-Based) ---
-  // Track view changes in the history stack
+  // --- Native Mobile Gesture & History Synchronization ---
+  // Push view to real window.history so native iOS/Android swipe back gestures preview returning page
   useEffect(() => {
     if (isNavigatingBackRef.current) {
       isNavigatingBackRef.current = false;
       return;
     }
     const stack = viewHistoryRef.current;
-    // Prevent duplicate consecutive entries
     if (stack[stack.length - 1] !== activeView) {
       stack.push(activeView);
-      // Cap stack at 20 entries
       if (stack.length > 20) {
         viewHistoryRef.current = stack.slice(-20);
       }
+    }
+    // Sync browser window.history state with activeView
+    if (window.history.state?.fmsView !== activeView) {
+      window.history.pushState({ fmsView: activeView }, '');
     }
   }, [activeView]);
 
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
-      haptic('TAP');
+      haptic('NAV_TAP');
 
       // Priority 1: Close any open overlays/modals first
       if (isAIChatOpen) {
         setIsAIChatOpen(false);
-        window.history.pushState({ fmsActive: true }, '');
         return;
       }
       if (isSettingsOpen) {
         setIsSettingsOpen(false);
-        window.history.pushState({ fmsActive: true }, '');
         return;
       }
       if (showAlertsPanel) {
         setShowAlertsPanel(false);
-        window.history.pushState({ fmsActive: true }, '');
         return;
       }
       if (showIOSGuide || showMacGuide || showOtherGuide) {
         setShowIOSGuide(false);
         setShowMacGuide(false);
         setShowOtherGuide(false);
-        window.history.pushState({ fmsActive: true }, '');
         return;
       }
 
       // Priority 2: Close mobile sidebar drawer
       if (isMobileMenuOpen) {
         setIsMobileMenuOpen(false);
-        window.history.pushState({ fmsActive: true }, '');
         return;
       }
 
-      // Priority 3: Navigate back through view history stack
+      // Priority 3: Native history state back navigation
+      const targetView = e.state?.fmsView;
+      if (targetView && targetView !== activeView) {
+        isNavigatingBackRef.current = true;
+        setActiveView(targetView);
+        return;
+      }
+
+      // Priority 4: Fallback to internal view stack if state is missing
       const stack = viewHistoryRef.current;
       if (stack.length > 1) {
         stack.pop(); // Remove current view
         const previousView = stack[stack.length - 1];
         isNavigatingBackRef.current = true;
         setActiveView(previousView);
-        // Keep the history entry alive if we're not at root
-        if (stack.length > 1) {
-          window.history.pushState({ fmsActive: true }, '');
-        }
-        return;
       }
-
-      // Priority 4: At root view — let the browser/PWA handle exit
-      // Don't prevent default behavior — this allows the app to minimize/exit
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [isMobileMenuOpen, showAlertsPanel, isSettingsOpen, showIOSGuide, showMacGuide, showOtherGuide, isAIChatOpen, setIsMobileMenuOpen, setShowAlertsPanel, setIsSettingsOpen, setShowIOSGuide, setActiveView]);
+  }, [isMobileMenuOpen, showAlertsPanel, isSettingsOpen, showIOSGuide, showMacGuide, showOtherGuide, isAIChatOpen, activeView, setIsMobileMenuOpen, setShowAlertsPanel, setIsSettingsOpen, setShowIOSGuide, setActiveView]);
 
-  // Push initial history state so back button works
+  // Initial history state setup on app load
   useEffect(() => {
-    if (!window.history.state?.fmsActive) {
-      window.history.pushState({ fmsActive: true }, '');
+    if (!window.history.state?.fmsView) {
+      window.history.replaceState({ fmsView: activeView }, '');
     }
-  }, []);
-
-  // Track overlay state changes — push history when opening overlays
-  useEffect(() => {
-    const hasOverlay = isMobileMenuOpen || showAlertsPanel || isSettingsOpen || showIOSGuide || isAIChatOpen;
-    if (hasOverlay && !window.history.state?.fmsOverlay) {
-      window.history.pushState({ fmsActive: true, fmsOverlay: true }, '');
-    }
-  }, [isMobileMenuOpen, showAlertsPanel, isSettingsOpen, showIOSGuide, isAIChatOpen]);
-
-  // Clean up history state on session unmount / logout
-  useEffect(() => {
-    return () => {
-      if (window.history.state?.fmsActive) {
-        window.history.back();
-      }
-    };
   }, []);
 
   // --- Keyboard-Aware Layout Detection ---
@@ -1592,7 +1572,7 @@ const AppContextContent: React.FC<any> = ({
             >
               <div 
                 key={activeView} 
-                className="animate-in fade-in duration-200 ease-out transform-gpu will-change-transform"
+                className="w-full min-h-full"
                 style={{
                   filter: blurAmount > 0 ? `blur(${blurAmount}px)` : 'none',
                   transition: pullingRef.current ? 'none' : 'filter 0.3s ease'

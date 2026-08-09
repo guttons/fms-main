@@ -360,78 +360,85 @@ export const Forecasting: React.FC = () => {
       {/* ── NEW: PREDICTIVE INTERNATIONAL SCHEDULE UPLIFT FORECAST ENGINE ── */}
       {selectedFuelType === FuelType.JET_A1 && (
         <div className="bg-surface/80 backdrop-blur-xl border border-outline/55 rounded-3xl p-6 lg:p-8 shadow-premium space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-outline/40 pb-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-outline/40 pb-6">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-2xl bg-primary/10 border border-primary/20">
+              <div className="p-3 rounded-2xl bg-primary/10 border border-primary/20 shrink-0">
                 <Globe className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.2em]">
+                <h3 className="text-sm sm:text-base font-black text-on-surface uppercase tracking-[0.15em]">
                   Flight Schedule Predictive Uplift Engine
                 </h3>
-                <p className="text-xs text-on-surface-dim opacity-70 mt-0.5">
-                  Generatively projecting Jet A-1 fuel uplift demand by blending uploaded seasonal flight frequencies (international & domestic) with historical log baselines ({internationalSchedules.length} Active Master Schedules).
-                </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 w-full lg:w-auto">
               {/* Model Mode Switcher */}
-              <div className="flex items-center bg-surface-container-low p-1 rounded-xl border border-outline text-xs">
+              <div className="relative p-1 bg-surface-container-low rounded-full border border-outline grid grid-cols-3 w-full sm:w-auto min-w-[300px] sm:min-w-[340px] shadow-inner">
+                <div 
+                  className="absolute top-1 bottom-1 rounded-full kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform"
+                  style={{
+                    left: `calc(4px + ${['hybrid', 'schedule', 'historical'].indexOf(predictionModelMode)} * (100% - 8px) / 3)`,
+                    width: 'calc((100% - 8px) / 3)'
+                  }}
+                />
                 <button
                   onClick={() => setPredictionModelMode('hybrid')}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                  className={`px-3 py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap text-center relative z-10 w-full ${
                     predictionModelMode === 'hybrid'
-                      ? 'kinetic-gradient text-white shadow-premium border-none'
+                      ? 'text-white'
                       : 'text-on-surface-dim hover:text-on-surface'
                   }`}
                 >
-                  Hybrid Generative (65/35)
+                  Hybrid (65/35)
                 </button>
                 <button
                   onClick={() => setPredictionModelMode('schedule')}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                  className={`px-3 py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap text-center relative z-10 w-full ${
                     predictionModelMode === 'schedule'
-                      ? 'kinetic-gradient text-white shadow-premium border-none'
+                      ? 'text-white'
                       : 'text-on-surface-dim hover:text-on-surface'
                   }`}
                 >
-                  Schedule Target Only
+                  Schedule Only
                 </button>
                 <button
                   onClick={() => setPredictionModelMode('historical')}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                  className={`px-3 py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap text-center relative z-10 w-full ${
                     predictionModelMode === 'historical'
-                      ? 'kinetic-gradient text-white shadow-premium border-none'
+                      ? 'text-white'
                       : 'text-on-surface-dim hover:text-on-surface'
                   }`}
                 >
-                  Historical Baseline
+                  Historical
                 </button>
               </div>
 
-              {/* Flight Category Selector */}
-              <select
-                value={forecastCategoryFilter}
-                onChange={e => setForecastCategoryFilter(e.target.value as any)}
-                className="px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-xs text-on-surface font-black uppercase tracking-wider focus:outline-none focus:border-primary"
-              >
-                <option value="ALL">All Flight Schedules</option>
-                <option value="INT">International Only</option>
-                <option value="DOM">Domestic Only</option>
-              </select>
+              {/* Dropdowns row on mobile */}
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                {/* Flight Category Selector */}
+                <select
+                  value={forecastCategoryFilter}
+                  onChange={e => setForecastCategoryFilter(e.target.value as any)}
+                  className="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-[11px] font-black text-on-surface uppercase tracking-wider focus:outline-none focus:border-primary"
+                >
+                  <option value="ALL">All Schedules</option>
+                  <option value="INT">Intl Only</option>
+                  <option value="DOM">Dom Only</option>
+                </select>
 
-              {/* Horizon Selector */}
-              <select
-                value={forecastDaysCount}
-                onChange={e => setForecastDaysCount(Number(e.target.value))}
-                className="px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-xs text-on-surface font-black uppercase tracking-wider focus:outline-none focus:border-primary"
-              >
-                <option value={7}>7-Day Forecast</option>
-                <option value={14}>14-Day Forecast</option>
-                <option value={30}>30-Day Forecast</option>
-                <option value={90}>90-Day Forecast</option>
-              </select>
+                {/* Horizon Selector */}
+                <select
+                  value={forecastDaysCount}
+                  onChange={e => setForecastDaysCount(Number(e.target.value))}
+                  className="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-[11px] font-black text-on-surface uppercase tracking-wider focus:outline-none focus:border-primary"
+                >
+                  <option value={7}>7 Days</option>
+                  <option value={14}>14 Days</option>
+                  <option value={30}>30 Days</option>
+                  <option value={90}>90 Days</option>
+                </select>
+              </div>
             </div>
           </div>
 

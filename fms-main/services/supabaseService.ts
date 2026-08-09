@@ -6,7 +6,7 @@ import { INITIAL_STAFF_LIST } from '../constants/staffList';
 import { fmsDb } from './db';
 import { syncEngine } from './syncEngine';
 import masterDbData from './masterDbData.json';
-import { INITIAL_MOCK_SCHEDULES } from './scheduleImportService';
+import { INITIAL_MOCK_SCHEDULES, scheduleImportService } from './scheduleImportService';
 
 const localBridgingLogs: BridgingLog[] = [
   {
@@ -2803,21 +2803,54 @@ export const supabaseService = {
 
   // ── International Flight Schedules ──────────────────────────────────────────
   async getInternationalSchedules(): Promise<InternationalSchedule[]> {
+    const isCleared = localStorage.getItem('fms_intl_schedules_cleared') === 'true';
+
+    const normalizeSchedule = (sch: InternationalSchedule): InternationalSchedule => {
+      const depFlt = scheduleImportService.parseMaclDepartureFlightNo(sch.flightNumber);
+      const normalizedAirline = scheduleImportService.normalizeAirlineName(sch.airlineName);
+      const normalizedAc = scheduleImportService.normalizeAircraftType(sch.aircraftType);
+      const estUplift = scheduleImportService.estimateUpliftByRouteAndAircraft(
+        sch.estimatedUpliftLiters > 500 ? 300 : 0,
+        normalizedAc,
+        sch.origin + '-' + sch.destination,
+        sch.isDomestic || false
+      );
+      // If uplift was unrealistic default or flight number was raw MACL pair
+      const updatedUplift = (sch.estimatedUpliftLiters < 55000 && sch.origin === 'LHR') || sch.estimatedUpliftLiters === 40000 
+        ? estUplift 
+        : sch.estimatedUpliftLiters;
+        
+      return {
+        ...sch,
+        flightNumber: depFlt,
+        airlineName: normalizedAirline,
+        aircraftType: normalizedAc,
+        estimatedUpliftLiters: updatedUplift
+      };
+    };
+
     try {
       const local = await fmsDb.getAll<InternationalSchedule>('international_schedules');
-      if (local && local.length >= INITIAL_MOCK_SCHEDULES.length) {
-        return local;
-      }
-      if (local && local.length > 0 && local.length < INITIAL_MOCK_SCHEDULES.length) {
-        // Re-seed updated initial mock schedules
-        const existingIds = new Set(local.map(s => s.id));
-        const newMocks = INITIAL_MOCK_SCHEDULES.filter(s => !existingIds.has(s.id));
-        const merged = [...local, ...newMocks];
-        for (const sch of newMocks) {
-          await fmsDb.put('international_schedules', sch);
+      if (local && local.length > 0) {
+        const normalized = local.map(normalizeSchedule);
+        // Deduplicate after normalizing departure flight numbers
+        const uniqueMap = new Map<string, InternationalSchedule>();
+        for (const s of normalized) {
+          const key = `${s.flightNumber}-${s.daysOfWeek.join(',')}-${s.effectiveFrom}`;
+          if (!uniqueMap.has(key)) uniqueMap.set(key, s);
         }
-        localStorage.setItem('fms_intl_schedules', JSON.stringify(merged));
-        return merged;
+        const deduplicated = Array.from(uniqueMap.values());
+        if (!isCleared && deduplicated.length < INITIAL_MOCK_SCHEDULES.length) {
+          const existingIds = new Set(deduplicated.map(s => s.id));
+          const newMocks = INITIAL_MOCK_SCHEDULES.map(normalizeSchedule).filter(s => !existingIds.has(s.id));
+          const merged = [...deduplicated, ...newMocks];
+          for (const sch of newMocks) {
+            await fmsDb.put('international_schedules', sch);
+          }
+          localStorage.setItem('fms_intl_schedules', JSON.stringify(merged));
+          return merged;
+        }
+        return deduplicated;
       }
     } catch (e) {}
 
@@ -2825,24 +2858,39 @@ export const supabaseService = {
       const stored = localStorage.getItem('fms_intl_schedules');
       if (stored) {
         const parsed: InternationalSchedule[] = JSON.parse(stored);
-        if (parsed.length >= INITIAL_MOCK_SCHEDULES.length) return parsed;
-        const existingIds = new Set(parsed.map(s => s.id));
-        const newMocks = INITIAL_MOCK_SCHEDULES.filter(s => !existingIds.has(s.id));
-        const merged = [...parsed, ...newMocks];
-        localStorage.setItem('fms_intl_schedules', JSON.stringify(merged));
-        return merged;
+        const normalized = parsed.map(normalizeSchedule);
+        const uniqueMap = new Map<string, InternationalSchedule>();
+        for (const s of normalized) {
+          const key = `${s.flightNumber}-${s.daysOfWeek.join(',')}-${s.effectiveFrom}`;
+          if (!uniqueMap.has(key)) uniqueMap.set(key, s);
+        }
+        const deduplicated = Array.from(uniqueMap.values());
+        if (!isCleared && deduplicated.length < INITIAL_MOCK_SCHEDULES.length) {
+          const existingIds = new Set(deduplicated.map(s => s.id));
+          const newMocks = INITIAL_MOCK_SCHEDULES.map(normalizeSchedule).filter(s => !existingIds.has(s.id));
+          const merged = [...deduplicated, ...newMocks];
+          localStorage.setItem('fms_intl_schedules', JSON.stringify(merged));
+          return merged;
+        }
+        return deduplicated;
       }
     } catch (e) {}
+
+    if (isCleared) {
+      return [];
+    }
 
     // Seed default mock schedules
     try {
-      for (const sch of INITIAL_MOCK_SCHEDULES) {
+      const normalizedMocks = INITIAL_MOCK_SCHEDULES.map(normalizeSchedule);
+      for (const sch of normalizedMocks) {
         await fmsDb.put('international_schedules', sch);
       }
-      localStorage.setItem('fms_intl_schedules', JSON.stringify(INITIAL_MOCK_SCHEDULES));
+      localStorage.setItem('fms_intl_schedules', JSON.stringify(normalizedMocks));
+      return normalizedMocks;
     } catch (e) {}
 
-    return INITIAL_MOCK_SCHEDULES;
+    return INITIAL_MOCK_SCHEDULES.map(normalizeSchedule);
   },
 
   async saveInternationalSchedule(sch: InternationalSchedule): Promise<void> {
@@ -2862,6 +2910,7 @@ export const supabaseService = {
   },
 
   async bulkSaveInternationalSchedules(schedules: InternationalSchedule[]): Promise<void> {
+    localStorage.removeItem('fms_intl_schedules_cleared');
     for (const sch of schedules) {
       try { await fmsDb.put('international_schedules', sch); } catch (e) {}
     }
@@ -2877,6 +2926,14 @@ export const supabaseService = {
     const existing = await this.getInternationalSchedules();
     const filtered = existing.filter(s => s.id !== id);
     try { localStorage.setItem('fms_intl_schedules', JSON.stringify(filtered)); } catch (e) {}
+  },
+
+  async deleteAllInternationalSchedules(): Promise<void> {
+    try { await fmsDb.clear('international_schedules'); } catch (e) {}
+    try {
+      localStorage.removeItem('fms_intl_schedules');
+      localStorage.setItem('fms_intl_schedules_cleared', 'true');
+    } catch (e) {}
   },
 
   async toggleInternationalScheduleActive(id: string, isActive: boolean): Promise<void> {

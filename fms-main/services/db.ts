@@ -201,7 +201,21 @@ class FMSDatabase {
         req.onerror = () => reject(req.error);
       });
     } catch (err) {
-      console.error(`[IndexedDB] delete ${storeName}/${key} failed:`, err);
+      console.warn(`[IndexedDB] delete ${storeName}/${key} failed:`, err);
+    }
+  }
+
+  async clear(storeName: string): Promise<void> {
+    try {
+      const store = await this.getStore(storeName, 'readwrite');
+      if (!store) return;
+      return new Promise((resolve, reject) => {
+        const req = store.clear();
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    } catch (err) {
+      console.warn(`[IndexedDB] clear ${storeName} failed:`, err);
     }
   }
 

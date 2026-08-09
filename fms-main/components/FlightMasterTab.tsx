@@ -356,14 +356,14 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
             return (
               <div key={airline.id} className="bg-surface-container-low border border-outline rounded-3xl overflow-hidden transition-all shadow-sm">
                 {/* Airline Card Header */}
-                <div className="p-5 flex items-center justify-between cursor-pointer hover:bg-surface-container/50 transition-colors" onClick={() => toggleExpand(airline.id)}>
-                  <div className="flex items-center gap-4">
-                    <button className="p-1 rounded-lg text-on-surface-dim hover:text-on-surface">
+                <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-surface-container/50 transition-colors" onClick={() => toggleExpand(airline.id)}>
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <button className="p-1 rounded-lg text-on-surface-dim hover:text-on-surface shrink-0">
                       {isExpanded ? <ChevronDown className="w-5 h-5 text-primary" /> : <ChevronRight className="w-5 h-5" />}
                     </button>
                     <div>
-                      <div className="flex items-center gap-2.5">
-                        <h3 className="text-base font-extrabold text-on-surface uppercase tracking-tight">{airline.name}</h3>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-sm sm:text-base font-extrabold text-on-surface uppercase tracking-tight">{airline.name}</h3>
                         <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${
                           cat === 'INT'
                             ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
@@ -383,31 +383,31 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2 justify-end" onClick={(e) => e.stopPropagation()}>
                     {isAdmin && (
                       <>
                         <button
                           onClick={() => openFlightModal('add', { id: airline.id, name: airline.name })}
-                          className="px-3.5 py-1.5 kinetic-gradient text-white shadow-premium rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border-none hover:opacity-90"
+                          className="px-3 py-1.5 kinetic-gradient text-white shadow-premium rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border-none hover:opacity-90"
                         >
                           + Flight
                         </button>
                         <button
                           onClick={() => openAircraftModal('add', { id: airline.id, name: airline.name })}
-                          className="px-3.5 py-1.5 kinetic-gradient text-white shadow-premium rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border-none hover:opacity-90"
+                          className="px-3 py-1.5 kinetic-gradient text-white shadow-premium rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border-none hover:opacity-90"
                         >
                           + Aircraft
                         </button>
                         <button
                           onClick={() => openAirlineModal('edit', airline)}
-                          className="p-2 text-on-surface-dim hover:text-primary transition-colors"
+                          className="p-1.5 text-on-surface-dim hover:text-primary transition-colors"
                           title="Edit Airline"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteAirline(airline.id, airline.name)}
-                          className="p-2 text-on-surface-dim hover:text-error transition-colors"
+                          className="p-1.5 text-on-surface-dim hover:text-error transition-colors"
                           title="Delete Airline"
                         >
                           <Trash2 className="w-4 h-4" />

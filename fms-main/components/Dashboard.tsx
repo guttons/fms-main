@@ -688,7 +688,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                                 </div>
                                             )}
                                         </div>
-                                        <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-2">{job.aircraftType} • Stand {job.stand}</p>
+                                        <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-2">{job.aircraftType} • {job.stand}</p>
                                     </div>
                                     
                                     {/* Desktop Center-Aligned Timings (Inline) - lg+ only */}
@@ -958,7 +958,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
               <span className="bg-surface-container-low px-1.5 py-0.5 rounded text-[8px] font-black text-on-surface-dim uppercase tracking-wider">{job.aircraftReg}</span>
             </div>
             <div className="flex items-center gap-2 mt-1 text-[9px] font-bold text-on-surface-dim">
-              <span>Stand {job.stand}</span>
+              <span className="flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5 text-primary opacity-60 shrink-0" /> {job.stand}</span>
               {vehicleId && (
                 <>
                   <span className="opacity-30">•</span>
@@ -1065,11 +1065,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
     // 3. Active Staff calculation (from Briefing module staffAssignments)
     const assignments = briefingInfo?.staffAssignments;
-    const activeOperatorsList = assignments?.activeOperators || [];
-    const activeOfficersList = assignments?.activeOfficers || [];
-    const hydrantOpsOfficersList = assignments?.hydrantOpsOfficers || [];
-    const dutySupervisorsList = assignments?.dutySupervisors || (assignments?.dutySupervisor ? [assignments.dutySupervisor] : []);
-    const shiftInChargesList = assignments?.shiftInCharges || (assignments?.shiftInCharge ? [assignments.shiftInCharge] : []);
+    const usersList = staff && staff.length > 0 ? staff : MOCK_USERS;
+    const isValidStaff = (id?: string) => !!id && id.trim() !== '' && usersList.some(u => u.id === id);
+
+    const activeOperatorsList = (assignments?.activeOperators || []).filter(isValidStaff);
+    const activeOfficersList = (assignments?.activeOfficers || []).filter(isValidStaff);
+    const hydrantOpsOfficersList = (assignments?.hydrantOpsOfficers || []).filter(isValidStaff);
+    const dutySupervisorsList = ((assignments?.dutySupervisors && assignments.dutySupervisors.length > 0)
+      ? assignments.dutySupervisors
+      : (assignments?.dutySupervisor ? [assignments.dutySupervisor] : [])).filter(isValidStaff);
+    const shiftInChargesList = ((assignments?.shiftInCharges && assignments.shiftInCharges.length > 0)
+      ? assignments.shiftInCharges
+      : (assignments?.shiftInCharge ? [assignments.shiftInCharge] : [])).filter(isValidStaff);
 
     const uniqueBriefingStaff = Array.from(new Set([
       ...activeOperatorsList,
@@ -1079,30 +1086,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
       ...shiftInChargesList
     ].filter(Boolean)));
 
-    const totalActiveStaffCount = uniqueBriefingStaff.length > 0 ? uniqueBriefingStaff.length : operators.length;
+    const totalActiveStaffCount = uniqueBriefingStaff.length;
 
     // Role breakdown
     const rfOpsCount = activeOperatorsList.length;
     const officerCount = activeOfficersList.length;
     const hdOpsCount = hydrantOpsOfficersList.length;
-
-    const usersList = staff && staff.length > 0 ? staff : MOCK_USERS;
-    const mgrSupStaff = Array.from(new Set([...dutySupervisorsList, ...shiftInChargesList].filter(Boolean)));
-    let dutyManagerCount = 0;
-    let supervisorCount = 0;
-
-    mgrSupStaff.forEach(id => {
-      const u = usersList.find(s => s.id === id);
-      if (u?.role === UserRole.ITP_MANAGER || u?.role === UserRole.ADMIN || u?.role === UserRole.EXECUTIVE) {
-        dutyManagerCount++;
-      } else {
-        supervisorCount++;
-      }
-    });
-
-    if (mgrSupStaff.length > 0 && dutyManagerCount === 0 && supervisorCount === 0) {
-      supervisorCount = mgrSupStaff.length;
-    }
+    const dutyManagerCount = shiftInChargesList.length;
+    const supervisorCount = dutySupervisorsList.length;
 
     // 4. Avg Turnaround calculation
     const durations = logsForSelectedDate.map(log => {
@@ -1750,7 +1741,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
               <div>
                 <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] opacity-70 mb-1">Select Equipment</p>
                 <h3 className="text-lg font-black text-on-surface tracking-tight">{equipPickerJob.flightNumber}</h3>
-                <p className="text-[11px] text-on-surface-dim font-bold mt-0.5">{equipPickerJob.aircraftReg} • Stand {equipPickerJob.stand}</p>
+                <p className="text-[11px] text-on-surface-dim font-bold mt-0.5">{equipPickerJob.aircraftReg} • {equipPickerJob.stand}</p>
               </div>
               <button
                 onClick={() => setEquipPickerJob(null)}

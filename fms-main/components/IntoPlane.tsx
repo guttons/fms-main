@@ -672,7 +672,7 @@ const ScreenDashboard: React.FC<{
                           <div className="flex flex-wrap items-center mt-2 text-on-surface-dim text-[11px] sm:text-[12px] font-bold gap-x-2 gap-y-1.5 md:hidden">
                                <div className="flex items-center whitespace-nowrap">
                                    <MapPin className="w-3.5 h-3.5 mr-1 text-primary opacity-60 shrink-0" />
-                                   <span>Stand {job.stand}</span>
+                                   <span>{job.stand}</span>
                                 </div>
                                <span className="opacity-20 shrink-0">|</span>
                                <span className="opacity-60 whitespace-nowrap">{job.aircraftType}</span>

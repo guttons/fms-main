@@ -1163,7 +1163,7 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
     { key: 'tanks', label: 'Tank Inventory', icon: <Fuel className="w-4 h-4" /> },
     { key: 'vessels', label: 'Vessel Registry', icon: <Anchor className="w-4 h-4" /> },
     { key: 'flight-master', label: 'Airline & Aircraft Master', icon: <Plane className="w-4 h-4" /> },
-    { key: 'intl-schedule', label: 'International Schedules', icon: <Globe className="w-4 h-4" /> },
+    { key: 'intl-schedule', label: 'Flight Schedule', icon: <Globe className="w-4 h-4" /> },
   ];
 
   return (
@@ -1193,10 +1193,10 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
 
       {/* Tab Navigation */}
       <div className="bg-surface-container-lowest rounded-3xl border-transparent overflow-visible shadow-sm">
-        <div className="border-b border-outline p-4 bg-surface-container-low/30 flex justify-center">
-          <div className="bg-surface-container-low p-1.5 rounded-2xl border-transparent relative grid grid-cols-3 sm:grid-cols-6 w-full max-w-[1100px] shadow-inner">
+        <div className="border-b border-outline p-2 sm:p-4 bg-surface-container-low/30 flex justify-center">
+          <div className="bg-surface-container-low p-1.5 rounded-2xl border-transparent relative grid grid-cols-6 w-full max-w-[1100px] shadow-inner">
             <div 
-              className="absolute top-1.5 bottom-1.5 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform hidden sm:block"
+              className="absolute top-1.5 bottom-1.5 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform"
               style={{
                 left: `calc(6px + ${tabs.findIndex(t => t.key === activeTab)} * (100% - 12px) / 6)`,
                 width: 'calc((100% - 12px) / 6)'
@@ -1209,8 +1209,8 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
                   setActiveTab(tab.key);
                   triggerTooltip(tab.key);
                 }}
-                className={`flex items-center justify-center gap-1.5 sm:gap-2.5 px-1 sm:px-4 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest sm:tracking-[0.2em] transition-all relative z-10 overflow-visible text-center w-full
-                  ${activeTab === tab.key ? 'text-white kinetic-gradient sm:bg-transparent rounded-xl sm:rounded-none' : 'text-on-surface-dim opacity-50 hover:opacity-100'}`}
+                className={`flex items-center justify-center gap-1.5 sm:gap-2.5 px-1 sm:px-4 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest sm:tracking-[0.2em] transition-all relative z-10 overflow-visible text-center w-full rounded-xl
+                  ${activeTab === tab.key ? 'text-white' : 'text-on-surface-dim opacity-50 hover:opacity-100'}`}
               >
                 {activeTooltip === tab.key && (
                   <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[9px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-200 sm:hidden">

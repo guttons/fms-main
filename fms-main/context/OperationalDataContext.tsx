@@ -90,6 +90,7 @@ interface OperationalDataContextType {
   importInternationalSchedules: (schedules: InternationalSchedule[]) => Promise<void>;
   saveInternationalSchedule: (schedule: InternationalSchedule) => Promise<void>;
   deleteInternationalSchedule: (id: string) => Promise<void>;
+  deleteAllInternationalSchedules: () => Promise<void>;
   toggleInternationalScheduleActive: (id: string, isActive: boolean) => Promise<void>;
   crossCheckDailyFlights: (dateStr?: string) => ScheduleCrossCheckResult[];
   getPredictiveUpliftForecast: (startDateStr?: string, daysCount?: number, categoryFilter?: 'ALL' | 'INT' | 'DOM') => PredictiveUpliftForecast[];
@@ -319,6 +320,20 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     return resolvedFidsStatus;
   };
 
+  const [internationalSchedules, setInternationalSchedules] = useState<InternationalSchedule[]>([]);
+
+  useEffect(() => {
+    const loadIntlSchedules = async () => {
+      try {
+        const data = await supabaseService.getInternationalSchedules();
+        setInternationalSchedules(data);
+      } catch (e) {
+        console.error('Failed to load international schedules:', e);
+      }
+    };
+    loadIntlSchedules();
+  }, []);
+
   const mergedFlightJobs = useMemo(() => {
     if (!externalFlights || externalFlights.length === 0) {
       return flightJobs;
@@ -376,6 +391,29 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         }
       }
 
+      const schMatch = (internationalSchedules || []).find((s: InternationalSchedule) => {
+        const cleanS = (s.flightNumber || '').replace(/[\s\-]/g, '').toUpperCase();
+        const cleanL = (lf.flightNumber || '').replace(/[\s\-]/g, '').toUpperCase();
+        if (cleanS === cleanL) return true;
+        const depS = scheduleImportService.parseMaclDepartureFlightNo(cleanS);
+        const depL = scheduleImportService.parseMaclDepartureFlightNo(cleanL);
+        if (depS === depL) return true;
+        if (cleanS.slice(0, 2) === cleanL.slice(0, 2)) {
+          const numS = parseInt(cleanS.slice(2), 10);
+          const numL = parseInt(cleanL.slice(2), 10);
+          if (!isNaN(numS) && !isNaN(numL)) {
+            if (Math.abs(numS - numL) <= 1) return true;
+            const strS = String(numS);
+            const strL = String(numL);
+            if (strS.startsWith(strL) || strL.startsWith(strS)) return true;
+          }
+        }
+        return false;
+      });
+
+      const fallbackAc = scheduleImportService.getSmartAircraftFallback(lf.flightNumber, routeStr);
+      const rawAc = schMatch?.aircraftType || (lf.aircraftType && !lf.aircraftType.toUpperCase().includes('WIDEBODY') ? lf.aircraftType : fallbackAc);
+      const matchedAcType = scheduleImportService.normalizeAircraftType(rawAc);
       const resolvedFids = getMergedFidsStatus(lf, liveIntl);
 
       if (existingJobIdx !== -1) {
@@ -384,6 +422,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
         merged[existingJobIdx] = {
           ...merged[existingJobIdx],
+          aircraftType: (merged[existingJobIdx].aircraftType && !['A320', 'Widebody Heavy', 'Widebody'].includes(merged[existingJobIdx].aircraftType)) ? scheduleImportService.normalizeAircraftType(merged[existingJobIdx].aircraftType) : matchedAcType,
           sta: staVal || merged[existingJobIdx].sta,
           eta: etaVal || merged[existingJobIdx].eta,
           std: stdVal || merged[existingJobIdx].std,
@@ -400,7 +439,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           id: lf.id || `fj-live-${lf.flightNumber}-${lf.scheduledTime}`,
           flightNumber: lf.flightNumber,
           aircraftReg: '8Q-TBA',
-          aircraftType: 'A320',
+          aircraftType: matchedAcType,
           stand: standVal || '---',
           sta: staVal,
           eta: etaVal,
@@ -418,7 +457,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       }
     });
     return merged;
-  }, [flightJobs, externalFlights]);
+  }, [flightJobs, externalFlights, internationalSchedules]);
 
   const mergedDomesticFlights = useMemo(() => {
     if (!externalFlights || externalFlights.length === 0) {
@@ -454,6 +493,12 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         (!j.date || j.date === f.date)
       );
 
+      const schMatch = (internationalSchedules || []).find((s: InternationalSchedule) => {
+        const cleanS = (s.flightNumber || '').replace(/[\s\-]/g, '').toUpperCase();
+        const cleanF = (f.flightNumber || '').replace(/[\s\-]/g, '').toUpperCase();
+        return cleanS === cleanF;
+      });
+
       const resolvedFids = getMergedFidsStatus(f, liveDom);
       let status = 'PENDING';
       const currentStatus = matchingJob?.status;
@@ -468,7 +513,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         id: f.id || `dom-${f.flightNumber}-${f.scheduledTime}-${idx}`,
         flightNumber: f.flightNumber,
         aircraftReg: f.aircraftReg || `8Q-DOM${idx}`,
-        aircraftType: f.aircraftType || 'Dash 8',
+        aircraftType: schMatch?.aircraftType || f.aircraftType || 'ATR72-600',
         stand: f.gate || 'D01',
         assignedTeam: `Team ${(idx % 3) + 1}`,
         status,
@@ -481,7 +526,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         type: f.type
       };
     });
-  }, [domesticFlights, externalFlights, flightJobs]);
+  }, [domesticFlights, externalFlights, flightJobs, internationalSchedules]);
 
   const refreshExternalFlights = useCallback(async () => {
     try {
@@ -581,11 +626,11 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       ],
       dieselNeeds: [],
       staffAssignments: {
-        activeOperators: ['u3', 'u3b'],
-        activeOfficers: ['u1'],
-        hydrantOpsOfficers: ['u7'],
-        dutySupervisor: 'u2',
-        shiftInCharge: 'u2b',
+        activeOperators: [],
+        activeOfficers: [],
+        hydrantOpsOfficers: [],
+        dutySupervisors: [],
+        shiftInCharges: [],
         adhocFlights: []
       }
     };
@@ -613,19 +658,6 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   });
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [isAlertsLoading, setIsAlertsLoading] = useState(false);
-  const [internationalSchedules, setInternationalSchedules] = useState<InternationalSchedule[]>([]);
-
-  useEffect(() => {
-    const loadIntlSchedules = async () => {
-      try {
-        const data = await supabaseService.getInternationalSchedules();
-        setInternationalSchedules(data);
-      } catch (e) {
-        console.error('Failed to load international schedules:', e);
-      }
-    };
-    loadIntlSchedules();
-  }, []);
 
   const [serviceTankId, setServiceTankIdState] = useState<string>(() => {
     try {
@@ -753,11 +785,11 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         ],
         dieselNeeds: [],
         staffAssignments: {
-          activeOperators: ['u3b'],
-          activeOfficers: ['u3'],
-          hydrantOpsOfficers: ['u7'],
-          dutySupervisor: 'u2',
-          shiftInCharge: 'u11',
+          activeOperators: [],
+          activeOfficers: [],
+          hydrantOpsOfficers: [],
+          dutySupervisor: '',
+          shiftInCharge: '',
           adhocFlights: []
         }
       });
@@ -801,11 +833,11 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       if (fetchedBriefing && typeof fetchedBriefing === 'object') {
          // Merge with default staff if missing
           const staff = (fetchedBriefing as any).staffAssignments || {
-            activeOperators: ['u3b'],
-            activeOfficers: ['u3'],
-            hydrantOpsOfficers: ['u7'],
-            dutySupervisor: 'u2',
-            shiftInCharge: 'u11'
+            activeOperators: [],
+            activeOfficers: [],
+            hydrantOpsOfficers: [],
+            dutySupervisor: '',
+            shiftInCharge: ''
           };
          if (staff.adhocFlights === undefined) {
            staff.adhocFlights = [];
@@ -978,6 +1010,28 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       })
       .subscribe();
 
+    const channelBriefing = supabase
+      .channel('public:shift_briefing_info')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_briefing_info' }, () => {
+        console.log("SYNC: postgres change on shift_briefing_info for date & shift:", selectedBriefingDate, selectedBriefingShift);
+        supabaseService.getShiftBriefingInfo(selectedBriefingDate, selectedBriefingShift).then(data => {
+          if (data && typeof data === 'object') {
+            const staff = (data as any).staffAssignments || {
+              activeOperators: [],
+              activeOfficers: [],
+              hydrantOpsOfficers: [],
+              dutySupervisors: [],
+              shiftInCharges: []
+            };
+            if (staff.adhocFlights === undefined) {
+              staff.adhocFlights = [];
+            }
+            setBriefingInfo({ ...(data as any), staffAssignments: staff });
+          }
+        });
+      })
+      .subscribe();
+
     return () => {
       console.log("PROVIDER: Tearing down listeners for user:", appUser.id);
       if (unsubscribeAppSettings) unsubscribeAppSettings();
@@ -988,8 +1042,9 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       if (unsubscribeFlightJobs) unsubscribeFlightJobs();
       if (unsubscribeVessels) unsubscribeVessels();
       if (channelDomAssign) channelDomAssign.unsubscribe();
+      if (channelBriefing) channelBriefing.unsubscribe();
     };
-  }, [appUser, selectedBriefingDate]);
+  }, [appUser, selectedBriefingDate, selectedBriefingShift]);
 
   const updateEquipmentStatus = async (id: string, status: EqStatus) => {
     setEquipment(prev => prev.map(eq => 
@@ -1410,6 +1465,11 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     setInternationalSchedules(updated);
   };
 
+  const deleteAllInternationalSchedules = async () => {
+    await supabaseService.deleteAllInternationalSchedules();
+    setInternationalSchedules([]);
+  };
+
   const toggleInternationalScheduleActive = async (id: string, isActive: boolean) => {
     await supabaseService.toggleInternationalScheduleActive(id, isActive);
     const updated = await supabaseService.getInternationalSchedules();
@@ -1493,6 +1553,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       importInternationalSchedules,
       saveInternationalSchedule,
       deleteInternationalSchedule,
+      deleteAllInternationalSchedules,
       toggleInternationalScheduleActive,
       crossCheckDailyFlights,
       getPredictiveUpliftForecast
