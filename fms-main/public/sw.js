@@ -65,6 +65,9 @@ self.addEventListener('fetch', (e) => {
   // Bypass Supabase API — always go to network
   if (url.hostname.includes('supabase.co') || url.hostname.includes('supabase.io')) return;
 
+  // Bypass Planespotters & Aviation APIs — always go to network
+  if (url.hostname.includes('planespotters.net') || url.hostname.includes('airport-data.com')) return;
+
   // Bypass BigQuery API — always go to network
   if (url.pathname.includes('/operations-log') || url.pathname.includes('/external-flights') || url.hostname.includes('run.app')) return;
 
@@ -94,8 +97,15 @@ self.addEventListener('fetch', (e) => {
     caches.match(e.request).then((cached) => {
       const fetchAndUpdate = fetch(e.request)
         .then((response) => {
-          if (response && response.ok && response.type !== 'opaque' && !response.bodyUsed) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, response.clone()));
+          if (response && response.ok && response.type !== 'opaque') {
+            try {
+              const responseToCache = response.clone();
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(e.request, responseToCache).catch(() => {});
+              });
+            } catch (err) {
+              // Ignore cloning errors if body already consumed
+            }
           }
           return response;
         })

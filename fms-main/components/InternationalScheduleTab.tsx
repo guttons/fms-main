@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { 
   Upload, Download, FileSpreadsheet, Plus, Trash2, CheckCircle2, 
   AlertTriangle, RefreshCw, Search, Calendar, Globe, Clock, Plane, 
-  Eye, Check, X, ShieldAlert, Layers, Filter, ToggleLeft, ToggleRight
+  Eye, Check, X, ShieldAlert, Layers, Filter, ToggleLeft, ToggleRight, Pencil
 } from 'lucide-react';
 import { InternationalSchedule, ScheduleCrossCheckResult, CrossCheckStatus } from '../types';
 import { useOperationalData } from '../context/OperationalDataContext';
@@ -67,6 +67,13 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
   });
 
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'INT' | 'DOM'>('ALL');
+  const [crossCheckCategoryFilter, setCrossCheckCategoryFilter] = useState<'ALL' | 'INT' | 'DOM'>('ALL');
+  const [activeSubTabTooltip, setActiveSubTabTooltip] = useState<string | null>(null);
+
+  const triggerSubTabTooltip = (tab: string) => {
+    setActiveSubTabTooltip(tab);
+    setTimeout(() => setActiveSubTabTooltip(null), 2000);
+  };
 
   const uniqueAirlines = Array.from(
     new Set(internationalSchedules.map(s => scheduleImportService.normalizeAirlineName(s.airlineName)))
@@ -139,21 +146,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
     );
   };
 
-  // Download Sample CSV Template
-  const handleDownloadTemplate = () => {
-    const csvStr = scheduleImportService.getSampleCsvTemplate();
-    const blob = new Blob([csvStr], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'Upcoming_International_Schedule_Template.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    push('Sample CSV template downloaded.', 'info');
-  };
-
-  // Handle File Upload Select (.xlsx, .xls, .csv)
+  // Handle File Upload Select (.xlsx, .xls)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -162,40 +155,32 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
     const uploader = currentUser?.name || 'System Admin';
     const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
 
-    if (isExcel) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const buffer = event.target?.result as ArrayBuffer;
-        if (buffer) {
-          try {
-            const { schedules, errors, stats } = scheduleImportService.parseScheduleExcel(buffer, file.name, uploader);
-            setParsedSchedules(schedules);
-            const domCount = schedules.filter(s => s.isDomestic).length;
-            const intlCount = schedules.length - domCount;
-            const seasonTag = stats.season && stats.season !== 'UNKNOWN' ? ` [${stats.season}]` : '';
-            setParseErrors(errors.length > 0 ? errors : [
-              `Parsed MACL Schedule${seasonTag}: ${schedules.length} flights (${intlCount} International, ${domCount} Domestic) across ${stats.airlineCount} airlines from Days of OPS & Domestic tabs.`
-            ]);
-            setPreviewModalOpen(true);
-          } catch (err: any) {
-            push('Failed to parse Excel file: ' + err.message, 'error');
-          }
-        }
-      };
-      reader.readAsArrayBuffer(file);
-    } else {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const content = event.target?.result as string;
-        if (content) {
-          const { schedules, errors } = scheduleImportService.parseScheduleCsv(content, file.name, uploader);
-          setParsedSchedules(schedules);
-          setParseErrors(errors);
-          setPreviewModalOpen(true);
-        }
-      };
-      reader.readAsText(file);
+    if (!isExcel) {
+      push('Please select a valid MACL Excel schedule workbook (.xlsx or .xls)', 'error');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
     }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const buffer = event.target?.result as ArrayBuffer;
+      if (buffer) {
+        try {
+          const { schedules, errors, stats } = scheduleImportService.parseScheduleExcel(buffer, file.name, uploader);
+          setParsedSchedules(schedules);
+          const domCount = schedules.filter(s => s.isDomestic).length;
+          const intlCount = schedules.length - domCount;
+          const seasonTag = stats.season && stats.season !== 'UNKNOWN' ? ` [${stats.season}]` : '';
+          setParseErrors(errors.length > 0 ? errors : [
+            `Parsed MACL Schedule${seasonTag}: ${schedules.length} flights (${intlCount} International, ${domCount} Domestic) across ${stats.airlineCount} airlines from Days of OPS & Domestic tabs.`
+          ]);
+          setPreviewModalOpen(true);
+        } catch (err: any) {
+          push('Failed to parse Excel file: ' + err.message, 'error');
+        }
+      }
+    };
+    reader.readAsArrayBuffer(file);
 
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -316,6 +301,22 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
   // Cross check results
   const crossCheckResults = crossCheckDailyFlights(selectedBriefingDate);
 
+  const isItemDomestic = (r: ScheduleCrossCheckResult) => {
+    if (r.isDomestic !== undefined) return r.isDomestic;
+    const fNo = (r.flightNumber || '').toUpperCase();
+    const aName = (r.airlineName || '').toUpperCase();
+    if (['NR', 'VP', 'Q2'].some(code => fNo.startsWith(code))) return true;
+    if (['MANTA', 'FLYME', 'MALDIVIAN', 'VILLA'].some(name => aName.includes(name))) return true;
+    return false;
+  };
+
+  const filteredCrossCheckResults = crossCheckResults.filter(r => {
+    const isDom = isItemDomestic(r);
+    if (crossCheckCategoryFilter === 'INT') return !isDom;
+    if (crossCheckCategoryFilter === 'DOM') return isDom;
+    return true;
+  });
+
   const getStatusBadge = (status: CrossCheckStatus) => {
     switch (status) {
       case 'MATCHED':
@@ -331,18 +332,18 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
     }
   };
 
-  const matchedCount = crossCheckResults.filter(r => r.status === 'MATCHED').length;
-  const retimedCount = crossCheckResults.filter(r => r.status === 'RETIMED').length;
-  const swapCount = crossCheckResults.filter(r => r.status === 'AIRCRAFT_SWAP').length;
-  const missingCount = crossCheckResults.filter(r => r.status === 'CANCELLED_OR_MISSING').length;
-  const adhocCount = crossCheckResults.filter(r => r.status === 'UNSCHEDULED_ADDITION').length;
-  const totalChecked = crossCheckResults.length;
+  const matchedCount = filteredCrossCheckResults.filter(r => r.status === 'MATCHED').length;
+  const retimedCount = filteredCrossCheckResults.filter(r => r.status === 'RETIMED').length;
+  const swapCount = filteredCrossCheckResults.filter(r => r.status === 'AIRCRAFT_SWAP').length;
+  const missingCount = filteredCrossCheckResults.filter(r => r.status === 'CANCELLED_OR_MISSING').length;
+  const adhocCount = filteredCrossCheckResults.filter(r => r.status === 'UNSCHEDULED_ADDITION').length;
+  const totalChecked = filteredCrossCheckResults.length;
   const compliancePct = totalChecked > 0 ? Math.round((matchedCount / totalChecked) * 100) : 100;
 
   return (
     <div className="space-y-6">
       {/* Header & Sub-Tabs */}
-      <div className="bg-surface/80 backdrop-blur-xl border border-outline/55 rounded-3xl p-6 shadow-premium">
+      <div className="bg-surface-container-low border border-outline rounded-3xl p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
@@ -375,13 +376,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               <Upload className="w-4 h-4" /> Import Schedule
             </button>
 
-            <button
-              onClick={handleDownloadTemplate}
-              className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl bg-surface-container-low/50 hover:bg-surface-container text-on-surface-dim text-[10px] font-semibold uppercase tracking-wider border border-outline/30 transition-all active:scale-95 opacity-80 hover:opacity-100 shrink-0 whitespace-nowrap"
-              title="Download CSV template for manual schedule entry (optional fallback)"
-            >
-              <Download className="w-3.5 h-3.5 text-on-surface-dim" /> CSV Fallback
-            </button>
+
 
             <button
               onClick={handleOpenAddModal}
@@ -400,40 +395,64 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
           </div>
         </div>
 
-        {/* Sub Navigation Bar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-6 pt-6 border-t border-outline/30">
-          <button
-            onClick={() => setActiveSubTab('master')}
-            className={`px-5 py-2.5 rounded-2xl sm:rounded-full text-xs font-black uppercase tracking-wider transition-all border-none ${
-              activeSubTab === 'master'
-                ? 'kinetic-gradient text-white shadow-premium'
-                : 'text-on-surface-dim hover:text-on-surface bg-surface-container-low/50 hover:bg-surface-container-low'
-            }`}
-          >
-            <div className="flex items-center justify-center gap-2">
-              <Layers className="w-4 h-4" />
-              <span>Schedule Registry ({internationalSchedules.length})</span>
-            </div>
-          </button>
+        {/* Sub Navigation Bar with Animated Kinetic Gradient Sliding Pill */}
+        <div className="mt-6 pt-6 border-t border-white/10">
+          <div className="bg-surface-dim/80 p-1.5 rounded-2xl md:rounded-full border border-white/15 shadow-inner relative flex items-center w-full md:w-auto self-start">
+            <div
+              className={`absolute top-1.5 bottom-1.5 rounded-xl md:rounded-full kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${
+                activeSubTab === 'master'
+                  ? 'w-[calc(50%-3px)] left-1.5 md:w-[230px] md:left-1.5 md:translate-x-0'
+                  : 'w-[calc(50%-3px)] left-[calc(50%+1.5px)] md:w-[270px] md:left-1.5 md:translate-x-[230px]'
+              }`}
+            />
+            <button
+              onClick={() => {
+                setActiveSubTab('master');
+                triggerSubTabTooltip('master');
+              }}
+              className={`flex-1 md:flex-initial md:w-[230px] px-3 md:px-6 py-2.5 rounded-xl md:rounded-full text-xs font-black uppercase tracking-wider transition-all relative z-10 flex items-center justify-center gap-1.5 sm:gap-2 ${
+                activeSubTab === 'master' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+              }`}
+            >
+              {activeSubTabTooltip === 'master' && (
+                <div className="absolute bottom-full mb-3 bg-surface-container border border-white/15 px-2.5 py-1.5 rounded-xl text-[10px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-150 md:hidden">
+                  Schedule Registry ({internationalSchedules.length})
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
+                </div>
+              )}
+              <Layers className="w-4 h-4 shrink-0" />
+              <span className="hidden md:inline whitespace-nowrap">Schedule Registry ({internationalSchedules.length})</span>
+              <span className="md:hidden text-[10px] font-extrabold opacity-90">({internationalSchedules.length})</span>
+            </button>
 
-          <button
-            onClick={() => setActiveSubTab('crosscheck')}
-            className={`px-5 py-2.5 rounded-2xl sm:rounded-full text-xs font-black uppercase tracking-wider transition-all relative border-none ${
-              activeSubTab === 'crosscheck'
-                ? 'kinetic-gradient text-white shadow-premium'
-                : 'text-on-surface-dim hover:text-on-surface bg-surface-container-low/50 hover:bg-surface-container-low'
-            }`}
-          >
-            <div className="flex items-center justify-center gap-2">
-              <Clock className="w-4 h-4" />
-              <span>Daily Flight Cross-Check</span>
+            <button
+              onClick={() => {
+                setActiveSubTab('crosscheck');
+                triggerSubTabTooltip('crosscheck');
+              }}
+              className={`flex-1 md:flex-initial md:w-[270px] px-3 md:px-6 py-2.5 rounded-xl md:rounded-full text-xs font-black uppercase tracking-wider transition-all relative z-10 flex items-center justify-center gap-1.5 sm:gap-2 ${
+                activeSubTab === 'crosscheck' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+              }`}
+            >
+              {activeSubTabTooltip === 'crosscheck' && (
+                <div className="absolute bottom-full mb-3 bg-surface-container border border-white/15 px-2.5 py-1.5 rounded-xl text-[10px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-150 md:hidden">
+                  Daily Flight Cross-Check
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
+                </div>
+              )}
+              <Clock className="w-4 h-4 shrink-0" />
+              <span className="hidden md:inline whitespace-nowrap">Daily Flight Cross-Check</span>
               {retimedCount + swapCount + missingCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-warning text-on-warning shrink-0">
-                  {retimedCount + swapCount + missingCount} Alerts
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 transition-colors ${
+                  activeSubTab === 'crosscheck'
+                    ? 'bg-amber-400 text-on-warning-container shadow-sm'
+                    : 'bg-warning text-on-warning'
+                }`}>
+                  {retimedCount + swapCount + missingCount} <span className="hidden sm:inline">Alerts</span>
                 </span>
               )}
-            </div>
-          </button>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -441,7 +460,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
       {activeSubTab === 'master' && (
         <div className="space-y-4">
           {/* Controls & Filters */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-surface/60 backdrop-blur-md p-4 rounded-2xl border border-outline/40">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-surface-container-low border border-outline p-4 rounded-2xl">
             <div className="relative w-full sm:w-80">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-dim" />
               <input
@@ -488,123 +507,126 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
           </div>
 
           {/* Schedules Data Table */}
-          <div className="bg-surface/80 backdrop-blur-xl border border-outline/55 rounded-3xl overflow-hidden shadow-premium">
-            <div className="overflow-x-auto">
-              <table className="min-w-[850px] w-full text-left text-xs text-on-surface border-collapse">
-                <thead>
-                  <tr className="bg-surface-container-low/80 border-b border-outline/50 text-[11px] font-black uppercase tracking-widest text-on-surface-dim">
-                    <th className="py-4 px-6">Flight #</th>
-                    <th className="py-4 px-6">Airline</th>
-                    <th className="py-4 px-6">Route</th>
-                    <th className="py-4 px-6">STA / STD</th>
-                    <th className="py-4 px-6">Days of Week</th>
-                    <th className="py-4 px-6">Aircraft</th>
-                    <th className="py-4 px-6 text-right">Est. Uplift</th>
-                    <th className="py-4 px-6">Validity Period</th>
-                    <th className="py-4 px-6 text-center">Status</th>
-                    <th className="py-4 px-6 text-right">Actions</th>
+          <div className="overflow-x-auto rounded-2xl border border-outline">
+            <table className="min-w-[850px] w-full divide-y divide-outline text-left">
+              <thead className="bg-surface-container-low">
+                <tr>
+                  <th className="px-6 py-4 text-left text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em]">Flight #</th>
+                  <th className="px-6 py-4 text-left text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em]">Airline</th>
+                  <th className="px-6 py-4 text-left text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em]">Route</th>
+                  <th className="px-6 py-4 text-left text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STA / STD</th>
+                  <th className="px-6 py-4 text-left text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em]">Days of Week</th>
+                  <th className="px-6 py-4 text-left text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em]">Aircraft</th>
+                  <th className="px-6 py-4 text-right text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em]">Est. Uplift</th>
+                  <th className="px-6 py-4 text-left text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em]">Validity Period</th>
+                  <th className="px-6 py-4 text-center text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em]">Status</th>
+                  <th className="px-6 py-4 text-right text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em]">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-surface-container-lowest divide-y divide-outline">
+                {filteredSchedules.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="py-12 text-center text-on-surface-dim opacity-70">
+                      No international schedules found matching criteria.
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-outline/30">
-                  {filteredSchedules.length === 0 ? (
-                    <tr>
-                      <td colSpan={10} className="py-12 text-center text-on-surface-dim opacity-70">
-                        No international schedules found matching criteria.
+                ) : (
+                  filteredSchedules.map(sch => (
+                    <tr key={sch.id} className="hover:bg-primary/[0.02] transition-colors group">
+                      <td className="px-6 py-5 whitespace-nowrap text-sm font-black tracking-wider text-primary">
+                        {sch.flightNumber}
+                      </td>
+                      <td className="px-6 py-5 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-on-surface">{scheduleImportService.normalizeAirlineName(sch.airlineName)}</span>
+                          <span className="opacity-50 text-[10px]">({sch.airlineCode})</span>
+                          {sch.isDomestic ? (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-secondary/15 text-secondary border border-secondary/30">
+                              DOMESTIC
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-primary/15 text-primary border border-primary/30">
+                              INTL
+                            </span>
+                          )}
+                          {sch.season && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                              {sch.season}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-5 whitespace-nowrap font-medium">
+                        {renderRouteBadge(sch)}
+                      </td>
+                      <td className="px-6 py-5 whitespace-nowrap font-mono font-semibold text-on-surface">
+                        {sch.sta} / {sch.std}
+                      </td>
+                      <td className="px-6 py-5 whitespace-nowrap">
+                        <div className="flex gap-1">
+                          {[1, 2, 3, 4, 5, 6, 7].map(day => {
+                            const active = sch.daysOfWeek.includes(day);
+                            const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+                            return (
+                              <span 
+                                key={day}
+                                className={`w-5 h-5 rounded-md text-[9px] font-black flex items-center justify-center border ${
+                                  active 
+                                    ? 'bg-primary/20 text-primary border-primary/30' 
+                                    : 'bg-surface-container-low text-on-surface-dim opacity-30 border-transparent'
+                                }`}
+                              >
+                                {labels[day - 1]}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </td>
+                      <td className="px-6 py-5 whitespace-nowrap text-sm font-bold text-on-surface-dim">
+                        {sch.aircraftType}
+                      </td>
+                      <td className="px-6 py-5 whitespace-nowrap font-mono font-bold text-right text-success">
+                        {sch.estimatedUpliftLiters.toLocaleString()} L
+                      </td>
+                      <td className="px-6 py-5 whitespace-nowrap text-xs text-on-surface-dim font-mono">
+                        {sch.effectiveFrom} ➔ {sch.effectiveTo}
+                      </td>
+                      <td className="px-6 py-5 whitespace-nowrap text-center">
+                        <button
+                          onClick={() => toggleInternationalScheduleActive(sch.id, !sch.isActive)}
+                          className={`px-3 py-1 text-[9px] font-black rounded-xl border uppercase tracking-widest transition-all ${
+                            sch.isActive 
+                              ? 'bg-success/10 text-success border-success/20 hover:bg-success/20' 
+                              : 'bg-on-surface-dim/10 text-on-surface-dim border-on-surface-dim/20 hover:bg-on-surface-dim/20'
+                          }`}
+                          title={sch.isActive ? 'Active - Click to Deactivate' : 'Inactive - Click to Activate'}
+                        >
+                          {sch.isActive ? 'ACTIVE' : 'INACTIVE'}
+                        </button>
+                      </td>
+                      <td className="px-6 py-5 whitespace-nowrap text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleOpenEditModal(sch)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-primary/10 text-primary text-[9px] font-black uppercase tracking-widest transition-all"
+                            title="Edit Schedule"
+                          >
+                            <Pencil className="w-3.5 h-3.5" /> EDIT
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSchedule(sch.id, sch.flightNumber)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-error/10 text-error text-[9px] font-black uppercase tracking-widest transition-all"
+                            title="Delete Schedule"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> REMOVE
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  ) : (
-                    filteredSchedules.map(sch => (
-                      <tr key={sch.id} className="hover:bg-surface-container-low/40 transition-colors">
-                        <td className="py-4 px-6 font-black tracking-wider text-primary">
-                          {sch.flightNumber}
-                        </td>
-                        <td className="py-4 px-6 font-bold">
-                          <div className="flex items-center gap-2">
-                            <span>{scheduleImportService.normalizeAirlineName(sch.airlineName)}</span>
-                            <span className="opacity-50 text-[10px]">({sch.airlineCode})</span>
-                            {sch.isDomestic ? (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-secondary/15 text-secondary border border-secondary/30">
-                                DOMESTIC
-                              </span>
-                            ) : (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-primary/15 text-primary border border-primary/30">
-                                INTL
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-4 px-6 font-medium">
-                          {renderRouteBadge(sch)}
-                        </td>
-                        <td className="py-4 px-6 font-mono font-semibold text-on-surface">
-                          {sch.sta} / {sch.std}
-                        </td>
-                        <td className="py-4 px-6">
-                          <div className="flex gap-1">
-                            {[1, 2, 3, 4, 5, 6, 7].map(day => {
-                              const active = sch.daysOfWeek.includes(day);
-                              const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-                              return (
-                                <span 
-                                  key={day}
-                                  className={`w-5 h-5 rounded-md text-[9px] font-black flex items-center justify-center border ${
-                                    active 
-                                      ? 'bg-primary/20 text-primary border-primary/30' 
-                                      : 'bg-surface-container-low text-on-surface-dim opacity-30 border-transparent'
-                                  }`}
-                                >
-                                  {labels[day - 1]}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </td>
-                        <td className="py-4 px-6 font-semibold text-on-surface-dim">
-                          {sch.aircraftType}
-                        </td>
-                        <td className="py-4 px-6 font-mono font-bold text-right text-success">
-                          {sch.estimatedUpliftLiters.toLocaleString()} L
-                        </td>
-                        <td className="py-4 px-6 text-[11px] text-on-surface-dim">
-                          {sch.effectiveFrom} ➔ {sch.effectiveTo}
-                        </td>
-                        <td className="py-4 px-6 text-center">
-                          <button
-                            onClick={() => toggleInternationalScheduleActive(sch.id, !sch.isActive)}
-                            className={`p-1.5 rounded-xl border transition-all ${
-                              sch.isActive 
-                                ? 'bg-success/10 text-success border-success/20 hover:bg-success/20' 
-                                : 'bg-surface-container-low text-on-surface-dim border-outline hover:bg-surface-container'
-                            }`}
-                            title={sch.isActive ? 'Active - Click to Deactivate' : 'Inactive - Click to Activate'}
-                          >
-                            {sch.isActive ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5 opacity-50" />}
-                          </button>
-                        </td>
-                        <td className="py-4 px-6 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => handleOpenEditModal(sch)}
-                              className="p-2 rounded-xl bg-surface-container-low hover:bg-surface-container text-on-surface hover:text-primary transition-all active:scale-95"
-                              title="Edit Schedule"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteSchedule(sch.id, sch.flightNumber)}
-                              className="p-2 rounded-xl bg-error/10 hover:bg-error/20 text-error transition-all active:scale-95"
-                              title="Delete Schedule"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -614,7 +636,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
         <div className="space-y-6">
           {/* Summary Metric Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-            <div className="bg-surface/80 backdrop-blur-xl border border-outline/55 rounded-3xl p-5 shadow-premium">
+            <div className="bg-surface-container-low border border-outline rounded-3xl p-5 shadow-sm">
               <div className="text-[10px] font-black uppercase tracking-widest text-on-surface-dim opacity-70">
                 Compliance Rate
               </div>
@@ -626,7 +648,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               </div>
             </div>
 
-            <div className="bg-surface/80 backdrop-blur-xl border border-outline/55 rounded-3xl p-5 shadow-premium">
+            <div className="bg-surface-container-low border border-outline rounded-3xl p-5 shadow-sm">
               <div className="text-[10px] font-black uppercase tracking-widest text-amber-500 opacity-80">
                 Retimed Flights
               </div>
@@ -638,7 +660,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               </div>
             </div>
 
-            <div className="bg-surface/80 backdrop-blur-xl border border-outline/55 rounded-3xl p-5 shadow-premium">
+            <div className="bg-surface-container-low border border-outline rounded-3xl p-5 shadow-sm">
               <div className="text-[10px] font-black uppercase tracking-widest text-primary opacity-80">
                 Aircraft Swaps
               </div>
@@ -650,7 +672,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               </div>
             </div>
 
-            <div className="bg-surface/80 backdrop-blur-xl border border-outline/55 rounded-3xl p-5 shadow-premium">
+            <div className="bg-surface-container-low border border-outline rounded-3xl p-5 shadow-sm">
               <div className="text-[10px] font-black uppercase tracking-widest text-error opacity-80">
                 Expected / Missing
               </div>
@@ -662,7 +684,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               </div>
             </div>
 
-            <div className="bg-surface/80 backdrop-blur-xl border border-outline/55 rounded-3xl p-5 shadow-premium col-span-2 sm:col-span-1">
+            <div className="bg-surface-container-low border border-outline rounded-3xl p-5 shadow-sm col-span-2 sm:col-span-1">
               <div className="text-[10px] font-black uppercase tracking-widest text-purple-400 opacity-80">
                 Ad-hoc / Unscheduled
               </div>
@@ -676,8 +698,8 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
           </div>
 
           {/* Cross Check Details List */}
-          <div className="bg-surface/80 backdrop-blur-xl border border-outline/55 rounded-3xl p-6 shadow-premium space-y-4">
-            <div className="flex items-center justify-between border-b border-outline/40 pb-4">
+          <div className="bg-surface-container-low border border-outline rounded-3xl p-6 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-outline/40 pb-4">
               <div>
                 <h3 className="text-sm font-black uppercase tracking-wider text-on-surface">
                   Daily Flight Cross-Check Analysis for {selectedBriefingDate}
@@ -686,15 +708,66 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                   Cross-referencing active daily operational flights with imported seasonal master schedule baselines.
                 </p>
               </div>
+
+              {/* Category Filter Pills (ALL / INT / DOM) with Animated Kinetic Gradient Sliding Pill */}
+              <div className="bg-surface-dim/80 p-1 rounded-2xl border border-white/15 relative flex items-center self-start sm:self-auto shadow-inner min-w-[280px]">
+                <div
+                  className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${
+                    crossCheckCategoryFilter === 'ALL'
+                      ? 'w-[calc(33.333%-2px)] left-1'
+                      : crossCheckCategoryFilter === 'INT'
+                      ? 'w-[calc(33.333%-2px)] left-[calc(33.333%+1px)]'
+                      : 'w-[calc(33.333%-2px)] left-[calc(66.666%+1px)]'
+                  }`}
+                />
+                <button
+                  onClick={() => setCrossCheckCategoryFilter('ALL')}
+                  className={`flex-1 text-center px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all relative z-10 whitespace-nowrap ${
+                    crossCheckCategoryFilter === 'ALL'
+                      ? 'text-white'
+                      : 'text-on-surface-dim hover:text-on-surface'
+                  }`}
+                >
+                  ALL ({crossCheckResults.length})
+                </button>
+                <button
+                  onClick={() => setCrossCheckCategoryFilter('INT')}
+                  className={`flex-1 text-center px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all relative z-10 whitespace-nowrap ${
+                    crossCheckCategoryFilter === 'INT'
+                      ? 'text-white'
+                      : 'text-on-surface-dim hover:text-on-surface'
+                  }`}
+                >
+                  INT ({crossCheckResults.filter(r => !isItemDomestic(r)).length})
+                </button>
+                <button
+                  onClick={() => setCrossCheckCategoryFilter('DOM')}
+                  className={`flex-1 text-center px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all relative z-10 whitespace-nowrap ${
+                    crossCheckCategoryFilter === 'DOM'
+                      ? 'text-white'
+                      : 'text-on-surface-dim hover:text-on-surface'
+                  }`}
+                >
+                  DOM ({crossCheckResults.filter(r => isItemDomestic(r)).length})
+                </button>
+              </div>
             </div>
 
             <div className="divide-y divide-outline/30">
-              {crossCheckResults.length === 0 ? (
-                <div className="py-12 text-center text-on-surface-dim opacity-70">
-                  No operational flight data found for cross-checking on {selectedBriefingDate}.
+              {filteredCrossCheckResults.length === 0 ? (
+                <div className="py-12 text-center text-on-surface-dim opacity-80">
+                  {internationalSchedules.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <AlertTriangle className="w-8 h-8 text-amber-400 opacity-60 mb-1" />
+                      <p className="font-black text-sm text-on-surface uppercase tracking-wider">No Master Schedules Loaded</p>
+                      <p className="text-xs text-on-surface-dim opacity-70 max-w-md">Import a seasonal flight schedule workbook (.xlsx) to run daily cross-check analysis against live FIDS operations.</p>
+                    </div>
+                  ) : (
+                    `No ${crossCheckCategoryFilter === 'INT' ? 'international' : crossCheckCategoryFilter === 'DOM' ? 'domestic' : ''} operational flight data found for cross-checking on ${selectedBriefingDate}.`
+                  )}
                 </div>
               ) : (
-                crossCheckResults.map(res => (
+                filteredCrossCheckResults.map(res => (
                   <div key={res.id} className="py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-surface-container-low/30 rounded-2xl p-3 transition-colors">
                     <div className="space-y-1">
                       <div className="flex items-center gap-3">

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plane, Plus, Pencil, Trash2, X, Check, Search, RefreshCw, ChevronDown, ChevronRight, ShieldAlert, Layers } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Plane, Plus, Pencil, Trash2, X, Check, Search, RefreshCw, ChevronDown, ChevronRight, ShieldAlert, Layers, Sparkles, Loader2 } from 'lucide-react';
 import { UserRole } from '../types';
 import type { AirlineMaster, FlightMaster, AircraftMaster, AirlineHierarchyNode } from '../types';
 import { supabaseService } from '../services/supabaseService';
+import { aircraftLookupService, normalizeRegistration, cleanAircraftTypeName } from '../services/aircraftLookupService';
 import type { NotificationType } from '../context/NotificationContext';
 import masterDbData from '../services/masterDbData.json';
 
@@ -44,15 +46,38 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
 
   const [aircraftReg, setAircraftReg] = useState('');
   const [aircraftType, setAircraftType] = useState('');
+  const [resolvingAircraft, setResolvingAircraft] = useState<boolean>(false);
+  const [lookupMessage, setLookupMessage] = useState<string>('');
+
+  const handleAutoLookup = async () => {
+    if (!aircraftReg.trim()) {
+      push('Please enter an aircraft registration first (e.g., 8Q-IAI, A6-EEO)', 'warning');
+      return;
+    }
+    setResolvingAircraft(true);
+    setLookupMessage('Auto-detecting...');
+    try {
+      const res = await aircraftLookupService.lookupAircraftByRegistration(aircraftReg);
+      if (res.found && res.aircraftType) {
+        setAircraftType(res.aircraftType);
+        setLookupMessage(`Auto-detected: ${res.aircraftType}`);
+        push(`Aircraft Type resolved: ${res.aircraftType}`, 'success');
+      } else {
+        setLookupMessage('');
+        push('Could not auto-detect aircraft type for this registration.', 'info');
+      }
+    } catch (e: any) {
+      setLookupMessage('');
+    } finally {
+      setResolvingAircraft(false);
+    }
+  };
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const data = await supabaseService.getMasterDBHierarchy();
       setHierarchy(data);
-      if (data.length > 0) {
-        setExpandedAirlines(prev => new Set(prev).add(data[0].airline.id));
-      }
     } catch (err: any) {
       console.error('[FlightMasterTab] Error loading hierarchy:', err);
       push('Failed to load Master DB hierarchy.', 'error');
@@ -67,10 +92,11 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
 
   const toggleExpand = (id: string) => {
     setExpandedAirlines(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+      if (prev.has(id)) {
+        return new Set();
+      } else {
+        return new Set([id]);
+      }
     });
   };
 
@@ -121,6 +147,7 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
 
   const openAircraftModal = (mode: 'add' | 'edit', targetAirline: { id: string; name: string }, data?: AircraftMaster) => {
     setModal({ type: 'aircraft', mode, data, targetAirlineId: targetAirline.id, targetAirlineName: targetAirline.name });
+    setLookupMessage('');
     if (mode === 'edit' && data) {
       setAircraftReg(data.aircraftReg);
       setAircraftType(data.aircraftType);
@@ -172,13 +199,15 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
   const saveAircraft = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aircraftReg.trim() || !aircraftType.trim()) return push('Registration and Aircraft Type are required', 'warning');
+    const normReg = normalizeRegistration(aircraftReg);
+    const cleanType = cleanAircraftTypeName(aircraftType);
     try {
       if (modal.mode === 'add' && modal.targetAirlineId && modal.targetAirlineName) {
-        await supabaseService.addAircraftMaster(modal.targetAirlineId, modal.targetAirlineName, aircraftReg, aircraftType);
-        push(`Aircraft ${aircraftReg} (${aircraftType}) registered`, 'success');
+        await supabaseService.addAircraftMaster(modal.targetAirlineId, modal.targetAirlineName, normReg, cleanType);
+        push(`Aircraft ${normReg} (${cleanType}) registered`, 'success');
       } else if (modal.data) {
-        await supabaseService.updateAircraftMaster(modal.data.id, { aircraftReg, aircraftType });
-        push(`Aircraft registration updated`, 'success');
+        await supabaseService.updateAircraftMaster(modal.data.id, { aircraftReg: normReg, aircraftType: cleanType });
+        push(`Aircraft ${normReg} (${cleanType}) updated`, 'success');
       }
       closeModal();
       loadData();
@@ -513,18 +542,18 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
         </div>
       )}
 
-      {/* ── MODALS ────────────────────────────────────────────────────────── */}
-      {modal.type === 'airline' && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <form onSubmit={saveAirline} className="bg-surface-container-low border border-outline p-6 rounded-3xl max-w-md w-full space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
+      {/* ── MODALS (Mounted to Document Body via Portal) ────────────────────────── */}
+      {modal.type === 'airline' && createPortal(
+        <div onClick={closeModal} className="fixed inset-0 top-0 left-0 w-screen h-screen bg-black/70 backdrop-blur-md z-[99999] flex items-center justify-center p-4 overflow-y-auto cursor-pointer">
+          <form onClick={e => e.stopPropagation()} onSubmit={saveAirline} className="relative my-auto bg-surface-container-low border border-outline p-6 rounded-3xl max-w-md w-full space-y-4 shadow-2xl animate-in zoom-in-95 duration-200 cursor-default">
             <div className="flex items-center justify-between border-b border-outline pb-3">
               <h3 className="text-sm font-black uppercase tracking-wider">{modal.mode === 'add' ? 'Add New Airline' : 'Edit Airline'}</h3>
-              <button type="button" onClick={closeModal} className="text-on-surface-dim hover:text-on-surface"><X className="w-4 h-4" /></button>
+              <button type="button" onClick={closeModal} className="text-on-surface-dim hover:text-on-surface transition-colors"><X className="w-4 h-4" /></button>
             </div>
             <div className="space-y-3 text-xs">
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-dim mb-1">Airline Name *</label>
-                <input type="text" value={airlineName} onChange={e => setAirlineName(e.target.value)} required placeholder="e.g. Emirates" className="w-full p-3 bg-surface-container border border-outline rounded-xl font-bold text-on-surface" />
+                <input type="text" value={airlineName} onChange={e => setAirlineName(e.target.value)} required placeholder="e.g. Emirates" className="w-full p-3 bg-surface-container border border-outline rounded-xl font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50" />
               </div>
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-dim mb-1">Category *</label>
@@ -532,10 +561,10 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
                   <button
                     type="button"
                     onClick={() => setAirlineCategory('INT')}
-                    className={`p-3 rounded-xl border text-xs font-black uppercase tracking-wider transition-all ${
+                    className={`p-3.5 rounded-2xl border text-xs font-black uppercase tracking-wider transition-all duration-200 ease-out active:scale-95 flex items-center justify-center ${
                       airlineCategory === 'INT'
-                        ? 'kinetic-gradient text-white border-transparent shadow-premium'
-                        : 'bg-surface-container border-outline text-on-surface-dim'
+                        ? 'kinetic-gradient text-white border-transparent shadow-premium scale-[1.02] ring-2 ring-primary/40'
+                        : 'bg-surface-container border-outline text-on-surface-dim hover:bg-surface-container-high hover:text-on-surface'
                     }`}
                   >
                     International (INT)
@@ -543,86 +572,112 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
                   <button
                     type="button"
                     onClick={() => setAirlineCategory('DOM')}
-                    className={`p-3 rounded-xl border text-xs font-black uppercase tracking-wider transition-all ${
+                    className={`p-3.5 rounded-2xl border text-xs font-black uppercase tracking-wider transition-all duration-200 ease-out active:scale-95 flex items-center justify-center ${
                       airlineCategory === 'DOM'
-                        ? 'kinetic-gradient text-white border-transparent shadow-premium'
-                        : 'bg-surface-container border-outline text-on-surface-dim'
+                        ? 'kinetic-gradient text-white border-transparent shadow-premium scale-[1.02] ring-2 ring-primary/40'
+                        : 'bg-surface-container border-outline text-on-surface-dim hover:bg-surface-container-high hover:text-on-surface'
                     }`}
                   >
                     Domestic (DOM)
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-dim mb-1">IATA Code</label>
-                  <input type="text" value={iataCode} onChange={e => setIataCode(e.target.value)} placeholder="e.g. EK" className="w-full p-3 bg-surface-container border border-outline rounded-xl font-mono uppercase font-bold text-on-surface" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-dim mb-1">ICAO Code</label>
-                  <input type="text" value={icaoCode} onChange={e => setIcaoCode(e.target.value)} placeholder="e.g. UAE" className="w-full p-3 bg-surface-container border border-outline rounded-xl font-mono uppercase font-bold text-on-surface" />
-                </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-dim mb-1">IATA Code</label>
+                <input type="text" value={iataCode} onChange={e => setIataCode(e.target.value)} placeholder="e.g. EK" className="w-full p-3 bg-surface-container border border-outline rounded-xl font-mono uppercase font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50" />
               </div>
             </div>
             <div className="flex justify-end gap-3 pt-2">
-              <button type="button" onClick={closeModal} className="px-4 py-2 text-xs font-bold text-on-surface-dim uppercase">Cancel</button>
+              <button type="button" onClick={closeModal} className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-surface-container hover:bg-surface-container-high border border-outline text-on-surface-dim hover:text-on-surface transition-all active:scale-95 shadow-sm">Cancel</button>
               <button type="submit" className="px-6 py-2.5 kinetic-gradient text-white shadow-premium rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 border-none hover:opacity-90">Save Airline</button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {modal.type === 'flight' && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <form onSubmit={saveFlight} className="bg-surface-container-low border border-outline p-6 rounded-3xl max-w-md w-full space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
+      {modal.type === 'flight' && createPortal(
+        <div onClick={closeModal} className="fixed inset-0 top-0 left-0 w-screen h-screen bg-black/70 backdrop-blur-md z-[99999] flex items-center justify-center p-4 overflow-y-auto cursor-pointer">
+          <form onClick={e => e.stopPropagation()} onSubmit={saveFlight} className="relative my-auto bg-surface-container-low border border-outline p-6 rounded-3xl max-w-md w-full space-y-4 shadow-2xl animate-in zoom-in-95 duration-200 cursor-default">
             <div className="flex items-center justify-between border-b border-outline pb-3">
               <h3 className="text-sm font-black uppercase tracking-wider">{modal.mode === 'add' ? `Add Flight (${modal.targetAirlineName})` : 'Edit Flight Number'}</h3>
-              <button type="button" onClick={closeModal} className="text-on-surface-dim hover:text-on-surface"><X className="w-4 h-4" /></button>
+              <button type="button" onClick={closeModal} className="text-on-surface-dim hover:text-on-surface transition-colors"><X className="w-4 h-4" /></button>
             </div>
             <div className="space-y-3 text-xs">
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-dim mb-1">Flight Number *</label>
-                <input type="text" value={flightNumber} onChange={e => setFlightNumber(e.target.value)} required placeholder="e.g. EK658" className="w-full p-3 bg-surface-container border border-outline rounded-xl font-mono uppercase font-bold text-on-surface" />
+                <input type="text" value={flightNumber} onChange={e => setFlightNumber(e.target.value)} required placeholder="e.g. EK658" className="w-full p-3 bg-surface-container border border-outline rounded-xl font-mono uppercase font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50" />
               </div>
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-dim mb-1">Route (Optional)</label>
-                <input type="text" value={flightRoute} onChange={e => setFlightRoute(e.target.value)} placeholder="e.g. DXB - MLE - DXB" className="w-full p-3 bg-surface-container border border-outline rounded-xl font-semibold text-on-surface" />
+                <input type="text" value={flightRoute} onChange={e => setFlightRoute(e.target.value)} placeholder="e.g. DXB - MLE - DXB" className="w-full p-3 bg-surface-container border border-outline rounded-xl font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50" />
               </div>
             </div>
             <div className="flex justify-end gap-3 pt-2">
-              <button type="button" onClick={closeModal} className="px-4 py-2 text-xs font-bold text-on-surface-dim uppercase">Cancel</button>
+              <button type="button" onClick={closeModal} className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-surface-container hover:bg-surface-container-high border border-outline text-on-surface-dim hover:text-on-surface transition-all active:scale-95 shadow-sm">Cancel</button>
               <button type="submit" className="px-6 py-2.5 kinetic-gradient text-white shadow-premium rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 border-none hover:opacity-90">Save Flight</button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {modal.type === 'aircraft' && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <form onSubmit={saveAircraft} className="bg-surface-container-low border border-outline p-6 rounded-3xl max-w-md w-full space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
+      {modal.type === 'aircraft' && createPortal(
+        <div onClick={closeModal} className="fixed inset-0 top-0 left-0 w-screen h-screen bg-black/70 backdrop-blur-md z-[99999] flex items-center justify-center p-4 overflow-y-auto cursor-pointer">
+          <form onClick={e => e.stopPropagation()} onSubmit={saveAircraft} className="relative my-auto bg-surface-container-low border border-outline p-6 rounded-3xl max-w-md w-full space-y-4 shadow-2xl animate-in zoom-in-95 duration-200 cursor-default">
             <div className="flex items-center justify-between border-b border-outline pb-3">
               <h3 className="text-sm font-black uppercase tracking-wider">{modal.mode === 'add' ? `Register Aircraft (${modal.targetAirlineName})` : 'Edit Aircraft Registration'}</h3>
-              <button type="button" onClick={closeModal} className="text-on-surface-dim hover:text-on-surface"><X className="w-4 h-4" /></button>
+              <button type="button" onClick={closeModal} className="text-on-surface-dim hover:text-on-surface transition-colors"><X className="w-4 h-4" /></button>
             </div>
             <div className="space-y-3 text-xs">
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-dim mb-1">Aircraft Registration (Tail No.) *</label>
-                <input type="text" value={aircraftReg} onChange={e => setAircraftReg(e.target.value)} required placeholder="e.g. 8Q-IAI" className="w-full p-3 bg-surface-container border border-outline rounded-xl font-mono uppercase font-bold text-on-surface" />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={aircraftReg}
+                    onChange={e => setAircraftReg(e.target.value)}
+                    required
+                    placeholder="e.g. 8Q-IAI or A6-EEO"
+                    className="w-full p-3 bg-surface-container border border-outline rounded-xl font-mono uppercase font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAutoLookup}
+                    disabled={resolvingAircraft || !aircraftReg.trim()}
+                    className="px-3.5 py-3 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-xl font-bold uppercase tracking-wider text-[10px] flex items-center gap-1.5 transition-all disabled:opacity-50 whitespace-nowrap active:scale-95 shadow-sm"
+                    title="Auto-detect Aircraft Type via Planespotters / Master DB"
+                  >
+                    {resolvingAircraft ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    {resolvingAircraft ? 'Checking...' : 'Auto-Detect'}
+                  </button>
+                </div>
+                {lookupMessage && (
+                  <p className="text-[10px] font-semibold mt-1.5 text-emerald-400 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" />
+                    {lookupMessage}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-dim mb-1">Aircraft Type *</label>
-                <input type="text" value={aircraftType} onChange={e => setAircraftType(e.target.value)} required placeholder="e.g. A320-200" className="w-full p-3 bg-surface-container border border-outline rounded-xl font-semibold uppercase font-bold text-on-surface" />
-                <p className="text-[10px] text-on-surface-dim mt-1 italic">
-                  Note: Aircraft registration permanently binds to this aircraft type.
-                </p>
+                <input
+                  type="text"
+                  value={aircraftType}
+                  onChange={e => setAircraftType(e.target.value)}
+                  required
+                  placeholder="e.g. ATR, B777, A320"
+                  className="w-full p-3 bg-surface-container border border-outline rounded-xl font-semibold uppercase font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
               </div>
             </div>
             <div className="flex justify-end gap-3 pt-2">
-              <button type="button" onClick={closeModal} className="px-4 py-2 text-xs font-bold text-on-surface-dim uppercase">Cancel</button>
+              <button type="button" onClick={closeModal} className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-surface-container hover:bg-surface-container-high border border-outline text-on-surface-dim hover:text-on-surface transition-all active:scale-95 shadow-sm">Cancel</button>
               <button type="submit" className="px-6 py-2.5 kinetic-gradient text-white shadow-premium rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 border-none hover:opacity-90">Save Registration</button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

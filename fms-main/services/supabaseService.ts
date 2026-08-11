@@ -2820,12 +2820,29 @@ export const supabaseService = {
         ? estUplift 
         : sch.estimatedUpliftLiters;
         
+      const normFrom = sch.effectiveFrom ? sch.effectiveFrom.split('T')[0] : '2026-03-29';
+      let normTo = sch.effectiveTo ? sch.effectiveTo.split('T')[0] : '2026-10-24';
+      if (!normTo || normTo === normFrom || normTo < normFrom) {
+        normTo = '2026-10-24';
+      }
+
+      let daysOfWk: number[] = [1, 2, 3, 4, 5, 6, 7];
+      if (Array.isArray(sch.daysOfWeek)) {
+        const parsedNums = sch.daysOfWeek.map(d => Number(d)).filter(n => !isNaN(n) && n >= 1 && n <= 7);
+        if (parsedNums.length > 0) daysOfWk = parsedNums;
+      } else if (typeof sch.daysOfWeek === 'string' || typeof sch.daysOfWeek === 'number') {
+        daysOfWk = scheduleImportService.parseDaysOfOps(sch.daysOfWeek);
+      }
+
       return {
         ...sch,
         flightNumber: depFlt,
         airlineName: normalizedAirline,
         aircraftType: normalizedAc,
-        estimatedUpliftLiters: updatedUplift
+        daysOfWeek: daysOfWk,
+        estimatedUpliftLiters: updatedUplift,
+        effectiveFrom: normFrom,
+        effectiveTo: normTo
       };
     };
 
@@ -2833,24 +2850,14 @@ export const supabaseService = {
       const local = await fmsDb.getAll<InternationalSchedule>('international_schedules');
       if (local && local.length > 0) {
         const normalized = local.map(normalizeSchedule);
-        // Deduplicate after normalizing departure flight numbers
+        // Filter out legacy mock schedules (e.g. intl-sch-101, dom-sch-101) so only user-uploaded sheet schedules remain
+        const userSchedules = normalized.filter(s => !s.id.startsWith('intl-sch-1') && !s.id.startsWith('dom-sch-1'));
         const uniqueMap = new Map<string, InternationalSchedule>();
-        for (const s of normalized) {
+        for (const s of userSchedules) {
           const key = `${s.flightNumber}-${s.daysOfWeek.join(',')}-${s.effectiveFrom}`;
           if (!uniqueMap.has(key)) uniqueMap.set(key, s);
         }
-        const deduplicated = Array.from(uniqueMap.values());
-        if (!isCleared && deduplicated.length < INITIAL_MOCK_SCHEDULES.length) {
-          const existingIds = new Set(deduplicated.map(s => s.id));
-          const newMocks = INITIAL_MOCK_SCHEDULES.map(normalizeSchedule).filter(s => !existingIds.has(s.id));
-          const merged = [...deduplicated, ...newMocks];
-          for (const sch of newMocks) {
-            await fmsDb.put('international_schedules', sch);
-          }
-          localStorage.setItem('fms_intl_schedules', JSON.stringify(merged));
-          return merged;
-        }
-        return deduplicated;
+        return Array.from(uniqueMap.values());
       }
     } catch (e) {}
 
@@ -2859,38 +2866,17 @@ export const supabaseService = {
       if (stored) {
         const parsed: InternationalSchedule[] = JSON.parse(stored);
         const normalized = parsed.map(normalizeSchedule);
+        const userSchedules = normalized.filter(s => !s.id.startsWith('intl-sch-1') && !s.id.startsWith('dom-sch-1'));
         const uniqueMap = new Map<string, InternationalSchedule>();
-        for (const s of normalized) {
+        for (const s of userSchedules) {
           const key = `${s.flightNumber}-${s.daysOfWeek.join(',')}-${s.effectiveFrom}`;
           if (!uniqueMap.has(key)) uniqueMap.set(key, s);
         }
-        const deduplicated = Array.from(uniqueMap.values());
-        if (!isCleared && deduplicated.length < INITIAL_MOCK_SCHEDULES.length) {
-          const existingIds = new Set(deduplicated.map(s => s.id));
-          const newMocks = INITIAL_MOCK_SCHEDULES.map(normalizeSchedule).filter(s => !existingIds.has(s.id));
-          const merged = [...deduplicated, ...newMocks];
-          localStorage.setItem('fms_intl_schedules', JSON.stringify(merged));
-          return merged;
-        }
-        return deduplicated;
+        return Array.from(uniqueMap.values());
       }
     } catch (e) {}
 
-    if (isCleared) {
-      return [];
-    }
-
-    // Seed default mock schedules
-    try {
-      const normalizedMocks = INITIAL_MOCK_SCHEDULES.map(normalizeSchedule);
-      for (const sch of normalizedMocks) {
-        await fmsDb.put('international_schedules', sch);
-      }
-      localStorage.setItem('fms_intl_schedules', JSON.stringify(normalizedMocks));
-      return normalizedMocks;
-    } catch (e) {}
-
-    return INITIAL_MOCK_SCHEDULES.map(normalizeSchedule);
+    return [];
   },
 
   async saveInternationalSchedule(sch: InternationalSchedule): Promise<void> {

@@ -1,63 +1,15 @@
 import * as XLSX from 'xlsx/dist/xlsx.full.min.js';
 import { InternationalSchedule, ScheduleCrossCheckResult, PredictiveUpliftForecast, FlightJob, FlightLog } from '../types';
 
-export const INITIAL_MOCK_SCHEDULES: InternationalSchedule[] = [
-  // ── INTERNATIONAL FLIGHT SCHEDULES ──
-  { id: 'intl-sch-101', flightNumber: 'EK657', airlineCode: 'EK', airlineName: 'Emirates', origin: 'DXB', destination: 'MLE', sta: '08:30', std: '10:00', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 48000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-102', flightNumber: 'EK657', airlineCode: 'EK', airlineName: 'Emirates', origin: 'DXB', destination: 'MLE', sta: '07:35', std: '09:05', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 48000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-103', flightNumber: 'EK659', airlineCode: 'EK', airlineName: 'Emirates', origin: 'DXB', destination: 'MLE', sta: '09:25', std: '10:55', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 48000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-104', flightNumber: 'QR673', airlineCode: 'QR', airlineName: 'Qatar Airways', origin: 'DOH', destination: 'MLE', sta: '08:05', std: '19:50', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 48000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-105', flightNumber: 'QR677', airlineCode: 'QR', airlineName: 'Qatar Airways', origin: 'DOH', destination: 'MLE', sta: '07:50', std: '09:40', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 48000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-106', flightNumber: 'QR671', airlineCode: 'QR', airlineName: 'Qatar Airways', origin: 'DOH', destination: 'MLE', sta: '08:25', std: '20:45', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320-200', estimatedUpliftLiters: 16500, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-107', flightNumber: 'FZ1208', airlineCode: 'FZ', airlineName: 'Fly Dubai', origin: 'DXB', destination: 'MLE', sta: '06:45', std: '10:10', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B737 MAX 8', estimatedUpliftLiters: 17000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-108', flightNumber: 'FZ1026', airlineCode: 'FZ', airlineName: 'Fly Dubai', origin: 'DXB', destination: 'MLE', sta: '07:15', std: '08:15', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B737 MAX 8', estimatedUpliftLiters: 17000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-109', flightNumber: 'SU321', airlineCode: 'SU', airlineName: 'Aeroflot', origin: 'SVO', destination: 'MLE', sta: '09:20', std: '11:00', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-300ER', estimatedUpliftLiters: 75000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-110', flightNumber: 'EY379', airlineCode: 'EY', airlineName: 'Etihad Airways', origin: 'AUH', destination: 'MLE', sta: '05:05', std: '09:35', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B787-10', estimatedUpliftLiters: 42000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-111', flightNumber: 'EY373', airlineCode: 'EY', airlineName: 'Etihad Airways', origin: 'AUH', destination: 'MLE', sta: '07:25', std: '09:10', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B787-10', estimatedUpliftLiters: 42000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-112', flightNumber: 'SQ437', airlineCode: 'SQ', airlineName: 'Singapore Airlines', origin: 'SIN', destination: 'MLE', sta: '22:10', std: '23:25', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B787-10', estimatedUpliftLiters: 39000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-113', flightNumber: 'BA060', airlineCode: 'BA', airlineName: 'British Airways', origin: 'LHR', destination: 'MLE', sta: '09:40', std: '11:40', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B777-200ER', estimatedUpliftLiters: 72000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-114', flightNumber: 'UL102', airlineCode: 'UL', airlineName: 'SriLankan Airlines', origin: 'CMB', destination: 'MLE', sta: '08:15', std: '09:25', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A330-300', estimatedUpliftLiters: 28000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-115', flightNumber: 'G9094', airlineCode: 'G9', airlineName: 'Air Arabia', origin: 'SHJ', destination: 'MLE', sta: '08:10', std: '09:10', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320-200', estimatedUpliftLiters: 16500, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-116', flightNumber: 'G9092', airlineCode: 'G9', airlineName: 'Air Arabia', origin: 'SHJ', destination: 'MLE', sta: '13:20', std: '14:20', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320-200', estimatedUpliftLiters: 16500, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-117', flightNumber: 'AK075', airlineCode: 'AK', airlineName: 'Air Asia', origin: 'KUL', destination: 'MLE', sta: '09:50', std: '10:45', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320neo', estimatedUpliftLiters: 18000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-118', flightNumber: 'AK073', airlineCode: 'AK', airlineName: 'Air Asia', origin: 'KUL', destination: 'MLE', sta: '20:30', std: '21:30', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320neo', estimatedUpliftLiters: 18000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-119', flightNumber: 'TK741', airlineCode: 'TK', airlineName: 'Turkish Airlines', origin: 'IST', destination: 'MLE', sta: '07:40', std: '09:00', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B787-9', estimatedUpliftLiters: 44000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-120', flightNumber: 'GF144', airlineCode: 'GF', airlineName: 'Gulf Air', origin: 'BAH', destination: 'MLE', sta: '06:35', std: '07:35', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320neo', estimatedUpliftLiters: 16000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-121', flightNumber: 'AI2240', airlineCode: 'AI', airlineName: 'Air India', origin: 'DEL', destination: 'MLE', sta: '11:50', std: '12:50', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'A320neo', estimatedUpliftLiters: 14500, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-  { id: 'intl-sch-122', flightNumber: 'MH484', airlineCode: 'MH', airlineName: 'Malaysia Airlines', origin: 'KUL', destination: 'MLE', sta: '10:55', std: '12:00', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'B737 MAX 8', estimatedUpliftLiters: 17500, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: false, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'MACL_Slot_Coordination.xlsx' },
-
-  // ── DOMESTIC FLIGHT SCHEDULES ──
-  { id: 'dom-sch-101', flightNumber: 'NR418', airlineCode: 'NR', airlineName: 'Manta Air', origin: 'MLE', destination: 'DDD', sta: '', std: '07:30', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'ATR72-600', estimatedUpliftLiters: 1850, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' },
-  { id: 'dom-sch-102', flightNumber: 'NR400', airlineCode: 'NR', airlineName: 'Manta Air', origin: 'MLE', destination: 'DDD', sta: '', std: '11:30', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'ATR72-600', estimatedUpliftLiters: 1850, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' },
-  { id: 'dom-sch-103', flightNumber: 'NR402', airlineCode: 'NR', airlineName: 'Manta Air', origin: 'MLE', destination: 'DDD', sta: '', std: '14:15', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'ATR72-600', estimatedUpliftLiters: 1850, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' },
-  { id: 'dom-sch-104', flightNumber: 'NR404', airlineCode: 'NR', airlineName: 'Manta Air', origin: 'MLE', destination: 'DDD', sta: '', std: '17:45', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'ATR72-600', estimatedUpliftLiters: 1850, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' },
-  { id: 'dom-sch-105', flightNumber: 'NR420', airlineCode: 'NR', airlineName: 'Manta Air', origin: 'MLE', destination: 'DDD', sta: '', std: '22:15', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'ATR72-600', estimatedUpliftLiters: 1850, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' },
-  { id: 'dom-sch-106', flightNumber: 'NR538', airlineCode: 'NR', airlineName: 'Manta Air', origin: 'MLE', destination: 'DRV', sta: '', std: '10:15', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'ATR72-600', estimatedUpliftLiters: 1850, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' },
-  { id: 'dom-sch-107', flightNumber: 'NR530', airlineCode: 'NR', airlineName: 'Manta Air', origin: 'MLE', destination: 'DRV', sta: '', std: '12:30', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'ATR72-600', estimatedUpliftLiters: 1850, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' },
-  { id: 'dom-sch-108', flightNumber: 'NR534', airlineCode: 'NR', airlineName: 'Manta Air', origin: 'MLE', destination: 'DRV', sta: '', std: '17:00', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'ATR72-600', estimatedUpliftLiters: 1850, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' },
-  { id: 'dom-sch-109', flightNumber: 'VP606', airlineCode: 'VP', airlineName: 'Flyme', origin: 'MLE', destination: 'VAM', sta: '', std: '13:00', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'ATR72-500', estimatedUpliftLiters: 1750, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' },
-  { id: 'dom-sch-110', flightNumber: 'VP610', airlineCode: 'VP', airlineName: 'Flyme', origin: 'MLE', destination: 'VAM', sta: '', std: '17:00', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'ATR72-500', estimatedUpliftLiters: 1750, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' },
-  { id: 'dom-sch-111', flightNumber: 'Q2102', airlineCode: 'Q2', airlineName: 'Maldivian', origin: 'MLE', destination: 'GAN', sta: '', std: '12:05', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'ATR72-600', estimatedUpliftLiters: 1950, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' },
-  { id: 'dom-sch-112', flightNumber: 'Q2106', airlineCode: 'Q2', airlineName: 'Maldivian', origin: 'MLE', destination: 'GAN', sta: '', std: '16:45', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'ATR72-600', estimatedUpliftLiters: 1950, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' },
-  { id: 'dom-sch-113', flightNumber: 'Q22108', airlineCode: 'Q2', airlineName: 'Maldivian', origin: 'MLE', destination: 'GAN', sta: '', std: '09:00', daysOfWeek: [4, 7], aircraftType: 'A330-200', estimatedUpliftLiters: 14000, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' },
-  { id: 'dom-sch-114', flightNumber: 'Q22143', airlineCode: 'Q2', airlineName: 'Maldivian', origin: 'MLE', destination: 'KDM', sta: '', std: '14:50', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'DH8', estimatedUpliftLiters: 1400, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' },
-  { id: 'dom-sch-115', flightNumber: 'Q2125', airlineCode: 'Q2', airlineName: 'Maldivian', origin: 'MLE', destination: 'FVM', sta: '', std: '18:40', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'DH8', estimatedUpliftLiters: 1400, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' },
-  { id: 'dom-sch-116', flightNumber: 'Q2325', airlineCode: 'Q2', airlineName: 'Maldivian', origin: 'MLE', destination: 'DRV', sta: '', std: '21:10', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], aircraftType: 'DH8', estimatedUpliftLiters: 1400, effectiveFrom: '2026-03-29', effectiveTo: '2027-03-27', isActive: true, isDomestic: true, uploadedAt: new Date().toISOString(), uploadedBy: 'System Admin', sourceFilename: 'Summer_Schedule_2026.xlsx' }
-];
+export const INITIAL_MOCK_SCHEDULES: InternationalSchedule[] = [];
 
 export const scheduleImportService = {
-  /**
-   * Generates a sample CSV format for upcoming international schedule uploads
-   */
   getSampleCsvTemplate(): string {
-    return `flight_number,airline_code,airline_name,origin,destination,sta,std,days_of_week,aircraft_type,estimated_uplift_liters,effective_from,effective_to
-EK652,EK,Emirates,DXB,MLE,08:30,10:00,1-2-3-4-5-6-7,B777-300ER,48000,2026-08-01,2026-10-31
-QR672,QR,Qatar Airways,DOH,MLE,15:15,16:45,1-3-5-7,A350-900,42000,2026-08-01,2026-10-31
-SQ438,SQ,Singapore Airlines,SIN,MLE,22:10,23:25,1-2-3-4-5-6-7,B787-10,39000,2026-08-01,2026-10-31
-BA061,BA,British Airways,LHR,MLE,09:45,11:30,2-4-6,B777-200ER,56000,2026-08-01,2026-10-31
-SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-31`;
+    return `AIRLINE,FLIGHT_NO,STA,STD,ORIGIN,DESTINATION,AIRCRAFT_TYPE,DAYS_OF_OPS,EFFECTIVE_FROM,EFFECTIVE_TO
+Emirates,EK652,15:30,16:55,DXB,MLE,B777,1234567,2026-01-01,2026-10-31
+Qatar Airways,QR672,08:15,09:40,DOH,MLE,A350,1030507,2026-01-01,2026-10-31
+Air India,AI263,14:10,15:25,DEL,MLE,A320,0204060,2026-01-01,2026-10-31`;
   },
-
   /**
    * MACL Days of Ops positional decoder.
    * MACL uses a 7-digit string where each position represents a day of the week (Mon=1 to Sun=7).
@@ -71,27 +23,51 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
    *   0200000 → Tue only [2]
    *   1204060 → Mon/Tue/Thu/Sat [1,2,4,6]
    */
+  /**
+   * MACL Days of Ops positional & list decoder.
+   * MACL uses a 7-digit string where each position represents a day of the week (Mon=1 to Sun=7).
+   * If the digit at position N equals N, that day is active; 0 means inactive.
+   * Examples:
+   *   1234567 → all days [1,2,3,4,5,6,7]
+   *   0030507 → Wed/Fri/Sun [3,5,7]
+   *   0004060 → Thu/Sat [4,6]
+   *   1357    → Mon/Wed/Fri/Sun [1,3,5,7]
+   */
   parseDaysOfOps(raw: any): number[] {
     if (raw === undefined || raw === null) return [1, 2, 3, 4, 5, 6, 7];
-    const str = String(raw).trim();
-    if (!str) return [1, 2, 3, 4, 5, 6, 7];
+    const str = String(raw).trim().toUpperCase();
+    if (!str || str === '-' || str === 'N/A' || str.includes('DAILY') || str.includes('DLY') || str.includes('EVERYDAY')) {
+      return [1, 2, 3, 4, 5, 6, 7];
+    }
 
     // Handle dash-separated format (e.g., "1-2-3-4-5-6-7" from CSV)
-    if (str.includes('-')) {
+    if (str.includes('-') && !str.includes('.')) {
       const parts = str.split('-').map(p => parseInt(p.trim(), 10)).filter(n => n >= 1 && n <= 7);
-      return parts.length > 0 ? parts : [1, 2, 3, 4, 5, 6, 7];
+      if (parts.length > 0) return parts;
     }
 
-    // MACL 7-digit positional encoding
-    const padded = str.padStart(7, '0');
-    const days: number[] = [];
-    for (let i = 0; i < 7; i++) {
-      const ch = parseInt(padded[i], 10);
-      if (ch === i + 1) {
-        days.push(ch);
+    const digitsOnly = str.replace(/\D/g, '');
+
+    // MACL 7-digit positional encoding (e.g. "0030507" or "1234567")
+    if (digitsOnly.length === 7) {
+      const days: number[] = [];
+      for (let i = 0; i < 7; i++) {
+        const ch = parseInt(digitsOnly[i], 10);
+        if (ch === i + 1) {
+          days.push(ch);
+        }
       }
+      if (days.length > 0) return days;
     }
-    return days.length > 0 ? days : [1, 2, 3, 4, 5, 6, 7];
+
+    // Extract all unique valid day digits 1..7 (e.g., "1357", "1.3.5.7", "1,3,5,7", "246")
+    const extractedDays = Array.from(new Set(
+      digitsOnly.split('')
+        .map(d => parseInt(d, 10))
+        .filter(d => d >= 1 && d <= 7)
+    )).sort((a, b) => a - b);
+
+    return extractedDays.length > 0 ? extractedDays : [1, 2, 3, 4, 5, 6, 7];
   },
 
   /**
@@ -117,37 +93,49 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
   },
 
   /**
-   * MACL Date Range decoder (e.g., "25.10.26-27.03.27" -> { effectiveFrom: "2026-10-25", effectiveTo: "2027-03-27" })
+   * MACL Date Range decoder (e.g., "29.03.26-24.10.26" -> { effectiveFrom: "2026-03-29", effectiveTo: "2026-10-24" })
    */
-  parseMaclDateRange(raw: any): { effectiveFrom: string; effectiveTo: string } {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const defaultEnd = new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0];
+  parseMaclDateRange(raw: any, defaultEndStr: string = '2026-10-24'): { effectiveFrom: string; effectiveTo: string } {
+    const defaultEnd = defaultEndStr || '2026-10-24';
+    const defaultFrom = '2026-03-29';
 
-    if (!raw) return { effectiveFrom: todayStr, effectiveTo: defaultEnd };
+    if (!raw) return { effectiveFrom: defaultFrom, effectiveTo: defaultEnd };
     const str = String(raw).trim();
-    if (!str) return { effectiveFrom: todayStr, effectiveTo: defaultEnd };
+    if (!str || str === '-' || str.toUpperCase() === 'N/A') return { effectiveFrom: defaultFrom, effectiveTo: defaultEnd };
+
+    // Handle Excel Serial Number (e.g. 46108)
+    if (/^\d{5}$/.test(str)) {
+      const num = parseInt(str, 10);
+      const d = new Date((num - 25569) * 86400 * 1000);
+      if (!isNaN(d.getTime())) {
+        const iso = d.toISOString().split('T')[0];
+        return { effectiveFrom: iso, effectiveTo: defaultEnd };
+      }
+    }
 
     const parts = str.split(/[-–—to]+/i).map(p => p.trim());
 
     const parseSingleDate = (dStr: string): string | null => {
       if (!dStr) return null;
-      // DD.MM.YY or DD.MM.YYYY
-      const dotMatch = dStr.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/);
-      if (dotMatch) {
-        const dd = dotMatch[1].padStart(2, '0');
-        const mm = dotMatch[2].padStart(2, '0');
-        let yy = dotMatch[3];
-        if (yy.length === 2) yy = `20${yy}`;
-        return `${yy}-${mm}-${dd}`;
+      const match = dStr.match(/(\d{1,4})[\.\/\-](\d{1,2})[\.\/\-](\d{1,4})/);
+      if (match) {
+        let p1 = match[1], p2 = match[2], p3 = match[3];
+        if (p1.length === 4) {
+          return `${p1}-${p2.padStart(2, '0')}-${p3.padStart(2, '0')}`;
+        } else {
+          const dd = p1.padStart(2, '0');
+          const mm = p2.padStart(2, '0');
+          let yy = p3;
+          if (yy.length === 2) yy = `20${yy}`;
+          return `${yy}-${mm}-${dd}`;
+        }
       }
-      // ISO YYYY-MM-DD
-      const isoMatch = dStr.match(/^\d{4}-\d{2}-\d{2}$/);
-      if (isoMatch) return dStr;
       return null;
     };
 
-    const fromDate = parseSingleDate(parts[0]) || todayStr;
-    const toDate = parts.length > 1 ? (parseSingleDate(parts[1]) || defaultEnd) : fromDate;
+    const fromDate = parseSingleDate(parts[0]) || defaultFrom;
+    // CRITICAL FIX: If parts.length === 1 (e.g. "29.03.26"), effectiveTo MUST default to defaultEnd, NOT fromDate!
+    const toDate = parts.length > 1 ? (parseSingleDate(parts[1]) || defaultEnd) : defaultEnd;
 
     return { effectiveFrom: fromDate, effectiveTo: toDate };
   },
@@ -160,12 +148,13 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
    * e.g. EY378-9 -> EY379 (Departure leg to AUH)
    * e.g. SU320-1 -> SU321 (Departure leg to SVO)
    * e.g. QR676-7 -> QR677 (Departure leg to DOH)
-   * e.g. AI2239-40 -> AI2240 (Departure leg to DEL)
+   * e.g. SU320/321 -> SU321
    */
   parseMaclDepartureFlightNo(rawFlt: string): string {
     const clean = (rawFlt || '').trim().replace(/\s+/g, '').toUpperCase();
-    if (clean.includes('-')) {
-      const parts = clean.split('-');
+    const sep = clean.includes('-') ? '-' : (clean.includes('/') ? '/' : '');
+    if (sep) {
+      const parts = clean.split(sep);
       const arr = parts[0];
       const depSuffix = parts[1];
       if (depSuffix && /^\d+$/.test(depSuffix)) {
@@ -689,6 +678,7 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
           effectiveTo,
           isActive: true,
           isDomestic,
+          season,
           uploadedAt: new Date().toISOString(),
           uploadedBy: uploader,
           sourceFilename: fileName
@@ -722,85 +712,6 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
   },
 
   /**
-   * Parse CSV content into InternationalSchedule items with validation
-   */
-  parseScheduleCsv(csvContent: string, fileName: string, uploader: string = 'Admin'): { schedules: InternationalSchedule[]; errors: string[] } {
-    const lines = csvContent.split(/\r?\n/).filter(line => line.trim().length > 0);
-    if (lines.length < 2) {
-      return { schedules: [], errors: ['File is empty or missing header row'] };
-    }
-
-    const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[\"\']/g, ''));
-    const schedules: InternationalSchedule[] = [];
-    const errors: string[] = [];
-
-    const getColIndex = (names: string[]) => {
-      for (const name of names) {
-        const idx = header.indexOf(name);
-        if (idx !== -1) return idx;
-      }
-      return -1;
-    };
-
-    const fnIdx = getColIndex(['flight_number', 'flightnumber', 'flight_no', 'flightno']);
-    const codeIdx = getColIndex(['airline_code', 'airlinecode', 'iata']);
-    const nameIdx = getColIndex(['airline_name', 'airlinename', 'airline']);
-    const origIdx = getColIndex(['origin', 'from', 'src']);
-    const destIdx = getColIndex(['destination', 'to', 'dest']);
-    const staIdx = getColIndex(['sta', 'arr_time', 'arrival']);
-    const stdIdx = getColIndex(['std', 'dep_time', 'departure']);
-    const daysIdx = getColIndex(['days_of_week', 'days', 'days_week', 'frequency']);
-    const acIdx = getColIndex(['aircraft_type', 'aircrafttype', 'ac_type', 'equipment']);
-    const upIdx = getColIndex(['estimated_uplift_liters', 'estimated_uplift', 'uplift', 'fuel_liters']);
-    const fromIdx = getColIndex(['effective_from', 'effectivefrom', 'start_date']);
-    const toIdx = getColIndex(['effective_to', 'effectiveto', 'end_date']);
-
-    if (fnIdx === -1) {
-      return { schedules: [], errors: ['Missing required column: "flight_number"'] };
-    }
-
-    for (let i = 1; i < lines.length; i++) {
-      const row = lines[i].split(',').map(c => c.trim().replace(/[\"\']/g, ''));
-      if (row.length <= 1) continue;
-
-      const flightNo = row[fnIdx];
-      if (!flightNo) {
-        errors.push(`Row ${i + 1}: Missing flight number`);
-        continue;
-      }
-
-      let daysOfWeek = this.parseDaysOfOps(daysIdx !== -1 ? row[daysIdx] : '1234567');
-      const estimatedUplift = upIdx !== -1 && row[upIdx] ? parseFloat(row[upIdx]) || 40000 : 40000;
-      const todayStr = new Date().toISOString().split('T')[0];
-      const nextMonthStr = new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0];
-
-      const item: InternationalSchedule = {
-        id: `intl-sch-${Date.now()}-${i}`,
-        flightNumber: flightNo.toUpperCase(),
-        airlineCode: codeIdx !== -1 && row[codeIdx] ? row[codeIdx].toUpperCase() : flightNo.slice(0, 2).toUpperCase(),
-        airlineName: nameIdx !== -1 && row[nameIdx] ? row[nameIdx] : 'International Carrier',
-        origin: origIdx !== -1 && row[origIdx] ? row[origIdx].toUpperCase() : 'INT',
-        destination: destIdx !== -1 && row[destIdx] ? row[destIdx].toUpperCase() : 'MLE',
-        sta: staIdx !== -1 && row[staIdx] ? row[staIdx] : '12:00',
-        std: stdIdx !== -1 && row[stdIdx] ? row[stdIdx] : '13:30',
-        daysOfWeek,
-        aircraftType: this.normalizeAircraftType(acIdx !== -1 && row[acIdx] ? row[acIdx] : 'Widebody Heavy'),
-        estimatedUpliftLiters: estimatedUplift,
-        effectiveFrom: fromIdx !== -1 && row[fromIdx] ? row[fromIdx] : todayStr,
-        effectiveTo: toIdx !== -1 && row[toIdx] ? row[toIdx] : nextMonthStr,
-        isActive: true,
-        uploadedAt: new Date().toISOString(),
-        uploadedBy: uploader,
-        sourceFilename: fileName
-      };
-
-      schedules.push(item);
-    }
-
-    return { schedules, errors };
-  },
-
-  /**
    * Cross-check daily flight jobs against uploaded international/domestic schedules
    */
   crossCheckDailyFlights(
@@ -808,26 +719,60 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
     dailyJobs: FlightJob[],
     schedules: InternationalSchedule[]
   ): ScheduleCrossCheckResult[] {
-    const targetDate = new Date(dateStr);
+    if (!schedules || schedules.length === 0) {
+      return [];
+    }
+
+    const cleanDateStr = (dateStr || '').split('T')[0] || new Date().toISOString().split('T')[0];
+    const [yStr, mStr, dStr] = cleanDateStr.split('-');
+    const y = parseInt(yStr, 10) || 2026;
+    const m = parseInt(mStr, 10) || 8;
+    const d = parseInt(dStr, 10) || 11;
+    const targetDate = new Date(y, m - 1, d, 12, 0, 0);
     const jsDay = targetDate.getDay();
     const dayOfWeek = jsDay === 0 ? 7 : jsDay;
+
+    const isScheduleActiveOnDay = (sch: InternationalSchedule, day: number): boolean => {
+      if (!sch.daysOfWeek) return true;
+      let numericDays: number[] = [];
+      if (Array.isArray(sch.daysOfWeek)) {
+        numericDays = sch.daysOfWeek.map(val => Number(val)).filter(n => !isNaN(n) && n >= 1 && n <= 7);
+      } else if (typeof sch.daysOfWeek === 'string' || typeof sch.daysOfWeek === 'number') {
+        numericDays = this.parseDaysOfOps(sch.daysOfWeek);
+      }
+      if (numericDays.length === 0) return true;
+      return numericDays.includes(day);
+    };
 
     const activeSchedules = schedules.filter(sch => {
       if (sch.isActive === false) return false;
       
       const normFrom = sch.effectiveFrom ? sch.effectiveFrom.split('T')[0] : '';
-      const normTo = sch.effectiveTo ? sch.effectiveTo.split('T')[0] : '';
+      let normTo = sch.effectiveTo ? sch.effectiveTo.split('T')[0] : '';
       
-      if (normFrom && normFrom.length === 10 && dateStr < normFrom) return false;
-      if (normTo && normTo.length === 10 && dateStr > normTo) return false;
+      if (!normTo || normTo === normFrom || normTo < normFrom) {
+        normTo = '2026-10-24';
+      }
       
-      return sch.daysOfWeek && sch.daysOfWeek.length > 0 ? sch.daysOfWeek.includes(dayOfWeek) : true;
+      if (normFrom && normFrom.length === 10 && cleanDateStr < normFrom) return false;
+      if (normTo && normTo.length === 10 && cleanDateStr > normTo) return false;
+      
+      return isScheduleActiveOnDay(sch, dayOfWeek);
     });
 
     const results: ScheduleCrossCheckResult[] = [];
     const matchedJobIds = new Set<string>();
 
     const cleanNo = (no?: string) => (no || '').replace(/[\s\-\/]/g, '').toUpperCase();
+
+    const parseFlightNumber = (flt: string) => {
+      const clean = cleanNo(flt);
+      const match = clean.match(/^([A-Z]{2,3}|[A-Z0-9]{2})(0*\d+)$/);
+      if (match) {
+        return { code: match[1], num: parseInt(match[2], 10) };
+      }
+      return null;
+    };
 
     const isFlightMatching = (schFlt: string, jobFlt: string): boolean => {
       const cleanA = cleanNo(schFlt);
@@ -839,32 +784,34 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
       const depB = cleanNo(this.parseMaclDepartureFlightNo(jobFlt));
       if (depA && depB && depA === depB) return true;
 
-      // Check airline code + turnaround leg pair (+/- 1 digit)
-      const codeA = cleanA.slice(0, 2);
-      const codeB = cleanB.slice(0, 2);
-      if (codeA === codeB) {
-        const numA = parseInt(cleanA.slice(2), 10);
-        const numB = parseInt(cleanB.slice(2), 10);
-        if (!isNaN(numA) && !isNaN(numB) && Math.abs(numA - numB) <= 1) {
-          return true;
-        }
+      const parsedA = parseFlightNumber(schFlt) || parseFlightNumber(depA);
+      const parsedB = parseFlightNumber(jobFlt) || parseFlightNumber(depB);
+
+      if (parsedA && parsedB && parsedA.code === parsedB.code) {
+        if (Math.abs(parsedA.num - parsedB.num) <= 2) return true;
+        const strA = String(parsedA.num);
+        const strB = String(parsedB.num);
+        if (strA.startsWith(strB) || strB.startsWith(strA)) return true;
       }
       return false;
     };
 
     for (const sch of activeSchedules) {
-      const matchingJob = dailyJobs.find(j => isFlightMatching(sch.flightNumber, j.flightNumber));
+      const matchingJobs = dailyJobs.filter(j => isFlightMatching(sch.flightNumber, j.flightNumber));
 
-      if (matchingJob) {
-        matchedJobIds.add(matchingJob.id);
-        const actualSta = matchingJob.sta || 'N/A';
-        const actualStd = matchingJob.std || 'N/A';
-        const actualAc = matchingJob.aircraftType || 'N/A';
+      if (matchingJobs.length > 0) {
+        matchingJobs.forEach(j => matchedJobIds.add(j.id));
+        const arrJob = matchingJobs.find(j => j.type === 'arrival' || j.sta) || matchingJobs[0];
+        const depJob = matchingJobs.find(j => j.type === 'departure' || j.std) || matchingJobs[0];
+
+        const actualSta = arrJob.sta || matchingJobs[0].sta || 'N/A';
+        const actualStd = depJob.std || matchingJobs[0].std || 'N/A';
+        const actualAc = arrJob.aircraftType || depJob.aircraftType || matchingJobs[0].aircraftType || 'N/A';
 
         let timeVarianceMins = 0;
-        if (sch.sta && matchingJob.sta && matchingJob.sta !== 'N/A') {
+        if (sch.sta && actualSta && actualSta !== 'N/A') {
           const [sH, sM] = sch.sta.split(':').map(Number);
-          const [aH, aM] = matchingJob.sta.split(':').map(Number);
+          const [aH, aM] = actualSta.split(':').map(Number);
           if (!isNaN(sH) && !isNaN(aH)) {
             timeVarianceMins = (aH * 60 + (aM || 0)) - (sH * 60 + (sM || 0));
           }
@@ -885,7 +832,7 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
           notes = `Aircraft type changed from ${sch.aircraftType} to ${actualAc}.`;
         } else if (isRetimed) {
           status = 'RETIMED';
-          notes = `Flight retimed by ${timeVarianceMins > 0 ? '+' : ''}${timeVarianceMins} mins (Scheduled: ${sch.sta}, Actual/ETA: ${matchingJob.sta}).`;
+          notes = `Flight retimed by ${timeVarianceMins > 0 ? '+' : ''}${timeVarianceMins} mins (Scheduled: ${sch.sta}, Actual/ETA: ${actualSta}).`;
         }
 
         results.push({
@@ -894,6 +841,7 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
           flightNumber: sch.flightNumber,
           airlineName: sch.airlineName,
           status,
+          isDomestic: Boolean(sch.isDomestic),
           scheduledSta: sch.sta,
           actualSta,
           scheduledStd: sch.std,
@@ -911,6 +859,7 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
           flightNumber: sch.flightNumber,
           airlineName: sch.airlineName,
           status: 'CANCELLED_OR_MISSING',
+          isDomestic: Boolean(sch.isDomestic),
           scheduledSta: sch.sta,
           actualSta: 'Not in FIDS',
           scheduledStd: sch.std,
@@ -923,24 +872,26 @@ SU320,SU,Aeroflot,SVO,MLE,07:20,09:00,1-3-6,B777-300ER,52000,2026-08-01,2026-10-
       }
     }
 
-    const unMatchedIntlJobs = dailyJobs.filter(j => 
-      !matchedJobIds.has(j.id) && (!j.isDomestic && j.isDomestic !== true)
+    const unMatchedJobs = dailyJobs.filter(j => 
+      !matchedJobIds.has(j.id) && 
+      (j.type === 'departure' || Boolean(j.std && j.std !== 'N/A' && j.std !== '---'))
     );
 
-    for (const job of unMatchedIntlJobs) {
+    for (const job of unMatchedJobs) {
       results.push({
         id: `xcheck-adhoc-${job.id}-${dateStr}`,
         date: dateStr,
         flightNumber: job.flightNumber,
         airlineName: this.normalizeAirlineName(job.flightNumber.slice(0, 2)),
         status: 'UNSCHEDULED_ADDITION',
+        isDomestic: Boolean(job.isDomestic),
         scheduledSta: 'Unscheduled',
         actualSta: job.sta || 'N/A',
         scheduledStd: 'Unscheduled',
         actualStd: job.std || 'N/A',
         scheduledAircraft: 'None',
         actualAircraft: job.aircraftType || 'N/A',
-        notes: `Unscheduled or ad-hoc international flight operating on ${dateStr}.`
+        notes: `Unscheduled or ad-hoc ${job.isDomestic ? 'domestic' : 'international'} flight operating on ${dateStr}.`
       });
     }
 

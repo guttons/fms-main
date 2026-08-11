@@ -269,6 +269,7 @@ export interface InternationalSchedule {
   effectiveTo: string;   // YYYY-MM-DD
   isActive: boolean;
   isDomestic?: boolean;
+  season?: string;
   uploadedAt: string;
   uploadedBy?: string;
   sourceFilename?: string;
@@ -282,6 +283,7 @@ export interface ScheduleCrossCheckResult {
   flightNumber: string;
   airlineName: string;
   status: CrossCheckStatus;
+  isDomestic?: boolean;
   scheduledSta?: string;
   actualSta?: string;
   scheduledStd?: string;

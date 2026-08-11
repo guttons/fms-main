@@ -359,7 +359,7 @@ export const Forecasting: React.FC = () => {
 
       {/* ── NEW: PREDICTIVE INTERNATIONAL SCHEDULE UPLIFT FORECAST ENGINE ── */}
       {selectedFuelType === FuelType.JET_A1 && (
-        <div className="bg-surface/80 backdrop-blur-xl border border-outline/55 rounded-3xl p-6 lg:p-8 shadow-premium space-y-6">
+        <div className="card-premium p-6 lg:p-8 space-y-6">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-outline/40 pb-6">
             <div className="flex items-center gap-3">
               <div className="p-3 rounded-2xl bg-primary/10 border border-primary/20 shrink-0">
@@ -493,6 +493,7 @@ export const Forecasting: React.FC = () => {
                       <XAxis dataKey="date" stroke="rgba(255,255,255,0.4)" tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.6)' }} />
                       <YAxis stroke="rgba(255,255,255,0.4)" tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.6)' }} tickFormatter={(val) => `${(val/1000).toFixed(0)}kL`} />
                       <Tooltip 
+                        cursor={{ fill: 'transparent' }}
                         contentStyle={{ backgroundColor: '#18181b', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '11px' }} 
                         formatter={(value: any) => [`${Number(value).toLocaleString()} Liters`, 'Predicted Uplift']}
                       />

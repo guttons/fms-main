@@ -392,21 +392,27 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       }
 
       const schMatch = (internationalSchedules || []).find((s: InternationalSchedule) => {
-        const cleanS = (s.flightNumber || '').replace(/[\s\-]/g, '').toUpperCase();
-        const cleanL = (lf.flightNumber || '').replace(/[\s\-]/g, '').toUpperCase();
+        const cleanS = (s.flightNumber || '').replace(/[\s\-\/]/g, '').toUpperCase();
+        const cleanL = (lf.flightNumber || '').replace(/[\s\-\/]/g, '').toUpperCase();
         if (cleanS === cleanL) return true;
         const depS = scheduleImportService.parseMaclDepartureFlightNo(cleanS);
         const depL = scheduleImportService.parseMaclDepartureFlightNo(cleanL);
         if (depS === depL) return true;
-        if (cleanS.slice(0, 2) === cleanL.slice(0, 2)) {
-          const numS = parseInt(cleanS.slice(2), 10);
-          const numL = parseInt(cleanL.slice(2), 10);
-          if (!isNaN(numS) && !isNaN(numL)) {
-            if (Math.abs(numS - numL) <= 1) return true;
-            const strS = String(numS);
-            const strL = String(numL);
-            if (strS.startsWith(strL) || strL.startsWith(strS)) return true;
-          }
+        
+        const parseFlt = (flt: string) => {
+          const clean = (flt || '').replace(/[\s\-\/]/g, '').toUpperCase();
+          const match = clean.match(/^([A-Z]{2,3}|[A-Z0-9]{2})(0*\d+)$/);
+          if (match) return { code: match[1], num: parseInt(match[2], 10) };
+          return null;
+        };
+
+        const pS = parseFlt(cleanS) || parseFlt(depS);
+        const pL = parseFlt(cleanL) || parseFlt(depL);
+        if (pS && pL && pS.code === pL.code) {
+          if (Math.abs(pS.num - pL.num) <= 2) return true;
+          const strS = String(pS.num);
+          const strL = String(pL.num);
+          if (strS.startsWith(strL) || strL.startsWith(strS)) return true;
         }
         return false;
       });

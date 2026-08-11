@@ -14,6 +14,34 @@
   --shadow-premium: 0 12px 40px rgba(25, 28, 30, 0.06);
 }
 
+/* Recharts & SVG Focus Outline Reset (removes white border box when charts are clicked or touched) */
+.recharts-wrapper,
+.recharts-wrapper *,
+.recharts-surface,
+.recharts-surface *,
+.recharts-layer,
+.recharts-layer *,
+.recharts-scatter-symbol,
+.recharts-bar-rectangle,
+.recharts-active-dot,
+.recharts-cartesian-axis-tick,
+svg,
+svg * {
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+svg:focus,
+svg *:focus,
+.recharts-wrapper:focus,
+.recharts-wrapper *:focus,
+.recharts-surface:focus,
+.recharts-surface *:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 
 /* Default Theme (Light) */
 :root, [data-theme='light'] {

@@ -83,7 +83,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   return (
     <NotificationContext.Provider value={{ notify, notifyWithAction, dismiss, clear }}>
       {children}
-      <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:bottom-6 sm:right-6 z-[10000] flex flex-col gap-3 pointer-events-none max-w-md w-auto sm:w-[380px]">
+      <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:bottom-6 sm:right-6 z-[1000000] flex flex-col gap-3 pointer-events-none max-w-md w-auto sm:w-[380px]">
         {notifications.length > 0 && (
           <Toast 
             key={notifications[0].id} 

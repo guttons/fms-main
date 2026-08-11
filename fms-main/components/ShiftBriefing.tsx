@@ -69,6 +69,8 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
     domesticFlights
   } = useOperationalData();
   const activeStaff = staff && staff.length > 0 ? staff : MOCK_USERS;
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isHistoricalView = selectedBriefingDate < todayStr;
 
   const staffHistory = [
     { staffId: 'u3', lastDomestic: { date: '2026-06-09', shift: 'Morning', team: 'Team 1' }, lastDaily: { date: '2026-06-09', shift: 'Morning' }},
@@ -300,9 +302,6 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
   const [adhocType, setAdhocType] = useState('B737');
   const [adhocCo, setAdhocCo] = useState('');
   const [adhocOperatorName, setAdhocOperatorName] = useState('');
-
-  const todayStr = new Date().toISOString().split('T')[0];
-  const isHistoricalView = selectedBriefingDate < todayStr;
 
   const userRoleStr = (user?.role || '').toUpperCase();
   const isItpStaffRole = [
