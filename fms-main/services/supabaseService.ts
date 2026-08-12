@@ -848,7 +848,11 @@ export const supabaseService = {
         ? new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
         : row.timestamp,
       acknowledged: row.acknowledged,
-      targetRole: row.target_role
+      targetRole: row.target_role,
+      alertType: row.alert_type,
+      flightNumber: row.flight_number,
+      assignedStaffId: row.assigned_staff_id,
+      metadata: row.metadata
     } as Alert));
   },
 
@@ -895,14 +899,18 @@ export const supabaseService = {
   },
 
   async createAlert(alert: Omit<Alert, 'id'>): Promise<void> {
-    const row = {
+    const row: any = {
       severity: alert.severity,
       message: alert.message,
       // Always use a full ISO 8601 timestamp for the DB column (timestamptz).
       // The caller may pass a display-only HH:MM string which is invalid for Postgres.
       timestamp: new Date().toISOString(),
       acknowledged: alert.acknowledged,
-      target_role: alert.targetRole || null
+      target_role: alert.targetRole || null,
+      alert_type: alert.alertType || null,
+      flight_number: alert.flightNumber || null,
+      assigned_staff_id: alert.assignedStaffId || null,
+      metadata: alert.metadata || null
     };
     const { error } = await supabase.from('alerts').insert([row]);
     if (error) {

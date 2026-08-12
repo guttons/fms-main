@@ -26,7 +26,9 @@ import {
   Moon,
   Eclipse,
   Ship,
-  Search
+  Search,
+  Radar,
+  Users
 } from 'lucide-react';
 import { BottomSheet, SheetAction, SheetDivider, SheetSectionHeader } from './BottomSheet';
 import { haptic } from '../utils/haptics';
@@ -182,15 +184,20 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       case UserRole.ITP_OPERATOR:
       case UserRole.ITP_SUPERVISOR:
       case UserRole.ITP_HD_OPERATOR:
-        return [];
+        return [
+          { id: 'flight-tracker', label: 'Flight Tracker', icon: Radar },
+        ];
 
       case UserRole.ITP_OFFICER:
         return [
+          { id: 'flight-tracker', label: 'Flight Tracker', icon: Radar },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
         ];
 
       case UserRole.ITP_MANAGER:
         return [
+          { id: 'flight-tracker', label: 'Flight Tracker', icon: Radar },
+          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
         ];
@@ -225,6 +232,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
       case UserRole.FUEL_MANAGEMENT:
         return [
+          { id: 'flight-tracker', label: 'Flight Tracker', icon: Radar },
+          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'history', label: 'Log History', icon: History },
@@ -235,6 +244,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
       case UserRole.ADMIN:
         return [
+          { id: 'flight-tracker', label: 'Flight Tracker', icon: Radar },
+          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'history', label: 'Log History', icon: History },

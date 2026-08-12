@@ -5,7 +5,7 @@ import { EQUIPMENT, TANKS, MOCK_ALERTS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
 import { scheduleImportService } from '../services/scheduleImportService';
 import { supabase } from '../supabase';
-import { sendNativeNotification } from '../utils/pwa';
+import { sendNativeNotification, sendHighPriorityNotification } from '../utils/pwa';
 
 import { INITIAL_STAFF_LIST } from '../constants/staffList';
 
@@ -929,6 +929,10 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       if (key === 'service_tank' && value?.tankId) {
         setServiceTankIdState(value.tankId);
       }
+      if (key === 'master_schedules' && value && Array.isArray(value.schedules)) {
+        console.log("SYNC: Master schedules received from Supabase across devices. Count:", value.schedules.length);
+        setInternationalSchedules(value.schedules);
+      }
     });
 
     const unsubscribeAlerts = supabaseService.subscribeToAlerts((updatedAlerts) => {
@@ -945,7 +949,20 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           if (!loadedAlertIdsRef.current.has(alert.id)) {
             loadedAlertIdsRef.current.add(alert.id);
             if (!alert.acknowledged) {
-              sendNativeNotification('New FMS Alert', alert.message);
+              const isHighPriority = alert.severity === 'critical' || 
+                !!alert.alertType || 
+                alert.message.toLowerCase().includes('alert requested') || 
+                alert.message.toLowerCase().includes('no fuel');
+
+              if (isHighPriority) {
+                sendHighPriorityNotification('🚨 CRITICAL FMS ALERT', alert.message, {
+                  alertType: alert.alertType,
+                  alertId: alert.id,
+                  flightNumber: alert.flightNumber
+                });
+              } else {
+                sendNativeNotification('New FMS Alert', alert.message);
+              }
             }
           }
         });

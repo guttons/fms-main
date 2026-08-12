@@ -897,6 +897,21 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
   const activeOfficersCount = (staffAssignments.activeOfficers || []).filter(isValidStaff).length;
   const hydrantOpsOfficersCount = (staffAssignments.hydrantOpsOfficers || []).filter(isValidStaff).length;
   const staffingManagementCount = (staffAssignments.dutySupervisors || []).filter(isValidStaff).length + (staffAssignments.shiftInCharges || []).filter(isValidStaff).length;
+  
+  const formatDateWithWeekday = (dateStr: string) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    const d = new Date(year, month, day);
+    if (isNaN(d.getTime())) return dateStr;
+    const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
+    const monthName = d.toLocaleDateString('en-US', { month: 'short' });
+    const dayStr = String(day).padStart(2, '0');
+    return `${weekday}, ${dayStr}-${monthName}-${year}`;
+  };
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 space-y-6 sm:space-y-10 animate-in fade-in duration-700 min-h-screen relative overflow-y-auto overflow-x-hidden custom-scrollbar transition-colors">
@@ -915,28 +930,21 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
               <h1 className="headline-lg tracking-tighter mb-1 uppercase">
                 SHIFT INFRASTRUCTURE <span className={`font-medium italic ${isHistoricalView ? 'text-amber-400' : 'text-primary'}`}>BRIEFING</span>
               </h1>
-              <div className="flex flex-wrap items-center gap-4 mb-4">
-                <div className="flex items-center space-x-2 px-3 py-1 bg-surface-dim rounded-full border border-outline">
-                  <Clock className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-[10px] font-black opacity-60 uppercase tracking-widest">{formattedBriefingDate} | {currentTime}</span>
+              {(isHistoricalView || isViewOnly) && (
+                <div className="flex flex-wrap items-center gap-4 mb-4">
+                  {isHistoricalView ? (
+                    <div className="flex items-center space-x-2 px-3 py-1.5 bg-amber-500/10 rounded-full border border-amber-500/30">
+                      <Calendar className="w-3 h-3 text-amber-400" />
+                      <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">HISTORY MODE — READ ONLY</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-2 px-3 py-1.5 bg-amber-500/10 rounded-full border border-amber-500/30">
+                      <Lock className="w-3 h-3 text-amber-400" />
+                      <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">BRIEFING VIEW ONLY</span>
+                    </div>
+                  )}
                 </div>
-                {isHistoricalView ? (
-                  <div className="flex items-center space-x-2 px-3 py-1.5 bg-amber-500/10 rounded-full border border-amber-500/30">
-                    <Calendar className="w-3 h-3 text-amber-400" />
-                    <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">HISTORY MODE — READ ONLY</span>
-                  </div>
-                ) : isViewOnly ? (
-                  <div className="flex items-center space-x-2 px-3 py-1.5 bg-amber-500/10 rounded-full border border-amber-500/30">
-                    <Lock className="w-3 h-3 text-amber-400" />
-                    <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">BRIEFING VIEW ONLY</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-2 px-3 py-1 bg-success/10 rounded-full border border-success/20">
-                    <div className="dot-live"></div>
-                    <span className="hidden sm:inline text-[10px] font-black text-success uppercase tracking-widest ml-1">SYSTEMS ACTIVE</span>
-                  </div>
-                )}
-              </div>
+              )}
               
               <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
                 {/* Shift Tabs */}
@@ -969,12 +977,15 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
 
                 <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full md:w-auto">
                   {/* Date Picker */}
-                  <div className={`relative flex items-center border rounded-xl shadow-inner focus-within:border-primary transition-colors flex-1 md:flex-none ${
+                  <div className={`relative flex items-center border rounded-xl shadow-inner focus-within:border-primary transition-colors flex-1 md:flex-none min-w-[200px] sm:min-w-[230px] px-3.5 py-2.5 cursor-pointer ${
                     isHistoricalView 
                       ? 'bg-amber-500/5 border-amber-500/30 focus-within:border-amber-500' 
                       : 'bg-surface-dim border-outline'
                   }`}>
-                    <Calendar className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none shrink-0 ${isHistoricalView ? 'text-amber-400' : 'text-primary'}`} />
+                    <Calendar className={`w-4 h-4 mr-2.5 shrink-0 ${isHistoricalView ? 'text-amber-400' : 'text-primary'}`} />
+                    <span className="text-[11px] font-black text-on-surface uppercase tracking-wider whitespace-nowrap">
+                      {formatDateWithWeekday(selectedBriefingDate)}
+                    </span>
                     <input 
                       type="date"
                       id="briefing-date-picker"
@@ -982,7 +993,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                       max={todayStr}
                       onChange={(e) => setSelectedBriefingDate(e.target.value)}
                       onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
-                      className="bg-transparent text-[11px] font-black text-on-surface outline-none cursor-pointer w-full min-w-[120px] sm:min-w-[130px] pl-9 pr-2 sm:pr-3 py-2.5"
+                      className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
                       style={{ colorScheme: 'dark' }}
                     />
                   </div>

@@ -162,3 +162,78 @@ export const sendNativeNotification = async (title: string, body: string) => {
     }
   }
 };
+
+/**
+ * Sends a high-priority native notification that persists until user interacts.
+ * Used for critical alerts: Request Fueling, No Fuel Required, ETA 5-min warnings.
+ */
+export const sendHighPriorityNotification = async (
+  title: string, 
+  body: string,
+  options?: {
+    alertType?: string;
+    alertId?: string;
+    flightNumber?: string;
+  }
+) => {
+  if (!('Notification' in window) || Notification.permission !== 'granted') {
+    return;
+  }
+
+  try {
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title, {
+        body,
+        icon: '/icon-dark.svg',
+        badge: '/icon-dark.svg',
+        tag: 'fms-high-alert',
+        renotify: true,
+        requireInteraction: true, // Don't auto-dismiss — user must tap
+        vibrate: [500, 200, 500, 200, 500, 200, 500], // Urgent vibration pattern
+        data: {
+          url: window.location.origin,
+          alertType: options?.alertType,
+          alertId: options?.alertId,
+          flightNumber: options?.flightNumber,
+        },
+        actions: [
+          { action: 'acknowledge', title: '✓ Acknowledge' },
+          { action: 'open', title: 'Open App' }
+        ]
+      } as any);
+    } else {
+      // Fallback: basic notification (no requireInteraction support)
+      new Notification(title, {
+        body,
+        icon: '/icon-dark.svg',
+        tag: 'fms-high-alert',
+        requireInteraction: true,
+      } as any);
+    }
+  } catch (error) {
+    console.warn('[PWA] High-priority notification failed:', error);
+    try {
+      new Notification(title, { body, icon: '/icon-dark.svg' });
+    } catch (fallbackError) {
+      console.error('[PWA] Fallback high-priority notification failed:', fallbackError);
+    }
+  }
+};
+
+/**
+ * Listen for messages from the Service Worker (e.g., notification clicks).
+ * Returns an unsubscribe function.
+ */
+export const onServiceWorkerMessage = (callback: (data: any) => void): (() => void) => {
+  if (!('serviceWorker' in navigator)) return () => {};
+  
+  const handler = (event: MessageEvent) => {
+    if (event.data && (event.data.type === 'NOTIFICATION_CLICKED' || event.data.type === 'NOTIFICATION_DISMISSED')) {
+      callback(event.data);
+    }
+  };
+  
+  navigator.serviceWorker.addEventListener('message', handler);
+  return () => navigator.serviceWorker.removeEventListener('message', handler);
+};

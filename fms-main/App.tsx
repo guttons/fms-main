@@ -30,10 +30,15 @@ import { MOCK_USERS } from './constants';
 import { AIChatModal } from './components/AIChatModal';
 import { User, UserRole, FlightJob, Alert, EquipmentStatus as EqStatusEnum } from './types';
 import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, Eclipse, CheckCircle, Share2, Smartphone, Trash2, Download, Laptop, Globe, RefreshCw, Users, ArrowRight, Sparkles } from 'lucide-react';
-import { updatePWAManifestAndTheme, requestNotificationPermission, sendNativeNotification } from './utils/pwa';
+import { updatePWAManifestAndTheme, requestNotificationPermission, sendNativeNotification, onServiceWorkerMessage } from './utils/pwa';
 import { haptic, isHapticEnabled, setHapticEnabled, isReducedMotion, setReducedMotion } from './utils/haptics';
 import { syncEngine } from './services/syncEngine';
 import { PredictiveBackWrapper } from './components/PredictiveBackWrapper';
+import { FlightTracker } from './components/FlightTracker';
+import { StaffTracker } from './components/StaffTracker';
+import { FullScreenAlert } from './components/FullScreenAlert';
+import { useEtaMonitor } from './hooks/useEtaMonitor';
+import { useStaffActivityTracker } from './hooks/useStaffActivityTracker';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -307,8 +312,76 @@ const AppContextContent: React.FC<any> = ({
   showAlertsPanel, setShowAlertsPanel, isSettingsOpen, setIsSettingsOpen, handleLogout,
   isSidebarCollapsed, toggleSidebarCollapse
 }) => {
-  const { alerts, acknowledgeAlert, acknowledgeAllAlerts, clearAllAlerts, equipment, flightJobs, refreshData, domesticFlights, domesticAssignments, updateEquipmentStatus, updateFlightJob } = useOperationalData();
+  const { alerts, createAlert, acknowledgeAlert, acknowledgeAllAlerts, clearAllAlerts, equipment, flightJobs, refreshData, domesticFlights, domesticAssignments, updateEquipmentStatus, updateFlightJob, staff = [] } = useOperationalData();
   const { notify, notifyWithAction, dismiss, clear } = useNotification();
+
+  // Active Full-Screen Alert state
+  const [activeFullScreenAlert, setActiveFullScreenAlert] = useState<Alert | null>(null);
+
+  // ETA Monitor Hook (automatically checks and fires 15-min and 5-min arrival alerts)
+  useEtaMonitor({
+    flightJobs: flightJobs || [],
+    currentUserId: currentUser?.id || '',
+    currentUserName: currentUser?.name || '',
+    currentUserRole: currentUser?.role || UserRole.ITP_OPERATOR,
+    createAlert,
+    staff
+  });
+
+  // Staff Activity Tracker Hook (logs login, logout, location, heartbeat)
+  useStaffActivityTracker({
+    user: currentUser,
+    isAuthenticated: !!currentUser
+  });
+
+  // Monitor incoming alerts for high-priority/critical events to present FullScreenAlert
+  useEffect(() => {
+    if (!alerts || !currentUser) return;
+    const criticalUnack = alerts.find(a => {
+      if (!a || a.acknowledged) return false;
+      const isCritical = a.severity === 'critical' || !!a.alertType;
+      if (!isCritical) return false;
+
+      // Filter to targeted staff or targeted role
+      const msgLower = (a.message || '').toLowerCase();
+      if (a.assignedStaffId && a.assignedStaffId !== currentUser.id && a.assignedStaffId !== currentUser.name) {
+        return false;
+      }
+
+      if (a.targetRole && a.targetRole !== currentUser.role && ![UserRole.ADMIN, UserRole.ITP_MANAGER, UserRole.FUEL_MANAGEMENT].includes(currentUser.role)) {
+        return false;
+      }
+
+      // Filter request/no-fuel targeted flight alerts by name if specified
+      const isRequestAlert = msgLower.includes('alert requested') || msgLower.includes('no fuel');
+      if (isRequestAlert && ![UserRole.ADMIN, UserRole.ITP_MANAGER, UserRole.FUEL_MANAGEMENT].includes(currentUser.role)) {
+        const hasOperator = msgLower.includes('(operator:');
+        const hasOfficer = msgLower.includes('(officer:');
+        const hasName = msgLower.includes(currentUser.name.toLowerCase());
+        if ((hasOperator || hasOfficer) && !hasName) return false;
+      }
+
+      return true;
+    });
+
+    if (criticalUnack) {
+      setActiveFullScreenAlert(criticalUnack);
+    }
+  }, [alerts, currentUser]);
+
+  // Listen to Service Worker message events (e.g., when notification is tapped)
+  useEffect(() => {
+    const unsub = onServiceWorkerMessage((data) => {
+      if (data.alertId && alerts) {
+        const matchingAlert = alerts.find(a => a.id === data.alertId);
+        if (matchingAlert) {
+          setActiveFullScreenAlert(matchingAlert);
+          setActiveView('intoplane');
+        }
+      }
+    });
+    return unsub;
+  }, [alerts, setActiveView]);
 
   // Wrapped logout: release any IN_USE equipment and revert IN_PROGRESS jobs for this user before signing out
   const wrappedLogout = () => {
@@ -964,6 +1037,10 @@ const AppContextContent: React.FC<any> = ({
         return <FinanceModule />;
       case 'customer-portal':
         return <CustomerPortal user={currentUser} />;
+      case 'flight-tracker':
+        return <FlightTracker user={currentUser} />;
+      case 'staff-tracker':
+        return <StaffTracker user={currentUser} />;
       default:
         return (
           <div className="flex items-center justify-center h-full text-slate-400">
@@ -1761,6 +1838,17 @@ const AppContextContent: React.FC<any> = ({
           onNavigate={(view) => setActiveView(view as any)}
           initialQuery={aiInitialQuery}
         />
+
+        {/* High-Priority Full-Screen Alert Modal Overlay */}
+        {activeFullScreenAlert && (
+          <FullScreenAlert
+            alert={activeFullScreenAlert}
+            onAcknowledge={(alertId) => {
+              acknowledgeAlert(alertId);
+              setActiveFullScreenAlert(null);
+            }}
+          />
+        )}
 
       </div>
   );

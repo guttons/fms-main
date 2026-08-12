@@ -749,8 +749,20 @@ const ScreenDashboard: React.FC<{
                                                            e.stopPropagation();
                                                            setActiveMenuJobId(null);
                                                            try {
+                                                               const alertMeta = {
+                                                                   aircraftReg: job.aircraftReg,
+                                                                   stand: job.stand,
+                                                                   eta: job.eta || job.sta,
+                                                                   vehicleId: job.vehicleId,
+                                                                   senderName: user.name
+                                                               };
+
                                                                await createAlert({
-                                                                   severity: 'medium',
+                                                                   severity: 'critical',
+                                                                   alertType: 'REQUEST_FUELING',
+                                                                   flightNumber: job.flightNumber,
+                                                                   assignedStaffId: job.assignedTo,
+                                                                   metadata: alertMeta,
                                                                    message: `Into-Plane: Alert requested for Flight ${job.flightNumber}${assigneeName ? ` (Operator: ${assigneeName})` : ''}.`,
                                                                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
                                                                    acknowledged: false,
@@ -758,7 +770,11 @@ const ScreenDashboard: React.FC<{
                                                                });
 
                                                                await createAlert({
-                                                                   severity: 'medium',
+                                                                   severity: 'critical',
+                                                                   alertType: 'REQUEST_FUELING',
+                                                                   flightNumber: job.flightNumber,
+                                                                   assignedStaffId: job.assignedOfficer,
+                                                                   metadata: alertMeta,
                                                                    message: `Into-Plane: Alert requested for Flight ${job.flightNumber}${officerName ? ` (Officer: ${officerName})` : ''}.`,
                                                                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
                                                                    acknowledged: false,
@@ -781,8 +797,20 @@ const ScreenDashboard: React.FC<{
                                                            e.stopPropagation();
                                                            setActiveMenuJobId(null);
                                                            try {
+                                                               const alertMeta = {
+                                                                   aircraftReg: job.aircraftReg,
+                                                                   stand: job.stand,
+                                                                   eta: job.eta || job.sta,
+                                                                   vehicleId: job.vehicleId,
+                                                                   senderName: user.name
+                                                               };
+
                                                                await createAlert({
-                                                                   severity: 'medium',
+                                                                   severity: 'critical',
+                                                                   alertType: 'NO_FUEL',
+                                                                   flightNumber: job.flightNumber,
+                                                                   assignedStaffId: job.assignedTo,
+                                                                   metadata: alertMeta,
                                                                    message: `Into-Plane: No Fuel required for Flight ${job.flightNumber}${assigneeName ? ` (Operator: ${assigneeName})` : ''}.`,
                                                                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
                                                                    acknowledged: false,
@@ -790,7 +818,11 @@ const ScreenDashboard: React.FC<{
                                                                });
 
                                                                await createAlert({
-                                                                   severity: 'medium',
+                                                                   severity: 'critical',
+                                                                   alertType: 'NO_FUEL',
+                                                                   flightNumber: job.flightNumber,
+                                                                   assignedStaffId: job.assignedOfficer,
+                                                                   metadata: alertMeta,
                                                                    message: `Into-Plane: No Fuel required for Flight ${job.flightNumber}${officerName ? ` (Officer: ${officerName})` : ''}.`,
                                                                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
                                                                    acknowledged: false,

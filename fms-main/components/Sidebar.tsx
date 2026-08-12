@@ -27,7 +27,9 @@ import {
   HelpCircle,
   History,
   BookOpen,
-  BarChart3
+  BarChart3,
+  Radar,
+  Users
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { haptic } from '../utils/haptics';
@@ -77,6 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
+          { id: 'flight-tracker', label: 'Flight Tracker', icon: Radar },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'history', label: 'Log History', icon: History },
         ];
@@ -87,6 +90,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
           { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
+          { id: 'flight-tracker', label: 'Flight Tracker', icon: Radar },
+          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'history', label: 'Log History', icon: History },
           { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
@@ -100,39 +105,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
           { id: 'seaplane', label: 'Seaplane Ops', icon: Sailboat },
           { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
-          { id: 'marine', label: 'Tanker Discharge', icon: Anchor },
+          { id: 'marine', label: 'Marine Tanks', icon: Anchor },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
         ];
 
       case UserRole.DEPOT_MANAGER:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'stock', label: 'Stock Reconciliation', icon: Database },
-          { id: 'bridging', label: 'Transfer Oversight', icon: Droplet },
+          { id: 'stock', label: 'Stock Control', icon: Database },
+          { id: 'bridging', label: 'Refueler Loading', icon: Droplet },
           { id: 'marine-loading', label: 'Marine Provisioning', icon: Ship },
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
           { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
           { id: 'marine', label: 'Marine Oversight', icon: Anchor },
           { id: 'forecasting', label: 'Stock Forecasting', icon: TrendingUp },
-          { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'history', label: 'Log History', icon: History },
+          { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
         ];
 
       case UserRole.EXECUTIVE:
         return [
-          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'executive', label: 'Executive Module', icon: Briefcase },
-          { id: 'forecasting', label: 'Forecasting & Trends', icon: TrendingUp },
+          { id: 'executive', label: 'Executive Summary', icon: LayoutDashboard },
+          { id: 'forecasting', label: 'Stock Forecasting', icon: TrendingUp },
           { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
-          { id: 'commercial-reports', label: 'Commercial Reports', icon: Coins },
+          { id: 'commercial-reports', label: 'Commercial Analytics', icon: Coins },
           { id: 'finance', label: 'Finance & Billing', icon: Receipt },
         ];
 
       case UserRole.COMMERCIAL:
         return [
-          { id: 'commercial-reports', label: 'Commercial Reports', icon: Coins },
-          { id: 'forecasting', label: 'Forecasting & Trends', icon: TrendingUp },
+          { id: 'commercial-reports', label: 'Commercial Analytics', icon: Coins },
+          { id: 'forecasting', label: 'Stock Forecasting', icon: TrendingUp },
           { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
           { id: 'finance', label: 'Finance & Billing', icon: Receipt },
         ];
@@ -141,7 +145,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         return [
           { id: 'finance', label: 'Finance & Billing', icon: Receipt },
           { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
-          { id: 'reports', label: 'Financial Reports', icon: FileText },
+          { id: 'reports', label: 'Custom Reports', icon: FileText },
         ];
 
       case UserRole.CUSTOMER:
@@ -151,38 +155,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       case UserRole.FUEL_MANAGEMENT:
         return [
-          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
+          { id: 'dashboard', label: 'Operations Dashboard', icon: LayoutDashboard },
           { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
-          { id: 'equipment', label: 'Equipment Status', icon: Truck },
-          { id: 'history', label: 'Log History', icon: History },
-          { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
+          { id: 'flight-tracker', label: 'Flight Tracker', icon: Radar },
+          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
+          { id: 'forecasting', label: 'Stock Forecasting', icon: TrendingUp },
           { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
-          { id: 'executive', label: 'Executive Module', icon: Briefcase },
+          { id: 'executive', label: 'Executive Overview', icon: Briefcase },
           { id: 'commercial-reports', label: 'Commercial Reports', icon: Coins },
           { id: 'finance', label: 'Finance & Billing', icon: Receipt },
+          { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
+          { id: 'equipment', label: 'Equipment Status', icon: Truck },
+          { id: 'history', label: 'Log History', icon: History },
         ];
 
       case UserRole.ADMIN:
         return [
-          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
-          { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
-          { id: 'intoplane', label: 'Into-Plane Ops', icon: Plane },
-          { id: 'equipment', label: 'Equipment Status', icon: Truck },
-          { id: 'history', label: 'Log History', icon: History },
-          { id: 'stock', label: 'Stock Management', icon: Database },
+          { id: 'dashboard', label: 'Operations Dashboard', icon: LayoutDashboard },
+          { id: 'admin', label: 'System Admin', icon: Settings },
+          { id: 'schedule', label: 'Master Schedule', icon: Calendar },
+          { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
+          { id: 'flight-tracker', label: 'Flight Tracker', icon: Radar },
+          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
+          { id: 'stock', label: 'Stock Control', icon: Database },
           { id: 'bridging', label: 'Transfer Oversight', icon: Droplet },
           { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
           { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
           { id: 'marine', label: 'Marine Oversight', icon: Anchor },
-          { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
+          { id: 'forecasting', label: 'Stock Forecasting', icon: TrendingUp },
           { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
-          { id: 'executive', label: 'Executive Module', icon: Briefcase },
+          { id: 'executive', label: 'Executive Overview', icon: Briefcase },
           { id: 'commercial-reports', label: 'Commercial Reports', icon: Coins },
           { id: 'finance', label: 'Finance & Billing', icon: Receipt },
-          { id: 'customer-portal', label: 'Customer Portal', icon: Plane },
+          { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
+          { id: 'equipment', label: 'Equipment Status', icon: Truck },
+          { id: 'history', label: 'Log History', icon: History },
         ];
       
       default:

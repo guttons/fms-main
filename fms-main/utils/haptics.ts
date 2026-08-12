@@ -8,17 +8,17 @@
  * User preference is persisted in localStorage under 'fms-haptics-enabled'.
  */
 
-// ── Vibration Patterns (Refined & Lightened for Premium Feel) ────────────────
+// ── Vibration Patterns (Featherlight for Subtle Tactile Feel) ─────────────────
 export const HapticPattern = {
-  TAP:          [10],                     // Crisp 10ms tick
-  NAV_TAP:      [5],                      // Ultra-light 5ms tick for nav/sidebar
-  SUCCESS:      [12, 35, 12],             // Light double tick
-  WARNING:      [16, 25, 18],             // Subtle warning pulse
-  ERROR:        [25, 30, 25],             // Gentle error double pulse
-  PULL_REFRESH: [8],                      // Micro tick
-  LONG_PRESS:   [15],                     // Soft hold tick
-  SELECTION:    [6],                      // Micro selection tick
-  TOGGLE:       [8, 20, 8],              // Light double toggle tick
+  TAP:          [6],                      // Ultra-crisp 6ms micro tick
+  NAV_TAP:      [4],                      // Featherlight 4ms tick for nav/sidebar
+  SUCCESS:      [8, 25, 8],               // Gentle double tick
+  WARNING:      [10, 20, 10],             // Soft warning pulse
+  ERROR:        [15, 20, 15],             // Subtle error double pulse
+  PULL_REFRESH: [5],                      // Micro tick
+  LONG_PRESS:   [10],                     // Soft hold tick
+  SELECTION:    [4],                      // Micro selection tick
+  TOGGLE:       [5, 15, 5],              // Featherlight double toggle tick
 } as const;
 
 export type HapticType = keyof typeof HapticPattern;

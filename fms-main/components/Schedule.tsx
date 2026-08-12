@@ -542,6 +542,21 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
     live: 'calc(91.666% - 5px)'
   };
 
+  const formatDateWithWeekday = (dateStr: string) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    const d = new Date(year, month, day);
+    if (isNaN(d.getTime())) return dateStr;
+    const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
+    const monthName = d.toLocaleDateString('en-US', { month: 'short' });
+    const dayStr = String(day).padStart(2, '0');
+    return `${weekday}, ${dayStr}-${monthName}-${year}`;
+  };
+
   return (
     <div className="p-6 lg:p-10 space-y-10">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-outline pb-10">
@@ -565,11 +580,14 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center w-full sm:w-auto">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full sm:w-auto">
             {/* Date Picker */}
-            <div className={`relative flex items-center border rounded-xl shadow-inner focus-within:border-primary transition-colors ${isHistoricalView ? 'bg-amber-500/5 border-amber-500/30 focus-within:border-amber-500' : 'bg-surface-dim border-outline'}`}>
-              <Calendar className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none shrink-0 ${isHistoricalView ? 'text-amber-400' : 'text-primary'}`} />
+            <div className={`relative flex items-center border rounded-xl shadow-inner focus-within:border-primary transition-colors flex-1 sm:flex-none w-full sm:w-auto min-w-[200px] sm:min-w-[230px] px-3.5 py-2.5 cursor-pointer ${isHistoricalView ? 'bg-amber-500/5 border-amber-500/30 focus-within:border-amber-500' : 'bg-surface-dim border-outline'}`}>
+              <Calendar className={`w-4 h-4 mr-2.5 shrink-0 ${isHistoricalView ? 'text-amber-400' : 'text-primary'}`} />
+              <span className="text-[11px] font-black text-on-surface uppercase tracking-wider whitespace-nowrap">
+                {formatDateWithWeekday(selectedBriefingDate)}
+              </span>
               <input
                 type="date"
                 id="schedule-date-picker"
@@ -577,7 +595,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                 max={todayStr}
                 onChange={(e) => setSelectedBriefingDate(e.target.value)}
                 onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
-                className="bg-transparent text-[11px] font-black text-on-surface outline-none cursor-pointer min-w-[120px] sm:min-w-[130px] pl-9 pr-2 sm:pr-3 py-2.5"
+                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
                 style={{ colorScheme: 'dark' }}
               />
             </div>
@@ -595,11 +613,11 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
           </div>
 
           {/* Shift Selector */}
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <select
               value={selectedBriefingShift || ""}
               onChange={(e) => setSelectedBriefingShift(e.target.value as BriefingShift)}
-              className="appearance-none px-6 py-3 pr-10 kinetic-gradient text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-premium cursor-pointer outline-none"
+              className="w-full sm:w-auto appearance-none px-6 py-3 pr-10 kinetic-gradient text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-premium cursor-pointer outline-none"
               style={{ colorScheme: 'dark' }}
             >
               <option value="Morning" className="bg-surface-dim text-on-surface">Morning (07:30-16:00)</option>

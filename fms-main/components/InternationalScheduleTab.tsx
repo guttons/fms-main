@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Upload, Download, FileSpreadsheet, Plus, Trash2, CheckCircle2, 
@@ -68,7 +68,28 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
 
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'INT' | 'DOM'>('ALL');
   const [crossCheckCategoryFilter, setCrossCheckCategoryFilter] = useState<'ALL' | 'INT' | 'DOM'>('ALL');
+  const [seasonFilter, setSeasonFilter] = useState<string>('ALL');
   const [activeSubTabTooltip, setActiveSubTabTooltip] = useState<string | null>(null);
+
+  // Dynamic Subtab Pill Measurement
+  const masterTabRef = useRef<HTMLButtonElement>(null);
+  const crosscheckTabRef = useRef<HTMLButtonElement>(null);
+  const [subTabPillStyle, setSubTabPillStyle] = useState<{ left: number; width: number }>({ left: 6, width: 250 });
+
+  useLayoutEffect(() => {
+    const updatePill = () => {
+      const activeEl = activeSubTab === 'master' ? masterTabRef.current : crosscheckTabRef.current;
+      if (activeEl) {
+        setSubTabPillStyle({
+          left: activeEl.offsetLeft,
+          width: activeEl.offsetWidth
+        });
+      }
+    };
+    updatePill();
+    window.addEventListener('resize', updatePill);
+    return () => window.removeEventListener('resize', updatePill);
+  }, [activeSubTab, internationalSchedules.length]);
 
   const triggerSubTabTooltip = (tab: string) => {
     setActiveSubTabTooltip(tab);
@@ -77,6 +98,10 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
 
   const uniqueAirlines = Array.from(
     new Set(internationalSchedules.map(s => scheduleImportService.normalizeAirlineName(s.airlineName)))
+  ).sort();
+
+  const uniqueSeasons = Array.from(
+    new Set(internationalSchedules.map(s => s.season).filter(Boolean) as string[])
   ).sort();
 
   const filteredSchedules = internationalSchedules.filter(s => {
@@ -103,8 +128,9 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
     const matchesStatus = statusFilter === 'ALL' || 
       (statusFilter === 'ACTIVE' && s.isActive) || 
       (statusFilter === 'INACTIVE' && !s.isActive);
+    const matchesSeason = seasonFilter === 'ALL' || s.season === seasonFilter;
 
-    return matchesSearch && matchesCategory && matchesAirline && matchesStatus;
+    return matchesSearch && matchesCategory && matchesAirline && matchesStatus && matchesSeason;
   });
 
   const renderRouteBadge = (sch: InternationalSchedule) => {
@@ -395,23 +421,18 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
           </div>
         </div>
 
-        {/* Sub Navigation Bar with Animated Kinetic Gradient Sliding Pill */}
+        {/* Sub Navigation Bar with Kinetic Gradient Active Pill */}
         <div className="mt-6 pt-6 border-t border-white/10">
-          <div className="bg-surface-dim/80 p-1.5 rounded-2xl md:rounded-full border border-white/15 shadow-inner relative flex items-center w-full md:w-auto self-start">
-            <div
-              className={`absolute top-1.5 bottom-1.5 rounded-xl md:rounded-full kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${
-                activeSubTab === 'master'
-                  ? 'w-[calc(50%-3px)] left-1.5 md:w-[230px] md:left-1.5 md:translate-x-0'
-                  : 'w-[calc(50%-3px)] left-[calc(50%+1.5px)] md:w-[270px] md:left-1.5 md:translate-x-[230px]'
-              }`}
-            />
+          <div className="bg-surface-dim/80 p-1.5 rounded-2xl md:rounded-full border border-white/15 shadow-inner inline-flex items-center gap-1.5 w-full sm:w-auto">
             <button
               onClick={() => {
                 setActiveSubTab('master');
                 triggerSubTabTooltip('master');
               }}
-              className={`flex-1 md:flex-initial md:w-[230px] px-3 md:px-6 py-2.5 rounded-xl md:rounded-full text-xs font-black uppercase tracking-wider transition-all relative z-10 flex items-center justify-center gap-1.5 sm:gap-2 ${
-                activeSubTab === 'master' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+              className={`flex-1 sm:flex-initial px-5 sm:px-7 py-2.5 rounded-xl md:rounded-full text-xs font-black uppercase tracking-wider transition-all duration-300 relative z-10 flex items-center justify-center gap-2 ${
+                activeSubTab === 'master'
+                  ? 'kinetic-gradient text-white shadow-premium scale-[1.01]'
+                  : 'text-on-surface-dim hover:text-on-surface hover:bg-surface-container/50'
               }`}
             >
               {activeSubTabTooltip === 'master' && (
@@ -430,8 +451,10 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                 setActiveSubTab('crosscheck');
                 triggerSubTabTooltip('crosscheck');
               }}
-              className={`flex-1 md:flex-initial md:w-[270px] px-3 md:px-6 py-2.5 rounded-xl md:rounded-full text-xs font-black uppercase tracking-wider transition-all relative z-10 flex items-center justify-center gap-1.5 sm:gap-2 ${
-                activeSubTab === 'crosscheck' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+              className={`flex-1 sm:flex-initial px-5 sm:px-7 py-2.5 rounded-xl md:rounded-full text-xs font-black uppercase tracking-wider transition-all duration-300 relative z-10 flex items-center justify-center gap-2 ${
+                activeSubTab === 'crosscheck'
+                  ? 'kinetic-gradient text-white shadow-premium scale-[1.01]'
+                  : 'text-on-surface-dim hover:text-on-surface hover:bg-surface-container/50'
               }`}
             >
               {activeSubTabTooltip === 'crosscheck' && (
@@ -443,7 +466,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               <Clock className="w-4 h-4 shrink-0" />
               <span className="hidden md:inline whitespace-nowrap">Daily Flight Cross-Check</span>
               {retimedCount + swapCount + missingCount > 0 && (
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 transition-colors ${
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black shrink-0 transition-colors ${
                   activeSubTab === 'crosscheck'
                     ? 'bg-amber-400 text-on-warning-container shadow-sm'
                     : 'bg-warning text-on-warning'
@@ -484,13 +507,13 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               </select>
 
               <select
-                value={airlineFilter}
-                onChange={e => setAirlineFilter(e.target.value)}
-                className="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-xs text-on-surface focus:outline-none focus:border-primary"
+                value={seasonFilter}
+                onChange={e => setSeasonFilter(e.target.value)}
+                className="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-xs text-on-surface focus:outline-none focus:border-primary font-semibold"
               >
-                <option value="ALL">All Airlines ({uniqueAirlines.length})</option>
-                {uniqueAirlines.map(a => (
-                  <option key={a} value={a}>{a}</option>
+                <option value="ALL">All Seasons ({uniqueSeasons.length})</option>
+                {uniqueSeasons.map(s => (
+                  <option key={s} value={s}>{s}</option>
                 ))}
               </select>
 
@@ -502,6 +525,17 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                 <option value="ALL">All Status</option>
                 <option value="ACTIVE">Active Only</option>
                 <option value="INACTIVE">Inactive Only</option>
+              </select>
+
+              <select
+                value={airlineFilter}
+                onChange={e => setAirlineFilter(e.target.value)}
+                className="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-xs text-on-surface focus:outline-none focus:border-primary"
+              >
+                <option value="ALL">All Airlines ({uniqueAirlines.length})</option>
+                {uniqueAirlines.map(a => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -550,7 +584,13 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                             </span>
                           )}
                           {sch.season && (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                              sch.season.toUpperCase().includes('SUMMER')
+                                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                : sch.season.toUpperCase().includes('WINTER')
+                                ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
+                                : 'bg-secondary/15 text-secondary border border-secondary/30'
+                            }`}>
                               {sch.season}
                             </span>
                           )}
@@ -710,7 +750,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               </div>
 
               {/* Category Filter Pills (ALL / INT / DOM) with Animated Kinetic Gradient Sliding Pill */}
-              <div className="bg-surface-dim/80 p-1 rounded-2xl border border-white/15 relative flex items-center self-start sm:self-auto shadow-inner min-w-[280px]">
+              <div className="bg-surface-dim/80 p-1 rounded-2xl border border-white/15 relative flex items-center w-full sm:w-auto self-stretch sm:self-auto shadow-inner">
                 <div
                   className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${
                     crossCheckCategoryFilter === 'ALL'
@@ -722,7 +762,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                 />
                 <button
                   onClick={() => setCrossCheckCategoryFilter('ALL')}
-                  className={`flex-1 text-center px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all relative z-10 whitespace-nowrap ${
+                  className={`flex-1 text-center px-2 sm:px-3.5 py-1.5 rounded-xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all relative z-10 whitespace-nowrap ${
                     crossCheckCategoryFilter === 'ALL'
                       ? 'text-white'
                       : 'text-on-surface-dim hover:text-on-surface'
@@ -732,7 +772,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                 </button>
                 <button
                   onClick={() => setCrossCheckCategoryFilter('INT')}
-                  className={`flex-1 text-center px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all relative z-10 whitespace-nowrap ${
+                  className={`flex-1 text-center px-2 sm:px-3.5 py-1.5 rounded-xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all relative z-10 whitespace-nowrap ${
                     crossCheckCategoryFilter === 'INT'
                       ? 'text-white'
                       : 'text-on-surface-dim hover:text-on-surface'
@@ -742,7 +782,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                 </button>
                 <button
                   onClick={() => setCrossCheckCategoryFilter('DOM')}
-                  className={`flex-1 text-center px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all relative z-10 whitespace-nowrap ${
+                  className={`flex-1 text-center px-2 sm:px-3.5 py-1.5 rounded-xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all relative z-10 whitespace-nowrap ${
                     crossCheckCategoryFilter === 'DOM'
                       ? 'text-white'
                       : 'text-on-surface-dim hover:text-on-surface'
@@ -864,7 +904,20 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                     {parsedSchedules.map((sch, i) => (
                       <tr key={i} className="hover:bg-surface-container-low/40 transition-colors">
                         <td className="p-3 font-bold text-primary">{sch.flightNumber}</td>
-                        <td className="p-3 font-semibold">{scheduleImportService.normalizeAirlineName(sch.airlineName)}</td>
+                        <td className="p-3 font-semibold flex items-center gap-2">
+                          <span>{scheduleImportService.normalizeAirlineName(sch.airlineName)}</span>
+                          {sch.season && (
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                              sch.season.toUpperCase().includes('SUMMER')
+                                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                : sch.season.toUpperCase().includes('WINTER')
+                                ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
+                                : 'bg-secondary/15 text-secondary border border-secondary/30'
+                            }`}>
+                              {sch.season}
+                            </span>
+                          )}
+                        </td>
                         <td className="p-3">
                           {renderRouteBadge(sch)}
                         </td>

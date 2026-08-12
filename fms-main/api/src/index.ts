@@ -3,6 +3,7 @@ import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import { BigQuery, TableSchema } from '@google-cloud/bigquery';
 import crypto from 'crypto';
+import authRouter from './auth';
 
 // ─── BigQuery client ─────────────────────────────────────────────────────────
 const bigquery = new BigQuery({ projectId: 'macl-fms-496808' });
@@ -466,6 +467,9 @@ async function requireAuth(req: Request, res: Response, next: NextFunction): Pro
 app.get('/', (_req: Request, res: Response) => {
   res.json({ service: 'MACL FMS BigQuery API', status: 'OK', version: '1.0.0' });
 });
+
+// ─── Auth Routes ──────────────────────────────────────────────────────────────
+app.use('/auth', authRouter);
 
 // ─── External flights proxy (public endpoint) ─────────────────────────────────
 app.get('/external-flights', async (_req: Request, res: Response) => {

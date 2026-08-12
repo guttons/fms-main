@@ -66,6 +66,11 @@ export interface StaffMember {
   status: 'active' | 'inactive';
   joinDate: string;
   avatar?: string;
+  currentStatus?: 'ONLINE' | 'ON_JOB' | 'IDLE' | 'OFFLINE' | 'ON_BREAK';
+  currentJobId?: string;
+  currentVehicleId?: string;
+  lastActiveAt?: string;
+  currentLocation?: { lat: number; lng: number; accuracy: number; updatedAt: string; };
 }
 
 export enum FuelType {
@@ -190,6 +195,12 @@ export interface Alert {
   timestamp: string;
   acknowledged: boolean;
   targetRole?: UserRole;
+  alertType?: string;
+  flightNumber?: string;
+  assignedStaffId?: string;
+  metadata?: any;
+  senderId?: string;
+  senderName?: string;
 }
 
 export interface Vessel {
@@ -305,4 +316,20 @@ export interface PredictiveUpliftForecast {
   airlineBreakdown: { airline: string; flightCount: number; estimatedUplift: number }[];
 }
 
+export interface StaffActivityEntry {
+  id: string;
+  staffId: string;
+  activityType: 'LOGIN' | 'LOGOUT' | 'JOB_START' | 'JOB_COMPLETE' | 'LOCATION_UPDATE' | 'ALERT_ACKNOWLEDGED' | 'STATUS_CHANGE' | 'HEARTBEAT';
+  activityData?: {
+    flightNumber?: string;
+    vehicleId?: string;
+    stand?: string;
+    gpsLat?: number;
+    gpsLng?: number;
+    previousStatus?: string;
+    newStatus?: string;
+    [key: string]: any;
+  };
+  createdAt: string;
+}
 
