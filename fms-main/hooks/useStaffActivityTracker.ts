@@ -59,7 +59,7 @@ export const useStaffActivityTracker = ({ user, isAuthenticated }: UseStaffActiv
         supabase.from('staff')
           .update({ last_active_at: new Date().toISOString() })
           .eq('id', user.id)
-          .catch(err => console.warn('[Tracker] Heartbeat failed:', err));
+          .then(null, err => console.warn('[Tracker] Heartbeat failed:', err));
       }, 5 * 60 * 1000);
 
       // Handle beforeunload to mark as offline
@@ -114,7 +114,7 @@ export const useStaffActivityTracker = ({ user, isAuthenticated }: UseStaffActiv
           supabase.from('staff').update({ 
             current_location: location,
             last_active_at: new Date().toISOString()
-          }).eq('id', user.id).catch(err => console.warn('[Tracker] Failed to update location:', err));
+          }).eq('id', user.id).then(null, err => console.warn('[Tracker] Failed to update location:', err));
           
           logActivity('LOCATION_UPDATE', location);
         }

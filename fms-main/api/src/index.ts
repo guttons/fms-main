@@ -4,6 +4,14 @@ import jwt from 'jsonwebtoken';
 import { BigQuery, TableSchema } from '@google-cloud/bigquery';
 import crypto from 'crypto';
 import authRouter from './auth';
+import { pushService, StoredSubscription, PushNotificationPayload } from './pushService';
+
+// ─── Web Push VAPID initialization ───────────────────────────────────────────
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'UUxI4sIqI3m0iU70m_93uC4p6xW2N8e1l3K_5k9l8M4';
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@macl.aero';
+
+pushService.initVapid(VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT);
 
 // ─── BigQuery client ─────────────────────────────────────────────────────────
 const bigquery = new BigQuery({ projectId: 'macl-fms-496808' });
@@ -1247,6 +1255,43 @@ app.get('/master-db-records', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('[BigQuery Master DB] Query error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Web Push Notifications API
+// ═══════════════════════════════════════════════════════════════════════════
+app.get('/api/push/status', (req: Request, res: Response) => {
+  res.json({
+    initialized: pushService.isReady(),
+    publicKey: VAPID_PUBLIC_KEY
+  });
+});
+
+app.post('/api/push/config', (req: Request, res: Response) => {
+  const { publicKey, privateKey, subject } = req.body;
+  if (!publicKey || !privateKey) {
+    return res.status(400).json({ error: 'publicKey and privateKey are required' });
+  }
+  pushService.initVapid(publicKey, privateKey, subject || VAPID_SUBJECT);
+  res.json({ success: true, message: 'VAPID configuration updated' });
+});
+
+app.post('/api/push/send', async (req: Request, res: Response) => {
+  try {
+    const { subscriptions, payload } = req.body;
+    if (!subscriptions || !Array.isArray(subscriptions) || subscriptions.length === 0) {
+      return res.status(400).json({ error: 'subscriptions array is required and cannot be empty' });
+    }
+    if (!payload || !payload.title || !payload.body) {
+      return res.status(400).json({ error: 'payload with title and body is required' });
+    }
+
+    const result = await pushService.sendBatch(subscriptions as StoredSubscription[], payload as PushNotificationPayload);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[Push API] Error sending push notifications:', err);
+    res.status(500).json({ error: err.message || 'Failed to dispatch push notifications' });
   }
 });
 

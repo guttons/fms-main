@@ -848,7 +848,13 @@ export const supabaseService = {
         ? new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
         : row.timestamp,
       acknowledged: row.acknowledged,
-      targetRole: row.target_role
+      targetRole: row.target_role,
+      alertType: row.alert_type || row.alertType || null,
+      flightNumber: row.flight_number || row.flightNumber || null,
+      assignedStaffId: row.assigned_staff_id || row.assignedStaffId || null,
+      metadata: row.metadata ? (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata) : null,
+      senderId: row.sender_id || row.senderId || null,
+      senderName: row.sender_name || row.senderName || null
     } as Alert));
   },
 
@@ -895,18 +901,201 @@ export const supabaseService = {
   },
 
   async createAlert(alert: Omit<Alert, 'id'>): Promise<void> {
-    const row = {
+    const row: any = {
       severity: alert.severity,
       message: alert.message,
       // Always use a full ISO 8601 timestamp for the DB column (timestamptz).
-      // The caller may pass a display-only HH:MM string which is invalid for Postgres.
       timestamp: new Date().toISOString(),
       acknowledged: alert.acknowledged,
-      target_role: alert.targetRole || null
+      target_role: alert.targetRole || null,
+      alert_type: alert.alertType || null,
+      flight_number: alert.flightNumber || null,
+      assigned_staff_id: alert.assignedStaffId || null,
+      metadata: alert.metadata ? JSON.stringify(alert.metadata) : null,
+      sender_id: alert.senderId || null,
+      sender_name: alert.senderName || null
     };
-    const { error } = await supabase.from('alerts').insert([row]);
+
+    let { error } = await supabase.from('alerts').insert([row]);
     if (error) {
-      console.error('[Supabase] createAlert failed:', error);
+      console.warn('[Supabase] createAlert with extended columns failed, falling back to base columns:', error.message);
+      const fallbackRow = {
+        severity: alert.severity,
+        message: alert.message,
+        timestamp: new Date().toISOString(),
+        acknowledged: alert.acknowledged,
+        target_role: alert.targetRole || null
+      };
+      const fallbackRes = await supabase.from('alerts').insert([fallbackRow]);
+      if (fallbackRes.error) {
+        console.error('[Supabase] createAlert fallback failed:', fallbackRes.error);
+      }
+    }
+
+    // Dispatch Web Push notification to assigned staff devices
+    supabaseService.dispatchPushForAlert(alert).catch(e => {
+      console.warn('[Supabase] Error in background dispatchPushForAlert:', e);
+    });
+  },
+
+  // ── Push Subscriptions ──────────────────────────────────────────────────────
+  async savePushSubscription(
+    userId: string,
+    userName: string,
+    userRole: string,
+    subscription: { endpoint: string; p256dh: string; auth: string },
+    deviceInfo: string = navigator.userAgent
+  ): Promise<boolean> {
+    try {
+      const { error } = await supabase.from('push_subscriptions').upsert(
+        {
+          user_id: userId,
+          user_name: userName,
+          user_role: userRole,
+          endpoint: subscription.endpoint,
+          p256dh: subscription.p256dh,
+          auth: subscription.auth,
+          device_info: deviceInfo,
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: 'endpoint' }
+      );
+      if (error) {
+        console.warn('[Supabase] Failed to save push subscription:', error);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error('[Supabase] savePushSubscription exception:', err);
+      return false;
+    }
+  },
+
+  async deletePushSubscription(endpoint: string): Promise<boolean> {
+    try {
+      const { error } = await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
+      if (error) {
+        console.warn('[Supabase] Failed to delete push subscription:', error);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error('[Supabase] deletePushSubscription exception:', err);
+      return false;
+    }
+  },
+
+  async getPushSubscriptionsForStaff(staffIds: string[]): Promise<any[]> {
+    if (!staffIds || staffIds.length === 0) return [];
+    try {
+      const { data, error } = await supabase
+        .from('push_subscriptions')
+        .select('*')
+        .in('user_id', staffIds);
+      if (error) {
+        console.warn('[Supabase] getPushSubscriptionsForStaff failed:', error);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.error('[Supabase] getPushSubscriptionsForStaff exception:', err);
+      return [];
+    }
+  },
+
+  async getVapidPublicKey(): Promise<string> {
+    try {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'vapid_keys')
+        .maybeSingle();
+
+      if (data && data.value && data.value.publicKey) {
+        return data.value.publicKey;
+      }
+    } catch (err) {
+      console.warn('[Supabase] Failed to fetch VAPID key from app_settings:', err);
+    }
+    return 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
+  },
+
+  async dispatchPushForAlert(alert: Omit<Alert, 'id'>): Promise<void> {
+    try {
+      const targetUserIds: string[] = [];
+      if (alert.assignedStaffId) {
+        targetUserIds.push(alert.assignedStaffId);
+      }
+
+      // If flightNumber is provided, look up flight jobs to include both operator & officer
+      if (alert.flightNumber) {
+        try {
+          const jobs = await supabaseService.getFlightJobs();
+          const cleanFlt = alert.flightNumber.replace(/\s+/g, '').toUpperCase();
+          const matchingJob = jobs.find(j => (j.flightNumber || '').replace(/\s+/g, '').toUpperCase() === cleanFlt);
+          if (matchingJob) {
+            if (matchingJob.assignedTo && !targetUserIds.includes(matchingJob.assignedTo)) {
+              targetUserIds.push(matchingJob.assignedTo);
+            }
+            if (matchingJob.assignedOfficer && !targetUserIds.includes(matchingJob.assignedOfficer)) {
+              targetUserIds.push(matchingJob.assignedOfficer);
+            }
+          }
+        } catch (e) {
+          console.warn('[Push] Error resolving flight assigned staff:', e);
+        }
+      }
+
+      if (targetUserIds.length === 0) {
+        return;
+      }
+
+      const subscriptions = await supabaseService.getPushSubscriptionsForStaff(targetUserIds);
+      if (!subscriptions || subscriptions.length === 0) {
+        console.log('[Push] No active push subscriptions found for staff:', targetUserIds);
+        return;
+      }
+
+      const apiBase = supabaseService._bqBase();
+      const headers = await supabaseService._bqAuthHeaders();
+
+      let title = 'FMS Operational Alert';
+      if (alert.alertType === 'REQUEST_FUELING') title = '⛽ HIGH ALERT: Request Fueling';
+      else if (alert.alertType === 'NO_FUEL') title = '🚫 HIGH ALERT: No Fuel Required';
+      else if (alert.alertType === 'ETA_15MIN') title = '⏰ ETA WARNING: ~15 Minutes';
+      else if (alert.alertType === 'ETA_5MIN') title = '🚨 ETA CRITICAL: ~5 Minutes';
+      else if (alert.alertType === 'LANDED') title = '✈️ FLIGHT LANDED';
+
+      const pushPayload = {
+        title,
+        body: alert.message,
+        alertType: alert.alertType,
+        flightNumber: alert.flightNumber,
+        metadata: alert.metadata,
+        urgency: alert.severity === 'critical' ? 'high' : 'normal',
+        url: '/'
+      };
+
+      const response = await fetch(`${apiBase}/api/push/send`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          subscriptions,
+          payload: pushPayload
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`[Push] Push dispatch complete. Sent: ${result.sent}, Failed: ${result.failed}`);
+        if (result.invalidEndpoints && result.invalidEndpoints.length > 0) {
+          for (const ep of result.invalidEndpoints) {
+            await supabaseService.deletePushSubscription(ep);
+          }
+        }
+      }
+    } catch (pushErr) {
+      console.warn('[Push] Failed to dispatch push notification:', pushErr);
     }
   },
 

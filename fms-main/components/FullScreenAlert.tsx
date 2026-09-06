@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Alert } from '../types';
-import { Bell, BellRing, Fuel, Ban, Clock, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Bell, BellRing, Fuel, Ban, Clock, AlertTriangle, ChevronRight, PlaneLanding } from 'lucide-react';
 import { Logo } from './Logo';
 import { alertSoundEngine } from '../utils/alertSounds';
 
@@ -24,6 +24,8 @@ export const FullScreenAlert: React.FC<FullScreenAlertProps> = ({ alert, onAckno
       alertSoundEngine.playEtaCritical();
     } else if (alert.alertType === 'ETA_15MIN') {
       alertSoundEngine.playEtaWarning();
+    } else if (alert.alertType === 'LANDED') {
+      alertSoundEngine.playLandingChime();
     }
 
     if (navigator.vibrate) {
@@ -122,6 +124,11 @@ export const FullScreenAlert: React.FC<FullScreenAlertProps> = ({ alert, onAckno
   } else if (alert.alertType === 'ETA_15MIN') {
     themeColorClass = 'text-warning';
     Icon = Clock;
+  } else if (alert.alertType === 'LANDED') {
+    themeColorClass = 'text-emerald-500 dark:text-emerald-400';
+    themeBorderClass = 'border-emerald-500/50';
+    themeBgClass = 'bg-emerald-500/10';
+    Icon = PlaneLanding;
   }
 
   return (

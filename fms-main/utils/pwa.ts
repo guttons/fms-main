@@ -162,3 +162,113 @@ export const sendNativeNotification = async (title: string, body: string) => {
     }
   }
 };
+
+/**
+ * Utility to convert URL-safe base64 string to Uint8Array for pushManager.subscribe()
+ */
+export function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+/**
+ * Get active Web Push subscription if it already exists.
+ */
+export const getPushSubscription = async (): Promise<PushSubscription | null> => {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return null;
+  }
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    return await registration.pushManager.getSubscription();
+  } catch (err) {
+    console.warn('[PWA] Failed to get push subscription:', err);
+    return null;
+  }
+};
+
+export interface SerializedPushSubscription {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
+
+/**
+ * Subscribes this browser/device to Web Push using the VAPID public key.
+ */
+export const subscribeToWebPush = async (vapidPublicKey: string): Promise<SerializedPushSubscription | null> => {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    console.warn('[PWA] PushManager is not supported in this browser.');
+    return null;
+  }
+
+  const permission = await requestNotificationPermission();
+  if (permission !== 'granted') {
+    console.warn('[PWA] Notification permission was not granted:', permission);
+    return null;
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedVapidKey
+      });
+    }
+
+    const p256dhKey = subscription.getKey('p256dh');
+    const authKey = subscription.getKey('auth');
+
+    if (!p256dhKey || !authKey) {
+      console.error('[PWA] Push subscription missing encryption keys');
+      return null;
+    }
+
+    const p256dh = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(p256dhKey))));
+    const auth = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(authKey))));
+
+    return {
+      endpoint: subscription.endpoint,
+      p256dh,
+      auth
+    };
+  } catch (error) {
+    console.error('[PWA] Failed to subscribe to Web Push:', error);
+    return null;
+  }
+};
+
+/**
+ * Unsubscribes this device from Web Push.
+ */
+export const unsubscribeFromWebPush = async (): Promise<boolean> => {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return false;
+  }
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    if (subscription) {
+      return await subscription.unsubscribe();
+    }
+    return true;
+  } catch (err) {
+    console.error('[PWA] Failed to unsubscribe:', err);
+    return false;
+  }
+};
+

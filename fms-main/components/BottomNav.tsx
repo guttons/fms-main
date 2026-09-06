@@ -26,7 +26,8 @@ import {
   Moon,
   Eclipse,
   Ship,
-  Search
+  Search,
+  Radar
 } from 'lucide-react';
 import { BottomSheet, SheetAction, SheetDivider, SheetSectionHeader } from './BottomSheet';
 import { haptic } from '../utils/haptics';
@@ -182,15 +183,19 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       case UserRole.ITP_OPERATOR:
       case UserRole.ITP_SUPERVISOR:
       case UserRole.ITP_HD_OPERATOR:
-        return [];
+        return [
+          { id: 'tracker', label: 'Flight Tracker', icon: Radar },
+        ];
 
       case UserRole.ITP_OFFICER:
         return [
+          { id: 'tracker', label: 'Flight Tracker', icon: Radar },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
         ];
 
       case UserRole.ITP_MANAGER:
         return [
+          { id: 'tracker', label: 'Flight Tracker', icon: Radar },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
         ];

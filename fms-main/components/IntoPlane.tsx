@@ -749,23 +749,42 @@ const ScreenDashboard: React.FC<{
                                                            e.stopPropagation();
                                                            setActiveMenuJobId(null);
                                                            try {
-                                                               await createAlert({
-                                                                   severity: 'medium',
-                                                                   message: `Into-Plane: Alert requested for Flight ${job.flightNumber}${assigneeName ? ` (Operator: ${assigneeName})` : ''}.`,
-                                                                   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-                                                                   acknowledged: false,
-                                                                   targetRole: UserRole.ITP_OPERATOR
-                                                               });
+                                                               const alertMeta = {
+                                                                   aircraftReg: job.aircraftReg,
+                                                                   stand: job.stand,
+                                                                   eta: job.eta || job.sta,
+                                                                   flightNumber: job.flightNumber
+                                                               };
 
-                                                               await createAlert({
-                                                                   severity: 'medium',
-                                                                   message: `Into-Plane: Alert requested for Flight ${job.flightNumber}${officerName ? ` (Officer: ${officerName})` : ''}.`,
-                                                                   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-                                                                   acknowledged: false,
-                                                                   targetRole: UserRole.ITP_OFFICER
-                                                               });
+                                                               if (job.assignedTo) {
+                                                                   await createAlert({
+                                                                       severity: 'critical',
+                                                                       alertType: 'REQUEST_FUELING',
+                                                                       flightNumber: job.flightNumber,
+                                                                       message: `Into-Plane: Alert requested for Flight ${job.flightNumber}${assigneeName ? ` (Operator: ${assigneeName})` : ''}.`,
+                                                                       timestamp: new Date().toISOString(),
+                                                                       acknowledged: false,
+                                                                       targetRole: UserRole.ITP_OPERATOR,
+                                                                       assignedStaffId: job.assignedTo,
+                                                                       metadata: alertMeta
+                                                                   });
+                                                               }
 
-                                                               notify(`Requested alert sent successfully for flight ${job.flightNumber}!`, 'success');
+                                                               if (job.assignedOfficer) {
+                                                                   await createAlert({
+                                                                       severity: 'critical',
+                                                                       alertType: 'REQUEST_FUELING',
+                                                                       flightNumber: job.flightNumber,
+                                                                       message: `Into-Plane: Alert requested for Flight ${job.flightNumber}${officerName ? ` (Officer: ${officerName})` : ''}.`,
+                                                                       timestamp: new Date().toISOString(),
+                                                                       acknowledged: false,
+                                                                       targetRole: UserRole.ITP_OFFICER,
+                                                                       assignedStaffId: job.assignedOfficer,
+                                                                       metadata: alertMeta
+                                                                   });
+                                                               }
+
+                                                               notify(`High Alert Request Fueling sent for flight ${job.flightNumber}!`, 'success');
                                                            } catch (err) {
                                                                console.error(err);
                                                                notify('Failed to send request alert.', 'error');
@@ -781,23 +800,42 @@ const ScreenDashboard: React.FC<{
                                                            e.stopPropagation();
                                                            setActiveMenuJobId(null);
                                                            try {
-                                                               await createAlert({
-                                                                   severity: 'medium',
-                                                                   message: `Into-Plane: No Fuel required for Flight ${job.flightNumber}${assigneeName ? ` (Operator: ${assigneeName})` : ''}.`,
-                                                                   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-                                                                   acknowledged: false,
-                                                                   targetRole: UserRole.ITP_OPERATOR
-                                                               });
+                                                               const alertMeta = {
+                                                                   aircraftReg: job.aircraftReg,
+                                                                   stand: job.stand,
+                                                                   eta: job.eta || job.sta,
+                                                                   flightNumber: job.flightNumber
+                                                               };
 
-                                                               await createAlert({
-                                                                   severity: 'medium',
-                                                                   message: `Into-Plane: No Fuel required for Flight ${job.flightNumber}${officerName ? ` (Officer: ${officerName})` : ''}.`,
-                                                                   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-                                                                   acknowledged: false,
-                                                                   targetRole: UserRole.ITP_OFFICER
-                                                               });
+                                                               if (job.assignedTo) {
+                                                                   await createAlert({
+                                                                       severity: 'critical',
+                                                                       alertType: 'NO_FUEL',
+                                                                       flightNumber: job.flightNumber,
+                                                                       message: `Into-Plane: No Fuel required for Flight ${job.flightNumber}${assigneeName ? ` (Operator: ${assigneeName})` : ''}.`,
+                                                                       timestamp: new Date().toISOString(),
+                                                                       acknowledged: false,
+                                                                       targetRole: UserRole.ITP_OPERATOR,
+                                                                       assignedStaffId: job.assignedTo,
+                                                                       metadata: alertMeta
+                                                                   });
+                                                               }
 
-                                                               notify(`No-Uplift alert sent successfully for flight ${job.flightNumber}!`, 'success');
+                                                               if (job.assignedOfficer) {
+                                                                   await createAlert({
+                                                                       severity: 'critical',
+                                                                       alertType: 'NO_FUEL',
+                                                                       flightNumber: job.flightNumber,
+                                                                       message: `Into-Plane: No Fuel required for Flight ${job.flightNumber}${officerName ? ` (Officer: ${officerName})` : ''}.`,
+                                                                       timestamp: new Date().toISOString(),
+                                                                       acknowledged: false,
+                                                                       targetRole: UserRole.ITP_OFFICER,
+                                                                       assignedStaffId: job.assignedOfficer,
+                                                                       metadata: alertMeta
+                                                                   });
+                                                               }
+
+                                                               notify(`High Alert No-Uplift sent for flight ${job.flightNumber}!`, 'success');
                                                            } catch (err) {
                                                                console.error(err);
                                                                notify('Failed to send No-Uplift alert.', 'error');

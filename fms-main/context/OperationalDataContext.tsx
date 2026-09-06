@@ -690,6 +690,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   const initialAlertsLoadedRef = React.useRef(false);
   const loadedAlertIdsRef = React.useRef<Set<string>>(new Set());
   const replenishmentLocks = React.useRef<Record<string, number>>({});
+  const prevFlightStatusesRef = React.useRef<Map<string, string>>(new Map());
+  const landedAlertsSentRef = React.useRef<Set<string>>(new Set());
 
   // Local sync to localStorage for persistence fallback
   useEffect(() => {
@@ -1331,6 +1333,70 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       pendingAlertHashes.current.delete(alertHash);
     }
   };
+
+  // ── Auto-Detect Flight Status Transitions to LANDED / ARRIVED ───────────────
+  useEffect(() => {
+    if (!mergedFlightJobs || mergedFlightJobs.length === 0) return;
+
+    mergedFlightJobs.forEach(job => {
+      if (!job.flightNumber) return;
+      const cleanNo = job.flightNumber.replace(/\s+/g, '').toUpperCase();
+      const currentStatus = (job.fidsStatus || job.status || '').toUpperCase();
+      const prevStatus = prevFlightStatusesRef.current.get(cleanNo);
+
+      prevFlightStatusesRef.current.set(cleanNo, currentStatus);
+
+      // Check if newly transitioned to LANDED / ARRIVED
+      const isLanded = currentStatus.includes('LAND') || currentStatus.includes('ARRIV');
+      const wasLanded = prevStatus ? (prevStatus.includes('LAND') || prevStatus.includes('ARRIV')) : false;
+
+      const alertKey = `${cleanNo}-${job.date || new Date().toISOString().split('T')[0]}-LANDED`;
+
+      if (isLanded && !wasLanded && !landedAlertsSentRef.current.has(alertKey)) {
+        // Only trigger if flight has assigned staff
+        if (job.assignedTo || job.assignedOfficer) {
+          landedAlertsSentRef.current.add(alertKey);
+
+          const alertMeta = {
+            stand: job.stand || 'TBA',
+            aircraftReg: job.aircraftReg || '',
+            eta: job.eta || job.sta || '',
+            flightNumber: job.flightNumber
+          };
+
+          // Send to assigned operator
+          if (job.assignedTo) {
+            createAlert({
+              alertType: 'LANDED',
+              severity: 'medium',
+              flightNumber: job.flightNumber,
+              message: `✈️ LANDED: Flight ${job.flightNumber} has landed at Stand ${job.stand || 'TBA'}.`,
+              timestamp: new Date().toISOString(),
+              acknowledged: false,
+              targetRole: UserRole.ITP_OPERATOR,
+              assignedStaffId: job.assignedTo,
+              metadata: alertMeta
+            }).catch(err => console.warn('[LANDED Alert] Failed to send to operator:', err));
+          }
+
+          // Send to assigned officer if different from operator
+          if (job.assignedOfficer && job.assignedOfficer !== job.assignedTo) {
+            createAlert({
+              alertType: 'LANDED',
+              severity: 'medium',
+              flightNumber: job.flightNumber,
+              message: `✈️ LANDED: Flight ${job.flightNumber} has landed at Stand ${job.stand || 'TBA'}.`,
+              timestamp: new Date().toISOString(),
+              acknowledged: false,
+              targetRole: UserRole.ITP_OFFICER,
+              assignedStaffId: job.assignedOfficer,
+              metadata: alertMeta
+            }).catch(err => console.warn('[LANDED Alert] Failed to send to officer:', err));
+          }
+        }
+      }
+    });
+  }, [mergedFlightJobs]);
 
   const acknowledgeAlert = async (id: string) => {
     try {

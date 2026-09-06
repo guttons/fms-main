@@ -68,7 +68,8 @@ export const useEtaMonitor = ({
         const key15 = `${job.id}-15`;
         const key5 = `${job.id}-5`;
 
-        if (diffMins >= 14 && diffMins <= 16 && !sentAlertsRef.current.has(key15)) {
+        // 15-minute alert window (fires once as soon as <= 15.5 minutes)
+        if (diffMins <= 15.5 && diffMins > 5.5 && !sentAlertsRef.current.has(key15)) {
           sentAlertsRef.current.add(key15);
           createAlert({
             alertType: 'ETA_15MIN',
@@ -87,7 +88,8 @@ export const useEtaMonitor = ({
           });
         }
 
-        if (diffMins >= 4 && diffMins <= 6 && !sentAlertsRef.current.has(key5)) {
+        // 5-minute alert window (fires once as soon as <= 5.5 minutes)
+        if (diffMins <= 5.5 && diffMins >= -1 && !sentAlertsRef.current.has(key5)) {
           sentAlertsRef.current.add(key5);
           createAlert({
             alertType: 'ETA_5MIN',

@@ -187,6 +187,53 @@ export class AlertSoundEngine {
 
     playCycle();
   }
+
+  public async playLandingChime(): Promise<void> {
+    this.stop();
+    this._isPlaying = true;
+    const ctx = this.getContext();
+    await this.resume();
+
+    const playAscendingChime = (startTime: number) => {
+      const notes = [
+        { freq: 523.25, offset: 0.0, dur: 0.18 },   // C5
+        { freq: 659.25, offset: 0.18, dur: 0.18 },  // E5
+        { freq: 783.99, offset: 0.36, dur: 0.18 },  // G5
+        { freq: 1046.50, offset: 0.54, dur: 0.45 }, // C6
+      ];
+
+      notes.forEach(({ freq, offset, dur }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, startTime + offset);
+
+        gain.gain.setValueAtTime(0, startTime + offset);
+        gain.gain.linearRampToValueAtTime(0.5, startTime + offset + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.005, startTime + offset + dur);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(startTime + offset);
+        osc.stop(startTime + offset + dur);
+
+        this.currentOscillators.push(osc);
+        this.currentGainNodes.push(gain);
+      });
+    };
+
+    const now = ctx.currentTime;
+    playAscendingChime(now);
+    playAscendingChime(now + 1.1);
+
+    setTimeout(() => {
+      if (this._isPlaying) {
+        this.stop();
+      }
+    }, 2400);
+  }
 }
 
 export const alertSoundEngine = AlertSoundEngine.getInstance();

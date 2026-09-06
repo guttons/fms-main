@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fms-v6';
+const CACHE_NAME = 'fms-v7';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -38,6 +38,85 @@ self.addEventListener('activate', (e) => {
           .map((key) => caches.delete(key))
       )
     ).then(() => self.clients.claim())
+  );
+});
+
+// ─── Push Event Listener (Web Push for Android & iOS 16.4+) ─────────────────
+self.addEventListener('push', (event) => {
+  console.log('[SW] Push notification received:', event);
+  let payload = {};
+  if (event.data) {
+    try {
+      payload = event.data.json();
+    } catch (err) {
+      payload = { title: 'FMS Operational Alert', body: event.data.text() };
+    }
+  }
+
+  const title = payload.title || 'FMS Alert';
+  const alertType = payload.alertType || payload.data?.alertType;
+
+  // Custom vibration patterns based on urgency
+  let vibrationPattern = [300, 150, 300, 150, 400];
+  if (alertType === 'NO_FUEL' || alertType === 'ETA_5MIN' || payload.urgency === 'high') {
+    vibrationPattern = [500, 100, 500, 100, 500, 100, 500];
+  } else if (alertType === 'LANDED') {
+    vibrationPattern = [200, 100, 300];
+  }
+
+  const notificationOptions = {
+    body: payload.body || 'New operational flight update',
+    icon: '/icon-dark.svg',
+    badge: '/icon-dark.svg',
+    tag: payload.tag || `fms-alert-${alertType || 'general'}-${payload.flightNumber || Date.now()}`,
+    renotify: true,
+    requireInteraction: true,
+    vibrate: vibrationPattern,
+    data: {
+      url: payload.url || '/',
+      alertType: alertType,
+      flightNumber: payload.flightNumber,
+      metadata: payload.metadata || {}
+    },
+    actions: [
+      { action: 'open', title: 'Open Alert' },
+      { action: 'dismiss', title: 'Dismiss' }
+    ]
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(title, notificationOptions)
+  );
+});
+
+// ─── Notification Click Handler ─────────────────────────────────────────────
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  if (event.action === 'dismiss') {
+    return;
+  }
+
+  const targetUrl = new URL(event.notification.data?.url || '/', self.location.origin).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // If a window is already open, focus it
+      for (const client of windowClients) {
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          // Send message to open alert in current window
+          client.postMessage({
+            type: 'NOTIFICATION_CLICKED',
+            data: event.notification.data
+          });
+          return client.focus();
+        }
+      }
+      // Otherwise open a new window
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })
   );
 });
 

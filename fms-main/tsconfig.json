@@ -34,6 +34,7 @@
     "dist",
     "api",
     "functions",
+    "supabase",
     "test-unzip-clean",
     "test-zip"
   ]

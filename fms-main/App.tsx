@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { IntoPlane } from './components/IntoPlane';
@@ -28,9 +28,12 @@ import { CustomerPortal } from './components/CustomerPortal';
 import { ExecutiveModule } from './components/ExecutiveModule';
 import { MOCK_USERS } from './constants';
 import { AIChatModal } from './components/AIChatModal';
+import { FlightTracker } from './components/FlightTracker';
+import { FullScreenAlert } from './components/FullScreenAlert';
+import { supabaseService } from './services/supabaseService';
 import { User, UserRole, FlightJob, Alert, EquipmentStatus as EqStatusEnum } from './types';
-import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, Eclipse, CheckCircle, Share2, Smartphone, Trash2, Download, Laptop, Globe, RefreshCw, Users, ArrowRight, Sparkles } from 'lucide-react';
-import { updatePWAManifestAndTheme, requestNotificationPermission, sendNativeNotification } from './utils/pwa';
+import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, Eclipse, CheckCircle, Share2, Smartphone, Trash2, Download, Laptop, Globe, RefreshCw, Users, ArrowRight, Sparkles, BellRing } from 'lucide-react';
+import { updatePWAManifestAndTheme, requestNotificationPermission, sendNativeNotification, subscribeToWebPush, unsubscribeFromWebPush, getPushSubscription } from './utils/pwa';
 import { haptic, isHapticEnabled, setHapticEnabled, isReducedMotion, setReducedMotion } from './utils/haptics';
 import { syncEngine } from './services/syncEngine';
 import { PredictiveBackWrapper } from './components/PredictiveBackWrapper';
@@ -349,6 +352,54 @@ const AppContextContent: React.FC<any> = ({
   // --- Haptic & Motion preferences (reactive state for settings UI) ---
   const [hapticEnabled, setHapticEnabledState] = useState(isHapticEnabled());
   const [reducedMotionEnabled, setReducedMotionState] = useState(isReducedMotion());
+
+  // --- Native Web Push Subscription State ---
+  const [isPushSubscribed, setIsPushSubscribed] = useState(false);
+  const [isPushLoading, setIsPushLoading] = useState(false);
+
+  useEffect(() => {
+    getPushSubscription().then(sub => {
+      setIsPushSubscribed(!!sub);
+    });
+  }, []);
+
+  const handleTogglePushNotifications = async () => {
+    if (!currentUser) return;
+    setIsPushLoading(true);
+    try {
+      if (isPushSubscribed) {
+        const sub = await getPushSubscription();
+        if (sub) {
+          await supabaseService.deletePushSubscription(sub.endpoint);
+        }
+        await unsubscribeFromWebPush();
+        setIsPushSubscribed(false);
+        notify('Web Push notifications disabled for this device.', 'info');
+      } else {
+        const vapidPublicKey = await supabaseService.getVapidPublicKey();
+        const sub = await subscribeToWebPush(vapidPublicKey);
+        if (sub) {
+          await supabaseService.savePushSubscription(
+            currentUser.id,
+            currentUser.name,
+            currentUser.role,
+            sub,
+            navigator.userAgent
+          );
+          setIsPushSubscribed(true);
+          notify('Native push notifications enabled successfully!', 'success');
+          sendNativeNotification('FMS Notifications', 'Push alerts are now enabled on this device.');
+        } else {
+          notify('Could not enable push notifications. Check browser permissions.', 'warning');
+        }
+      }
+    } catch (err: any) {
+      console.error('Error toggling push notifications:', err);
+      notify('Failed to update push notification settings.', 'error');
+    } finally {
+      setIsPushLoading(false);
+    }
+  };
 
   const alertsRef = React.useRef<HTMLDivElement>(null);
   const settingsRef = React.useRef<HTMLDivElement>(null);
@@ -816,7 +867,7 @@ const AppContextContent: React.FC<any> = ({
 
     // Targeted request/no-fuel alerts: only visible to assigned operator/officer, or supervisors
     const msgLower = (a.message || '').toLowerCase();
-    const isRequestAlert = msgLower.includes('alert requested') || msgLower.includes('no fuel');
+    const isRequestAlert = msgLower.includes('alert requested') || msgLower.includes('no fuel') || a.alertType === 'REQUEST_FUELING' || a.alertType === 'NO_FUEL' || a.alertType === 'LANDED';
     if (isRequestAlert && ![UserRole.ADMIN, UserRole.ITP_MANAGER, UserRole.FUEL_MANAGEMENT].includes(currentUser.role)) {
       const isDomestic = (domesticFlights || []).some(df => msgLower.includes((df.flightNumber || '').toLowerCase()));
       if (isDomestic) {
@@ -826,7 +877,8 @@ const AppContextContent: React.FC<any> = ({
         const hasOperator = msgLower.includes('(operator:');
         const hasOfficer = msgLower.includes('(officer:');
         const hasName = msgLower.includes(currentUser.name.toLowerCase());
-        if ((hasOperator || hasOfficer) && !hasName) return false;
+        const isAssigned = a.assignedStaffId === currentUser.id || (a.assignedStaffId && a.assignedStaffId.toLowerCase() === currentUser.name.toLowerCase());
+        if ((hasOperator || hasOfficer || a.assignedStaffId) && !hasName && !isAssigned) return false;
       }
     }
 
@@ -844,8 +896,39 @@ const AppContextContent: React.FC<any> = ({
   const unacknowledgedCount = (userAlerts || []).filter(a => a && !a.acknowledged).length;
   const activeCriticalAlerts = userAlerts.filter(a => a && !a.acknowledged && a.severity === 'critical');
 
+  // Priority Full Screen Alert for currently assigned staff
+  const fullScreenAlert = useMemo(() => {
+    if (!currentUser || !alerts || alerts.length === 0) return null;
+    const alertTypesToTrigger = ['REQUEST_FUELING', 'NO_FUEL', 'ETA_5MIN', 'ETA_15MIN', 'LANDED'];
+
+    return alerts.find(a => {
+      if (!a || a.acknowledged) return false;
+      const type = a.alertType || '';
+      if (!alertTypesToTrigger.includes(type)) return false;
+
+      // Only show to assigned staff
+      const isAssignedToUser = (
+        a.assignedStaffId === currentUser.id ||
+        (a.assignedStaffId && a.assignedStaffId.toLowerCase() === currentUser.name.toLowerCase()) ||
+        (a.message && a.message.toLowerCase().includes(currentUser.name.toLowerCase()))
+      );
+
+      return isAssignedToUser;
+    }) || null;
+  }, [alerts, currentUser]);
+
   const renderContent = (viewToRender = activeView) => {
     switch (viewToRender) {
+      case 'tracker':
+        return (
+          <FlightTracker 
+            user={currentUser} 
+            onNavigateToIntoPlane={(flightJob: FlightJob) => {
+              setPendingJob(flightJob);
+              setActiveView('intoplane');
+            }} 
+          />
+        );
       case 'dashboard':
         return (
           <Dashboard 
@@ -1431,32 +1514,44 @@ const AppContextContent: React.FC<any> = ({
                               </div>
                             </div>
 
-                            {/* Native Notifications Section */}
+                            {/* Native Web Push Notifications Section */}
                             <div className="p-4 bg-surface-dim/40 rounded-[32px] flex items-center justify-between hover:scale-[1.02] transition-all duration-300">
                                 <div className="flex items-center space-x-3 text-left">
-                                  <div className={`p-2.5 rounded-lg transition-all ${notificationPermission === 'granted' ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary'}`}>
-                                    <Bell className="w-4 h-4" />
+                                  <div className={`p-2.5 rounded-lg transition-all ${isPushSubscribed ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary'}`}>
+                                    <BellRing className="w-4 h-4" />
                                   </div>
                                   <div>
-                                    <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight">Notifications</h4>
+                                    <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight flex items-center gap-1.5">
+                                      Push Alerts
+                                      <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-primary/10 text-primary uppercase">
+                                        iOS 16.4+ / Android
+                                      </span>
+                                    </h4>
                                     <p className="text-[9px] font-bold text-on-surface-dim opacity-50">
-                                      {notificationPermission === 'granted' ? 'Enabled for updates' : notificationPermission === 'denied' ? 'Permission denied' : 'Enable device alerts'}
+                                      {isPushSubscribed ? 'Delivering when app is closed' : 'Receive lock screen alerts'}
                                     </p>
                                   </div>
                                 </div>
-                                {notificationPermission !== 'granted' ? (
-                                  <button
-                                    onClick={handleEnableNotifications}
-                                    className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary hover:border-primary border border-outline text-[9px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95"
-                                  >
-                                    Enable
-                                  </button>
-                                ) : (
-                                  <div className="text-[10px] font-black uppercase text-success tracking-wide flex items-center gap-1">
-                                    <CheckCircle className="w-3.5 h-3.5" />
-                                    Active
-                                  </div>
-                                )}
+                                <button
+                                  disabled={isPushLoading}
+                                  onClick={handleTogglePushNotifications}
+                                  className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center gap-1.5 ${
+                                    isPushSubscribed
+                                      ? 'bg-success/15 text-success border border-success/30 hover:bg-error/10 hover:text-error hover:border-error/30'
+                                      : 'bg-primary text-white shadow-sm hover:opacity-90'
+                                  }`}
+                                >
+                                  {isPushLoading ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : isPushSubscribed ? (
+                                    <>
+                                      <CheckCircle className="w-3 h-3" />
+                                      Enabled
+                                    </>
+                                  ) : (
+                                    'Enable'
+                                  )}
+                                </button>
                             </div>
 
                             {/* Haptic Feedback Toggle */}
@@ -1761,6 +1856,14 @@ const AppContextContent: React.FC<any> = ({
           onNavigate={(view) => setActiveView(view as any)}
           initialQuery={aiInitialQuery}
         />
+
+        {/* Priority Full-Screen Beeping Alert Overlay */}
+        {fullScreenAlert && (
+          <FullScreenAlert 
+            alert={fullScreenAlert} 
+            onAcknowledge={acknowledgeAlert} 
+          />
+        )}
 
       </div>
   );

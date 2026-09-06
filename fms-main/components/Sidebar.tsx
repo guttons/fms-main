@@ -27,7 +27,8 @@ import {
   HelpCircle,
   History,
   BookOpen,
-  BarChart3
+  BarChart3,
+  Radar
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { haptic } from '../utils/haptics';
@@ -75,6 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       case UserRole.ITP_OFFICER:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'tracker', label: 'Flight Tracker', icon: Radar },
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
@@ -84,6 +86,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       case UserRole.ITP_MANAGER:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'tracker', label: 'Flight Tracker', icon: Radar },
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
           { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
@@ -166,6 +169,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       case UserRole.ADMIN:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'tracker', label: 'Flight Tracker', icon: Radar },
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
           { id: 'intoplane', label: 'Into-Plane Ops', icon: Plane },
