@@ -128,7 +128,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   const handlePinKeyDown = (index: number, e: React.KeyboardEvent, isConfirm = false) => {
-    if (e.key === 'Backspace' && !(e.currentTarget as HTMLInputElement).value && index > 0) {
+    if (e.key === 'Backspace' && !e.currentTarget.value && index > 0) {
       const prevRef = isConfirm ? confirmPinRefs.current[index - 1] : pinRefs.current[index - 1];
       if (prevRef) {
         prevRef.focus();
@@ -370,7 +370,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 {pin.map((digit, idx) => (
                   <input
                     key={idx}
-                    ref={el => { pinRefs.current[idx] = el; }}
+                    ref={el => pinRefs.current[idx] = el}
                     type="password"
                     inputMode="numeric"
                     maxLength={1}
@@ -411,7 +411,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     {pin.map((digit, idx) => (
                       <input
                         key={idx}
-                        ref={el => { pinRefs.current[idx] = el; }}
+                        ref={el => pinRefs.current[idx] = el}
                         type="password"
                         inputMode="numeric"
                         maxLength={1}
@@ -430,7 +430,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     {confirmPin.map((digit, idx) => (
                       <input
                         key={idx}
-                        ref={el => { confirmPinRefs.current[idx] = el; }}
+                        ref={el => confirmPinRefs.current[idx] = el}
                         type="password"
                         inputMode="numeric"
                         maxLength={1}

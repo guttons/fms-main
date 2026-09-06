@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fms-v7';
+const CACHE_NAME = 'fms-v6';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -41,108 +41,6 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// ─── Push Notification Handler ───────────────────────────────────────────────
-// Handles push events for background notifications (when app is in background)
-self.addEventListener('push', (e) => {
-  if (!e.data) return;
-
-  let payload;
-  try {
-    payload = e.data.json();
-  } catch (_err) {
-    payload = { title: 'FMS Alert', body: e.data.text() };
-  }
-
-  const title = payload.title || 'FMS Alert';
-  const body = payload.body || payload.message || '';
-  const isHighAlert = (payload.alertType || '').startsWith('REQUEST_') || 
-                      (payload.alertType || '').startsWith('NO_FUEL') ||
-                      (payload.alertType || '').startsWith('ETA_5MIN');
-  const isCritical = payload.severity === 'critical' || isHighAlert;
-
-  const options = {
-    body,
-    icon: '/icon-dark.svg',
-    badge: '/icon-dark.svg',
-    tag: isCritical ? 'fms-high-alert' : 'fms-alert',
-    renotify: true,
-    requireInteraction: isCritical, // Don't auto-dismiss critical alerts
-    vibrate: isCritical 
-      ? [500, 200, 500, 200, 500, 200, 500] // Urgent pattern
-      : [200, 100, 200],                      // Standard pattern
-    data: {
-      url: self.registration.scope,
-      alertType: payload.alertType,
-      alertId: payload.alertId,
-      flightNumber: payload.flightNumber,
-    },
-    actions: isCritical ? [
-      { action: 'acknowledge', title: '✓ Acknowledge' },
-      { action: 'open', title: 'Open App' }
-    ] : [
-      { action: 'open', title: 'Open' }
-    ]
-  };
-
-  e.waitUntil(
-    self.registration.showNotification(title, options)
-  );
-});
-
-// ─── Notification Click Handler ──────────────────────────────────────────────
-self.addEventListener('notificationclick', (e) => {
-  e.notification.close();
-
-  const data = e.notification.data || {};
-  const urlToOpen = data.url || self.registration.scope;
-
-  // Build URL with view parameter based on alert type
-  let targetUrl = urlToOpen;
-  if (data.alertType && data.alertType.startsWith('ETA_')) {
-    targetUrl = urlToOpen + '?view=intoplane';
-  } else if (data.alertType === 'REQUEST_FUELING' || data.alertType === 'NO_FUEL') {
-    targetUrl = urlToOpen + '?view=intoplane';
-  }
-
-  e.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Focus existing window if available
-      for (const client of clientList) {
-        if (client.url.startsWith(self.registration.scope) && 'focus' in client) {
-          // Post message to the app to show the alert
-          client.postMessage({
-            type: 'NOTIFICATION_CLICKED',
-            alertId: data.alertId,
-            alertType: data.alertType,
-            flightNumber: data.flightNumber,
-            action: e.action || 'open'
-          });
-          return client.focus();
-        }
-      }
-      // Open new window if no existing window
-      if (self.clients.openWindow) {
-        return self.clients.openWindow(targetUrl);
-      }
-    })
-  );
-});
-
-// ─── Notification Close Handler ──────────────────────────────────────────────
-self.addEventListener('notificationclose', (e) => {
-  const data = e.notification.data || {};
-  // Notify the app that the notification was dismissed
-  self.clients.matchAll({ type: 'window' }).then((clientList) => {
-    for (const client of clientList) {
-      client.postMessage({
-        type: 'NOTIFICATION_DISMISSED',
-        alertId: data.alertId,
-        alertType: data.alertType
-      });
-    }
-  });
-});
-
 // ─── Fetch ───────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', (e) => {
   // Only handle GET requests
@@ -173,14 +71,8 @@ self.addEventListener('fetch', (e) => {
   // Bypass BigQuery API — always go to network
   if (url.pathname.includes('/operations-log') || url.pathname.includes('/external-flights') || url.hostname.includes('run.app')) return;
 
-  // Bypass Auth API — always go to network
-  if (url.pathname.includes('/auth/')) return;
-
   // Bypass Flights API — always go to network
   if (url.hostname.includes('fis.com.mv')) return;
-
-  // Bypass FlightRadar24 — always go to network
-  if (url.hostname.includes('flightradar24.com')) return;
 
   // Bypass external CDN modules (esm.sh, tailwindcss CDN, etc.)
   if (

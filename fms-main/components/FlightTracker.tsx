@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Radar, Plane, MapPin, Clock, Navigation, ExternalLink, ChevronUp, ChevronDown, ArrowRight } from 'lucide-react';
 import { User, UserRole, FlightJob } from '../types';
 import { useOperationalData } from '../context/OperationalDataContext';
+import { format, differenceInMinutes, parseISO } from 'date-fns';
 
 interface FlightTrackerProps {
   user: User;
@@ -19,8 +20,10 @@ export const FlightTracker: React.FC<FlightTrackerProps> = ({ user }) => {
     const today = new Date().toISOString().split('T')[0];
     
     let filtered = flightJobs.filter(job => {
+      // Basic today check - depending on how date is stored in flightJobs
+      // If it doesn't have a date, assume it's for the current briefing date
       const jobDate = job.date || today;
-      return jobDate === today && job.status !== 'COMPLETED';
+      return jobDate === today && job.status !== 'COMPLETED'; // Optionally filter out completed if desired, or keep them
     });
 
     const canSeeAll = [UserRole.ADMIN, UserRole.ITP_MANAGER, UserRole.ITP_SUPERVISOR].includes(user.role);
@@ -34,6 +37,7 @@ export const FlightTracker: React.FC<FlightTrackerProps> = ({ user }) => {
       );
     }
 
+    // Sort by ETA
     return filtered.sort((a, b) => {
       const timeA = a.eta || a.sta || '23:59';
       const timeB = b.eta || b.sta || '23:59';
@@ -59,12 +63,13 @@ export const FlightTracker: React.FC<FlightTrackerProps> = ({ user }) => {
     const targetTime = eta || sta;
     if (!targetTime) return { color: 'bg-surface-dim text-on-surface-dim', text: 'NO TIME' };
 
+    // Simple time comparison logic assuming targetTime is HH:mm
     const now = new Date();
     const [hours, minutes] = targetTime.split(':').map(Number);
     const targetDate = new Date();
     targetDate.setHours(hours, minutes, 0, 0);
 
-    const diffMins = Math.round((targetDate.getTime() - now.getTime()) / 60000);
+    const diffMins = differenceInMinutes(targetDate, now);
 
     if (diffMins < 0) return { color: 'bg-primary/20 text-primary border border-primary/30', text: 'ARRIVED' };
     if (diffMins <= 15) return { color: 'bg-error/20 text-error border border-error/30', text: '<15 MIN' };
@@ -73,6 +78,7 @@ export const FlightTracker: React.FC<FlightTrackerProps> = ({ user }) => {
   };
 
   const getAirlineCode = (flightNumber: string) => {
+    // Extract first 2-3 letters
     const match = flightNumber.match(/^[A-Z0-9]{2,3}/i);
     return match ? match[0].toUpperCase() : 'UNKNOWN';
   };

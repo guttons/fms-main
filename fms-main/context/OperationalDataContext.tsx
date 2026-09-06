@@ -5,7 +5,7 @@ import { EQUIPMENT, TANKS, MOCK_ALERTS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
 import { scheduleImportService } from '../services/scheduleImportService';
 import { supabase } from '../supabase';
-import { sendNativeNotification, sendHighPriorityNotification } from '../utils/pwa';
+import { sendNativeNotification } from '../utils/pwa';
 
 import { INITIAL_STAFF_LIST } from '../constants/staffList';
 
@@ -949,20 +949,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           if (!loadedAlertIdsRef.current.has(alert.id)) {
             loadedAlertIdsRef.current.add(alert.id);
             if (!alert.acknowledged) {
-              const isHighPriority = alert.severity === 'critical' || 
-                !!alert.alertType || 
-                alert.message.toLowerCase().includes('alert requested') || 
-                alert.message.toLowerCase().includes('no fuel');
-
-              if (isHighPriority) {
-                sendHighPriorityNotification('🚨 CRITICAL FMS ALERT', alert.message, {
-                  alertType: alert.alertType,
-                  alertId: alert.id,
-                  flightNumber: alert.flightNumber
-                });
-              } else {
-                sendNativeNotification('New FMS Alert', alert.message);
-              }
+              sendNativeNotification('New FMS Alert', alert.message);
             }
           }
         });

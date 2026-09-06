@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Users, Activity,
-  Plus, Pencil, Trash2, X, Check, AlertTriangle, Key,
+  Plus, Pencil, Trash2, X, Check, AlertTriangle,
   Truck, Fuel, ChevronDown, Phone, Mail, IdCard, UserCheck, UserX,
   RefreshCw, Anchor, Plane, Globe
 } from 'lucide-react';
@@ -301,27 +301,6 @@ const StaffTab: React.FC<{
     catch { push('Failed to update status', 'error'); }
   };
 
-  const handleResetPin = (s: StaffMember) => {
-    confirm(`Reset security PIN for ${s.name} (${s.employeeId})? They will be required to set a new PIN on their next sign in.`, async () => {
-      try {
-        const res = await fetch('/api/bq/auth/reset-pin', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ staffId: s.id })
-        });
-        const data = await res.json();
-        if (data.success) {
-          push(`PIN reset for ${s.name}. User will set a new PIN on next sign-in.`, 'success');
-        } else {
-          push(data.error || 'Failed to reset PIN', 'error');
-        }
-      } catch (err) {
-        console.error('Reset PIN error:', err);
-        push('Failed to reset PIN. Backend authentication server error.', 'error');
-      }
-    });
-  };
-
   const [searchQuery, setSearchQuery] = useState('');
 
   const filtered = staff.filter(s => {
@@ -442,9 +421,6 @@ const StaffTab: React.FC<{
                       </button>
                       <button onClick={() => openEdit(s)} title="Configure RBAC Access Role & Status" className="p-2 rounded-xl hover:bg-primary/10 border border-transparent hover:border-primary/20 transition-all active:scale-90 flex items-center gap-1 text-[10px] font-bold text-primary">
                         <Pencil className="w-4 h-4" /> Role
-                      </button>
-                      <button onClick={() => handleResetPin(s)} title="Reset Security PIN" className="p-2 rounded-xl hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 transition-all active:scale-90 flex items-center gap-1 text-[10px] font-bold text-amber-500">
-                        <Key className="w-4 h-4" /> PIN
                       </button>
                       <button onClick={() => handleDelete(s)} title="Remove Staff Member" className="p-2 rounded-xl hover:bg-error/10 border border-transparent hover:border-error/20 transition-all active:scale-90">
                         <Trash2 className="w-4 h-4 text-error" />
