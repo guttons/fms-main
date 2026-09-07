@@ -19,7 +19,7 @@ export const PredictiveBackWrapper: React.FC<PredictiveBackWrapperProps> = ({
   children,
 }) => {
   return (
-    <div className="w-full min-h-full">
+    <div className={`w-full ${activeView === 'tracker' ? 'flex-1 h-full min-h-0 flex flex-col overflow-hidden' : 'min-h-full'}`}>
       {children || renderContent(activeView)}
     </div>
   );

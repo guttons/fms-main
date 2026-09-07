@@ -29,6 +29,8 @@ import { ExecutiveModule } from './components/ExecutiveModule';
 import { MOCK_USERS } from './constants';
 import { AIChatModal } from './components/AIChatModal';
 import { FlightTracker } from './components/FlightTracker';
+import { StaffTracker } from './components/StaffTracker';
+import { LocationPromptModal } from './components/LocationPromptModal';
 import { FullScreenAlert } from './components/FullScreenAlert';
 import { supabaseService } from './services/supabaseService';
 import { User, UserRole, FlightJob, Alert, EquipmentStatus as EqStatusEnum } from './types';
@@ -36,6 +38,7 @@ import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, A
 import { updatePWAManifestAndTheme, requestNotificationPermission, sendNativeNotification, subscribeToWebPush, unsubscribeFromWebPush, getPushSubscription } from './utils/pwa';
 import { haptic, isHapticEnabled, setHapticEnabled, isReducedMotion, setReducedMotion } from './utils/haptics';
 import { syncEngine } from './services/syncEngine';
+import { useStaffActivityTracker } from './hooks/useStaffActivityTracker';
 import { PredictiveBackWrapper } from './components/PredictiveBackWrapper';
 
 const App: React.FC = () => {
@@ -313,6 +316,14 @@ const AppContextContent: React.FC<any> = ({
   const { alerts, acknowledgeAlert, acknowledgeAllAlerts, clearAllAlerts, equipment, flightJobs, refreshData, domesticFlights, domesticAssignments, updateEquipmentStatus, updateFlightJob } = useOperationalData();
   const { notify, notifyWithAction, dismiss, clear } = useNotification();
 
+  // Automatic staff activity tracking, heartbeat, and location sharing prompt for logged-in user
+  const {
+    showLocationPrompt,
+    startLocationTracking,
+    dismissLocationPrompt,
+    isRequestingLocation
+  } = useStaffActivityTracker({ user: currentUser, isAuthenticated: !!currentUser });
+
   // Wrapped logout: release any IN_USE equipment and revert IN_PROGRESS jobs for this user before signing out
   const wrappedLogout = () => {
     // Revert any IN_PROGRESS flight jobs assigned to this user and release their associated equipment
@@ -341,6 +352,17 @@ const AppContextContent: React.FC<any> = ({
   useEffect(() => {
     return syncEngine.subscribe(status => setSyncState(status));
   }, []);
+
+  // Ensure scroll position is reset whenever activeView changes, preventing fixed views from getting cut off under the sticky header
+  useEffect(() => {
+    if (mainElement) {
+      mainElement.scrollTop = 0;
+    }
+    if (scrollRef?.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
+  }, [activeView, mainElement, scrollRef]);
 
   // --- View History Stack for smart back-button navigation ---
   const viewHistoryRef = React.useRef<string[]>([activeView]);
@@ -919,6 +941,8 @@ const AppContextContent: React.FC<any> = ({
 
   const renderContent = (viewToRender = activeView) => {
     switch (viewToRender) {
+      case 'staff-tracker':
+        return <StaffTracker user={currentUser!} />;
       case 'tracker':
         return (
           <FlightTracker 
@@ -985,7 +1009,18 @@ const AppContextContent: React.FC<any> = ({
       case 'history':
         return <LogHistory user={currentUser} />;
       case 'schedule':
-        return <Schedule user={currentUser} />;
+        return (
+          <Schedule 
+            user={currentUser} 
+            onStartJob={(job: FlightJob) => {
+              setPendingJob(job);
+              if (job.vehicleId) {
+                setPendingVehicleId(job.vehicleId);
+              }
+              setActiveView('intoplane');
+            }} 
+          />
+        );
       case 'briefing':
         return <ShiftBriefing user={currentUser} isSidebarCollapsed={isSidebarCollapsed} />;
       case 'admin':
@@ -1088,7 +1123,7 @@ const AppContextContent: React.FC<any> = ({
           )}
 
           {/* Main Content Scroll Area */}
-          <main ref={mainRefCallback} className="flex-1 overflow-y-auto relative canvas scroll-smooth overscroll-none pb-32 lg:pb-10">
+          <main ref={mainRefCallback} className={`flex-1 ${activeView === 'tracker' ? 'overflow-hidden flex flex-col pb-[92px] lg:pb-0' : 'overflow-y-auto pb-32 lg:pb-10'} relative canvas scroll-smooth overscroll-none`}>
             
             {/* Dynamic Pull to Refresh Hex Droplet Spinner */}
             {(pullDistance > 0 || isRefreshing) && (
@@ -1667,7 +1702,7 @@ const AppContextContent: React.FC<any> = ({
             >
               <div 
                 key={activeView} 
-                className="w-full min-h-full"
+                className={`w-full ${activeView === 'tracker' ? 'h-full flex-1 min-h-0 flex flex-col overflow-hidden' : 'min-h-full'}`}
                 style={{
                   filter: blurAmount > 0 ? `blur(${blurAmount}px)` : 'none',
                   transition: pullingRef.current ? 'none' : 'filter 0.3s ease'
@@ -1864,6 +1899,14 @@ const AppContextContent: React.FC<any> = ({
             onAcknowledge={acknowledgeAlert} 
           />
         )}
+
+        {/* Airfield Location Sharing Prompt Modal for all logged in staff */}
+        <LocationPromptModal 
+          isOpen={showLocationPrompt}
+          onAllow={startLocationTracking}
+          onDismiss={dismissLocationPrompt}
+          isLoading={isRequestingLocation}
+        />
 
       </div>
   );

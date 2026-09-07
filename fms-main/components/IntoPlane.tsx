@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { FlightLog, User, FlightJob, Equipment, EquipmentStatus, UserRole } from '../types';
-import { MOCK_USERS, MOCK_ADHOC_FLIGHTS, PIT_MAPPING } from '../constants';
-import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Users, Lock, Calendar, X, CreditCard, Ban, Eye, Zap, Bell, Droplet, PlaneLanding, PlaneTakeoff, ArrowRightCircle, Check } from 'lucide-react';
+import { FlightLog, User, FlightJob, Equipment, EquipmentStatus, UserRole, isDomesticFlight } from '../types';
+import { MOCK_USERS, PIT_MAPPING } from '../constants';
+import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Users, Lock, Calendar, X, CreditCard, Ban, Eye, Zap, Bell, Droplet, PlaneLanding, PlaneTakeoff, ArrowRightCircle, Check, Pencil, Plane } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { equipmentBadgeClass, equipmentDotClass, getEquipmentHexColor } from '../utils/equipmentColors';
 import { useNotification } from '../context/NotificationContext';
 
 import { useOperationalData } from '../context/OperationalDataContext';
+import { EditStandModal } from './Schedule';
 
 interface IntoPlaneProps {
     user: User;
@@ -79,6 +80,133 @@ const getFuelColorClass = (volume: number | undefined, maxCapacity: number): str
   return 'text-primary';
 };
 
+const COMMON_AIRCRAFT_TYPES = [
+  'A320',
+  'A321',
+  'A330',
+  'A319',
+  'A340',
+  'A350',
+  'B777',
+  'B737',
+  'B787',
+  'B767',
+  'B757',
+  'DASH8',
+  'ATR'
+];
+
+const EditAircraftModal: React.FC<{
+  flightNumber: string;
+  initialType?: string;
+  initialReg?: string;
+  onClose: () => void;
+  onSave: (aircraftType: string, aircraftReg: string) => Promise<void> | void;
+}> = ({ flightNumber, initialType, initialReg, onClose, onSave }) => {
+  const [acType, setAcType] = useState(initialType || '');
+  const [acReg, setAcReg] = useState(initialReg || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!acType.trim() || !acReg.trim()) return;
+    setSaving(true);
+    try {
+      await onSave(acType.trim().toUpperCase(), acReg.trim().toUpperCase());
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-surface border border-outline rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-premium text-on-surface animate-in zoom-in-95 duration-200 relative">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+              <Plane className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base sm:text-lg font-black tracking-tight uppercase">Edit Aircraft Details</h3>
+              <p className="text-[10px] font-black text-primary uppercase tracking-widest">{flightNumber}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl text-on-surface-dim hover:text-on-surface hover:bg-surface-dim transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">
+              Aircraft Type
+            </label>
+            <input
+              type="text"
+              required
+              value={acType}
+              onChange={(e) => setAcType(e.target.value.toUpperCase())}
+              placeholder="e.g. A350-900"
+              className="w-full px-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black uppercase tracking-wider focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all"
+            />
+            <div className="flex flex-wrap gap-1.5 mt-2.5">
+              {COMMON_AIRCRAFT_TYPES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setAcType(t)}
+                  className={`px-2.5 py-1 text-[9px] font-black uppercase rounded-lg border transition-all cursor-pointer ${
+                    acType.toUpperCase() === t
+                      ? 'bg-primary text-white border-primary shadow-sm'
+                      : 'bg-surface-dim border-outline text-on-surface-dim hover:border-primary/50'
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">
+              Aircraft Registration
+            </label>
+            <input
+              type="text"
+              required
+              value={acReg}
+              onChange={(e) => setAcReg(e.target.value.toUpperCase())}
+              placeholder="e.g. 9V-SKT"
+              className="w-full px-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black uppercase tracking-wider focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all text-primary"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3.5 bg-surface-dim border border-outline text-on-surface-dim hover:text-on-surface rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !acType.trim() || !acReg.trim()}
+              className="flex-1 py-3.5 kinetic-gradient text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-premium disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {saving ? 'Saving...' : 'Save Details'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body
+  );
+};
 
 const MobileHeader: React.FC<{ 
     user: User, 
@@ -90,8 +218,10 @@ const MobileHeader: React.FC<{
     paymentType: string,
     setPaymentType: (v: string) => void,
     cashRate: string,
-    setCashRate: (rate: string) => void
-}> = ({ user, isOnline, activeFlight, selectedVehicleId, setSelectedVehicleId, equipment, paymentType, setPaymentType, cashRate, setCashRate }) => (
+    setCashRate: (rate: string) => void,
+    onEditActiveAircraft?: () => void,
+    onEditActiveStand?: () => void
+}> = ({ user, isOnline, activeFlight, selectedVehicleId, setSelectedVehicleId, equipment, paymentType, setPaymentType, cashRate, setCashRate, onEditActiveAircraft, onEditActiveStand }) => (
   <div className="bg-surface text-on-surface p-4 border-b border-outline sticky top-0 z-30 transition-colors shadow-sm flex items-center justify-between gap-3 overflow-hidden">
       <div className="flex items-center flex-1 min-w-0">
           <Truck className="w-5 h-5 mr-3 text-primary animate-pulse flex-shrink-0" />
@@ -187,13 +317,35 @@ const MobileHeader: React.FC<{
           {activeFlight && (
               <div className="flex flex-col md:flex-row md:items-center justify-center ml-3 pl-3 border-l border-outline min-w-0 flex-1">
                   <span className="text-xl font-[900] text-primary tracking-tighter leading-none mb-1 md:mb-0 md:mr-3 flex-shrink-0">{activeFlight.flightNumber}</span>
-                  <span className="text-[11px] font-black text-on-surface-dim uppercase tracking-widest truncate">
-                      <span className="text-on-surface">{activeFlight.stand}</span>
-                      {activeFlight.aircraftType && <span className="mx-1.5 opacity-50">•</span>}
-                      {activeFlight.aircraftType && <span className="text-on-surface">{activeFlight.aircraftType}</span>}
-                      {activeFlight.aircraftReg && <span className="mx-1.5 opacity-50">•</span>}
-                      {activeFlight.aircraftReg && <span className="text-primary">{activeFlight.aircraftReg}</span>}
-                  </span>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-[11px] font-black text-on-surface-dim uppercase tracking-widest truncate flex items-center">
+                          <span className="text-on-surface">{activeFlight.stand || 'TBA'}</span>
+                          {onEditActiveStand && (
+                              <button
+                                  type="button"
+                                  onClick={onEditActiveStand}
+                                  className="p-1 ml-0.5 rounded-md hover:bg-surface-container text-on-surface-dim hover:text-primary transition-all opacity-60 hover:opacity-100 flex-shrink-0 cursor-pointer"
+                                  title="Edit Parking Stand"
+                              >
+                                  <Pencil className="w-2.5 h-2.5" />
+                              </button>
+                          )}
+                          {activeFlight.aircraftType && <span className="mx-1.5 opacity-50">•</span>}
+                          {activeFlight.aircraftType && <span className="text-on-surface">{activeFlight.aircraftType}</span>}
+                          {activeFlight.aircraftReg && <span className="mx-1.5 opacity-50">•</span>}
+                          {activeFlight.aircraftReg && <span className="text-primary">{activeFlight.aircraftReg}</span>}
+                      </span>
+                      {onEditActiveAircraft && (
+                          <button
+                              type="button"
+                              onClick={onEditActiveAircraft}
+                              className="p-1 rounded-md hover:bg-surface-container text-on-surface-dim hover:text-primary transition-all opacity-60 hover:opacity-100 flex-shrink-0 cursor-pointer"
+                              title="Edit Aircraft Type & Registration"
+                          >
+                              <Pencil className="w-3 h-3" />
+                          </button>
+                      )}
+                  </div>
               </div>
           )}
       </div>
@@ -239,10 +391,13 @@ const ScreenDashboard: React.FC<{
     selectedBriefingShift,
     selectedBriefingDate,
     domesticAssignments,
-    externalFlights
+    externalFlights,
+    updateFlightJob
   } = useOperationalData();
   const [viewMode, setViewMode] = useState<'INT' | 'DOM' | 'ADHOC'>('INT');
   const [filterMyTasks, setFilterMyTasks] = useState(false);
+  const [editingAircraftJob, setEditingAircraftJob] = useState<FlightJob | null>(null);
+  const [editingStandJob, setEditingStandJob] = useState<FlightJob | null>(null);
 
   const renderStatusBadge = (status?: string) => {
     if (!status) return null;
@@ -302,19 +457,20 @@ const ScreenDashboard: React.FC<{
 
   const isFlightInShift = (dep?: string) => {
     if (!dep) return true; // Show flights without DEP always
+    const timeStr = dep.slice(0, 5);
     const range = shiftRanges[selectedBriefingShift];
     if (!range) return true;
     if (range.crossesMidnight) {
-      return dep >= range.start || dep <= range.end;
+      return timeStr >= range.start || timeStr <= range.end;
     }
-    return dep >= range.start && dep <= range.end;
+    return timeStr >= range.start && timeStr <= range.end;
   };
 
   const frozenFlights = briefingInfo?.staffAssignments?.frozenFlights;
 
   const liveIntlList = (flightJobs || []).filter(f => {
     const isDep = f.type ? f.type === 'departure' : !!f.std;
-    return isDep && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate);
+    return !isDomesticFlight(f) && isDep && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate);
   });
 
   const getStatusForFlightDate = (cleanNo: string, flightDate: string, defaultStatus: string = 'PENDING') => {
@@ -337,10 +493,11 @@ const ScreenDashboard: React.FC<{
       if (!j || !j.flightNumber) return false;
       const jobNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
       if (jobNo !== cleanNo) return false;
-      return j.date ? j.date === flightDate : true;
+      const jDate = j.date ? j.date.split('T')[0] : '';
+      return jDate ? jDate === flightDate : true;
     });
 
-    if (dbJob && (dbJob.date === flightDate || !dbJob.date) && dbJob.status) {
+    if (dbJob && (!dbJob.date || dbJob.date.split('T')[0] === flightDate) && dbJob.status) {
       return dbJob.status;
     }
 
@@ -377,7 +534,7 @@ const ScreenDashboard: React.FC<{
   });
 
   if (frozenFlights?.intl) {
-    frozenFlights.intl.forEach((ff: any) => {
+    frozenFlights.intl.filter((ff: any) => !isDomesticFlight(ff)).forEach((ff: any) => {
       const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
       const existing = intlJobsMap.get(cleanNo);
       const flightDate = ff.date ? ff.date.split('T')[0] : selectedBriefingDate;
@@ -409,11 +566,11 @@ const ScreenDashboard: React.FC<{
     .filter((f: any) => f.fidsStatus?.toUpperCase() !== 'CANCELLED')
     .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
   
-  const liveDomList = (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate));
+  const liveDomList = (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate));
   const domJobsMap = new Map<string, any>();
   liveDomList.forEach(f => {
     const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-    const flightDate = f.date || selectedBriefingDate;
+    const flightDate = f.date ? f.date.split('T')[0] : selectedBriefingDate;
     const computedStatus = getStatusForFlightDate(cleanNo, flightDate, f.status || 'PENDING');
     domJobsMap.set(cleanNo, {
       ...f,
@@ -426,7 +583,7 @@ const ScreenDashboard: React.FC<{
     frozenFlights.domestic.forEach((ff: any) => {
       const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
       const existing = domJobsMap.get(cleanNo);
-      const flightDate = ff.date || selectedBriefingDate;
+      const flightDate = ff.date ? ff.date.split('T')[0] : selectedBriefingDate;
       const computedStatus = getStatusForFlightDate(cleanNo, flightDate, existing?.status || ff.status || 'PENDING');
       domJobsMap.set(cleanNo, {
         ...(existing || {}),
@@ -462,27 +619,32 @@ const ScreenDashboard: React.FC<{
       };
   }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
 
-  const adhocJobsRaw = briefingInfo?.staffAssignments?.adhocFlights !== undefined
-    ? briefingInfo.staffAssignments.adhocFlights
-    : MOCK_ADHOC_FLIGHTS.filter(f => isFlightInShift(f.sta || f.std) && (!f.date || f.date === selectedBriefingDate));
+  const adhocJobsRaw = (briefingInfo?.staffAssignments?.adhocFlights || [])
+    .filter((f: any) => f && f.id !== 'ah1' && f.id !== 'ah2');
 
-  const adhocJobs = adhocJobsRaw.map((f: any) => ({
-      id: f.id,
-      flightNumber: f.flightNumber,
-      aircraftReg: f.aircraftReg,
-      aircraftType: f.aircraftType,
-      stand: f.stand,
-      sta: f.sta,
-      eta: f.eta,
-      std: f.std,
-      assignedTo: f.id === 'ah1' ? user.id : 'u3b',
-      assignedOfficer: undefined,
-      status: f.status as any,
-      fidsStatus: f.status,
-      route: f.route,
+  const adhocJobs = adhocJobsRaw.map((f: any) => {
+    const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+    const matchJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+    const merged = matchJob ? { ...f, ...matchJob } : f;
+    return {
+      ...merged,
+      id: merged.id,
+      flightNumber: merged.flightNumber,
+      aircraftReg: merged.aircraftReg,
+      aircraftType: merged.aircraftType,
+      stand: merged.stand,
+      sta: merged.sta,
+      eta: merged.eta,
+      std: merged.std,
+      assignedTo: merged.assignedTo || '',
+      assignedOfficer: merged.assignedOfficer || '',
+      status: merged.status as any,
+      fidsStatus: merged.status,
+      route: merged.route,
       isAdhoc: true,
-      vehicleId: f.vehicleId,
-  })).sort((a: any, b: any) => (a.std || a.sta || '').localeCompare(b.std || b.sta || ''));
+      vehicleId: merged.vehicleId,
+    };
+  }).sort((a: any, b: any) => (a.std || a.sta || '').localeCompare(b.std || b.sta || ''));
 
   const isJobAssignedToUser = (job: FlightJob) => {
     if (!job || !user) return false;
@@ -568,6 +730,10 @@ const ScreenDashboard: React.FC<{
 
   const renderJobCard = (job: FlightJob) => {
       const isAssignedToMe = isJobAssignedToUser(job);
+      const isManagerOrAdmin = user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN;
+      const canLogFlight = isAssignedToMe || isManagerOrAdmin;
+      const canEditAircraft = isAssignedToMe || isManagerOrAdmin;
+      const canEditStand = isManagerOrAdmin;
       const usersList = staff && staff.length > 0 ? staff : MOCK_USERS;
       const assignee = usersList.find(u => u.id === job.assignedTo || u.name.toLowerCase() === (job.assignedTo || '').toLowerCase());
       const assigneeName = assignee?.name || job.assignedTo || 'Unassigned';
@@ -620,8 +786,15 @@ const ScreenDashboard: React.FC<{
                           <div className="flex flex-col">
                               <div className="flex flex-wrap items-center gap-2">
                                   {/* Yellow gradient stand badge next to flight number on desktop view */}
-                                  <div className="hidden md:block bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider">
-                                      {job.stand}
+                                  <div 
+                                      onClick={canEditStand ? (e) => { e.stopPropagation(); setEditingStandJob(job); } : undefined}
+                                      className={`hidden md:flex items-center gap-1 bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider ${
+                                          canEditStand ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500' : ''
+                                      }`}
+                                      title={canEditStand ? "Click to change stand" : undefined}
+                                  >
+                                      <span>{job.stand || 'TBA'}</span>
+                                      {canEditStand && <Pencil className="w-2.5 h-2.5 opacity-60" />}
                                   </div>
                                   <h3 className="text-2xl sm:text-3xl font-[900] text-on-surface tracking-tighter leading-none">{job.flightNumber}</h3>
                                   
@@ -651,6 +824,16 @@ const ScreenDashboard: React.FC<{
                                       <span className="opacity-60">{job.aircraftType}</span>
                                       <span className="opacity-20">|</span>
                                       <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black text-on-surface-dim border-transparent uppercase tracking-wider">{job.aircraftReg}</span>
+                                      {canEditAircraft && (
+                                          <button
+                                              type="button"
+                                              onClick={(e) => { e.stopPropagation(); setEditingAircraftJob(job); }}
+                                              className="p-1 rounded-md hover:bg-surface-container text-on-surface-dim hover:text-primary transition-all opacity-60 hover:opacity-100 cursor-pointer"
+                                              title="Edit Aircraft Type & Registration"
+                                          >
+                                              <Pencil className="w-3 h-3" />
+                                          </button>
+                                      )}
                                       {job.route && (
                                           <>
                                               <span className="opacity-20">|</span>
@@ -670,14 +853,29 @@ const ScreenDashboard: React.FC<{
 
                           {/* Mobile-only details: Stand, type, reg, and route grouped together on the same row */}
                           <div className="flex flex-wrap items-center mt-2 text-on-surface-dim text-[11px] sm:text-[12px] font-bold gap-x-2 gap-y-1.5 md:hidden">
-                               <div className="flex items-center whitespace-nowrap">
+                               <div 
+                                   onClick={canEditStand ? (e) => { e.stopPropagation(); setEditingStandJob(job); } : undefined}
+                                   className={`flex items-center whitespace-nowrap ${canEditStand ? 'cursor-pointer hover:text-primary transition-colors' : ''}`}
+                                   title={canEditStand ? "Click to change stand" : undefined}
+                               >
                                    <MapPin className="w-3.5 h-3.5 mr-1 text-primary opacity-60 shrink-0" />
-                                   <span>{job.stand}</span>
+                                   <span>{job.stand || 'TBA'}</span>
+                                   {canEditStand && <Pencil className="w-2.5 h-2.5 ml-1 opacity-60 text-primary" />}
                                 </div>
                                <span className="opacity-20 shrink-0">|</span>
                                <span className="opacity-60 whitespace-nowrap">{job.aircraftType}</span>
                                <span className="opacity-20 shrink-0">|</span>
                                <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black text-on-surface-dim border-transparent uppercase tracking-wider whitespace-nowrap">{job.aircraftReg}</span>
+                               {canEditAircraft && (
+                                   <button
+                                       type="button"
+                                       onClick={(e) => { e.stopPropagation(); setEditingAircraftJob(job); }}
+                                       className="p-1 rounded-md hover:bg-surface-container text-on-surface-dim hover:text-primary transition-all opacity-60 hover:opacity-100 cursor-pointer"
+                                       title="Edit Aircraft Type & Registration"
+                                   >
+                                       <Pencil className="w-3 h-3" />
+                                   </button>
+                               )}
                                {job.route && (
                                  <>
                                    <span className="opacity-20 shrink-0">|</span>
@@ -853,17 +1051,17 @@ const ScreenDashboard: React.FC<{
                                )
                            )}
 
-                           {/* play action button only if assigned to me or completed */}
-                           {(isAssignedToMe || job.status === 'COMPLETED') && (
+                           {/* play action button if assigned to me, manager/admin, or completed */}
+                           {(canLogFlight || job.status === 'COMPLETED') && (
                                <button 
                                    onClick={() => {
                                        if (job.status === 'COMPLETED') {
                                            notify(`Log for ${job.flightNumber} is already finalized.`, "info");
-                                       } else if (isAssignedToMe) {
+                                       } else if (canLogFlight) {
                                            onStartJob(job);
                                        }
                                    }}
-                                   className={`w-10 h-10 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm
+                                   className={`w-10 h-10 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm cursor-pointer
                                         ${job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/20' : 'kinetic-gradient text-white hover:scale-[1.05] active:scale-95 shadow-premium'}
                                     `}
                                    title={job.status === 'COMPLETED' ? 'View Log' : 'Start Job'}
@@ -1000,6 +1198,50 @@ const ScreenDashboard: React.FC<{
               {activeJobs.map(renderJobCard)}
           </div>
       </div>
+
+      {editingAircraftJob && (
+        <EditAircraftModal
+          flightNumber={editingAircraftJob.flightNumber}
+          initialType={editingAircraftJob.aircraftType}
+          initialReg={editingAircraftJob.aircraftReg}
+          onClose={() => setEditingAircraftJob(null)}
+          onSave={async (newType, newReg) => {
+            try {
+              await updateFlightJob(editingAircraftJob.id, {
+                aircraftType: newType,
+                aircraftReg: newReg
+              });
+              notify(`Updated aircraft for flight ${editingAircraftJob.flightNumber} to ${newType} (${newReg})`, 'success');
+            } catch (err) {
+              console.error(err);
+              notify('Failed to update aircraft details', 'error');
+            }
+          }}
+        />
+      )}
+
+      {editingStandJob && (
+        <EditStandModal
+          flightNumber={editingStandJob.flightNumber}
+          currentStand={editingStandJob.stand || ''}
+          onClose={() => setEditingStandJob(null)}
+          onSave={async (newStand) => {
+            try {
+              const jobId = editingStandJob.id || ((flightJobs || []).find(j => j.flightNumber === editingStandJob.flightNumber)?.id);
+              if (jobId) {
+                await updateFlightJob(jobId, { stand: newStand });
+              }
+              if (activeFlight && (activeFlight.id === editingStandJob.id || activeFlight.flightNumber === editingStandJob.flightNumber)) {
+                activeFlight.stand = newStand;
+              }
+              notify(`Flight ${editingStandJob.flightNumber} stand changed to ${newStand}`, 'success');
+            } catch (err) {
+              console.error(err);
+              notify('Failed to update flight stand', 'error');
+            }
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -1023,28 +1265,57 @@ const ScreenTimestamps: React.FC<{
       <h2 className="text-on-surface text-xl sm:text-2xl font-black mb-8 tracking-tighter uppercase italic">Ramp Arrival <span className="text-primary">& Setup</span></h2>
       
       <div className="space-y-6 flex-1">
-          {/* Operational Date */}
-          <div className="card-premium p-6 border-outline overflow-hidden">
-              <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Operational Date</label>
-              <div className="relative">
-                  <input
-                      type="date"
-                      required
-                      value={activeFlight?.operationalDate || selectedBriefingDate || new Date().toISOString().split('T')[0]}
-                      onChange={(e) => onInputChange('operationalDate' as any, e.target.value)}
-                      onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
-                      className="w-full pl-10 pr-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:left-0 [&::-webkit-calendar-picker-indicator]:top-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                  />
-                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
+          {/* Top Row: Operational Date (Left) & Aircraft Details (Right) */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
+              {/* Operational Date */}
+              <div className="card-premium p-6 border-outline overflow-hidden md:col-span-5 lg:col-span-4 flex flex-col justify-between">
+                  <div className="flex justify-between items-center mb-4">
+                      <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Operational Date</label>
+                  </div>
+                  <div>
+                      <span className="hidden sm:block text-[9px] font-black text-transparent select-none uppercase tracking-widest mb-1.5 opacity-0">Date</span>
+                      <div className="relative">
+                          <input
+                              type="date"
+                              required
+                              value={activeFlight?.operationalDate || selectedBriefingDate || new Date().toISOString().split('T')[0]}
+                              onChange={(e) => onInputChange('operationalDate' as any, e.target.value)}
+                              onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) (e.target as HTMLInputElement).showPicker(); } catch {} }}
+                              className="w-full pl-10 pr-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:left-0 [&::-webkit-calendar-picker-indicator]:top-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                          />
+                          <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary opacity-50 pointer-events-none" />
+                      </div>
+                  </div>
               </div>
-          </div>
 
-          {/* Fuel Type / Product Display */}
-          <div className="card-premium p-6 border-outline overflow-hidden">
-              <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Fuel Type / Product</label>
-              <div className="w-full px-6 py-4 bg-primary/5 border border-primary/20 rounded-2xl text-primary font-black uppercase tracking-widest flex items-center shadow-inner">
-                  <Droplet className="w-4 h-4 mr-3 opacity-60" />
-                  JET A-1
+              {/* Aircraft Details */}
+              <div className="card-premium p-6 border-outline overflow-hidden md:col-span-7 lg:col-span-8 flex flex-col justify-between">
+                  <div className="flex justify-between items-center mb-4">
+                      <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">Aircraft Details</label>
+                      <Plane className="w-4 h-4 text-primary opacity-50" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                          <span className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5 opacity-60">Aircraft Type</span>
+                          <input
+                              type="text"
+                              value={activeFlight?.aircraftType || ''}
+                              onChange={(e) => onInputChange('aircraftType', e.target.value.toUpperCase())}
+                              placeholder="e.g. A320"
+                              className="w-full px-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[12px] font-black uppercase tracking-wider focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all"
+                          />
+                      </div>
+                      <div>
+                          <span className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5 opacity-60">Aircraft Registration</span>
+                          <input
+                              type="text"
+                              value={activeFlight?.aircraftReg || ''}
+                              onChange={(e) => onInputChange('aircraftReg', e.target.value.toUpperCase())}
+                              placeholder="e.g. 9V-SKT"
+                              className="w-full px-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[12px] font-black uppercase tracking-wider focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all text-primary"
+                          />
+                      </div>
+                  </div>
               </div>
           </div>
 
@@ -1644,7 +1915,7 @@ const ScreenQC: React.FC<{
 
 export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob, initialVehicleId, onClearInitialVehicleId }) => {
   const { notify } = useNotification();
-  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, externalFlights, staff, refreshData, selectedBriefingDate } = useOperationalData();
+  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, externalFlights, staff, refreshData, selectedBriefingDate, tanks, updateTankLevel, serviceTankId } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(null);
   const [paymentType, setPaymentType] = useState<'CREDIT' | 'CASH' | 'VOID'>('CREDIT');
@@ -1654,6 +1925,8 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   const [voidSaving, setVoidSaving] = useState(false);
   const [voidSuccess, setVoidSuccess] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showEditActiveAircraft, setShowEditActiveAircraft] = useState(false);
+  const [showEditActiveStand, setShowEditActiveStand] = useState(false);
 
   // Auto-show void modal when VOID selected
   useEffect(() => {
@@ -1854,7 +2127,11 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     // Update flight job status to IN_PROGRESS so Operator Oversight reflects active tasks
     const matchingJob = (flightJobs || []).find(j => j.flightNumber === job.flightNumber && j.status === 'PENDING');
     if (matchingJob) {
-      updateFlightJob(matchingJob.id, { status: 'IN_PROGRESS', vehicleId: activeVehicleId, assignedTo: user.id });
+      updateFlightJob(matchingJob.id, { 
+        status: 'IN_PROGRESS', 
+        vehicleId: activeVehicleId, 
+        assignedTo: matchingJob.assignedTo || user.id 
+      });
     }
 
     // Fetch last meterClose for this vehicle
@@ -1885,7 +2162,9 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       aircraftReg: job.aircraftReg,
       aircraftType: job.aircraftType,
       stand: job.stand,
-      operatorId: user.id,
+      operatorId: (user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN) 
+        ? (job.assignedTo || user.id) 
+        : user.id,
       vehicleId: activeVehicleId,
       status: 'PENDING',
       meterOpen: initialMeter,
@@ -2270,7 +2549,13 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
           updateEquipmentStatus(selectedVehicleId, EquipmentStatus.AVAILABLE);
         }
       } else {
-        // Just release hydrant/service equipment
+        // Hydrant dispensation: deduct from active service tank (defaults to tk101)
+        const targetTank = (tanks || []).find(t => t.id === serviceTankId) || (tanks || []).find(t => t.id === 'tk101');
+        if (targetTank && activeFlight.volume) {
+          const newLevel = Math.max(0, targetTank.currentLevel - (activeFlight.volume || 0));
+          await updateTankLevel(targetTank.id, newLevel);
+        }
+        // Release hydrant/service equipment
         updateEquipmentStatus(selectedVehicleId, EquipmentStatus.AVAILABLE);
       }
 
@@ -2305,7 +2590,42 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
           setPaymentType={(v) => setPaymentType(v as any)}
           cashRate={cashRate}
           setCashRate={setCashRate}
+          onEditActiveAircraft={() => setShowEditActiveAircraft(true)}
+          onEditActiveStand={(user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN) ? () => setShowEditActiveStand(true) : undefined}
         />
+
+        {showEditActiveAircraft && activeFlight && (
+          <EditAircraftModal
+            flightNumber={activeFlight.flightNumber || ''}
+            initialType={activeFlight.aircraftType}
+            initialReg={activeFlight.aircraftReg}
+            onClose={() => setShowEditActiveAircraft(false)}
+            onSave={async (newType, newReg) => {
+              setActiveFlight(prev => prev ? ({ ...prev, aircraftType: newType, aircraftReg: newReg }) : null);
+              const matching = (flightJobs || []).find(j => j.flightNumber === activeFlight.flightNumber);
+              if (matching) {
+                await updateFlightJob(matching.id, { aircraftType: newType, aircraftReg: newReg });
+              }
+              notify(`Aircraft updated to ${newType} (${newReg})`, 'success');
+            }}
+          />
+        )}
+
+        {showEditActiveStand && activeFlight && (
+          <EditStandModal
+            flightNumber={activeFlight.flightNumber || ''}
+            currentStand={activeFlight.stand || ''}
+            onClose={() => setShowEditActiveStand(false)}
+            onSave={async (newStand) => {
+              setActiveFlight(prev => prev ? ({ ...prev, stand: newStand }) : null);
+              const matching = (flightJobs || []).find(j => j.flightNumber === activeFlight.flightNumber);
+              if (matching) {
+                await updateFlightJob(matching.id, { stand: newStand });
+              }
+              notify(`Flight ${activeFlight.flightNumber} stand updated to ${newStand}`, 'success');
+            }}
+          />
+        )}
 
         {/* Detail Confirmation Modal */}
         {showConfirmModal && activeFlight && createPortal(

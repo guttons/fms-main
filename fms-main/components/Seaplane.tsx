@@ -10,7 +10,7 @@ interface SeaplaneProps {
 }
 
 export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
-    const { flightLogs, staff } = useOperationalData();
+    const { flightLogs, staff, tanks, updateTankLevel } = useOperationalData();
     const activeOfficers = (staff || []).filter(s => [UserRole.DEPOT_MANAGER, UserRole.ITP_MANAGER, UserRole.ADMIN].includes(s.role));
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -76,6 +76,14 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
             };
 
             await supabaseService.createFlightLog(logToSave);
+
+            // Deduct pumped volume from active seaplane fuel tank
+            const targetSpfTank = (tanks || []).find(t => t.id === 'spf-e1') || (tanks || []).find(t => t.id.startsWith('spf'));
+            if (targetSpfTank && parsedVolume > 0) {
+                const newLevel = Math.max(0, targetSpfTank.currentLevel - parsedVolume);
+                await updateTankLevel(targetSpfTank.id, newLevel);
+            }
+
             setLoading(false);
             setSuccess(true);
             setFormData({

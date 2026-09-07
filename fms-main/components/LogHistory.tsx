@@ -93,7 +93,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
   const resolveLogType = (log: FlightLog): string => {
     const num = log.flightNumber || '';
-    const category = String((log as any).category || (log as any).flightCategory || (log as any).flight_category || (log as any).route || '').toUpperCase();
+    const category = String((log as any).category || (log as any).flightCategory || (log as any).flight_category || (log as any).route || log.intDom || '').toUpperCase();
     if (log.logType === 'SEAPLANE' || num.startsWith('SEAPLANE') || category === 'SEA' || category.startsWith('SEA')) return 'SEAPLANE';
     if (log.logType === 'FILLING_STATION' || num.startsWith('GROUND-')) return 'FILLING_STATION';
     if (log.logType === 'MARINE' || num.startsWith('VESSEL-')) return 'MARINE';
@@ -358,7 +358,6 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
         const res = await supabaseService.getFlightLogs(filters);
         fetchedLogsList = res.logs || [];
         if (selectedLogType === 'TOTALIZER_READINGS') {
-          const originalLen = fetchedLogsList.length;
           fetchedLogsList = fetchedLogsList.filter(log => {
             if (!log || !log.vehicleId) return false;
             const veh = log.vehicleId.toUpperCase();
@@ -366,25 +365,13 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
             if (log.meterOpen === undefined || log.meterOpen === null || isNaN(log.meterOpen)) return false;
             return veh.startsWith('RF') || veh.startsWith('HD');
           });
-          if (fetchedLogsList.length < originalLen) {
-            // Recalculate totals client-side as fallback if server-side is not yet redeployed
-            fetchedTotalCount = fetchedLogsList.length;
-            fetchedTotalVolume = fetchedLogsList.reduce((sum, l) => sum + (l.volume || 0), 0);
-          } else {
-            fetchedTotalCount = res.totalCount;
-            fetchedTotalVolume = res.totalVolume;
-          }
+          fetchedTotalCount = res.totalCount !== undefined && res.totalCount > 0 ? res.totalCount : fetchedLogsList.length;
+          fetchedTotalVolume = res.totalVolume !== undefined && res.totalVolume > 0 ? res.totalVolume : fetchedLogsList.reduce((sum, l) => sum + (l.volume || 0), 0);
         } else {
           // Client-side fallback filtering by resolveLogType to guarantee clean separation on deployed app
-          const originalList = [...fetchedLogsList];
           fetchedLogsList = fetchedLogsList.filter(log => resolveLogType(log) === selectedLogType);
-          if (fetchedLogsList.length < originalList.length) {
-            fetchedTotalCount = fetchedLogsList.length;
-            fetchedTotalVolume = fetchedLogsList.reduce((sum, l) => sum + (l.volume || 0), 0);
-          } else {
-            fetchedTotalCount = res.totalCount;
-            fetchedTotalVolume = res.totalVolume;
-          }
+          fetchedTotalCount = res.totalCount !== undefined && res.totalCount > 0 ? res.totalCount : fetchedLogsList.length;
+          fetchedTotalVolume = res.totalVolume !== undefined && res.totalVolume > 0 ? res.totalVolume : fetchedLogsList.reduce((sum, l) => sum + (l.volume || 0), 0);
         }
       }
 
@@ -1251,7 +1238,19 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                            <tr className="bg-surface-dim/30 border-b border-outline">
                               <td colSpan={colSpanCount} className="px-10 py-6">
                                  {/* Into-Plane details */}
-                                 {selectedLogType === 'FLIGHT' && (
+                                 {selectedLogType === 'FLIGHT' && (() => {
+                                    const isCancelledDelivery =
+                                      String(log.intDom || '').toUpperCase() === 'VOID' ||
+                                      String(log.airline || log.co || '').toUpperCase().includes('CANCELLED DELIVERY');
+                                    if (isCancelledDelivery) {
+                                      return (
+                                        <div className="flex flex-col gap-1 animate-in fade-in duration-300">
+                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Officer</span>
+                                          <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{officerName}</span>
+                                        </div>
+                                      );
+                                    }
+                                    return (
                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-in fade-in duration-300">
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Airline / Customer</span>
@@ -1312,12 +1311,12 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                          <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{officerName}</span>
                                       </div>
                                       <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Operator Name</span>
-                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.tacticalOperator || log.operatorName || operatorName || 'N/A'}</span>
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">RF Operator</span>
+                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.tacticalOperator || 'N/A'}</span>
                                       </div>
                                       <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">C/O (Account)</span>
-                                         <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.airline || 'N/A'}</span>
+                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Operator Name</span>
+                                         <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.operatorName || 'N/A'}</span>
                                       </div>
                                       <div className="flex flex-col gap-1">
                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Stand</span>
@@ -1334,14 +1333,15 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                          <span className="text-[11px] text-on-surface opacity-80">{log.remarks || 'No operational remarks.'}</span>
                                       </div>
                                    </div>
-                                 )}
+                                    );
+                                  })()}
 
                                  {/* Seaplane details */}
                                  {selectedLogType === 'SEAPLANE' && (
                                     <div className="grid grid-cols-2 md:grid-cols-5 gap-6 animate-in fade-in duration-300">
                                        <div className="flex flex-col gap-1">
-                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Operator Name</span>
-                                          <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{seaplaneOp}</span>
+                                          <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">RF Operator</span>
+                                          <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.tacticalOperator || 'N/A'}</span>
                                        </div>
                                        <div className="flex flex-col gap-1">
                                           <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Infrastructure Registry</span>

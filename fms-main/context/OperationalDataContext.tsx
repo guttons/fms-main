@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightLog, StaffMember, UserRole, Vessel, ShipmentData, InternationalSchedule, ScheduleCrossCheckResult, PredictiveUpliftForecast } from '../types';
+import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightLog, StaffMember, UserRole, Vessel, ShipmentData, InternationalSchedule, ScheduleCrossCheckResult, PredictiveUpliftForecast, isDomesticFlight } from '../types';
 import { EQUIPMENT, TANKS, MOCK_ALERTS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
 import { scheduleImportService } from '../services/scheduleImportService';
@@ -171,6 +171,59 @@ const INITIAL_SHIPMENTS: ShipmentData[] = [
   }
 ];
 
+// ── Helper: Deduplicate Alerts and Identify Redundant IDs ────────────────────
+export const deduplicateAlerts = (rawAlerts: Alert[]): { uniqueAlerts: Alert[]; duplicateIds: string[] } => {
+  if (!Array.isArray(rawAlerts)) return { uniqueAlerts: [], duplicateIds: [] };
+
+  const seen = new Set<string>();
+  const uniqueAlerts: Alert[] = [];
+  const duplicateIds: string[] = [];
+
+  for (const alert of rawAlerts) {
+    if (!alert || !alert.id) continue;
+
+    const cleanFlight = (alert.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+    const type = alert.alertType || 'GENERAL';
+    const target = alert.assignedStaffId || alert.targetRole || 'ALL';
+
+    let dedupeKey: string;
+    if (['LANDED', 'ETA_15MIN', 'ETA_5MIN', 'REQUEST_FUELING', 'NO_FUEL'].includes(type) && cleanFlight) {
+      // For tactical alerts on a flight, deduplicate strictly by type, flight number, and target
+      dedupeKey = `${type}:${cleanFlight}:${target}`;
+    } else {
+      // For general alerts, deduplicate by message and target
+      dedupeKey = `${type}:${target}:${(alert.message || '').trim()}`;
+    }
+
+    if (seen.has(dedupeKey)) {
+      duplicateIds.push(alert.id);
+    } else {
+      seen.add(dedupeKey);
+      uniqueAlerts.push(alert);
+    }
+  }
+
+  return { uniqueAlerts, duplicateIds };
+};
+
+const getSentAlertsCache = (type: string, dateStr: string): Set<string> => {
+  try {
+    const raw = localStorage.getItem(`fms_sent_${type.toLowerCase()}_${dateStr}`);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+};
+
+const persistSentAlertToCache = (type: string, dateStr: string, key: string) => {
+  try {
+    const cacheKey = `fms_sent_${type.toLowerCase()}_${dateStr}`;
+    const set = getSentAlertsCache(type, dateStr);
+    set.add(key);
+    localStorage.setItem(cacheKey, JSON.stringify(Array.from(set)));
+  } catch {}
+};
+
 export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user: any }> = ({ children, user: appUser }) => {
   const [shipments, setShipments] = useState<ShipmentData[]>(() => {
     try {
@@ -228,7 +281,14 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
   });
 
-  const [externalFlights, setExternalFlights] = useState<any[]>([]);
+  const [externalFlights, setExternalFlights] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('fms_external_flights_cache');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [isExternalFlightsLoading, setIsExternalFlightsLoading] = useState(false);
 
   const findRelatedArrival = (depFlight: any, allFlights: any[]) => {
@@ -322,6 +382,29 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
   const [internationalSchedules, setInternationalSchedules] = useState<InternationalSchedule[]>([]);
 
+  const [selectedBriefingShift, setSelectedBriefingShiftState] = useState<BriefingShift>(() => {
+    try {
+      const saved = localStorage.getItem('fms_selected_shift');
+      if (saved) return saved as BriefingShift;
+    } catch(e) {}
+    
+    // Auto-detect current shift based on time
+    const hour = new Date().getHours();
+    const min = new Date().getMinutes();
+    const time = hour + min / 60;
+    
+    // Morning: 07:30 (7.5) to 16:00 (16.0)
+    // Evening: 15:00 (15.0) to 23:30 (23.5)
+    // Night: 22:30 (22.5) to 08:30 (8.5)
+    if (time >= 7.5 && time < 15.0) return 'Morning';
+    if (time >= 15.0 && time < 22.5) return 'Evening';
+    return 'Night';
+  });
+
+  const [selectedBriefingDate, setSelectedBriefingDateState] = useState<string>(() => {
+    return new Date().toISOString().split('T')[0];
+  });
+
   useEffect(() => {
     const loadIntlSchedules = async () => {
       try {
@@ -335,13 +418,26 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   }, []);
 
   const mergedFlightJobs = useMemo(() => {
-    if (!externalFlights || externalFlights.length === 0) {
-      return flightJobs;
+    let activeExternal = externalFlights;
+    if (!activeExternal || activeExternal.length === 0) {
+      try {
+        const cached = localStorage.getItem('fms_external_flights_cache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            activeExternal = parsed;
+          }
+        }
+      } catch (e) {}
     }
-    const dbJobs = flightJobs.filter(job => !['j1', 'j2', 'j3', 'j4'].includes(job.id));
+
+    if (!activeExternal || activeExternal.length === 0) {
+      return flightJobs.filter(job => !isDomesticFlight(job));
+    }
+    const dbJobs = flightJobs.filter(job => !['j1', 'j2', 'j3', 'j4'].includes(job.id) && !isDomesticFlight(job));
     const merged = [...dbJobs];
-    const liveIntl = externalFlights.filter((f: any) => {
-      if (f.category?.toLowerCase() !== 'international') return false;
+    const liveIntl = activeExternal.filter((f: any) => {
+      if (f.category?.toLowerCase() !== 'international' || isDomesticFlight(f)) return false;
       const statusLower = (f.status || '').toLowerCase();
       return !(statusLower.includes('cancel') || statusLower.includes('cnl'));
     });
@@ -359,7 +455,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
     liveIntl.forEach((lf: any) => {
       const lfNumNorm = (lf.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-      const lfDateStr = lf.date ? lf.date.split('T')[0] : '';
+      const lfDateStr = lf.date ? lf.date.split('T')[0] : selectedBriefingDate;
       const existingJobIdx = merged.findIndex(
         (job) => {
           const jobNumNorm = (job.flightNumber || '').replace(/\s+/g, '').toLowerCase();
@@ -429,12 +525,13 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         merged[existingJobIdx] = {
           ...merged[existingJobIdx],
           aircraftType: (merged[existingJobIdx].aircraftType && !['A320', 'Widebody Heavy', 'Widebody'].includes(merged[existingJobIdx].aircraftType)) ? scheduleImportService.normalizeAircraftType(merged[existingJobIdx].aircraftType) : matchedAcType,
+          aircraftReg: (merged[existingJobIdx].aircraftReg && merged[existingJobIdx].aircraftReg !== '8Q-TBA') ? merged[existingJobIdx].aircraftReg : (lf.aircraftReg || '8Q-TBA'),
           sta: staVal || merged[existingJobIdx].sta,
           eta: etaVal || merged[existingJobIdx].eta,
           std: stdVal || merged[existingJobIdx].std,
-          stand: standVal || merged[existingJobIdx].stand,
+          stand: (merged[existingJobIdx].stand && merged[existingJobIdx].stand !== '---') ? merged[existingJobIdx].stand : (standVal || '---'),
           route: routeStr || merged[existingJobIdx].route,
-          date: lf.date || merged[existingJobIdx].date,
+          date: lfDateStr || (merged[existingJobIdx].date ? merged[existingJobIdx].date.split('T')[0] : selectedBriefingDate),
           type: lf.type || merged[existingJobIdx].type,
           status: newStatus,
           fidsStatus: resolvedFids
@@ -456,25 +553,38 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           status: newStatus,
           route: routeStr,
           isVirtual: true,
-          date: lf.date,
+          date: lfDateStr,
           type: lf.type,
           fidsStatus: resolvedFids
         });
       }
     });
     return merged;
-  }, [flightJobs, externalFlights, internationalSchedules]);
+  }, [flightJobs, externalFlights, internationalSchedules, selectedBriefingDate]);
 
   const mergedDomesticFlights = useMemo(() => {
-    if (!externalFlights || externalFlights.length === 0) {
+    let activeExternal = externalFlights;
+    if (!activeExternal || activeExternal.length === 0) {
+      try {
+        const cached = localStorage.getItem('fms_external_flights_cache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            activeExternal = parsed;
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (!activeExternal || activeExternal.length === 0) {
       return domesticFlights;
     }
-    const liveDom = externalFlights.filter((f: any) => {
-      if (f.category?.toLowerCase() !== 'domestic') return false;
+    const liveDom = activeExternal.filter((f: any) => {
+      if (f.category?.toLowerCase() !== 'domestic' && !isDomesticFlight(f)) return false;
       const statusLower = (f.status || '').toLowerCase();
       return !(statusLower.includes('cancel') || statusLower.includes('cnl'));
     });
-    return liveDom.map((f: any, idx: number) => {
+    const domFromLive = liveDom.map((f: any, idx: number) => {
       let staVal = f.type === 'arrival' ? f.scheduledTime : '';
       let stdVal = f.type === 'departure' ? f.scheduledTime : '';
       let etaVal = f.type === 'arrival' ? (f.estimatedTime || f.scheduledTime) : '';
@@ -494,9 +604,10 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       }
 
       const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      const fDateStr = f.date ? f.date.split('T')[0] : selectedBriefingDate;
       const matchingJob = flightJobs.find((j: any) => 
         (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo &&
-        (!j.date || j.date === f.date)
+        (!j.date || j.date.split('T')[0] === fDateStr)
       );
 
       const schMatch = (internationalSchedules || []).find((s: InternationalSchedule) => {
@@ -518,9 +629,9 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       return {
         id: f.id || `dom-${f.flightNumber}-${f.scheduledTime}-${idx}`,
         flightNumber: f.flightNumber,
-        aircraftReg: f.aircraftReg || `8Q-DOM${idx}`,
-        aircraftType: schMatch?.aircraftType || f.aircraftType || 'ATR72-600',
-        stand: f.gate || 'D01',
+        aircraftReg: matchingJob?.aircraftReg || f.aircraftReg || `8Q-DOM${idx}`,
+        aircraftType: matchingJob?.aircraftType || schMatch?.aircraftType || f.aircraftType || 'ATR72-600',
+        stand: matchingJob?.stand || f.gate || 'D01',
         assignedTeam: `Team ${(idx % 3) + 1}`,
         status,
         fidsStatus: resolvedFids,
@@ -528,11 +639,23 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         eta: etaVal,
         std: stdVal,
         route: routeStr,
-        date: f.date,
-        type: f.type
+        date: fDateStr,
+        type: f.type,
+        isDomestic: true
       };
     });
-  }, [domesticFlights, externalFlights, flightJobs, internationalSchedules]);
+
+    const existingDomNos = new Set(liveDom.map((f: any) => (f.flightNumber || '').replace(/\s+/g, '').toLowerCase()));
+    const extraDomJobs = flightJobs
+      .filter(j => isDomesticFlight(j) && !existingDomNos.has((j.flightNumber || '').replace(/\s+/g, '').toLowerCase()))
+      .map((j, idx) => ({
+        ...j,
+        assignedTeam: (j as any).assignedTeam || `Team ${((liveDom.length + idx) % 3) + 1}`,
+        isDomestic: true
+      }));
+
+    return [...domFromLive, ...extraDomJobs];
+  }, [domesticFlights, externalFlights, flightJobs, internationalSchedules, selectedBriefingDate]);
 
   const refreshExternalFlights = useCallback(async () => {
     try {
@@ -545,29 +668,6 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       setIsExternalFlightsLoading(false);
     }
   }, []);
-
-  const [selectedBriefingShift, setSelectedBriefingShiftState] = useState<BriefingShift>(() => {
-    try {
-      const saved = localStorage.getItem('fms_selected_shift');
-      if (saved) return saved as BriefingShift;
-    } catch(e) {}
-    
-    // Auto-detect current shift based on time
-    const hour = new Date().getHours();
-    const min = new Date().getMinutes();
-    const time = hour + min / 60;
-    
-    // Morning: 07:30 (7.5) to 16:00 (16.0)
-    // Evening: 15:00 (15.0) to 23:30 (23.5)
-    // Night: 22:30 (22.5) to 08:30 (8.5)
-    if (time >= 7.5 && time < 15.0) return 'Morning';
-    if (time >= 15.0 && time < 22.5) return 'Evening';
-    return 'Night';
-  });
-
-  const [selectedBriefingDate, setSelectedBriefingDateState] = useState<string>(() => {
-    return new Date().toISOString().split('T')[0];
-  });
 
   const setSelectedBriefingShift = (shift: BriefingShift) => {
     setBriefingInfo(prev => {
@@ -645,7 +745,13 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   const [alerts, setAlerts] = useState<Alert[]>(() => {
     try {
       const saved = localStorage.getItem('fms_alerts');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return deduplicateAlerts(parsed).uniqueAlerts;
+        }
+      }
+      return [];
     } catch (e) {
       return [];
     }
@@ -691,7 +797,15 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   const loadedAlertIdsRef = React.useRef<Set<string>>(new Set());
   const replenishmentLocks = React.useRef<Record<string, number>>({});
   const prevFlightStatusesRef = React.useRef<Map<string, string>>(new Map());
-  const landedAlertsSentRef = React.useRef<Set<string>>(new Set());
+  const todayDateStr = new Date().toISOString().split('T')[0];
+  const landedAlertsSentRef = React.useRef<Set<string>>(getSentAlertsCache('landed', todayDateStr));
+
+  // Sync alerts to localStorage whenever updated
+  useEffect(() => {
+    try {
+      localStorage.setItem('fms_alerts', JSON.stringify(alerts));
+    } catch (e) {}
+  }, [alerts]);
 
   // Local sync to localStorage for persistence fallback
   useEffect(() => {
@@ -863,7 +977,14 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           return [...mappedLive, ...fallbackMocks];
         });
       }
-      if (fetchedAlerts && Array.isArray(fetchedAlerts)) setAlerts(fetchedAlerts);
+      if (fetchedAlerts && Array.isArray(fetchedAlerts)) {
+        const { uniqueAlerts, duplicateIds } = deduplicateAlerts(fetchedAlerts);
+        if (duplicateIds.length > 0) {
+          console.log(`[Alert Cleanup] Purging ${duplicateIds.length} duplicate alerts from Supabase...`);
+          supabaseService.deleteAlerts(duplicateIds).catch(err => console.warn('[Alert Cleanup] Error deleting duplicate alerts:', err));
+        }
+        setAlerts(uniqueAlerts);
+      }
       if (fetchedLogs) {
         if (Array.isArray(fetchedLogs)) {
           setFlightLogs(fetchedLogs);
@@ -940,14 +1061,23 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     const unsubscribeAlerts = supabaseService.subscribeToAlerts((updatedAlerts) => {
       console.log("SYNC: Alerts received from Supabase. Count:", updatedAlerts.length);
       
+      const { uniqueAlerts, duplicateIds } = deduplicateAlerts(updatedAlerts);
+
+      if (duplicateIds.length > 0) {
+        console.log(`[Alert Cleanup] Purging ${duplicateIds.length} duplicate alerts from Supabase:`, duplicateIds);
+        supabaseService.deleteAlerts(duplicateIds).catch(err => {
+          console.warn('[Alert Cleanup] Error deleting duplicate alerts:', err);
+        });
+      }
+
       if (!initialAlertsLoadedRef.current) {
         // Record existing alert IDs on startup to avoid spamming the user
-        const existingIds = new Set(updatedAlerts.map(a => a.id));
+        const existingIds = new Set(uniqueAlerts.map(a => a.id));
         loadedAlertIdsRef.current = existingIds;
         initialAlertsLoadedRef.current = true;
       } else {
         // Notify for any new, unacknowledged alerts
-        updatedAlerts.forEach((alert) => {
+        uniqueAlerts.forEach((alert) => {
           if (!loadedAlertIdsRef.current.has(alert.id)) {
             loadedAlertIdsRef.current.add(alert.id);
             if (!alert.acknowledged) {
@@ -957,7 +1087,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         });
       }
 
-      setAlerts(updatedAlerts);
+      setAlerts(uniqueAlerts);
       setIsAlertsLoading(false);
     });
 
@@ -1120,16 +1250,35 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
   const updateFlightJob = async (id: string, updates: Partial<FlightJob>) => {
     const isDbJob = flightJobs.some(j => j.id === id);
+    let targetFlightNo = updates.flightNumber || '';
 
     if (!isDbJob) {
-      const virtualJob = mergedFlightJobs.find(j => j.id === id);
+      const virtualJob = mergedFlightJobs.find(j => j.id === id) 
+        || (mergedDomesticFlights || []).find((j: any) => j.id === id)
+        || (briefingInfo?.staffAssignments?.adhocFlights || []).find((j: any) => j.id === id);
       if (virtualJob) {
+        const isDom = isDomesticFlight(virtualJob) || isDomesticFlight(updates) || isDomesticFlight({ flightNumber: targetFlightNo });
         const fullJob: FlightJob = {
           ...virtualJob,
           ...updates,
+          isDomestic: isDom,
+          date: virtualJob.date ? virtualJob.date.split('T')[0] : selectedBriefingDate,
           isVirtual: undefined
         };
-        setFlightJobs(prev => [...prev, fullJob]);
+        setFlightJobs(prev => {
+          const normNo = (fullJob.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+          const jobDate = (fullJob.date || '').split('T')[0];
+          const existsIdx = prev.findIndex(j => 
+            j.id === fullJob.id || 
+            ((j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === normNo && (!jobDate || !j.date || j.date.split('T')[0] === jobDate))
+          );
+          if (existsIdx !== -1) {
+            const next = [...prev];
+            next[existsIdx] = { ...next[existsIdx], ...fullJob };
+            return next;
+          }
+          return [...prev, fullJob];
+        });
         if (appUser) {
           try {
             await supabaseService.addFlightJob(fullJob);
@@ -1137,13 +1286,16 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
             console.error('Failed to create flight job in Supabase from virtual:', error);
           }
         }
-        return;
+      }
+    } else {
+      setFlightJobs(prev => prev.map(job => 
+        job.id === id ? { ...job, ...updates } : job
+      ));
+      const existingJob = flightJobs.find(j => j.id === id);
+      if (existingJob) {
+        targetFlightNo = existingJob.flightNumber || targetFlightNo;
       }
     }
-
-    setFlightJobs(prev => prev.map(job => 
-      job.id === id ? { ...job, ...updates } : job
-    ));
 
     // Also update frozenFlights in briefingInfo state if it exists
     let updatedBriefing = false;
@@ -1151,20 +1303,25 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
     if (briefingInfo?.staffAssignments?.frozenFlights) {
       const frozen = briefingInfo.staffAssignments.frozenFlights;
+      const normTarget = (targetFlightNo || '').replace(/\s+/g, '').toLowerCase();
+      const matchFlight = (f: any) => 
+        f.id === id || 
+        (normTarget && (f.flightNumber || '').replace(/\s+/g, '').toLowerCase() === normTarget);
+
       let updatedIntl = frozen.intl;
       let updatedDomestic = frozen.domestic;
       let updatedAdhoc = frozen.adhoc;
 
-      if (frozen.intl && frozen.intl.some((f: any) => f.id === id)) {
-        updatedIntl = frozen.intl.map((f: any) => f.id === id ? { ...f, ...updates } : f);
+      if (frozen.intl && frozen.intl.some(matchFlight)) {
+        updatedIntl = frozen.intl.map((f: any) => matchFlight(f) ? { ...f, ...updates } : f);
         updatedBriefing = true;
       }
-      if (frozen.domestic && frozen.domestic.some((f: any) => f.id === id)) {
-        updatedDomestic = frozen.domestic.map((f: any) => f.id === id ? { ...f, ...updates } : f);
+      if (frozen.domestic && frozen.domestic.some(matchFlight)) {
+        updatedDomestic = frozen.domestic.map((f: any) => matchFlight(f) ? { ...f, ...updates } : f);
         updatedBriefing = true;
       }
-      if (frozen.adhoc && frozen.adhoc.some((f: any) => f.id === id)) {
-        updatedAdhoc = frozen.adhoc.map((f: any) => f.id === id ? { ...f, ...updates } : f);
+      if (frozen.adhoc && frozen.adhoc.some(matchFlight)) {
+        updatedAdhoc = frozen.adhoc.map((f: any) => matchFlight(f) ? { ...f, ...updates } : f);
         updatedBriefing = true;
       }
 
@@ -1187,7 +1344,9 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
     if (appUser) {
       try {
-        await supabaseService.updateFlightJob(id, updates);
+        if (isDbJob) {
+          await supabaseService.updateFlightJob(id, updates);
+        }
         if (updatedBriefing && newBriefingInfo && newBriefingInfo.staffAssignments) {
           await supabaseService.upsertShiftBriefingInfo(
             selectedBriefingDate,
@@ -1268,7 +1427,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
   const createAlert = async (alertData: Omit<Alert, 'id'>): Promise<boolean> => {
     // Generate a unique hash for general duplicate prevention
-    const alertHash = `${alertData.message}-${alertData.targetRole}`;
+    const alertHash = `${alertData.message}-${alertData.targetRole || ''}-${alertData.assignedStaffId || ''}`;
     
     // REPLENISHMENT LOCK: Specific guard for vehicle requests
     const replenishmentMatch = alertData.message.match(/unit (RF-\d+)/);
@@ -1305,6 +1464,24 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       }
     }
 
+    // TACTICAL FLIGHT ALERTS DUPLICATE GUARD
+    if (alertData.alertType && ['LANDED', 'ETA_15MIN', 'ETA_5MIN', 'REQUEST_FUELING', 'NO_FUEL'].includes(alertData.alertType)) {
+      const cleanFlt = (alertData.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+      const duplicateExists = (alerts || []).some(a => {
+        if (a.alertType !== alertData.alertType) return false;
+        const aFlt = (a.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+        if (cleanFlt && aFlt && cleanFlt !== aFlt) return false;
+        if (alertData.assignedStaffId && a.assignedStaffId === alertData.assignedStaffId) return true;
+        if (alertData.targetRole && a.targetRole === alertData.targetRole) return true;
+        return a.message === alertData.message;
+      });
+
+      if (duplicateExists || pendingAlertHashes.current.has(alertHash)) {
+        console.warn(`[Duplicate Blocked] ${alertData.alertType} alert already exists for ${alertData.flightNumber}`);
+        return false;
+      }
+    }
+
     // GENERAL DUPLICATE GUARD: Check current state + pending Ref
     const isDuplicate = (alerts || []).some(a => 
       !a.acknowledged && 
@@ -1322,8 +1499,12 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     try {
       await supabaseService.createAlert(alertData);
       // Immediately refresh alerts for local consistency
-      const updatedAlerts = await supabaseService.getAlerts();
-      setAlerts(updatedAlerts || []);
+      const rawUpdatedAlerts = await supabaseService.getAlerts();
+      const { uniqueAlerts, duplicateIds } = deduplicateAlerts(rawUpdatedAlerts || []);
+      if (duplicateIds.length > 0) {
+        supabaseService.deleteAlerts(duplicateIds).catch(console.warn);
+      }
+      setAlerts(uniqueAlerts);
       return true;
     } catch (error) {
       console.error('Failed to create alert:', error);
@@ -1338,24 +1519,65 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   useEffect(() => {
     if (!mergedFlightJobs || mergedFlightJobs.length === 0) return;
 
+    const todayDate = new Date().toISOString().split('T')[0];
+
     mergedFlightJobs.forEach(job => {
       if (!job.flightNumber) return;
       const cleanNo = job.flightNumber.replace(/\s+/g, '').toUpperCase();
       const currentStatus = (job.fidsStatus || job.status || '').toUpperCase();
-      const prevStatus = prevFlightStatusesRef.current.get(cleanNo);
+      const jobKey = job.id || `${cleanNo}-${job.type || 'flt'}`;
 
-      prevFlightStatusesRef.current.set(cleanNo, currentStatus);
+      const hasObservedBefore = prevFlightStatusesRef.current.has(jobKey);
+      const prevStatus = prevFlightStatusesRef.current.get(jobKey);
+      prevFlightStatusesRef.current.set(jobKey, currentStatus);
+
+      // Guard 1: If this flight was not previously observed in this session,
+      // record its status and do NOT fire a landed alert on initial load or refresh!
+      if (!hasObservedBefore) {
+        return;
+      }
 
       // Check if newly transitioned to LANDED / ARRIVED
       const isLanded = currentStatus.includes('LAND') || currentStatus.includes('ARRIV');
       const wasLanded = prevStatus ? (prevStatus.includes('LAND') || prevStatus.includes('ARRIV')) : false;
 
-      const alertKey = `${cleanNo}-${job.date || new Date().toISOString().split('T')[0]}-LANDED`;
+      const jobDate = (job.date ? job.date.split('T')[0] : '') || todayDate;
+      const alertKey = `${cleanNo}-${jobDate}-LANDED`;
 
-      if (isLanded && !wasLanded && !landedAlertsSentRef.current.has(alertKey)) {
+      // Guard 2: Persistent memory + localStorage cache
+      if (landedAlertsSentRef.current.has(alertKey)) {
+        return;
+      }
+
+      // Guard 3: Database flight_jobs column flag
+      if (job.landed_alert_sent) {
+        landedAlertsSentRef.current.add(alertKey);
+        persistSentAlertToCache('landed', todayDate, alertKey);
+        return;
+      }
+
+      // Guard 4: Check if an alert for this flight with alertType === 'LANDED' already exists
+      const alreadyInAlerts = alerts.some(a => 
+        a.alertType === 'LANDED' && 
+        ((a.flightNumber && a.flightNumber.replace(/\s+/g, '').toUpperCase() === cleanNo) || 
+         (a.message && a.message.replace(/\s+/g, '').toUpperCase().includes(cleanNo)))
+      );
+      if (alreadyInAlerts) {
+        landedAlertsSentRef.current.add(alertKey);
+        persistSentAlertToCache('landed', todayDate, alertKey);
+        return;
+      }
+
+      if (isLanded && !wasLanded) {
         // Only trigger if flight has assigned staff
         if (job.assignedTo || job.assignedOfficer) {
           landedAlertsSentRef.current.add(alertKey);
+          persistSentAlertToCache('landed', todayDate, alertKey);
+
+          // Mark job in database so no other client or session triggers it
+          if (job.id && flightJobs.some(fj => fj.id === job.id)) {
+            updateFlightJob(job.id, { landed_alert_sent: true } as any).catch(console.warn);
+          }
 
           const alertMeta = {
             stand: job.stand || 'TBA',
@@ -1396,12 +1618,27 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         }
       }
     });
-  }, [mergedFlightJobs]);
+  }, [mergedFlightJobs, alerts, flightJobs]);
 
   const acknowledgeAlert = async (id: string) => {
     try {
-      await supabaseService.acknowledgeAlert(id);
-      setAlerts(prev => prev.map(a => a.id === id ? { ...a, acknowledged: true } : a));
+      const targetAlert = (alerts || []).find(a => a.id === id);
+      const cleanFlt = targetAlert?.flightNumber?.replace(/\s+/g, '').toUpperCase();
+      
+      // Batch acknowledge all matching tactical alerts for this flight
+      const matchingIds = (alerts || [])
+        .filter(a => {
+          if (a.id === id) return true;
+          if (targetAlert?.alertType && ['LANDED', 'ETA_15MIN', 'ETA_5MIN', 'REQUEST_FUELING', 'NO_FUEL'].includes(targetAlert.alertType)) {
+            const aFlt = (a.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+            return a.alertType === targetAlert.alertType && (!cleanFlt || !aFlt || aFlt === cleanFlt);
+          }
+          return false;
+        })
+        .map(a => a.id);
+
+      await supabaseService.acknowledgeAllAlerts(matchingIds);
+      setAlerts(prev => prev.map(a => matchingIds.includes(a.id) ? { ...a, acknowledged: true } : a));
     } catch (error) {
       console.error('Failed to acknowledge alert:', error);
       throw error;

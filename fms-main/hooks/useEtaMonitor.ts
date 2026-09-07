@@ -8,7 +8,25 @@ interface UseEtaMonitorParams {
   currentUserRole: UserRole;
   createAlert: (alert: Omit<Alert, 'id'>) => Promise<boolean>;
   staff: any[];
+  updateFlightJob?: (id: string, updates: Partial<FlightJob>) => Promise<void>;
 }
+
+const getStoredEtaAlerts = (dateStr: string): Set<string> => {
+  try {
+    const raw = localStorage.getItem(`fms_sent_eta_${dateStr}`);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+};
+
+const saveStoredEtaAlert = (dateStr: string, key: string) => {
+  try {
+    const set = getStoredEtaAlerts(dateStr);
+    set.add(key);
+    localStorage.setItem(`fms_sent_eta_${dateStr}`, JSON.stringify(Array.from(set)));
+  } catch {}
+};
 
 export const useEtaMonitor = ({
   flightJobs,
@@ -16,9 +34,11 @@ export const useEtaMonitor = ({
   currentUserName,
   currentUserRole,
   createAlert,
-  staff
+  staff,
+  updateFlightJob
 }: UseEtaMonitorParams) => {
-  const sentAlertsRef = useRef<Set<string>>(new Set());
+  const todayStr = new Date().toISOString().split('T')[0];
+  const sentAlertsRef = useRef<Set<string>>(getStoredEtaAlerts(todayStr));
   const [monitoredFlightCount, setMonitoredFlightCount] = useState(0);
 
   useEffect(() => {
@@ -69,8 +89,12 @@ export const useEtaMonitor = ({
         const key5 = `${job.id}-5`;
 
         // 15-minute alert window (fires once as soon as <= 15.5 minutes)
-        if (diffMins <= 15.5 && diffMins > 5.5 && !sentAlertsRef.current.has(key15)) {
+        if (diffMins <= 15.5 && diffMins > 5.5 && !job.eta_alert_15_sent && !sentAlertsRef.current.has(key15)) {
           sentAlertsRef.current.add(key15);
+          saveStoredEtaAlert(todayStr, key15);
+          if (updateFlightJob) {
+            updateFlightJob(job.id, { eta_alert_15_sent: true }).catch(console.warn);
+          }
           createAlert({
             alertType: 'ETA_15MIN',
             severity: 'medium',
@@ -89,8 +113,12 @@ export const useEtaMonitor = ({
         }
 
         // 5-minute alert window (fires once as soon as <= 5.5 minutes)
-        if (diffMins <= 5.5 && diffMins >= -1 && !sentAlertsRef.current.has(key5)) {
+        if (diffMins <= 5.5 && diffMins >= -1 && !job.eta_alert_5_sent && !sentAlertsRef.current.has(key5)) {
           sentAlertsRef.current.add(key5);
+          saveStoredEtaAlert(todayStr, key5);
+          if (updateFlightJob) {
+            updateFlightJob(job.id, { eta_alert_5_sent: true }).catch(console.warn);
+          }
           createAlert({
             alertType: 'ETA_5MIN',
             severity: 'critical',
@@ -110,23 +138,13 @@ export const useEtaMonitor = ({
       });
 
       setMonitoredFlightCount(count);
-
-      // Cleanup alerts for jobs that no longer exist or are completed
-      const newSent = new Set<string>();
-      sentAlertsRef.current.forEach(key => {
-        const jobId = key.split('-')[0];
-        if (currentJobIds.has(jobId)) {
-          newSent.add(key);
-        }
-      });
-      sentAlertsRef.current = newSent;
     };
 
     checkETAs();
     const interval = setInterval(checkETAs, 30000);
 
     return () => clearInterval(interval);
-  }, [flightJobs, currentUserId, currentUserName, currentUserRole, createAlert, staff]);
+  }, [flightJobs, currentUserId, currentUserName, currentUserRole, createAlert, staff, updateFlightJob, todayStr]);
 
   return { monitoredFlightCount };
 };

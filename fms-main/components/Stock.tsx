@@ -339,7 +339,6 @@ export const Stock: React.FC<StockProps> = ({ user }) => {
                                   </div>
                                   <div>
                                     <p className="text-xs font-black uppercase tracking-tight text-on-surface pr-2">{tank.name.replace(/\s\((NFF|OFF)\)/i, '')}</p>
-                                    <p className="text-[8px] font-semibold text-on-surface-dim opacity-40">{tank.id}</p>
                                   </div>
                                 </div>
                               </td>

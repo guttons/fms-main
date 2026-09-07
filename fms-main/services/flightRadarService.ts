@@ -18,14 +18,18 @@ class FlightRadarService {
     return `${this.baseUrl}/simple_index.php?lat=${this.mleLat}&lon=${this.mleLon}&z=${zoom}&airport=MLE`;
   }
 
-  public getFlightWebUrl(flightNumber: string): string {
-    const clean = this.cleanFlightNumber(flightNumber);
-    return `${this.baseUrl}/data/flights/${clean.toLowerCase()}`;
+  public getFlightWebUrl(flightNumber?: string): string {
+    if (flightNumber) {
+      const clean = this.cleanFlightNumber(flightNumber);
+      // Direct live flight tracking on the Flightradar24 map (not historical data table)
+      return `${this.baseUrl}/${clean}`;
+    }
+    return `${this.baseUrl}/4.19,73.53/9`;
   }
 
   public getFlightSearchUrl(flightNumber: string): string {
     const clean = this.cleanFlightNumber(flightNumber);
-    return `${this.baseUrl}/data/flights/${clean.toLowerCase()}`;
+    return `${this.baseUrl}/${clean}`;
   }
 
   public getFlightAppDeepLink(flightNumber?: string): string {
@@ -36,14 +40,21 @@ class FlightRadarService {
     return `flightradar24://map?lat=${this.mleLat}&lon=${this.mleLon}&z=9`;
   }
 
-  public getFlightAwareUrl(flightNumber: string): string {
-    const clean = this.cleanFlightNumber(flightNumber);
-    return `https://www.flightaware.com/live/flight/${clean}`;
+  public getFlightAwareUrl(flightNumber?: string): string {
+    if (flightNumber) {
+      const clean = this.cleanFlightNumber(flightNumber);
+      return `https://www.flightaware.com/live/flight/${clean}`;
+    }
+    return `https://www.flightaware.com/live/airport/VRMM`;
   }
 
-  public getRadarBoxUrl(flightNumber: string): string {
-    const clean = this.cleanFlightNumber(flightNumber);
-    return `https://www.radarbox.com/data/flights/${clean}`;
+  public getRadarBoxUrl(flightNumber?: string): string {
+    if (flightNumber) {
+      const clean = this.cleanFlightNumber(flightNumber);
+      // Direct live tracking on the RadarBox map
+      return `https://www.radarbox.com/flight/${clean}`;
+    }
+    return `https://www.radarbox.com/airport/VRMM`;
   }
 
   public buildMapUrl(lat: number = this.mleLat, lon: number = this.mleLon, zoom: number = 9): string {

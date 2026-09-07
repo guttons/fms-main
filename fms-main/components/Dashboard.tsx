@@ -5,8 +5,8 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend, BarChart, Bar, ComposedChart
 } from 'recharts';
-import { MOCK_ALERTS, MOCK_USERS, MOCK_ADHOC_FLIGHTS } from '../constants';
-import { FuelType, Tank, User, UserRole, FlightJob, Equipment, EquipmentStatus as EqStatus, EquipmentType } from '../types';
+import { MOCK_ALERTS, MOCK_USERS } from '../constants';
+import { FuelType, Tank, User, UserRole, FlightJob, Equipment, EquipmentStatus as EqStatus, EquipmentType, isDomesticFlight } from '../types';
 import { AlertTriangle, AlertOctagon, TrendingDown, TrendingUp, Activity, Droplet, Users, Clock, Plane, LayoutDashboard, MapPin, CheckCircle, Truck, Play, Thermometer, CloudSun, Wind, RefreshCw, Send, Globe, Anchor, ShoppingBag, Database, Eye, ChevronRight, ChevronDown, X, Calendar } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
@@ -818,7 +818,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
   const liveIntlList = (flightJobs || []).filter(f => {
     const isDep = f.type ? f.type === 'departure' : !!f.std;
-    return isDep && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate);
+    return !isDomesticFlight(f) && isDep && isFlightInShift(f.std) && (!f.date || f.date === selectedBriefingDate);
   });
 
   const intlJobsMap = new Map<string, any>();
@@ -847,7 +847,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
   });
 
   if (frozenFlights?.intl) {
-    frozenFlights.intl.forEach((ff: any) => {
+    frozenFlights.intl.filter((ff: any) => !isDomesticFlight(ff)).forEach((ff: any) => {
       const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
       const existing = intlJobsMap.get(cleanNo);
       const flightDate = ff.date ? ff.date.split('T')[0] : selectedBriefingDate;
@@ -908,14 +908,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
       };
   }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
 
-  const adhocJobsRaw = briefingInfo?.staffAssignments?.adhocFlights !== undefined
-    ? briefingInfo.staffAssignments.adhocFlights
-    : MOCK_ADHOC_FLIGHTS.filter(f => isFlightInShift(f.sta || f.std) && (!f.date || f.date === selectedBriefingDate));
+  const adhocJobsRaw = (briefingInfo?.staffAssignments?.adhocFlights || [])
+    .filter((f: any) => f && f.id !== 'ah1' && f.id !== 'ah2');
 
-  const adhocJobs = adhocJobsRaw.map((f: any) => ({
-      ...f,
+  const adhocJobs = adhocJobsRaw.map((f: any) => {
+    const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+    const matchJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+    return {
+      ...(matchJob ? { ...f, ...matchJob } : f),
       isAdhoc: true,
-  })).sort((a: any, b: any) => (a.std || a.sta || '').localeCompare(b.std || b.sta || ''));
+    };
+  }).sort((a: any, b: any) => (a.std || a.sta || '').localeCompare(b.std || b.sta || ''));
 
   const ongoingIntl = intlJobs.filter(j => j.status === 'IN_PROGRESS');
   const ongoingDom = domesticJobs.filter(j => j.status === 'IN_PROGRESS');

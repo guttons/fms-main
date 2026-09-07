@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Hexagon, Lock, User as UserIcon, ShieldCheck, AlertCircle, Search, Mail, IdCard, ArrowRight, CheckCircle, Info, X } from 'lucide-react';
+﻿import React, { useState, useEffect } from 'react';
+import { Lock, User as UserIcon, ShieldCheck, AlertCircle, Search, Mail, IdCard, ArrowRight, CheckCircle, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { supabase } from '../supabase';
 import { User, UserRole, StaffMember } from '../types';
 import { supabaseService } from '../services/supabaseService';
+import { staffAuthService } from '../services/staffAuthService';
 import { Logo } from './Logo';
 import { haptic } from '../utils/haptics';
 
@@ -10,58 +11,45 @@ interface LoginProps {
   onLogin: (user: User) => void;
 }
 
-type LoginStep = 'identifier' | 'pin-input' | 'pin-setup' | 'forgot-pin';
+type LoginStep = 'identifier' | 'password-setup' | 'forgot-password';
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [step, setStep] = useState<LoginStep>('identifier');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [showDirectory, setShowDirectory] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  // Credential inputs
   const [credentialInput, setCredentialInput] = useState('');
-  const [matchedStaff, setMatchedStaff] = useState<StaffMember | null>(null);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
-  // Staff Directory (Testing & Demo access)
+  // New Password Setup
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+
+  const [matchedStaff, setMatchedStaff] = useState<StaffMember | null>(null);
+  const [shake, setShake] = useState(false);
+
+  // Staff Directory for Testing & Demo
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('ALL');
-  
-  // PIN states
-  const PIN_LENGTH = 4;
-  const [pin, setPin] = useState<string[]>(Array(PIN_LENGTH).fill(''));
-  const [confirmPin, setConfirmPin] = useState<string[]>(Array(PIN_LENGTH).fill(''));
-  const [shake, setShake] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [isLocked, setIsLocked] = useState(false);
-  const [lockedUntil, setLockedUntil] = useState<Date | null>(null);
-  const [forgotEmail, setForgotEmail] = useState('');
 
-  const pinRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const confirmPinRefs = useRef<(HTMLInputElement | null)[]>([]);
-
-  // Load staff list for testing directory & quick access
   useEffect(() => {
     supabaseService.getStaff()
       .then(data => setStaffList(data || []))
-      .catch(err => console.warn('[Login] Could not load staff directory:', err));
+      .catch(err => {
+        console.warn('Failed to load staff list for login:', err);
+      });
   }, []);
-
-  const resetPinState = () => {
-    setPin(Array(PIN_LENGTH).fill(''));
-    setConfirmPin(Array(PIN_LENGTH).fill(''));
-    if (pinRefs.current[0]) pinRefs.current[0].focus();
-  };
 
   const triggerShake = () => {
     setShake(true);
     haptic('ERROR');
     setTimeout(() => setShake(false), 500);
-    resetPinState();
   };
 
-  /**
-   * Completes login with a given staff member
-   */
   const completeLogin = (staff: StaffMember) => {
     const user: User = {
       id: staff.id,
@@ -74,7 +62,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   /**
-   * Direct selection from testing directory (1-click login for QA/testing)
+   * Handle testing directory 1-click login
    */
   const handleStaffSelect = (staff: StaffMember) => {
     if (staff.status === 'inactive') {
@@ -86,253 +74,123 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   /**
-   * Safe JSON fetch helper to guard against HTML 404 / 502 / proxy fallback responses
+   * Handle primary password credential authentication
    */
-  const safeFetchJson = async (url: string, options: RequestInit): Promise<{ ok: boolean; status: number; data: any }> => {
-    try {
-      const res = await fetch(url, options);
-      const contentType = res.headers.get('content-type') || '';
-      if (!contentType.includes('application/json')) {
-        // Not a JSON response (e.g. HTML 404 page from Cloud Run)
-        return { ok: false, status: res.status, data: null };
-      }
-      const data = await res.json();
-      return { ok: res.ok, status: res.status, data };
-    } catch (err: any) {
-      console.warn(`[SafeFetch] Request to ${url} failed:`, err?.message);
-      return { ok: false, status: 0, data: null };
-    }
-  };
-
-  const handleCredentialSubmit = async (e?: React.FormEvent) => {
+  const handleCredentialSignIn = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!credentialInput.trim()) {
       haptic('WARNING');
-      setError('Please enter an Email or RC Number (e.g. A-6600 or email)');
+      setError('Please enter an Email or RC Number');
       return;
     }
 
-    setIsProcessing(true);
+    setIsLoggingIn(true);
     setError(null);
 
     try {
       const match = await supabaseService.findStaffByEmailOrRc(credentialInput);
       if (!match) {
         haptic('ERROR');
-        setError(`No staff record found for "${credentialInput}". Check your RC Number or Email.`);
-        setIsProcessing(false);
+        setError(`No staff record found for "${credentialInput}". Please check your Email or RC Number.`);
+        setIsLoggingIn(false);
         return;
       }
 
       if (match.status === 'inactive') {
         haptic('ERROR');
-        setError(`Account "${match.name}" (${match.employeeId}) is currently INACTIVE.`);
-        setIsProcessing(false);
+        setError(`Account "${match.name}" (${match.employeeId}) is currently INACTIVE. Contact your System Administrator.`);
+        setIsLoggingIn(false);
         return;
       }
 
       setMatchedStaff(match);
 
-      // Attempt to check PIN status via API (gracefully fallback if API not deployed or offline)
-      const authRes = await safeFetchJson('/api/bq/auth/check-auth-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ staffId: match.id })
-      });
+      // Check if user has a password configured
+      const hasPassword = await staffAuthService.hasPassword(match.id);
 
-      if (authRes.ok && authRes.data) {
-        const data = authRes.data;
-        if (data.isLocked) {
-          setIsLocked(true);
-          setLockedUntil(new Date(data.lockedUntil));
-          setError(`Account locked until ${new Date(data.lockedUntil).toLocaleTimeString()}`);
-          setStep('pin-input');
+      if (!hasPassword) {
+        // First-time user setup: prompt to create a password
+        if (passwordInput && passwordInput.length >= 4) {
+          // If they already entered a valid password in the input, save it and log in
+          await staffAuthService.setPassword(match.id, passwordInput);
+          completeLogin(match);
           return;
         }
-        if (data.hasPin && !data.mustChangePin) {
-          // Valid PIN exists on backend
-          setStep('pin-input');
-          haptic('TAP');
-          return;
-        }
-        if (data.mustChangePin || !data.hasPin) {
-          // Prompt user to set PIN if configured
-          setStep('pin-setup');
-          haptic('TAP');
-          return;
-        }
+
+        // Show password setup view
+        setStep('password-setup');
+        setIsLoggingIn(false);
+        return;
       }
 
-      // If backend auth API is unavailable, returned HTML, or has no PIN: proceed with direct login
-      console.log('[Login] Direct login authenticated for staff:', match.name, match.employeeId);
+      // User has a password — verify it
+      if (!passwordInput) {
+        haptic('WARNING');
+        setError('Please enter your password.');
+        setIsLoggingIn(false);
+        return;
+      }
+
+      const verifyResult = await staffAuthService.verifyPassword(match.id, passwordInput);
+      if (!verifyResult.success) {
+        triggerShake();
+        setError(verifyResult.error || 'Invalid password.');
+        setIsLoggingIn(false);
+        return;
+      }
+
+      // Success
       completeLogin(match);
 
     } catch (err: any) {
-      console.error('Credential lookup error:', err);
+      console.error('Credential login error:', err);
       haptic('ERROR');
-      setError(err?.message || 'Verification failed. Please try again.');
+      setError(err?.message || 'Login failed.');
     } finally {
-      setIsProcessing(false);
+      setIsLoggingIn(false);
     }
   };
 
-  const handlePinChange = (index: number, value: string, isConfirm = false) => {
-    const val = value.replace(/[^0-9]/g, '');
-    if (val.length > 1) return; // Prevent pasting multiple chars here for simplicity
-
-    const newPinArray = isConfirm ? [...confirmPin] : [...pin];
-    newPinArray[index] = val;
-    
-    if (isConfirm) {
-      setConfirmPin(newPinArray);
-    } else {
-      setPin(newPinArray);
-    }
-
-    // Auto focus next
-    if (val && index < PIN_LENGTH - 1) {
-      const nextRef = isConfirm ? confirmPinRefs.current[index + 1] : pinRefs.current[index + 1];
-      if (nextRef) nextRef.focus();
-    }
-  };
-
-  const handlePinKeyDown = (index: number, e: React.KeyboardEvent, isConfirm = false) => {
-    if (e.key === 'Backspace' && !(e.currentTarget as HTMLInputElement).value && index > 0) {
-      const prevRef = isConfirm ? confirmPinRefs.current[index - 1] : pinRefs.current[index - 1];
-      if (prevRef) {
-        prevRef.focus();
-        const newPinArray = isConfirm ? [...confirmPin] : [...pin];
-        newPinArray[index - 1] = '';
-        if (isConfirm) setConfirmPin(newPinArray);
-        else setPin(newPinArray);
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (step === 'pin-input' && pin.every(p => p !== '')) {
-      verifyPin(pin.join(''));
-    }
-  }, [pin, step]);
-
-  const verifyPin = async (enteredPin: string) => {
-    if (!matchedStaff) return;
-    setIsProcessing(true);
-    setError(null);
-    try {
-      const res = await safeFetchJson('/api/bq/auth/verify-pin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ staffId: matchedStaff.id, pin: enteredPin })
-      });
-
-      if (!res.ok) {
-        // If server is offline, returned HTML (404), or non-JSON: log in directly so user is never blocked
-        if (res.status === 0 || !res.data) {
-          console.warn('[Login] Auth server offline or returned HTML, bypassing PIN for staff session');
-          setSuccess(true);
-          haptic('SUCCESS');
-          setTimeout(() => completeLogin(matchedStaff), 500);
-          return;
-        }
-
-        if (res.data.locked) {
-          setIsLocked(true);
-          setLockedUntil(new Date(Date.now() + 15 * 60 * 1000));
-          setError('Account locked due to too many failed attempts.');
-        } else {
-          setError(res.data.error || 'Invalid PIN');
-        }
-        triggerShake();
-        return;
-      }
-
-      setSuccess(true);
-      haptic('SUCCESS');
-      setTimeout(() => completeLogin(matchedStaff), 600);
-
-    } catch (err: any) {
-      setError(err.message || 'Verification failed');
-      triggerShake();
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleSetPin = async () => {
-    const pinStr = pin.join('');
-    const confirmPinStr = confirmPin.join('');
-    
-    if (pin.some(p => p === '') || confirmPin.some(p => p === '')) {
-      setError('Please fill all PIN digits');
-      haptic('WARNING');
-      return;
-    }
-    
-    if (pinStr !== confirmPinStr) {
-      setError('PINs do not match');
-      triggerShake();
-      return;
-    }
-
-    setIsProcessing(true);
-    setError(null);
-    try {
-      const res = await safeFetchJson('/api/bq/auth/set-pin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ staffId: matchedStaff!.id, pin: pinStr })
-      });
-      
-      if (!res.ok) {
-        // If auth server is unavailable, log in directly
-        console.warn('[Login] Could not set remote PIN, proceeding with login');
-        completeLogin(matchedStaff!);
-        return;
-      }
-
-      haptic('SUCCESS');
-      setStep('pin-input');
-      resetPinState();
-      setError('PIN set successfully. Please enter it to login.');
-    } catch (err: any) {
-      setError(err.message || 'Failed to set PIN');
-      haptic('ERROR');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleForgotPinSubmit = async (e: React.FormEvent) => {
+  /**
+   * Handle first-time password setup submission
+   */
+  const handleSetPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!forgotEmail) return;
-    setIsProcessing(true);
+    if (!matchedStaff) return;
+
+    if (!newPassword || newPassword.length < 4) {
+      haptic('WARNING');
+      setError('Password must be at least 4 characters long.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      triggerShake();
+      setError('Passwords do not match. Please re-enter.');
+      return;
+    }
+
+    setIsLoggingIn(true);
     setError(null);
+
     try {
-      const res = await safeFetchJson('/api/bq/auth/forgot-pin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ staffId: matchedStaff!.id, email: forgotEmail })
-      });
-      if (!res.ok) {
-        setError('PIN reset service is currently offline. You can log in directly using the link below.');
+      const res = await staffAuthService.setPassword(matchedStaff.id, newPassword);
+      if (!res.success) {
+        setError(res.error || 'Failed to set password.');
+        setIsLoggingIn(false);
         return;
       }
-      
-      setStep('identifier');
-      setError(`Reset requested. Token: ${res.data?.token || 'Sent'} (Check registered email)`);
-      haptic('SUCCESS');
+
+      completeLogin(matchedStaff);
     } catch (err: any) {
-      setError(err.message || 'Request failed');
-      haptic('ERROR');
-    } finally {
-      setIsProcessing(false);
+      setError(err?.message || 'Failed to save password.');
+      setIsLoggingIn(false);
     }
   };
 
   const handleMicrosoftLogin = async () => {
     haptic('TAP');
-    setIsProcessing(true);
+    setIsLoggingIn(true);
     setError(null);
     try {
       const { error: authErr } = await supabase.auth.signInWithOAuth({
@@ -346,29 +204,19 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       console.error("Microsoft Login failed:", err);
       haptic('ERROR');
       setError(err.message || "Failed to sign in with Microsoft.");
-      setIsProcessing(false);
+      setIsLoggingIn(false);
     }
   };
 
-  // Staff filtering logic for testing directory
   const filteredStaff = staffList.filter(s => {
-    const matchesSearch = !searchQuery.trim() || (
-      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (s.employeeId || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (s.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (s.role || '').toLowerCase().includes(searchQuery.toLowerCase())
+    if (!searchQuery.trim()) return true;
+    const lower = searchQuery.toLowerCase();
+    return (
+      s.name.toLowerCase().includes(lower) ||
+      (s.employeeId || '').toLowerCase().includes(lower) ||
+      (s.email || '').toLowerCase().includes(lower) ||
+      (s.role || '').toLowerCase().includes(lower)
     );
-
-    const matchesRole = selectedRoleFilter === 'ALL' || (
-      selectedRoleFilter === 'OPERATOR' && (s.role === UserRole.ITP_OPERATOR || s.role === UserRole.ITP_HD_OPERATOR) ||
-      selectedRoleFilter === 'OFFICER' && (s.role === UserRole.ITP_OFFICER || s.role === UserRole.ITP_SUPERVISOR) ||
-      selectedRoleFilter === 'HD' && s.role === UserRole.ITP_HD_OPERATOR ||
-      selectedRoleFilter === 'DEPOT' && (s.role === UserRole.DEPOT_OPERATOR || s.role === UserRole.DEPOT_MANAGER) ||
-      selectedRoleFilter === 'ADMIN' && (s.role === UserRole.ADMIN || s.role === UserRole.ITP_MANAGER || s.role === UserRole.DEPOT_MANAGER) ||
-      (s.role as string) === selectedRoleFilter
-    );
-
-    return matchesSearch && matchesRole;
   });
 
   return (
@@ -376,22 +224,22 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-primary/10 rounded-full blur-[140px] -mr-96 -mt-96 animate-pulse"></div>
       <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] -ml-64 -mb-64"></div>
       
-      <div className={`max-w-md w-full bg-surface p-8 sm:p-10 lg:p-12 border border-outline shadow-premium rounded-[40px] relative z-10 fade-in ${shake ? 'animate-shake' : ''}`}>
+      <div className={`max-w-md w-full bg-surface p-10 sm:p-12 lg:p-14 border border-outline shadow-premium rounded-[48px] relative z-10 fade-in ${shake ? 'animate-shake' : ''}`}>
         <div className="text-center">
-          <div className="mx-auto mb-6 flex justify-center">
-            <Logo className="h-16 sm:h-20 w-auto object-contain text-primary" />
+          <div className="mx-auto mb-8 flex justify-center">
+            <Logo className="h-20 sm:h-24 w-auto object-contain text-primary" />
           </div>
-          <h2 className="headline-xl text-on-surface tracking-tighter mb-1 uppercase text-xl sm:text-2xl font-black">
+          <h2 className="headline-xl text-on-surface tracking-tighter mb-1 uppercase">
             FUEL SERVICES
           </h2>
-          <p className="text-[10px] font-black text-on-surface-dim opacity-50 uppercase tracking-[0.4em] mt-2">
+          <p className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-[0.5em] mt-3">
             FUEL MANAGEMENT SYSTEM
           </p>
         </div>
 
-        <div className="mt-8 space-y-5">
+        <div className="mt-10 space-y-6">
           {error && (
-            <div className="bg-error/10 text-error p-3.5 rounded-2xl text-[11px] border border-error/20 flex items-start space-x-3 fade-in font-bold">
+            <div className="bg-error/10 text-error p-4 rounded-2xl text-[11px] border border-error/20 flex items-start space-x-3 fade-in font-bold">
               <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
@@ -401,22 +249,16 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
               DIRECTORY VIEW: Testing & Demo Access (Instant 1-Click Login)
              ───────────────────────────────────────────────────────────────── */}
           {showDirectory ? (
-            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-6 duration-300">
               <div className="flex items-center justify-between px-1">
-                <div className="flex items-center space-x-2">
-                  <ShieldCheck className="w-4 h-4 text-primary" />
-                  <h3 className="text-[10px] font-black text-on-surface uppercase tracking-widest">
-                    MACL Staff Directory
-                  </h3>
-                  <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                    Testing Mode
-                  </span>
-                </div>
+                <h3 className="text-[10px] font-black text-on-surface-dim opacity-50 uppercase tracking-widest">
+                  MACL Staff Directory
+                </h3>
                 <button 
                   onClick={() => { setShowDirectory(false); setError(null); }}
-                  className="text-[10px] font-black text-primary hover:underline uppercase tracking-widest flex items-center space-x-1"
+                  className="text-[10px] font-black text-primary hover:underline uppercase tracking-widest"
                 >
-                  <span>Back to Sign In</span>
+                  Back to Sign In
                 </button>
               </div>
 
@@ -426,61 +268,24 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by RC, Name, Email, or Role..."
-                  className="w-full pl-10 pr-8 py-2.5 bg-surface-dim border border-outline rounded-xl text-xs font-semibold text-on-surface focus:outline-none focus:border-primary placeholder:text-on-surface-dim/40"
+                  placeholder="Search by RC Number, Name, Email, or Role..."
+                  className="w-full pl-10 pr-4 py-2.5 bg-surface-dim border border-outline rounded-xl text-xs font-semibold text-on-surface focus:outline-none focus:border-primary"
                   autoFocus
                 />
                 <Search className="w-4 h-4 text-on-surface-dim opacity-40 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                {searchQuery && (
-                  <button 
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-dim hover:text-on-surface"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Role filter chips */}
-              <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 custom-scrollbar text-[9px] font-black uppercase tracking-wider">
-                {[
-                  { id: 'ALL', label: `All (${staffList.length})` },
-                  { id: 'OPERATOR', label: 'Operators' },
-                  { id: 'OFFICER', label: 'Officers' },
-                  { id: 'HD', label: 'HD Only' },
-                  { id: 'DEPOT', label: 'Depot' },
-                  { id: 'ADMIN', label: 'Admin' },
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setSelectedRoleFilter(tab.id)}
-                    className={`px-2.5 py-1 rounded-lg border whitespace-nowrap transition-all ${
-                      selectedRoleFilter === tab.id
-                        ? 'bg-primary text-white border-primary shadow-sm'
-                        : 'bg-surface-dim text-on-surface-dim border-outline hover:text-on-surface'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="text-[10px] text-on-surface-dim/70 px-1 flex justify-between">
-                <span>Click any staff member to log in instantly:</span>
-                <span className="font-bold">{filteredStaff.length} found</span>
               </div>
 
               {/* Staff List */}
-              <div className="max-h-[300px] overflow-y-auto pr-1 space-y-2 custom-scrollbar">
+              <div className="max-h-[320px] overflow-y-auto pr-1 space-y-2.5 custom-scrollbar">
                 {filteredStaff.map((staff) => (
                   <button
                     key={staff.id}
                     onClick={() => handleStaffSelect(staff)}
-                    className={`w-full flex items-center p-3 bg-surface-dim border border-outline rounded-2xl hover:bg-surface-lowest hover:border-primary/50 hover:shadow-sm transition-all text-left group ${
-                      staff.status === 'inactive' ? 'opacity-40 grayscale pointer-events-none' : ''
+                    className={`w-full flex items-center p-3 bg-surface-dim border border-outline rounded-2xl hover:bg-surface-lowest hover:border-primary/40 transition-all text-left group ${
+                      staff.status === 'inactive' ? 'opacity-50 grayscale' : ''
                     }`}
                   >
-                    <div className="w-10 h-10 rounded-xl mr-3 bg-primary/10 flex items-center justify-center text-primary font-black text-xs border border-primary/20 flex-shrink-0 group-hover:scale-105 transition-transform">
+                    <div className="w-10 h-10 rounded-xl mr-3 bg-primary/10 flex items-center justify-center text-primary font-black text-xs border border-primary/20 flex-shrink-0">
                       {staff.employeeId ? staff.employeeId.replace('A-', '') : 'ST'}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -494,33 +299,28 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                           {staff.status}
                         </span>
                       </div>
-                      <div className="flex items-center text-[10px] font-bold text-on-surface-dim opacity-60 space-x-2 truncate mt-0.5">
-                        <span className="font-mono text-primary font-semibold">{staff.employeeId}</span>
+                      <div className="flex items-center text-[10px] font-bold text-on-surface-dim opacity-50 space-x-2 truncate">
+                        <span>{staff.employeeId}</span>
                         <span>•</span>
-                        <span className="uppercase tracking-wider">{staff.role.replace(/_/g, ' ')}</span>
+                        <span className="uppercase">{staff.role.replace(/_/g, ' ')}</span>
                       </div>
                     </div>
                   </button>
                 ))}
                 {filteredStaff.length === 0 && (
-                  <div className="text-center py-8 text-xs text-on-surface-dim opacity-60 border border-dashed border-outline rounded-2xl p-4">
-                    <p>No staff found matching "{searchQuery}".</p>
-                    <button 
-                      onClick={() => { setSearchQuery(''); setSelectedRoleFilter('ALL'); }}
-                      className="mt-2 text-primary font-bold text-[11px] underline"
-                    >
-                      Clear filters
-                    </button>
-                  </div>
+                  <p className="text-center py-6 text-xs text-on-surface-dim opacity-50">
+                    No staff found matching "{searchQuery}".
+                  </p>
                 )}
               </div>
             </div>
           ) : step === 'identifier' ? (
             /* ─────────────────────────────────────────────────────────────────
-               STANDARD SIGN-IN: Email or RC Number
+               STANDARD SIGN-IN: Email/RC Number + Password
                ───────────────────────────────────────────────────────────────── */
-            <div className="space-y-5 fade-in">
-              <form onSubmit={handleCredentialSubmit} className="space-y-4">
+            <div className="space-y-6 fade-in">
+              <form onSubmit={handleCredentialSignIn} className="space-y-4">
+                {/* Identifier Field */}
                 <div>
                   <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">
                     Email or RC Number
@@ -530,10 +330,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                       type="text"
                       value={credentialInput}
                       onChange={(e) => { setCredentialInput(e.target.value); setError(null); }}
-                      placeholder="e.g. A-6600, 35075, or email"
-                      className="w-full pl-11 pr-4 py-3.5 bg-surface-dim border border-outline rounded-2xl text-xs font-bold text-on-surface focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-dim/40"
+                      placeholder="Email or RC Number"
+                      className="w-full pl-11 pr-4 py-3.5 bg-surface-dim border border-outline rounded-2xl text-xs font-bold text-on-surface focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-dim/40 placeholder:font-medium"
                     />
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-dim opacity-50">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-dim opacity-40">
                       {credentialInput.startsWith('A-') || !isNaN(Number(credentialInput)) ? (
                         <IdCard className="w-4 h-4" />
                       ) : (
@@ -543,255 +343,197 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   </div>
                 </div>
 
+                {/* Password Field */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider">
+                      Password
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => { setStep('forgot-password'); setError(null); }}
+                      className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider"
+                    >
+                      Forgot?
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={passwordInput}
+                      onChange={(e) => { setPasswordInput(e.target.value); setError(null); }}
+                      placeholder="Enter your password"
+                      className="w-full pl-11 pr-11 py-3.5 bg-surface-dim border border-outline rounded-2xl text-xs font-bold text-on-surface focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-dim/40 placeholder:font-medium"
+                    />
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-dim opacity-40">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-dim opacity-40 hover:opacity-100 transition-opacity"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
                 <button
                   type="submit"
-                  disabled={isProcessing}
+                  disabled={isLoggingIn}
                   className="kinetic-gradient relative w-full flex items-center justify-center py-4 px-4 text-white text-[11px] font-black rounded-2xl hover:scale-[1.01] active:scale-95 transition-all duration-300 disabled:opacity-50 uppercase tracking-[0.2em] shadow-premium"
                 >
-                  {isProcessing ? 'Verifying Account...' : 'Sign In with Staff Account'}
+                  {isLoggingIn ? 'Authenticating...' : 'Sign In with Staff Account'}
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </button>
               </form>
 
-              {/* Staff Directory Testing Method Button */}
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={() => { setShowDirectory(true); setError(null); }}
-                  className="w-full flex justify-center items-center py-3.5 px-4 bg-primary/10 border border-primary/30 text-[11px] font-black rounded-2xl text-primary hover:bg-primary/20 hover:border-primary/50 transition-all duration-300 uppercase tracking-wider shadow-sm group"
-                >
-                  <ShieldCheck className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform" />
-                  Browse MACL Staff Directory ({staffList.length})
-                  <span className="ml-2 text-[8px] bg-primary text-white px-2 py-0.5 rounded-full font-bold">
-                    TESTING / DEMO
-                  </span>
-                </button>
-              </div>
-
-              <div className="relative py-1">
+              <div className="relative py-2">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-outline/40"></div>
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="px-3 text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-[0.3em] bg-surface">
+                  <span className="px-4 text-[9px] font-black text-on-surface-dim opacity-30 uppercase tracking-[0.4em] bg-surface">
                     Alternative Access
                   </span>
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <button
                   onClick={handleMicrosoftLogin}
-                  disabled={isProcessing}
+                  disabled={isLoggingIn}
                   className="w-full flex justify-center items-center py-3.5 px-4 border border-outline text-[10px] font-black rounded-2xl text-on-surface-dim hover:bg-surface-dim hover:text-on-surface transition-all duration-300 uppercase tracking-widest"
                 >
                   <Lock className="h-4 w-4 text-primary mr-3" />
                   Sign in with Microsoft OAuth
                 </button>
+
+                {/* Testing Login: As it was earlier */}
+                <button
+                  type="button"
+                  onClick={() => setShowDirectory(true)}
+                  className="w-full flex justify-center items-center py-3 px-4 border border-transparent text-[10px] font-black rounded-2xl text-primary hover:bg-primary/5 transition-all duration-300 uppercase tracking-widest"
+                >
+                  <ShieldCheck className="h-4 w-4 mr-2" />
+                  Browse MACL Staff Directory ({staffList.length})
+                </button>
               </div>
             </div>
-          ) : step === 'pin-input' ? (
+          ) : step === 'password-setup' ? (
             /* ─────────────────────────────────────────────────────────────────
-               PIN INPUT VIEW
+               PASSWORD SETUP VIEW: First-time setup
                ───────────────────────────────────────────────────────────────── */
             <div className="space-y-6 fade-in flex flex-col items-center">
               <div className="text-center w-full">
                 <div className="w-12 h-12 mx-auto bg-primary/10 rounded-full flex items-center justify-center text-primary mb-3">
-                  {success ? <CheckCircle className="w-6 h-6 text-success" /> : <Lock className="w-6 h-6" />}
+                  <KeyRound className="w-6 h-6" />
                 </div>
                 <h3 className="text-sm font-black text-on-surface">Welcome, {matchedStaff?.name}</h3>
-                <p className="text-[10px] text-on-surface-dim uppercase tracking-wider mt-1 font-mono">
-                  {matchedStaff?.employeeId} • {matchedStaff?.role.replace(/_/g, ' ')}
-                </p>
-                <p className="text-[11px] text-on-surface font-semibold mt-2">Enter your 4-digit PIN</p>
-              </div>
-              
-              <div className="flex space-x-3 justify-center">
-                {pin.map((digit, idx) => (
-                  <input
-                    key={idx}
-                    ref={el => { pinRefs.current[idx] = el; }}
-                    type="password"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={e => handlePinChange(idx, e.target.value)}
-                    onKeyDown={e => handlePinKeyDown(idx, e)}
-                    disabled={isLocked || success || isProcessing}
-                    className="w-12 h-14 bg-surface-dim border border-outline rounded-xl text-center text-xl font-black text-on-surface focus:outline-none focus:border-primary transition-all disabled:opacity-50"
-                  />
-                ))}
-              </div>
-
-              <div className="w-full flex justify-between items-center px-2 mt-2">
-                <button 
-                  onClick={() => { setStep('identifier'); resetPinState(); setError(null); }} 
-                  className="text-[10px] font-bold text-on-surface-dim hover:text-on-surface uppercase tracking-wider"
-                >
-                  Back
-                </button>
-                <button 
-                  onClick={() => { setStep('forgot-pin'); setError(null); }} 
-                  className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider"
-                >
-                  Forgot PIN?
-                </button>
-              </div>
-
-              {/* Quick bypass button for testing convenience */}
-              <div className="w-full pt-2 border-t border-outline/30 text-center">
-                <button
-                  onClick={() => {
-                    if (matchedStaff) {
-                      completeLogin(matchedStaff);
-                    }
-                  }}
-                  className="text-[10px] font-black text-on-surface-dim/60 hover:text-primary uppercase tracking-wider py-1"
-                >
-                  Skip PIN / Quick Test Sign In →
-                </button>
-              </div>
-            </div>
-          ) : step === 'pin-setup' ? (
-            /* ─────────────────────────────────────────────────────────────────
-               PIN SETUP VIEW
-               ───────────────────────────────────────────────────────────────── */
-            <div className="space-y-5 fade-in flex flex-col items-center">
-              <div className="text-center w-full">
-                <div className="w-12 h-12 mx-auto bg-primary/10 rounded-full flex items-center justify-center text-primary mb-3">
-                  <ShieldCheck className="w-6 h-6" />
-                </div>
-                <h3 className="text-sm font-black text-on-surface">Setup Security PIN</h3>
                 <p className="text-[10px] text-on-surface-dim uppercase tracking-wider mt-1">
-                  Create a 4-digit PIN for {matchedStaff?.name}
-                </p>
-              </div>
-              
-              <div className="w-full space-y-4">
-                <div>
-                  <p className="text-[10px] font-bold text-on-surface-dim uppercase tracking-wider mb-2 text-center">New PIN</p>
-                  <div className="flex space-x-3 justify-center">
-                    {pin.map((digit, idx) => (
-                      <input
-                        key={idx}
-                        ref={el => { pinRefs.current[idx] = el; }}
-                        type="password"
-                        inputMode="numeric"
-                        maxLength={1}
-                        value={digit}
-                        onChange={e => handlePinChange(idx, e.target.value)}
-                        onKeyDown={e => handlePinKeyDown(idx, e)}
-                        className="w-12 h-14 bg-surface-dim border border-outline rounded-xl text-center text-xl font-black text-on-surface focus:outline-none focus:border-primary"
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-bold text-on-surface-dim uppercase tracking-wider mb-2 text-center">Confirm PIN</p>
-                  <div className="flex space-x-3 justify-center">
-                    {confirmPin.map((digit, idx) => (
-                      <input
-                        key={idx}
-                        ref={el => { confirmPinRefs.current[idx] = el; }}
-                        type="password"
-                        inputMode="numeric"
-                        maxLength={1}
-                        value={digit}
-                        onChange={e => handlePinChange(idx, e.target.value, true)}
-                        onKeyDown={e => handlePinKeyDown(idx, e, true)}
-                        className="w-12 h-14 bg-surface-dim border border-outline rounded-xl text-center text-xl font-black text-on-surface focus:outline-none focus:border-primary"
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="w-full flex space-x-3 mt-3">
-                <button
-                  onClick={() => { setStep('identifier'); resetPinState(); setError(null); }}
-                  className="flex-1 py-3 border border-outline rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-surface-dim"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSetPin}
-                  disabled={isProcessing}
-                  className="flex-1 bg-primary text-white rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-primary/90 disabled:opacity-50"
-                >
-                  Save PIN
-                </button>
-              </div>
-
-              <div className="w-full pt-1 text-center">
-                <button
-                  onClick={() => {
-                    if (matchedStaff) completeLogin(matchedStaff);
-                  }}
-                  className="text-[10px] font-black text-on-surface-dim/60 hover:text-primary uppercase tracking-wider"
-                >
-                  Skip PIN Setup for Now →
-                </button>
-              </div>
-            </div>
-          ) : (
-            /* ─────────────────────────────────────────────────────────────────
-               FORGOT PIN VIEW
-               ───────────────────────────────────────────────────────────────── */
-            <div className="space-y-5 fade-in">
-              <div className="text-center w-full">
-                <div className="w-12 h-12 mx-auto bg-warning/10 rounded-full flex items-center justify-center text-warning mb-3">
-                  <Info className="w-6 h-6" />
-                </div>
-                <h3 className="text-sm font-black text-on-surface">Reset PIN</h3>
-                <p className="text-[10px] text-on-surface-dim uppercase tracking-wider mt-1">
-                  Enter email for {matchedStaff?.name || 'your account'}
+                  Create a password for your account ({matchedStaff?.employeeId})
                 </p>
               </div>
 
-              <form onSubmit={handleForgotPinSubmit} className="space-y-4">
+              <form onSubmit={handleSetPasswordSubmit} className="w-full space-y-4">
                 <div>
+                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">
+                    New Password
+                  </label>
                   <div className="relative">
                     <input
-                      type="email"
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      placeholder="Your registered email"
-                      className="w-full pl-11 pr-4 py-3.5 bg-surface-dim border border-outline rounded-2xl text-xs font-bold text-on-surface focus:outline-none focus:border-primary"
+                      type={showNewPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => { setNewPassword(e.target.value); setError(null); }}
+                      placeholder="Minimum 4 characters"
+                      className="w-full pl-11 pr-11 py-3.5 bg-surface-dim border border-outline rounded-2xl text-xs font-bold text-on-surface focus:outline-none focus:border-primary transition-all"
                       required
+                      autoFocus
                     />
-                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim opacity-40" />
+                    <Lock className="w-4 h-4 text-on-surface-dim opacity-40 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-dim opacity-40 hover:opacity-100"
+                    >
+                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex space-x-3">
+                <div>
+                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">
+                    Confirm Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => { setConfirmPassword(e.target.value); setError(null); }}
+                      placeholder="Re-enter password"
+                      className="w-full pl-11 pr-4 py-3.5 bg-surface-dim border border-outline rounded-2xl text-xs font-bold text-on-surface focus:outline-none focus:border-primary transition-all"
+                      required
+                    />
+                    <Lock className="w-4 h-4 text-on-surface-dim opacity-40 absolute left-4 top-1/2 -translate-y-1/2" />
+                  </div>
+                </div>
+
+                <div className="flex space-x-3 pt-2">
                   <button
                     type="button"
-                    onClick={() => { setStep('pin-input'); setError(null); }}
+                    onClick={() => { setStep('identifier'); setError(null); }}
                     className="flex-1 py-3 border border-outline rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-surface-dim"
                   >
-                    Back
+                    Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={isProcessing}
+                    disabled={isLoggingIn}
                     className="flex-1 bg-primary text-white rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-primary/90 disabled:opacity-50"
                   >
-                    Send Token
+                    Save & Sign In
                   </button>
                 </div>
               </form>
-
-              {matchedStaff && (
-                <div className="pt-2 text-center border-t border-outline/30">
-                  <button
-                    onClick={() => completeLogin(matchedStaff)}
-                    className="text-[10px] font-black text-primary hover:underline uppercase tracking-wider"
-                  >
-                    Sign in without PIN (Emergency Fallback) →
-                  </button>
+            </div>
+          ) : (
+            /* ─────────────────────────────────────────────────────────────────
+               FORGOT PASSWORD VIEW
+               ───────────────────────────────────────────────────────────────── */
+            <div className="space-y-6 fade-in">
+              <div className="text-center w-full">
+                <div className="w-12 h-12 mx-auto bg-primary/10 rounded-full flex items-center justify-center text-primary mb-3">
+                  <KeyRound className="w-6 h-6" />
                 </div>
-              )}
+                <h3 className="text-sm font-black text-on-surface">Password Recovery</h3>
+                <p className="text-[10px] text-on-surface-dim uppercase tracking-wider mt-1">
+                  Reset password for individual staff
+                </p>
+              </div>
+
+              <div className="p-4 bg-surface-dim border border-outline rounded-2xl text-xs text-on-surface-dim space-y-2">
+                <p className="font-bold text-on-surface">Contact Shift Supervisor or System Admin</p>
+                <p className="text-[11px]">
+                  Your shift supervisor or system administrator can instantly reset your password in the <strong>Staff Tracker</strong> or <strong>Staff Management</strong> console.
+                </p>
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  onClick={() => { setStep('identifier'); setError(null); }}
+                  className="flex-1 py-3 border border-outline rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-surface-dim"
+                >
+                  Back to Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowDirectory(true); setStep('identifier'); setError(null); }}
+                  className="flex-1 bg-primary text-white rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-primary/90"
+                >
+                  Open Staff Directory
+                </button>
+              </div>
             </div>
           )}
 
@@ -799,7 +541,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         <div className="mt-12 text-center">
           <p className="text-[9px] font-black text-on-surface-dim opacity-20 uppercase tracking-[0.6em]">
-            MACL AVIATION & MARITIME SERVICES
+            MACL FUEL SERVICES
           </p>
         </div>
       </div>

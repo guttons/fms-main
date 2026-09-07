@@ -32,8 +32,8 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
-import { MOCK_USERS, MOCK_ADHOC_FLIGHTS, EQUIPMENT } from '../constants';
-import { User, UserRole, EquipmentType, EquipmentStatus } from '../types';
+import { MOCK_USERS, EQUIPMENT } from '../constants';
+import { User, UserRole, EquipmentType, EquipmentStatus, isDomesticFlight } from '../types';
 import { useNotification } from '../context/NotificationContext';
 import { useOperationalData, BriefingShift } from '../context/OperationalDataContext';
 
@@ -138,11 +138,12 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
 
   const isFlightInShift = (dep?: string) => {
     if (!dep) return true; // Show flights without DEP always
+    const timeStr = dep.slice(0, 5);
     const range = shiftRanges[selectedBriefingShift];
     if (range.crossesMidnight) {
-      return dep >= range.start || dep <= range.end;
+      return timeStr >= range.start || timeStr <= range.end;
     }
-    return dep >= range.start && dep <= range.end;
+    return timeStr >= range.start && timeStr <= range.end;
   };
 
   const getIntlFlightTimeLabel = (flight: any) => {
@@ -242,28 +243,57 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
   const frozenFlights = briefingInfo?.staffAssignments?.frozenFlights;
 
   const intlFlightsToRender = frozenFlights?.intl 
-    ? frozenFlights.intl.map((ff: any) => {
-        const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-        const liveJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
-        return liveJob ? { ...ff, status: liveJob.status } : ff;
-      }).filter((f: any) => isHistoricalView || (f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED'))
+    ? (() => {
+        const frozenMap = new Map<string, any>();
+        frozenFlights.intl.filter((ff: any) => !isDomesticFlight(ff)).forEach((ff: any) => {
+          const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+          frozenMap.set(cleanNo, ff);
+        });
+        (flightJobs || []).filter(j => !isDomesticFlight(j)).forEach((j: any) => {
+          const cleanNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+          if (!frozenMap.has(cleanNo)) {
+            frozenMap.set(cleanNo, j);
+          } else {
+            const existing = frozenMap.get(cleanNo);
+            frozenMap.set(cleanNo, { ...existing, status: j.status || existing.status });
+          }
+        });
+        return Array.from(frozenMap.values()).filter((f: any) => {
+          const isDep = f.type ? f.type === 'departure' : !!f.std;
+          return !isDomesticFlight(f) && isDep && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate) && (isHistoricalView || (f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED'));
+        }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+      })()
     : (flightJobs || []).filter(f => {
         const isDep = f.type ? f.type === 'departure' : !!f.std;
-        return isDep && isFlightInShift(f.std) && f.date === selectedBriefingDate && f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED';
+        return !isDomesticFlight(f) && isDep && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate) && (isHistoricalView || (f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED'));
       }).sort((a, b) => (a.std || '').localeCompare(b.std || ''));
 
   const domesticFlightsToRender = frozenFlights?.domestic 
-    ? frozenFlights.domestic.map((ff: any) => {
-        const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-        const liveJob = (domesticFlights || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
-        return liveJob ? { ...ff, status: liveJob.status } : ff;
-      }).filter((f: any) => isHistoricalView || (f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED'))
-    : (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && f.date === selectedBriefingDate && f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED')
-      .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+    ? (() => {
+        const frozenMap = new Map<string, any>();
+        frozenFlights.domestic.forEach((ff: any) => {
+          const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+          frozenMap.set(cleanNo, ff);
+        });
+        (domesticFlights || []).forEach((j: any) => {
+          const cleanNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+          if (!frozenMap.has(cleanNo)) {
+            frozenMap.set(cleanNo, j);
+          } else {
+            const existing = frozenMap.get(cleanNo);
+            frozenMap.set(cleanNo, { ...existing, status: j.status || existing.status });
+          }
+        });
+        return Array.from(frozenMap.values()).filter((f: any) => {
+          return f.type === 'departure' && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate) && (isHistoricalView || (f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED'));
+        }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+      })()
+    : (domesticFlights || []).filter(f => {
+        return f.type === 'departure' && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate) && (isHistoricalView || (f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED'));
+      }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
 
-  const adhocFlightsToRender = briefingInfo?.staffAssignments?.adhocFlights !== undefined
-    ? briefingInfo.staffAssignments.adhocFlights
-    : MOCK_ADHOC_FLIGHTS.filter(f => isFlightInShift(f.sta || f.std) && (!f.date || f.date === selectedBriefingDate));
+  const adhocFlightsToRender = (briefingInfo?.staffAssignments?.adhocFlights || [])
+    .filter((f: any) => f && f.id !== 'ah1' && f.id !== 'ah2');
 
   const formatDateShort = (dateStr: string) => {
     if (!dateStr) return '';
@@ -297,9 +327,9 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
   const [isAddAdhocModalOpen, setIsAddAdhocModalOpen] = useState(false);
   const [adhocFlightNumber, setAdhocFlightNumber] = useState('');
   const [adhocStd, setAdhocStd] = useState('');
-  const [adhocDestination, setAdhocDestination] = useState('MLE');
-  const [adhocReg, setAdhocReg] = useState('8Q-ADH');
-  const [adhocType, setAdhocType] = useState('B737');
+  const [adhocDestination, setAdhocDestination] = useState('');
+  const [adhocReg, setAdhocReg] = useState('');
+  const [adhocType, setAdhocType] = useState('');
   const [adhocCo, setAdhocCo] = useState('');
   const [adhocOperatorName, setAdhocOperatorName] = useState('');
 
@@ -469,17 +499,15 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
   }, [briefingInfo]);
 
   const handleStaffAssignmentsUpdate = (updater: (prev: StaffAssignments) => StaffAssignments) => {
-    setStaffAssignments(prev => {
-      const updated = updater(prev);
-      updateBriefingInfo(additionalInfo, dieselNeeds, {
-        ...updated,
-        attendees,
-        staffStatuses,
-        dailyCompleted,
-        frozenFlights: briefingInfo?.staffAssignments?.frozenFlights || null,
-        adhocFlights: briefingInfo?.staffAssignments?.adhocFlights || []
-      });
-      return updated;
+    const updated = updater(staffAssignments);
+    setStaffAssignments(updated);
+    updateBriefingInfo(additionalInfo, dieselNeeds, {
+      ...updated,
+      attendees,
+      staffStatuses,
+      dailyCompleted,
+      frozenFlights: briefingInfo?.staffAssignments?.frozenFlights || null,
+      adhocFlights: briefingInfo?.staffAssignments?.adhocFlights || []
     });
   };
 
@@ -594,15 +622,15 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
     const newAdhoc = {
       id: `ah-custom-${Date.now()}`,
       flightNumber: adhocFlightNumber.trim(),
-      std: adhocStd || '---',
+      std: adhocStd.trim() || '---',
       sta: '---',
-      route: adhocDestination || 'MLE',
-      destination: adhocDestination || 'MLE',
+      route: adhocDestination.trim() || '---',
+      destination: adhocDestination.trim() || '---',
       stand: '---',
       status: 'PENDING',
       isAdhoc: true,
-      aircraftReg: adhocReg || '---',
-      aircraftType: adhocType || '---',
+      aircraftReg: adhocReg.trim() || '---',
+      aircraftType: adhocType.trim() || '---',
       co: adhocCo.trim() || undefined,
       operatorName: adhocOperatorName.trim() || undefined,
       date: selectedBriefingDate
@@ -622,9 +650,9 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
       setIsAddAdhocModalOpen(false);
       setAdhocFlightNumber('');
       setAdhocStd('');
-      setAdhocDestination('MLE');
-      setAdhocReg('8Q-ADH');
-      setAdhocType('B737');
+      setAdhocDestination('');
+      setAdhocReg('');
+      setAdhocType('');
       setAdhocCo('');
       setAdhocOperatorName('');
     } catch (err) {
@@ -1248,7 +1276,16 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                 <div className="flex items-center space-x-2.5">
                   {canEdit && (
                     <button
-                      onClick={() => setIsAddAdhocModalOpen(true)}
+                      onClick={() => {
+                        setAdhocFlightNumber('');
+                        setAdhocStd('');
+                        setAdhocDestination('');
+                        setAdhocReg('');
+                        setAdhocType('');
+                        setAdhocCo('');
+                        setAdhocOperatorName('');
+                        setIsAddAdhocModalOpen(true);
+                      }}
                       className="transition-all p-1 flex items-center justify-center rounded-md px-2.5 badge-custom-warning hover:opacity-80 cursor-pointer shrink-0"
                       title="Add Ad-Hoc Flight"
                     >
@@ -1787,7 +1824,6 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                 <input 
                   type="text"
                   required
-                  placeholder="e.g. AH 001"
                   value={adhocFlightNumber}
                   onChange={(e) => setAdhocFlightNumber(e.target.value)}
                   className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
@@ -1799,7 +1835,6 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">DEP / STD (Time)</label>
                   <input 
                     type="text"
-                    placeholder="e.g. 15:30"
                     value={adhocStd}
                     onChange={(e) => setAdhocStd(e.target.value)}
                     className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
@@ -1809,7 +1844,6 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Destination</label>
                   <input 
                     type="text"
-                    placeholder="e.g. MLE"
                     value={adhocDestination}
                     onChange={(e) => setAdhocDestination(e.target.value)}
                     className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
@@ -1822,7 +1856,6 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Reg</label>
                   <input 
                     type="text"
-                    placeholder="8Q-ADH"
                     value={adhocReg}
                     onChange={(e) => setAdhocReg(e.target.value)}
                     className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
@@ -1832,7 +1865,6 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                   <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Type</label>
                   <input 
                     type="text"
-                    placeholder="B737"
                     value={adhocType}
                     onChange={(e) => setAdhocType(e.target.value)}
                     className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
@@ -1844,7 +1876,6 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                 <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">C/O (Customer Name)</label>
                 <input 
                   type="text"
-                  placeholder="e.g. Maldivian Air Taxi"
                   value={adhocCo}
                   onChange={(e) => setAdhocCo(e.target.value)}
                   className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
@@ -1855,7 +1886,6 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                 <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Operator Name</label>
                 <input 
                   type="text"
-                  placeholder="e.g. Ahmed Ibrahim"
                   value={adhocOperatorName}
                   onChange={(e) => setAdhocOperatorName(e.target.value)}
                   className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"

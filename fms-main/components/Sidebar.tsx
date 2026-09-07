@@ -28,7 +28,8 @@ import {
   History,
   BookOpen,
   BarChart3,
-  Radar
+  Radar,
+  Users
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { haptic } from '../utils/haptics';
@@ -77,6 +78,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'tracker', label: 'Flight Tracker', icon: Radar },
+          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
@@ -87,6 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'tracker', label: 'Flight Tracker', icon: Radar },
+          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
           { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
@@ -98,6 +101,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       case UserRole.DEPOT_OPERATOR:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
           { id: 'stock', label: 'Tank Levels', icon: Database },
           { id: 'bridging', label: 'Refueler Loading', icon: Droplet },
           { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
@@ -110,6 +114,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       case UserRole.DEPOT_MANAGER:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
           { id: 'stock', label: 'Stock Reconciliation', icon: Database },
           { id: 'bridging', label: 'Transfer Oversight', icon: Droplet },
           { id: 'marine-loading', label: 'Marine Provisioning', icon: Ship },
@@ -155,6 +160,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       case UserRole.FUEL_MANAGEMENT:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
@@ -170,6 +176,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'tracker', label: 'Flight Tracker', icon: Radar },
+          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
           { id: 'intoplane', label: 'Into-Plane Ops', icon: Plane },

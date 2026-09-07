@@ -18,8 +18,14 @@ interface Notification {
   duration?: number;
 }
 
+interface NotificationPayload {
+  message?: string;
+  title?: string;
+  type?: NotificationType;
+}
+
 interface NotificationContextType {
-  notify: (message: string, type?: NotificationType) => void;
+  notify: (messageOrPayload: string | NotificationPayload, type?: NotificationType) => void;
   notifyWithAction: (message: string, type: NotificationType, action: NotificationAction, duration?: number) => string;
   dismiss: (id: string) => void;
   clear: () => void;
@@ -50,11 +56,23 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     });
   }, []);
 
-  const notify = useCallback((message: string, type: NotificationType = 'info') => {
+  const notify = useCallback((messageOrPayload: string | NotificationPayload, type: NotificationType = 'info') => {
+    let finalMessage = '';
+    let finalType: NotificationType = type;
+
+    if (typeof messageOrPayload === 'object' && messageOrPayload !== null) {
+      finalMessage = messageOrPayload.message || messageOrPayload.title || '';
+      if (messageOrPayload.type && ['success', 'error', 'warning', 'info'].includes(messageOrPayload.type)) {
+        finalType = messageOrPayload.type;
+      }
+    } else {
+      finalMessage = String(messageOrPayload ?? '');
+    }
+
     const id = Math.random().toString(36).substring(2, 9);
-    addNotification({ id, message, type });
+    addNotification({ id, message: finalMessage, type: finalType });
     if (document.visibilityState === 'hidden') {
-      sendNativeNotification(`FMS ${type.toUpperCase()}`, message);
+      sendNativeNotification(`FMS ${finalType.toUpperCase()}`, finalMessage);
     }
   }, [addNotification]);
 
@@ -160,7 +178,9 @@ const Toast: React.FC<{ notification: Notification; onClose: () => void }> = ({ 
       </div>
       <div className="flex-1 flex flex-col justify-center py-0.5 min-w-0">
         <p className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest ${config.labelColor} mb-0.5`}>{config.label}</p>
-        <p className="text-xs sm:text-sm font-bold leading-tight">{message}</p>
+        <p className="text-xs sm:text-sm font-bold leading-tight">
+          {typeof message === 'object' && message !== null ? (message as any).message || (message as any).title || JSON.stringify(message) : String(message ?? '')}
+        </p>
         {action && (
           <button
             onClick={() => {

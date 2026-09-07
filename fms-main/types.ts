@@ -113,6 +113,9 @@ export interface FlightJob {
   isVirtual?: boolean;
   type?: 'arrival' | 'departure';
   fidsStatus?: string;
+  landed_alert_sent?: boolean;
+  eta_alert_15_sent?: boolean;
+  eta_alert_5_sent?: boolean;
 }
 
 export interface FlightLog {
@@ -333,3 +336,11 @@ export interface StaffActivityEntry {
   createdAt: string;
 }
 
+export const isDomesticFlight = (flight: any): boolean => {
+  if (!flight) return false;
+  const no = (flight.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+  if (no.startsWith('VP') || no.startsWith('NR')) return true;
+  if (flight.isDomestic === true) return true;
+  if (flight.category && String(flight.category).toLowerCase() === 'domestic') return true;
+  return false;
+};

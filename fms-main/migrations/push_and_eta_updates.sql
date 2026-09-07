@@ -32,35 +32,9 @@ CREATE POLICY "Allow all to insert/update push subscriptions"
     WITH CHECK (true);
 
 -- 2. Add alert tracking flags to flight_jobs if not already present
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'flight_jobs' 
-        AND column_name = 'eta_alert_15_sent'
-    ) THEN
-        ALTER TABLE public.flight_jobs ADD COLUMN eta_alert_15_sent BOOLEAN DEFAULT FALSE;
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'flight_jobs' 
-        AND column_name = 'eta_alert_5_sent'
-    ) THEN
-        ALTER TABLE public.flight_jobs ADD COLUMN eta_alert_5_sent BOOLEAN DEFAULT FALSE;
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'flight_jobs' 
-        AND column_name = 'landed_alert_sent'
-    ) THEN
-        ALTER TABLE public.flight_jobs ADD COLUMN landed_alert_sent BOOLEAN DEFAULT FALSE;
-    END IF;
-END $$;
+ALTER TABLE public.flight_jobs ADD COLUMN IF NOT EXISTS eta_alert_15_sent BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.flight_jobs ADD COLUMN IF NOT EXISTS eta_alert_5_sent BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.flight_jobs ADD COLUMN IF NOT EXISTS landed_alert_sent BOOLEAN DEFAULT FALSE;
 
 -- 3. Default VAPID keys in app_settings table (can be updated with custom keys)
 INSERT INTO public.app_settings (key, value)

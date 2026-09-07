@@ -1,17 +1,139 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { MOCK_USERS, MOCK_ADHOC_FLIGHTS, EQUIPMENT } from '../constants';
-import { UserRole, EquipmentType, FlightJob } from '../types';
-import { Calendar, Zap, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home, Radio, RefreshCw, PlaneLanding, PlaneTakeoff, Check, XCircle, ArrowRightCircle, AlertTriangle, Lock, Ban, Play, CheckCircle, Globe } from 'lucide-react';
+import { MOCK_USERS, EQUIPMENT } from '../constants';
+import { UserRole, EquipmentType, FlightJob, isDomesticFlight } from '../types';
+import { Calendar, Zap, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home, Radio, RefreshCw, PlaneLanding, PlaneTakeoff, Check, XCircle, ArrowRightCircle, AlertTriangle, Lock, Ban, Play, CheckCircle, Globe, X, Pencil } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { BriefingShift } from '../context/OperationalDataContext';
+import { useNotification } from '../context/NotificationContext';
+
+export const COMMON_MLE_STANDS = [
+  'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9',
+  '1R', 'ST 1', '1L',
+  '2R', 'ST 2', '2L',
+  '3R', 'ST 3', '3L',
+  '4R', 'ST 4', '4L',
+  '5R', 'ST 5', '5L',
+  '6R', 'ST 6', '6L',
+  '7R', 'ST 7', '7L',
+  '8R', 'ST 8', '8L',
+  '9R', 'ST 9', '9L',
+  'A10', 'A11', 'A12',
+  'N', 'E'
+];
+
+export const EditStandModal: React.FC<{
+  flightNumber: string;
+  currentStand: string;
+  onClose: () => void;
+  onSave: (newStand: string) => Promise<void> | void;
+}> = ({ flightNumber, currentStand, onClose, onSave }) => {
+  const [stand, setStand] = useState(currentStand || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stand.trim()) return;
+    setSaving(true);
+    try {
+      await onSave(stand.trim().toUpperCase());
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-surface border border-outline rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-premium text-on-surface animate-in zoom-in-95 duration-200 relative">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+              <MapPin className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base sm:text-lg font-black tracking-tight uppercase">Change Flight Stand</h3>
+              <p className="text-[10px] font-black text-primary uppercase tracking-widest">{flightNumber}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl text-on-surface-dim hover:text-on-surface hover:bg-surface-dim transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">
+              Assigned Stand / Bay
+            </label>
+            <input
+              type="text"
+              required
+              value={stand}
+              onChange={(e) => setStand(e.target.value.toUpperCase())}
+              placeholder="e.g. A2, D14, ST 1"
+              className="w-full px-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black uppercase tracking-wider focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all font-mono"
+            />
+          </div>
+
+          <div>
+            <span className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-2 opacity-50">
+              Quick Select MLE Stands
+            </span>
+            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1">
+              {COMMON_MLE_STANDS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStand(s)}
+                  className={`px-2.5 py-1 text-[9px] font-black uppercase rounded-lg border transition-all cursor-pointer ${
+                    stand.toUpperCase() === s
+                      ? 'bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 border-amber-500 font-black shadow-sm'
+                      : 'bg-surface-dim border-outline text-on-surface-dim hover:border-primary/50'
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3.5 bg-surface-dim border border-outline text-on-surface-dim hover:text-on-surface rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !stand.trim()}
+              className="flex-1 py-3.5 kinetic-gradient text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-premium disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {saving ? 'Updating...' : 'Confirm Stand'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body
+  );
+};
 
 interface ScheduleProps {
   user?: any;
+  onStartJob?: (job: FlightJob) => void;
 }
 
-export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
+export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
+  const { notify } = useNotification();
+  const [editingStandFlight, setEditingStandFlight] = useState<any | null>(null);
+  const isItpManagerOrAdmin = user?.role === UserRole.ITP_MANAGER || user?.role === UserRole.ADMIN;
   const {
     equipment,
     flightJobs,
@@ -197,7 +319,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
       sta: staVal,
       eta: etaVal,
       std: stdVal,
-      isDomestic: flight.category === 'domestic',
+      isDomestic: isDomesticFlight(flight),
       type: flight.type
     });
 
@@ -268,7 +390,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
         status: 'PENDING',
         date: todayDate,
         route,
-        isDomestic: prefillData?.isDomestic ?? false,
+        isDomestic: prefillData?.isDomestic ?? isDomesticFlight({ flightNumber: flight }),
         isAdhoc: false,
         type: prefillData?.type || (sta ? 'arrival' : 'departure')
       });
@@ -327,47 +449,95 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
   const isFlightInShift = (dep?: string) => {
     if (!dep) return true; // Show flights without DEP always
+    const timeStr = dep.slice(0, 5);
     const range = shiftRanges[selectedBriefingShift];
     if (range.crossesMidnight) {
-      return dep >= range.start || dep <= range.end;
+      return timeStr >= range.start || timeStr <= range.end;
     }
-    return dep >= range.start && dep <= range.end;
+    return timeStr >= range.start && timeStr <= range.end;
   };
 
   const scheduledFlights = useMemo(() => {
     const frozen = briefingInfo?.staffAssignments?.frozenFlights;
-    if (frozen?.intl) {
-      return frozen.intl.map((ff: any) => {
+
+    // Filter live flight jobs for today in the selected shift (international only)
+    const liveFiltered = (flightJobs || []).filter(f => {
+      const isDep = f.type ? f.type === 'departure' : !!f.std;
+      const matchesDate = !f.date || f.date.split('T')[0] === todayDate;
+      return !isDomesticFlight(f) && isDep && isFlightInShift(f.std) && matchesDate;
+    });
+
+    if (frozen?.intl && frozen.intl.length > 0) {
+      // Create a map starting from live flights so no live FIDS flight is ever dropped
+      const flightMap = new Map<string, any>();
+      liveFiltered.forEach(f => {
+        const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        flightMap.set(cleanNo, f);
+      });
+
+      // Merge frozen flights onto the map (ensure domestic flights are excluded)
+      frozen.intl.filter((ff: any) => !isDomesticFlight(ff)).forEach((ff: any) => {
         const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-        const dbJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
-        return dbJob ? { ...ff, ...dbJob } : ff;
-      }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+        const existing = flightMap.get(cleanNo);
+        flightMap.set(cleanNo, {
+          ...(existing || {}),
+          ...ff,
+          // Preserve any live db updates such as status or stand
+          stand: existing?.stand || ff.stand,
+          status: existing?.status || ff.status,
+          assignedTo: existing?.assignedTo || ff.assignedTo,
+          assignedOfficer: existing?.assignedOfficer || ff.assignedOfficer,
+        });
+      });
+
+      return Array.from(flightMap.values()).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
     }
 
-    const filtered = flightJobs.filter(f => {
-      const isDep = f.type ? f.type === 'departure' : !!f.std;
-      return isDep && isFlightInShift(f.std) && f.date === todayDate;
-    });
-    return [...filtered].sort((a, b) => (a.std || '').localeCompare(b.std || ''));
+    return [...liveFiltered].sort((a, b) => (a.std || '').localeCompare(b.std || ''));
   }, [flightJobs, selectedBriefingShift, todayDate, briefingInfo]);
 
   const domesticFlightsToRender = useMemo(() => {
     const frozen = briefingInfo?.staffAssignments?.frozenFlights;
-    if (frozen?.domestic) {
-      return frozen.domestic.map((ff: any) => {
+
+    const liveFiltered = (domesticFlights || []).filter(f => {
+      const isDep = f.type ? f.type === 'departure' : !!f.std;
+      const matchesDate = !f.date || f.date.split('T')[0] === todayDate;
+      return isDep && isFlightInShift(f.std) && matchesDate;
+    });
+
+    if (frozen?.domestic && frozen.domestic.length > 0) {
+      const flightMap = new Map<string, any>();
+      liveFiltered.forEach(f => {
+        const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        flightMap.set(cleanNo, f);
+      });
+
+      frozen.domestic.forEach((ff: any) => {
         const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-        const domJob = (domesticFlights || []).find((f: any) => (f.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
-        return domJob ? { ...ff, ...domJob } : ff;
-      }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+        const existing = flightMap.get(cleanNo);
+        flightMap.set(cleanNo, {
+          ...(existing || {}),
+          ...ff,
+          stand: existing?.stand || ff.stand,
+          status: existing?.status || ff.status,
+        });
+      });
+
+      return Array.from(flightMap.values()).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
     }
 
-    const filtered = (domesticFlights || []).filter(f => f.type === 'departure' && isFlightInShift(f.std) && f.date === todayDate);
-    return [...filtered].sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+    return [...liveFiltered].sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
   }, [domesticFlights, selectedBriefingShift, todayDate, briefingInfo]);
 
-  const adhocFlightsToRender = briefingInfo?.staffAssignments?.adhocFlights !== undefined
-    ? briefingInfo.staffAssignments.adhocFlights
-    : MOCK_ADHOC_FLIGHTS.filter(f => isFlightInShift(f.sta || f.std) && (!f.date || f.date === todayDate));
+  const adhocFlightsToRender = useMemo(() => {
+    const raw = (briefingInfo?.staffAssignments?.adhocFlights || [])
+      .filter((af: any) => af && af.id !== 'ah1' && af.id !== 'ah2');
+    return raw.map((af: any) => {
+      const cleanNo = (af.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      const matchJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+      return matchJob ? { ...af, ...matchJob } : af;
+    });
+  }, [briefingInfo, flightJobs]);
 
   const domesticTeams = [
     { id: 't1', name: 'Team 1', op1: '', op2: '' },
@@ -460,6 +630,17 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
   const handleAssignFlight = (flightId: string, field: 'assignedTo' | 'assignedOfficer' | 'equipmentUsage', value: string) => {
     if (isHistoricalView) return;
     updateFlightJob(flightId, { [field]: value });
+  };
+
+  const handleSaveStand = async (newStand: string) => {
+    if (!editingStandFlight) return;
+    try {
+      await updateFlightJob(editingStandFlight.id, { stand: newStand });
+      notify(`Flight ${editingStandFlight.flightNumber} stand changed to ${newStand}`, 'success');
+    } catch (err) {
+      console.error('Failed to update stand:', err);
+      notify('Failed to update flight stand. Please try again.', 'error');
+    }
   };
 
   const handleAssignDomestic = async (teamId: string, opIndex: 1 | 2, userId: string) => {
@@ -787,8 +968,15 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                           <td className="px-4 py-6 whitespace-nowrap">
                             <div className="flex items-center gap-3">
                               {/* Yellow gradient stand badge */}
-                              <div className="bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider">
-                                {item.stand}
+                              <div 
+                                onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingStandFlight(item); } : undefined}
+                                className={`bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center gap-1 ${
+                                  isItpManagerOrAdmin ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500 shadow-md' : ''
+                                }`}
+                                title={isItpManagerOrAdmin ? "Click to change stand" : undefined}
+                              >
+                                <span>{item.stand}</span>
+                                {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-60" />}
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <span className="text-xl font-[900] tracking-tighter italic">{item.flightNumber}</span>
@@ -888,8 +1076,15 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                         <div className="flex items-center min-w-0">
                           <div className="flex items-center gap-3">
                             {/* Yellow gradient stand badge */}
-                            <div className="bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider">
-                              {item.stand}
+                            <div 
+                              onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingStandFlight(item); } : undefined}
+                              className={`bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center gap-1 ${
+                                isItpManagerOrAdmin ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500' : ''
+                              }`}
+                              title={isItpManagerOrAdmin ? "Click to change stand" : undefined}
+                            >
+                              <span>{item.stand}</span>
+                              {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-60" />}
                             </div>
                             <div>
                               <div className="flex items-center gap-1.5">
@@ -969,7 +1164,9 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                       </div>
                       <div className="flex justify-between items-center mt-4 pt-4 border-t border-outline/30">
                         <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Status</span>
-                        {renderStatusBadge(item.status)}
+                        <div className="flex items-center gap-2">
+                          {renderStatusBadge(item.status)}
+                        </div>
                       </div>
                     </div>
                   );
@@ -1028,8 +1225,15 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                             <td className="px-4 py-6 whitespace-nowrap">
                               <div className="flex items-center gap-3">
                                 {/* Yellow gradient stand badge */}
-                                <div className="bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider">
-                                  {flight.stand}
+                                <div 
+                                  onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingStandFlight(flight); } : undefined}
+                                  className={`bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center gap-1 ${
+                                    isItpManagerOrAdmin ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500' : ''
+                                  }`}
+                                  title={isItpManagerOrAdmin ? "Click to change stand" : undefined}
+                                >
+                                  <span>{flight.stand}</span>
+                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-60" />}
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-lg font-[900] italic tracking-tighter">{flight.flightNumber}</span>
@@ -1067,7 +1271,9 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                             </td>
 
                             <td className="px-4 py-6 whitespace-nowrap">
-                              {renderStatusBadge(flight.status)}
+                              <div className="flex items-center gap-2">
+                                {renderStatusBadge(flight.status)}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -1087,8 +1293,15 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                       <div className="flex justify-between items-start mb-6">
                         <div className="flex items-center min-w-0">
                           <div className="flex items-center gap-3">
-                            <div className="bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider">
-                              {flight.stand}
+                            <div 
+                              onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingStandFlight(flight); } : undefined}
+                              className={`bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center gap-1 ${
+                                isItpManagerOrAdmin ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500' : ''
+                              }`}
+                              title={isItpManagerOrAdmin ? "Click to change stand" : undefined}
+                            >
+                              <span>{flight.stand}</span>
+                              {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-60" />}
                             </div>
                             <div>
                               <div className="flex items-center gap-1.5">
@@ -1130,7 +1343,9 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
                       <div className="flex justify-between items-center mt-4 pt-4 border-t border-outline/30">
                         <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Status</span>
-                        {renderStatusBadge(flight.status)}
+                        <div className="flex items-center gap-2">
+                          {renderStatusBadge(flight.status)}
+                        </div>
                       </div>
                     </div>
                   );
@@ -1155,15 +1370,29 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-outline text-on-surface">
-                      {adhocFlightsToRender.map((flight, idx) => {
+                      {adhocFlightsToRender.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-12 text-center text-on-surface-dim font-bold text-xs uppercase tracking-wider">
+                            No ad-hoc flights scheduled for this shift
+                          </td>
+                        </tr>
+                      ) : (
+                        adhocFlightsToRender.map((flight, idx) => {
                         const logoUrl = getLogoUrl(flight.flightNumber);
                         return (
                           <tr key={flight.id} className={`hover:bg-primary/[0.01] transition-colors group animate-in fade-in slide-in-from-left-4 duration-300 stagger-${Math.min(idx + 1, 5)}`}>
                             <td className="px-4 py-6 whitespace-nowrap">
                               <div className="flex items-center gap-3">
                                 {/* Yellow gradient stand badge */}
-                                <div className="bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider">
-                                  {flight.stand}
+                                <div 
+                                  onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingStandFlight(flight); } : undefined}
+                                  className={`bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center gap-1 ${
+                                    isItpManagerOrAdmin ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500' : ''
+                                  }`}
+                                  title={isItpManagerOrAdmin ? "Click to change stand" : undefined}
+                                >
+                                  <span>{flight.stand}</span>
+                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-60" />}
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-lg font-[900] italic tracking-tighter">{flight.flightNumber}</span>
@@ -1204,11 +1433,13 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                             </td>
 
                             <td className="px-4 py-6 whitespace-nowrap">
-                              {renderStatusBadge(flight.status)}
+                              <div className="flex items-center gap-2">
+                                {renderStatusBadge(flight.status)}
+                              </div>
                             </td>
                           </tr>
                         );
-                      })}
+                      }))}
                     </tbody>
                   </table>
                 </div>
@@ -1216,7 +1447,12 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
               {/* Mobile View */}
               <div className="block md:hidden space-y-4">
-                {adhocFlightsToRender.map((flight) => {
+                {adhocFlightsToRender.length === 0 ? (
+                  <div className="bg-surface-container-lowest p-8 rounded-2xl border border-outline text-center">
+                    <p className="text-on-surface-dim font-bold text-xs uppercase tracking-wider">No ad-hoc flights scheduled for this shift</p>
+                  </div>
+                ) : (
+                  adhocFlightsToRender.map((flight) => {
                   const logoUrl = getLogoUrl(flight.flightNumber);
                   const delayed = isDelayed(flight.sta, flight.eta);
                   return (
@@ -1224,8 +1460,15 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                       <div className="flex justify-between items-start mb-6">
                         <div className="flex items-center min-w-0">
                           <div className="flex items-center gap-3">
-                            <div className="bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider">
-                              {flight.stand}
+                            <div 
+                              onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingStandFlight(flight); } : undefined}
+                              className={`bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center gap-1 ${
+                                isItpManagerOrAdmin ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500' : ''
+                              }`}
+                              title={isItpManagerOrAdmin ? "Click to change stand" : undefined}
+                            >
+                              <span>{flight.stand}</span>
+                              {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-60" />}
                             </div>
                             <div>
                               <div className="flex items-center gap-1.5 flex-wrap">
@@ -1278,11 +1521,13 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
                       <div className="flex justify-between items-center mt-4 pt-4 border-t border-outline/30">
                         <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Status</span>
-                        {renderStatusBadge(flight.status)}
+                        <div className="flex items-center gap-2">
+                          {renderStatusBadge(flight.status)}
+                        </div>
                       </div>
                     </div>
                   );
-                })}
+                }))}
               </div>
             </div>
           )}
@@ -1809,6 +2054,15 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
           </div>
         </div>,
         document.body
+      )}
+
+      {editingStandFlight && (
+        <EditStandModal
+          flightNumber={editingStandFlight.flightNumber}
+          currentStand={editingStandFlight.stand}
+          onClose={() => setEditingStandFlight(null)}
+          onSave={handleSaveStand}
+        />
       )}
 
       {isModalOpen && (

@@ -148,7 +148,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
   const { flightLogs, tanks, equipment } = useOperationalData();
   
   // Tabs
-  const [activeTab, setActiveTab] = useState<'sales' | 'shipments' | 'reconciliation'>('sales');
+  const [activeTab, setActiveTab] = useState<'reconciliation' | 'sales' | 'shipments'>('reconciliation');
   
   // Filter States
   const [selectedYear, setSelectedYear] = useState<string>('2026');
@@ -178,7 +178,6 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
   const [dayOfWeekJet, setDayOfWeekJet] = useState<string>('All Weekdays');
   const [airlineJet, setAirlineJet] = useState<string>('All Airlines');
   const [flightNoJet, setFlightNoJet] = useState<string>('');
-  const [showUnusedPits, setShowUnusedPits] = useState<boolean>(false);
 
   // DIESEL & PETROL specific filter states
   const [startDateGround, setStartDateGround] = useState<string>('2026-01-01');
@@ -191,12 +190,12 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
   const [deptGround, setDeptGround] = useState<string>('All Departments');
   const [searchGround, setSearchGround] = useState<string>('');
 
-  // Auto-sync date range to encompass actual available flight log dates on initial load
+  // Auto-sync date range from loaded flightLogs so charts and filters capture actual data
   const hasAutoSyncedDates = React.useRef(false);
   useEffect(() => {
-    if (flightLogs && flightLogs.length > 0 && !hasAutoSyncedDates.current) {
+    if (!hasAutoSyncedDates.current && flightLogs && flightLogs.length > 0) {
       const dates = flightLogs
-        .map(l => l.operationalDate || (l.timestampStart ? l.timestampStart.split('T')[0] : ''))
+        .map(l => l.operationalDate)
         .filter(Boolean)
         .sort();
       if (dates.length > 0) {
@@ -210,6 +209,7 @@ export const FuelReports: React.FC<FuelReportsProps> = ({ user }) => {
         setEndDateGround(maxDate);
         setTempStartDateGround(minDate);
         setTempEndDateGround(maxDate);
+        setStockReportDate(maxDate);
         hasAutoSyncedDates.current = true;
       }
     }
@@ -1195,17 +1195,9 @@ const emptyGroundData = {
     };
   }, [startDateGround, endDateGround, compareGround, fuelGradeGround, facilityGround, deptGround, searchGround, flightLogs, equipment, activeTab, salesFuelType]);
 
-  // Fluctuates volume deterministically based on date to simulate historical reports
-  const getHistoricalLevel = (id: string, currentLevel: number, capacity: number, dateStr: string) => {
-    if (dateStr === '2026-06-30') return currentLevel;
-    let hash = 0;
-    const combined = id + dateStr;
-    for (let i = 0; i < combined.length; i++) {
-      hash = combined.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const maxFluctuate = capacity > 0 ? capacity * 0.15 : 10000;
-    const offset = (Math.abs(hash) % (maxFluctuate * 2)) - maxFluctuate;
-    return Math.max(0, Math.min(capacity > 0 ? capacity : 100000, Math.round(currentLevel + offset)));
+  // Returns real-time level matching Stock Management
+  const getHistoricalLevel = (_id: string, currentLevel: number, _capacity: number, _dateStr: string) => {
+    return currentLevel;
   };
 
   // Triggers browser-native high-fidelity PDF print matching MACL Excel layout
@@ -1222,67 +1214,53 @@ const emptyGroundData = {
       return getHistoricalLevel(id, currentVol, defaultCap, stockReportDate);
     };
 
-    // Gather Jet A-1 OFF farm details
-    const offTanksList = [
-      { id: 'tk4', name: 'TK-4', cap: 2200000, current: 450000 },
-      { id: 'tk6', name: 'TK-6', cap: 2200000, current: 620000 },
-      { id: 'tk7', name: 'TK-7', cap: 3300000, current: 380000 },
-      { id: 'tk8', name: 'TK-8', cap: 3300000, current: 710000 },
-      { id: 'tk9', name: 'TK-9', cap: 3300000, current: 540000 }
-    ];
+    // Gather Jet A-1 OFF farm details from live tanks
+    const offTanksList = (tanks || []).filter(t => {
+      const id = t.id.toLowerCase();
+      return ['tk4', 'tk6', 'tk7', 'tk8', 'tk9'].includes(id) || (t.name.toUpperCase().includes('OFF') && t.type === FuelType.JET_A1);
+    });
 
-    const offRefuellersList = [
-      { id: 'rf02', name: 'RF-02', cap: 57000, current: 32000 },
-      { id: 'rf04', name: 'RF-04', cap: 12000, current: 8000 },
-      { id: 'rf06', name: 'RF-06', cap: 57000, current: 45000 },
-      { id: 'rf07', name: 'RF-07', cap: 57000, current: 39000 },
-      { id: 'rf10', name: 'RF-10', cap: 56000, current: 41000 },
-      { id: 'rf11', name: 'RF-11', cap: 13000, current: 9500 },
-      { id: 'rf12', name: 'RF-12', cap: 13100, current: 8700 },
-      { id: 'rf16', name: 'RF-16', cap: 13000, current: 7200 },
-      { id: 'rf17', name: 'RF-17', cap: 20000, current: 15000 }
-    ];
+    const offRefuellersList = (equipment || []).filter(e => e.type === 'Refueller');
 
     const offTanksData = offTanksList.map(t => {
-      const vol = getLevel(t.id, t.cap, t.current);
-      const dip = lookupDipSync(t.id, vol, t.cap);
-      return { ...t, volume: vol, dip };
+      const vol = t.currentLevel;
+      const dip = lookupDipSync(t.id, vol, t.capacity);
+      return { id: t.id, name: t.name.replace(/\s*\(OFF\)/i, ''), cap: t.capacity, current: vol, volume: vol, dip };
     });
 
     const offRefuellersData = offRefuellersList.map(r => {
-      const vol = getLevel(r.id, r.cap, r.current);
-      return { ...r, volume: vol, dip: 'NIL' };
+      const vol = r.currentVolume || 0;
+      return { id: r.id, name: r.name, cap: r.maxCapacity, current: vol, volume: vol, dip: 'NIL' };
     });
 
-    const pr1Vol = getLevel('pr1', 20000, 12000);
+    const pr1Vol = 12000;
 
     const offTotalJetVolume = offTanksData.reduce((sum, t) => sum + t.volume, 0) +
                              offRefuellersData.reduce((sum, r) => sum + r.volume, 0) +
                              pr1Vol;
 
-    // SPF Seaplane Fuel details
-    const spfList = [
-      { id: 'spf_e1', name: 'SPF E-1', cap: 35000, current: 32083 },
-      { id: 'spf_e2', name: 'SPF E-2', cap: 35000, current: 31973 },
-      { id: 'spf_e3', name: 'SPF E-3', cap: 35000, current: 33287 }
-    ];
+    // SPF Seaplane Fuel details from live tanks
+    const spfList = (tanks || []).filter(t => t.id.toLowerCase().startsWith('spf') || t.name.toUpperCase().includes('SPF'));
     const spfData = spfList.map(s => {
-      const vol = getLevel(s.id, s.cap, s.current);
-      return { ...s, volume: vol };
+      return { id: s.id, name: s.name, cap: s.capacity, current: s.currentLevel, volume: s.currentLevel };
     });
     const spfTotalVolume = spfData.reduce((sum, s) => sum + s.volume, 0);
 
-    // NFF Jet A-1 details
-    const nffList = [
-      { id: 'tk101', name: 'TK101', cap: 14500000, current: 3150000 },
-      { id: 'tk102', name: 'TK102', cap: 14500000, current: 4085000 },
-      { id: 'tk103', name: 'TK103', cap: 14500000, current: 2800000 },
-      { id: 'tk106', name: 'TK106', cap: 100000, current: 12000 }
-    ];
+    // NFF Jet A-1 details from live tanks
+    const nffList = (tanks || []).filter(t => {
+      const id = t.id.toLowerCase();
+      return ['tk101', 'tk102', 'tk103', 'tk106'].includes(id);
+    }).sort((a, b) => {
+      const aRec = a.name.toUpperCase().includes('RECOVERY');
+      const bRec = b.name.toUpperCase().includes('RECOVERY');
+      if (aRec && !bRec) return 1;
+      if (!aRec && bRec) return -1;
+      return a.name.localeCompare(b.name, undefined, { numeric: true });
+    });
     const nffData = nffList.map(n => {
-      const vol = getLevel(n.id, n.cap, n.current);
-      const dip = lookupDipSync(n.id, vol, n.cap);
-      return { ...n, volume: vol, dip };
+      const vol = n.currentLevel;
+      const dip = lookupDipSync(n.id, vol, n.capacity);
+      return { id: n.id, name: n.name.replace(/\s*\(NFF\)/i, '').replace(/Recovery Tank /i, ''), cap: n.capacity, current: vol, volume: vol, dip };
     });
     const nffTotalJetVolume = nffData.reduce((sum, n) => sum + n.volume, 0);
 
@@ -1309,23 +1287,23 @@ const emptyGroundData = {
     const avgTransfer = Math.round(593360 + (hash % 10000));
 
     // OFF Diesel/Petrol
-    const offDieselVol = getLevel('off_diesel_tk', 50000, 32000);
-    const offDieselDip = lookupDipSync('tk202', offDieselVol, 50000);
+    const offDieselVol = (tanks || []).find(t => t.id === 'off-diesel')?.currentLevel ?? 32000;
+    const offDieselDip = lookupDipSync('off-diesel', offDieselVol, 50000) ?? lookupDipSync('tk202', offDieselVol, 50000);
 
-    const offPetrolVol = getLevel('off_petrol_tk', 20000, 15000);
-    const offPetrolDip = lookupDipSync('tk301', offPetrolVol, 20000);
+    const offPetrolVol = (tanks || []).find(t => t.id === 'off-petrol')?.currentLevel ?? 15000;
+    const offPetrolDip = lookupDipSync('off-petrol', offPetrolVol, 20000) ?? lookupDipSync('tk301', offPetrolVol, 20000);
 
-    const offDieselTruck02Vol = getLevel('off_dt02', 30000, 17000);
+    const offDieselTruck02Vol = (equipment || []).find(e => e.id === 'DT-02')?.currentVolume ?? 17000;
 
     // LFS Diesel/Petrol
-    const lfsDieselVol = getLevel('lfs_diesel', 15000, 3921);
-    const lfsPetrolVol = getLevel('lfs_petrol', 10000, 3739);
+    const lfsDieselVol = (tanks || []).find(t => t.id === 'lfs-diesel')?.currentLevel ?? 22000;
+    const lfsPetrolVol = (tanks || []).find(t => t.id === 'lfs-petrol')?.currentLevel ?? 14000;
 
     // NFF Diesel & Petrol
-    const nffDiesel01Vol = getLevel('tk201', 500000, 75000);
-    const nffDiesel02Vol = getLevel('tk202', 500000, 68000);
-    const nffPetrol01Vol = getLevel('tk301', 50000, 42000);
-    const nffPetrol02Vol = getLevel('tk302', 50000, 38000);
+    const nffDiesel01Vol = (tanks || []).find(t => t.id === 'tk201')?.currentLevel ?? 75000;
+    const nffDiesel02Vol = (tanks || []).find(t => t.id === 'tk202')?.currentLevel ?? 68000;
+    const nffPetrol01Vol = (tanks || []).find(t => t.id === 'tk301')?.currentLevel ?? 42000;
+    const nffPetrol02Vol = (tanks || []).find(t => t.id === 'tk302')?.currentLevel ?? 38000;
 
     // Historical trends
     const last7DaysSalesData = [];
@@ -2116,18 +2094,18 @@ const emptyGroundData = {
   // 3. CONSOLIDATED FUEL SUMMARY (Reconciliation Tab)
   // Summarize across facilities: Tanks, Refuellers, Hydrant dispensers
   const activeTanksTotal = useMemo(() => {
-    const jet = (tanks || []).filter(t => t.type === FuelType.JET_A1).reduce((sum, t) => sum + getHistoricalLevel(t.id, t.currentLevel, t.capacity, stockReportDate), 0);
-    const diesel = (tanks || []).filter(t => t.type === FuelType.DIESEL).reduce((sum, t) => sum + getHistoricalLevel(t.id, t.currentLevel, t.capacity, stockReportDate), 0);
-    const petrol = (tanks || []).filter(t => t.type === FuelType.PETROL).reduce((sum, t) => sum + getHistoricalLevel(t.id, t.currentLevel, t.capacity, stockReportDate), 0);
+    const jet = (tanks || []).filter(t => t.type === FuelType.JET_A1).reduce((sum, t) => sum + t.currentLevel, 0);
+    const diesel = (tanks || []).filter(t => t.type === FuelType.DIESEL).reduce((sum, t) => sum + t.currentLevel, 0);
+    const petrol = (tanks || []).filter(t => t.type === FuelType.PETROL).reduce((sum, t) => sum + t.currentLevel, 0);
     return { jet, diesel, petrol };
-  }, [tanks, stockReportDate]);
+  }, [tanks]);
 
   const activeRefuellersTotal = useMemo(() => {
     // Dynamic sum of all refueller capacities/volumes
     const refuellers = (equipment || []).filter(e => e.type === 'Refueller');
-    const totalVolume = refuellers.reduce((sum, e) => sum + getHistoricalLevel(e.id, e.currentVolume || 0, e.maxCapacity, stockReportDate), 0);
+    const totalVolume = refuellers.reduce((sum, e) => sum + (e.currentVolume || 0), 0);
     return totalVolume;
-  }, [equipment, stockReportDate]);
+  }, [equipment]);
 
   const hydrantVehiclesCount = useMemo(() => {
     return (equipment || []).filter(e => e.type === 'Hydrant Dispenser' || e.type === 'Hydrant Service').length;
@@ -2153,7 +2131,7 @@ const emptyGroundData = {
     const dieselStorage = activeTanksTotal.diesel;
     const dieselMobile = (equipment || [])
       .filter(e => e.type === 'Diesel Truck')
-      .reduce((sum, e) => sum + getHistoricalLevel(e.id, e.currentVolume || 0, e.maxCapacity, stockReportDate), 0);
+      .reduce((sum, e) => sum + (e.currentVolume || 0), 0);
     const dieselTotal = dieselStorage + dieselMobile;
 
     const petrolTotal = activeTanksTotal.petrol;
@@ -2163,7 +2141,7 @@ const emptyGroundData = {
       diesel: dieselTotal,
       petrol: petrolTotal
     };
-  }, [activeTanksTotal, activeRefuellersTotal, equipment, stockReportDate]);
+  }, [activeTanksTotal, activeRefuellersTotal, equipment]);
 
   // Estimated depletion calculations based on daily averages
   const stockAvailability = useMemo(() => {
@@ -2197,13 +2175,12 @@ const emptyGroundData = {
       const items = (equipment || [])
         .filter(e => e.type === 'Refueller' || e.type === 'Diesel Truck' || e.type === 'Hydrant Service')
         .map(e => {
-          const historicalVol = getHistoricalLevel(e.id, e.currentVolume || 0, e.maxCapacity, stockReportDate);
           return {
             id: e.id,
             name: e.name,
             type: e.type === 'Refueller' ? FuelType.JET_A1 : e.type === 'Diesel Truck' ? FuelType.DIESEL : 'Service Asset',
             capacity: e.maxCapacity,
-            currentLevel: historicalVol,
+            currentLevel: e.currentVolume || 0,
             dipHeight: null,
             status: e.status,
             lastUpdated: e.lastUpdated
@@ -2219,61 +2196,50 @@ const emptyGroundData = {
     }
 
     const matchingTanks = (tanks || []).filter(tank => {
+      const name = tank.name.toUpperCase();
       const id = tank.id.toLowerCase();
       if (selectedFacility === 'OFF') {
-        return id.includes('off') || ['tk4', 'tk6', 'tk7', 'tk8', 'tk9'].includes(id);
+        return name.includes('OFF') || id.includes('off') || ['tk4', 'tk6', 'tk7', 'tk8', 'tk9'].includes(id);
       }
       if (selectedFacility === 'NFF') {
-        return id.includes('nff') || ['tk101', 'tk102', 'tk103', 'tk106', 'tk201', 'tk202', 'tk301', 'tk302'].includes(id);
+        return name.includes('NFF') || id.includes('nff') || ['tk101', 'tk102', 'tk103', 'tk106', 'tk201', 'tk202', 'tk301', 'tk302'].includes(id);
       }
       if (selectedFacility === 'SP') {
-        return id.includes('spf');
+        return name.includes('SPF') || id.startsWith('spf');
       }
       if (selectedFacility === 'FS') {
-        return id.includes('lfs') || id.includes('afs');
+        return name.includes('LFS') || name.includes('AFS') || id.startsWith('lfs') || id.startsWith('afs');
       }
       return false;
     });
 
     const mapped = matchingTanks.map(t => {
-      const historicalVol = getHistoricalLevel(t.id, t.currentLevel, t.capacity, stockReportDate);
-      const dip = lookupDipSync(t.id, historicalVol, t.capacity);
+      const vol = t.currentLevel;
+      const dip = lookupDipSync(t.id, vol, t.capacity);
       return {
         id: t.id,
         name: t.name,
         type: t.type,
         capacity: t.capacity,
-        currentLevel: historicalVol,
+        currentLevel: vol,
         dipHeight: dip,
-        status: historicalVol === 0 ? 'Empty' : historicalVol >= t.capacity * 0.95 ? 'Full' : 'Active',
+        status: vol === 0 ? 'Empty' : vol >= t.capacity * 0.95 ? 'Full' : 'Active',
         lastUpdated: t.lastUpdated
       };
     });
 
-    if (selectedFacility === 'NFF') {
-      const nffEquipment = (equipment || [])
-        .filter(e => e.id === 'HS-01' || e.id === 'HS-02')
-        .map(e => {
-          const historicalVol = getHistoricalLevel(e.id, e.currentVolume || 0, e.maxCapacity || 0, stockReportDate);
-          return {
-            id: e.id,
-            name: `${e.name} (Hydrant Service)`,
-            type: FuelType.JET_A1,
-            capacity: e.maxCapacity || 0,
-            currentLevel: historicalVol,
-            dipHeight: null,
-            status: e.status,
-            lastUpdated: e.lastUpdated
-          };
-        });
-      mapped.push(...nffEquipment);
-    }
-
-    // Sort to have JET A-1 first
+    // Sort to have JET A-1 first, placing Recovery tank at the end of JET A1
     return mapped.sort((a, b) => {
       if (a.type === FuelType.JET_A1 && b.type !== FuelType.JET_A1) return -1;
       if (a.type !== FuelType.JET_A1 && b.type === FuelType.JET_A1) return 1;
-      return 0;
+      if (a.type === FuelType.JET_A1 && b.type === FuelType.JET_A1) {
+        const aIsRecovery = a.name.toUpperCase().includes('RECOVERY');
+        const bIsRecovery = b.name.toUpperCase().includes('RECOVERY');
+        if (aIsRecovery && !bIsRecovery) return 1;
+        if (!aIsRecovery && bIsRecovery) return -1;
+        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+      }
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
     });
   }, [selectedFacility, tanks, equipment, stockReportDate]);
 
@@ -2296,11 +2262,19 @@ const emptyGroundData = {
         <div className="relative flex bg-surface-dim p-1.5 rounded-2xl border border-outline shrink-0 overflow-hidden w-full max-w-[420px] shadow-inner">
           <div 
             className={`absolute top-1.5 bottom-1.5 w-[calc(33.333%-4px)] rounded-xl kinetic-gradient transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform
-              ${activeTab === 'sales' ? 'left-1.5 translate-x-[0%]' : ''}
-              ${activeTab === 'shipments' ? 'left-1.5 translate-x-[100%]' : ''}
-              ${activeTab === 'reconciliation' ? 'left-1.5 translate-x-[200%]' : ''}
+              ${activeTab === 'reconciliation' ? 'left-1.5 translate-x-[0%]' : ''}
+              ${activeTab === 'sales' ? 'left-1.5 translate-x-[100%]' : ''}
+              ${activeTab === 'shipments' ? 'left-1.5 translate-x-[200%]' : ''}
             `}
           />
+          <button 
+            onClick={() => setActiveTab('reconciliation')}
+            className={`flex-1 flex items-center justify-center py-2.5 text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all relative z-10 overflow-hidden ${
+              activeTab === 'reconciliation' ? 'text-white font-black' : 'text-on-surface-dim opacity-50 hover:opacity-85'
+            }`}
+          >
+            Stock Summary
+          </button>
           <button 
             onClick={() => setActiveTab('sales')}
             className={`flex-1 flex items-center justify-center py-2.5 text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all relative z-10 overflow-hidden ${
@@ -2315,15 +2289,7 @@ const emptyGroundData = {
               activeTab === 'shipments' ? 'text-white font-black' : 'text-on-surface-dim opacity-50 hover:opacity-85'
             }`}
           >
-            Shipments Details
-          </button>
-          <button 
-            onClick={() => setActiveTab('reconciliation')}
-            className={`flex-1 flex items-center justify-center py-2.5 text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all relative z-10 overflow-hidden ${
-              activeTab === 'reconciliation' ? 'text-white font-black' : 'text-on-surface-dim opacity-50 hover:opacity-85'
-            }`}
-          >
-            Stock Summary
+            Shipment Details
           </button>
         </div>
       </div>

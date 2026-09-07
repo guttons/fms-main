@@ -105,6 +105,10 @@ function removeUserEdit(id: string) {
   } catch (e) {}
 }
 
+// Flag to track whether the 'alerts' table has extended columns (alert_type, metadata, etc.)
+// Default to false so it does not send failing HTTP requests with non-existent columns.
+let alertsExtendedSupported: boolean = false;
+
 export const supabaseService = {
   // ── Auth & Users ────────────────────────────────────────────────────────────
   async getUsers(): Promise<User[]> {
@@ -325,7 +329,10 @@ export const supabaseService = {
             route: routeVal,
             isDomestic: isDomesticVal,
             isAdhoc: isAdhocVal,
-            type: typeVal
+            type: typeVal,
+            landed_alert_sent: !!row.landed_alert_sent,
+            eta_alert_15_sent: !!row.eta_alert_15_sent,
+            eta_alert_5_sent: !!row.eta_alert_5_sent
           } as FlightJob;
         });
 
@@ -372,7 +379,10 @@ export const supabaseService = {
       vehicle_id: job.vehicleId || null,
       remarks: metaString,
       delivery_number: job.deliveryNumber || null,
-      pit_number: job.pitNumber || null
+      pit_number: job.pitNumber || null,
+      landed_alert_sent: job.landed_alert_sent || false,
+      eta_alert_15_sent: job.eta_alert_15_sent || false,
+      eta_alert_5_sent: job.eta_alert_5_sent || false
     };
 
     // 2. Queue mutation in outbox
@@ -407,6 +417,9 @@ export const supabaseService = {
     if ('equipmentUsage' in updates) row.equipment_usage = updates.equipmentUsage;
     if ('status' in updates) row.status = updates.status;
     if ('vehicleId' in updates) row.vehicle_id = updates.vehicleId === undefined ? null : updates.vehicleId;
+    if ('landed_alert_sent' in updates) row.landed_alert_sent = updates.landed_alert_sent;
+    if ('eta_alert_15_sent' in updates) row.eta_alert_15_sent = updates.eta_alert_15_sent;
+    if ('eta_alert_5_sent' in updates) row.eta_alert_5_sent = updates.eta_alert_5_sent;
     if ('remarks' in updates || 'date' in updates || 'route' in updates || 'isDomestic' in updates || 'isAdhoc' in updates || 'type' in updates) {
       const metaString = JSON.stringify({
         _fms_meta: true,
@@ -489,10 +502,12 @@ export const supabaseService = {
     const isLocalhost = typeof window !== 'undefined' && 
       (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-    if (envUrl && envUrl.includes('localhost') && !isLocalhost) {
-      return 'https://fms-bigquery-api-808402455416.us-central1.run.app';
+    if (isLocalhost && envUrl && envUrl.includes('localhost')) {
+      return envUrl;
     }
-    return envUrl || 'https://fms-bigquery-api-808402455416.us-central1.run.app';
+    return (envUrl && !envUrl.includes('localhost')) 
+      ? envUrl 
+      : 'https://fms-bigquery-api-808402455416.us-central1.run.app';
   },
 
   async _bqAuthHeaders(): Promise<Record<string, string>> {
@@ -839,6 +854,12 @@ export const supabaseService = {
       return [];
     }
     if (!data || data.length === 0) return [];
+
+    // Automatically detect whether extended columns exist in the alerts table
+    if (data[0] && 'alert_type' in data[0]) {
+      alertsExtendedSupported = true;
+    }
+
     return data.map(row => ({
       id: row.id,
       severity: row.severity,
@@ -901,34 +922,42 @@ export const supabaseService = {
   },
 
   async createAlert(alert: Omit<Alert, 'id'>): Promise<void> {
-    const row: any = {
+    const baseRow = {
       severity: alert.severity,
       message: alert.message,
       // Always use a full ISO 8601 timestamp for the DB column (timestamptz).
       timestamp: new Date().toISOString(),
       acknowledged: alert.acknowledged,
-      target_role: alert.targetRole || null,
-      alert_type: alert.alertType || null,
-      flight_number: alert.flightNumber || null,
-      assigned_staff_id: alert.assignedStaffId || null,
-      metadata: alert.metadata ? JSON.stringify(alert.metadata) : null,
-      sender_id: alert.senderId || null,
-      sender_name: alert.senderName || null
+      target_role: alert.targetRole || null
     };
 
-    let { error } = await supabase.from('alerts').insert([row]);
-    if (error) {
-      console.warn('[Supabase] createAlert with extended columns failed, falling back to base columns:', error.message);
-      const fallbackRow = {
-        severity: alert.severity,
-        message: alert.message,
-        timestamp: new Date().toISOString(),
-        acknowledged: alert.acknowledged,
-        target_role: alert.targetRole || null
+    if (alertsExtendedSupported) {
+      const extendedRow = {
+        ...baseRow,
+        alert_type: alert.alertType || null,
+        flight_number: alert.flightNumber || null,
+        assigned_staff_id: alert.assignedStaffId || null,
+        metadata: alert.metadata ? JSON.stringify(alert.metadata) : null,
+        sender_id: alert.senderId || null,
+        sender_name: alert.senderName || null
       };
-      const fallbackRes = await supabase.from('alerts').insert([fallbackRow]);
-      if (fallbackRes.error) {
-        console.error('[Supabase] createAlert fallback failed:', fallbackRes.error);
+
+      const { error } = await supabase.from('alerts').insert([extendedRow]);
+      if (error) {
+        if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('alert_type')) {
+          alertsExtendedSupported = false;
+          const fallbackRes = await supabase.from('alerts').insert([baseRow]);
+          if (fallbackRes.error) {
+            console.error('[Supabase] createAlert fallback failed:', fallbackRes.error);
+          }
+        } else {
+          console.error('[Supabase] createAlert failed:', error);
+        }
+      }
+    } else {
+      const { error } = await supabase.from('alerts').insert([baseRow]);
+      if (error) {
+        console.error('[Supabase] createAlert failed:', error);
       }
     }
 
@@ -2158,18 +2187,67 @@ export const supabaseService = {
   },
 
   async getExternalFlights(): Promise<any[]> {
-    try {
-      const headers = await this._bqAuthHeaders();
-      const res = await fetch(`${this._bqBase()}/external-flights`, { headers, cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        return data.flights || [];
-      }
-      throw new Error(`BigQuery API proxy returned status ${res.status}`);
-    } catch (error) {
-      console.warn('[BigQuery] getExternalFlights unavailable –', (error as Error)?.message || '');
+    const CLOUD_RUN_URL = 'https://fms-bigquery-api-808402455416.us-central1.run.app';
+    const CACHE_KEY = 'fms_external_flights_cache';
+    
+    const getCachedFlights = (): any[] => {
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {}
       return [];
+    };
+
+    const primaryUrl = `${this._bqBase()}/external-flights`;
+    const fallbackUrl = `${CLOUD_RUN_URL}/external-flights`;
+
+    const tryFetch = async (targetUrl: string): Promise<any[] | null> => {
+      try {
+        const headers = await this._bqAuthHeaders();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(targetUrl, { headers, cache: 'no-store', signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.flights) && data.flights.length > 0) {
+            try {
+              localStorage.setItem(CACHE_KEY, JSON.stringify(data.flights));
+            } catch (err) {}
+            return data.flights;
+          }
+        }
+      } catch (err) {
+        console.warn(`[BigQuery] Fetch from ${targetUrl} failed:`, (err as Error)?.message);
+      }
+      return null;
+    };
+
+    // 1. Try primary URL
+    let flights = await tryFetch(primaryUrl);
+    
+    // 2. If primary failed and was not already CLOUD_RUN_URL, try direct Cloud Run
+    if (!flights && primaryUrl !== fallbackUrl) {
+      console.log('[BigQuery] Attempting fallback to Cloud Run external flights endpoint...');
+      flights = await tryFetch(fallbackUrl);
     }
+
+    // 3. If online fetches succeeded, return flights
+    if (flights && flights.length > 0) {
+      return flights;
+    }
+
+    // 4. If all network attempts failed, return cached flights
+    const cached = getCachedFlights();
+    if (cached.length > 0) {
+      console.log(`[BigQuery] Returning ${cached.length} cached external flights.`);
+      return cached;
+    }
+
+    return [];
   },
 
   // ── App Settings (Service Tank) ─────────────────────────────────────────────
