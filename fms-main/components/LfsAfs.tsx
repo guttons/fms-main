@@ -257,7 +257,6 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                                     value={formData.driverName}
                                     onChange={handleInputChange}
                                     className="w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" 
-                                    placeholder="E.G. SKYWARD AVIATION" 
                                 />
                             </div>
                          </div>
@@ -274,7 +273,6 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                                     value={formData.receivedBy}
                                     onChange={handleInputChange}
                                     className="w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" 
-                                    placeholder="E.G. IBRAHIM NAZEER" 
                                 />
                             </div>
                          </div>
@@ -291,7 +289,6 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                                     value={formData.equipmentName}
                                     onChange={handleInputChange}
                                     className="w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" 
-                                    placeholder="E.G. GROUND POWER UNIT GPU-02" 
                                 />
                             </div>
                          </div>
@@ -308,7 +305,6 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                                     value={formData.vehicleReg}
                                     onChange={handleInputChange}
                                     className="w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" 
-                                    placeholder="E.G. BG-1A90" 
                                 />
                             </div>
                          </div>

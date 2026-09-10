@@ -869,6 +869,9 @@ export const supabaseService = {
         ? new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
         : row.timestamp,
       acknowledged: row.acknowledged,
+      acknowledgedAt: row.acknowledged_at || row.acknowledgedAt || null,
+      acknowledged_at: row.acknowledged_at || row.acknowledgedAt || null,
+      acknowledgedBy: row.acknowledged_by || row.acknowledgedBy || null,
       targetRole: row.target_role,
       alertType: row.alert_type || row.alertType || null,
       flightNumber: row.flight_number || row.flightNumber || null,
@@ -899,17 +902,37 @@ export const supabaseService = {
     };
   },
 
-  async acknowledgeAlert(id: string): Promise<void> {
-    const { error } = await supabase.from('alerts').update({ acknowledged: true }).eq('id', id);
+  async acknowledgeAlert(id: string, ackData?: { acknowledgedAt?: string; acknowledgedBy?: string }): Promise<void> {
+    const updatePayload: any = { 
+      acknowledged: true,
+      acknowledged_at: ackData?.acknowledgedAt || new Date().toISOString()
+    };
+    if (ackData?.acknowledgedBy) {
+      updatePayload.acknowledged_by = ackData.acknowledgedBy;
+    }
+    const { error } = await supabase.from('alerts').update(updatePayload).eq('id', id);
     if (error) {
       console.error('[Supabase] acknowledgeAlert failed:', error);
+      if (error.message?.includes('acknowledged_at') || error.message?.includes('acknowledged_by') || error.code === 'PGRST204') {
+        await supabase.from('alerts').update({ acknowledged: true }).eq('id', id);
+      }
     }
   },
 
-  async acknowledgeAllAlerts(ids: string[]): Promise<void> {
-    const { error } = await supabase.from('alerts').update({ acknowledged: true }).in('id', ids);
+  async acknowledgeAllAlerts(ids: string[], ackData?: { acknowledgedAt?: string; acknowledgedTime?: string; acknowledgedBy?: string }): Promise<void> {
+    const updatePayload: any = { 
+      acknowledged: true,
+      acknowledged_at: ackData?.acknowledgedAt || new Date().toISOString()
+    };
+    if (ackData?.acknowledgedBy) {
+      updatePayload.acknowledged_by = ackData.acknowledgedBy;
+    }
+    const { error } = await supabase.from('alerts').update(updatePayload).in('id', ids);
     if (error) {
       console.error('[Supabase] acknowledgeAllAlerts failed:', error);
+      if (error.message?.includes('acknowledged_at') || error.message?.includes('acknowledged_by') || error.code === 'PGRST204') {
+        await supabase.from('alerts').update({ acknowledged: true }).in('id', ids);
+      }
     }
   },
 
@@ -1090,7 +1113,7 @@ export const supabaseService = {
 
       let title = 'FMS Operational Alert';
       if (alert.alertType === 'REQUEST_FUELING') title = '⛽ HIGH ALERT: Request Fueling';
-      else if (alert.alertType === 'NO_FUEL') title = '🚫 HIGH ALERT: No Fuel Required';
+      else if (alert.alertType === 'NO_FUEL') title = '🚫 NOTICE: No Fuel Required';
       else if (alert.alertType === 'ETA_15MIN') title = '⏰ ETA WARNING: ~15 Minutes';
       else if (alert.alertType === 'ETA_5MIN') title = '🚨 ETA CRITICAL: ~5 Minutes';
       else if (alert.alertType === 'LANDED') title = '✈️ FLIGHT LANDED';
@@ -1393,7 +1416,7 @@ export const supabaseService = {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'staff' },
         async () => {
-          const staff = await supabaseService.getStaff();
+          const staff = await supabaseService.getStaff(true);
           callback(staff);
         }
       )
@@ -1432,7 +1455,12 @@ export const supabaseService = {
             email: row.email,
             status: row.status as 'active' | 'inactive',
             joinDate: row.join_date || new Date().toISOString(),
-            avatar: row.avatar
+            avatar: row.avatar,
+            currentStatus: (row.current_status as any) || 'OFFLINE',
+            currentJobId: row.current_job_id || undefined,
+            currentVehicleId: row.current_vehicle_id || undefined,
+            lastActiveAt: row.last_active_at || undefined,
+            currentLocation: row.current_location || undefined
           };
           const existing = mergedMap.get(dbStaff.id);
           if (existing) {
@@ -1447,7 +1475,7 @@ export const supabaseService = {
     }
 
     // Step 3: ABSOLUTE TOP PRIORITY: User UI Edits (fms_staff_user_edits)
-    // Edits made in the Staff Management UI overwrite everything else so they NEVER revert!
+    // Edits made in the Staff Management UI overwrite static attributes
     const userEdits = getUserEdits();
     Object.entries(userEdits).forEach(([id, edits]) => {
       const existing = mergedMap.get(id);
@@ -1461,26 +1489,6 @@ export const supabaseService = {
     localStaff = Array.from(mergedMap.values());
     await fmsDb.bulkPut('staff', localStaff);
     try { localStorage.setItem('fms_staff_list_v3', JSON.stringify(localStaff)); } catch (e) {}
-
-    // Synchronize current merged staff records to remote Supabase PostgreSQL DB
-    const staffDataToUpsert = localStaff.map(user => ({
-      id: user.id,
-      name: user.name,
-      role: user.role,
-      employee_id: user.employeeId,
-      phone: user.phone || null,
-      email: user.email || null,
-      status: user.status || 'active',
-      join_date: user.joinDate || new Date().toISOString(),
-      avatar: user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`
-    }));
-
-    try {
-      await supabase.from('staff').upsert(staffDataToUpsert);
-      console.log('[Supabase] Staff table successfully synchronized in remote DB!');
-    } catch (err) {
-      console.warn('[Supabase] Staff remote upsert error:', err);
-    }
 
     return localStaff;
   },

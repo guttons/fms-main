@@ -347,7 +347,7 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Filter by Airline, Flight (e.g. EK658), or Tail (e.g. 8Q-IAI)..."
+            placeholder="Filter by Airline, Flight, or Tail..."
             className="w-full pl-11 pr-4 py-2.5 bg-surface-container-low border border-outline rounded-2xl text-xs font-semibold text-on-surface placeholder:text-on-surface-dim/50 focus:outline-none focus:border-primary transition-all"
           />
         </div>
@@ -553,7 +553,7 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
             <div className="space-y-3 text-xs">
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-dim mb-1">Airline Name *</label>
-                <input type="text" value={airlineName} onChange={e => setAirlineName(e.target.value)} required placeholder="e.g. Emirates" className="w-full p-3 bg-surface-container border border-outline rounded-xl font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                <input type="text" value={airlineName} onChange={e => setAirlineName(e.target.value)} required className="w-full p-3 bg-surface-container border border-outline rounded-xl font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50" />
               </div>
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-dim mb-1">Category *</label>
@@ -584,7 +584,7 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
               </div>
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-dim mb-1">IATA Code</label>
-                <input type="text" value={iataCode} onChange={e => setIataCode(e.target.value)} placeholder="e.g. EK" className="w-full p-3 bg-surface-container border border-outline rounded-xl font-mono uppercase font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                <input type="text" value={iataCode} onChange={e => setIataCode(e.target.value)} className="w-full p-3 bg-surface-container border border-outline rounded-xl font-mono uppercase font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50" />
               </div>
             </div>
             <div className="flex justify-end gap-3 pt-2">
@@ -606,11 +606,11 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
             <div className="space-y-3 text-xs">
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-dim mb-1">Flight Number *</label>
-                <input type="text" value={flightNumber} onChange={e => setFlightNumber(e.target.value)} required placeholder="e.g. EK658" className="w-full p-3 bg-surface-container border border-outline rounded-xl font-mono uppercase font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                <input type="text" value={flightNumber} onChange={e => setFlightNumber(e.target.value)} required className="w-full p-3 bg-surface-container border border-outline rounded-xl font-mono uppercase font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50" />
               </div>
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-dim mb-1">Route (Optional)</label>
-                <input type="text" value={flightRoute} onChange={e => setFlightRoute(e.target.value)} placeholder="e.g. DXB - MLE - DXB" className="w-full p-3 bg-surface-container border border-outline rounded-xl font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                <input type="text" value={flightRoute} onChange={e => setFlightRoute(e.target.value)} className="w-full p-3 bg-surface-container border border-outline rounded-xl font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50" />
               </div>
             </div>
             <div className="flex justify-end gap-3 pt-2">
@@ -638,7 +638,6 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
                     value={aircraftReg}
                     onChange={e => setAircraftReg(e.target.value)}
                     required
-                    placeholder="e.g. 8Q-IAI or A6-EEO"
                     className="w-full p-3 bg-surface-container border border-outline rounded-xl font-mono uppercase font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50"
                   />
                   <button
@@ -666,7 +665,6 @@ export const FlightMasterTab: React.FC<FlightMasterTabProps> = ({ push, confirm,
                   value={aircraftType}
                   onChange={e => setAircraftType(e.target.value)}
                   required
-                  placeholder="e.g. ATR, B777, A320"
                   className="w-full p-3 bg-surface-container border border-outline rounded-xl font-semibold uppercase font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50"
                 />
               </div>

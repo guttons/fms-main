@@ -20,7 +20,7 @@ import { FuelReports } from './components/FuelReports';
 import { Login } from './components/Login';
 import { Logo } from './components/Logo';
 import { BottomNav } from './components/BottomNav';
-import { NotificationProvider, useNotification } from './context/NotificationContext';
+import { NotificationProvider, useNotification, NotificationType } from './context/NotificationContext';
 import { OperationalDataProvider, useOperationalData } from './context/OperationalDataContext';
 import { FinanceDataProvider } from './context/FinanceDataContext';
 import { FinanceModule } from './components/FinanceModule';
@@ -28,7 +28,6 @@ import { CustomerPortal } from './components/CustomerPortal';
 import { ExecutiveModule } from './components/ExecutiveModule';
 import { MOCK_USERS } from './constants';
 import { AIChatModal } from './components/AIChatModal';
-import { FlightTracker } from './components/FlightTracker';
 import { StaffTracker } from './components/StaffTracker';
 import { LocationPromptModal } from './components/LocationPromptModal';
 import { FullScreenAlert } from './components/FullScreenAlert';
@@ -508,9 +507,12 @@ const AppContextContent: React.FC<any> = ({
       if (activeAlerts.length > 0) {
         setTimeout(() => {
           activeAlerts.forEach(alert => {
-            let type: 'info' | 'success' | 'warning' | 'error' = 'info';
-            if (alert.severity === 'critical') type = 'error';
-            else if (alert.severity === 'medium') type = 'warning';
+            let type: NotificationType = 'info';
+            if (alert.severity === 'critical' || alert.alertType === 'REQUEST_FUELING' || alert.alertType === 'ALERT_CANCELLED') {
+              type = 'critical';
+            } else if (alert.severity === 'warning' || alert.alertType === 'NO_FUEL' || alert.severity === 'medium') {
+              type = 'warning';
+            }
             
             notify(alert.message, type);
           });
@@ -525,9 +527,15 @@ const AppContextContent: React.FC<any> = ({
 
     if (newlyAdded.length > 0) {
       newlyAdded.forEach(alert => {
-        let type: 'info' | 'success' | 'warning' | 'error' = 'info';
-        if (alert.severity === 'critical') type = 'error';
-        else if (alert.severity === 'medium') type = 'warning';
+        // Prevent double toast: do not fire toast for the user who dispatched this alert
+        if (alert.senderId && alert.senderId === currentUser.id) return;
+
+        let type: NotificationType = 'info';
+        if (alert.severity === 'critical' || alert.alertType === 'REQUEST_FUELING' || alert.alertType === 'ALERT_CANCELLED') {
+          type = 'critical';
+        } else if (alert.severity === 'warning' || alert.alertType === 'NO_FUEL' || alert.severity === 'medium') {
+          type = 'warning';
+        }
         
         notify(alert.message, type);
       });
@@ -921,7 +929,7 @@ const AppContextContent: React.FC<any> = ({
   // Priority Full Screen Alert for currently assigned staff
   const fullScreenAlert = useMemo(() => {
     if (!currentUser || !alerts || alerts.length === 0) return null;
-    const alertTypesToTrigger = ['REQUEST_FUELING', 'NO_FUEL', 'ETA_5MIN', 'ETA_15MIN', 'LANDED'];
+    const alertTypesToTrigger = ['REQUEST_FUELING', 'NO_FUEL', 'ALERT_CANCELLED', 'ETA_5MIN', 'ETA_15MIN', 'LANDED'];
 
     return alerts.find(a => {
       if (!a || a.acknowledged) return false;
@@ -942,17 +950,14 @@ const AppContextContent: React.FC<any> = ({
   const renderContent = (viewToRender = activeView) => {
     switch (viewToRender) {
       case 'staff-tracker':
+        if (currentUser?.role !== UserRole.ITP_MANAGER && currentUser?.role !== UserRole.ADMIN) {
+          setActiveView('dashboard');
+          return null;
+        }
         return <StaffTracker user={currentUser!} />;
       case 'tracker':
-        return (
-          <FlightTracker 
-            user={currentUser} 
-            onNavigateToIntoPlane={(flightJob: FlightJob) => {
-              setPendingJob(flightJob);
-              setActiveView('intoplane');
-            }} 
-          />
-        );
+        setActiveView('intoplane');
+        return null;
       case 'dashboard':
         return (
           <Dashboard 
@@ -1123,7 +1128,7 @@ const AppContextContent: React.FC<any> = ({
           )}
 
           {/* Main Content Scroll Area */}
-          <main ref={mainRefCallback} className={`flex-1 ${activeView === 'tracker' ? 'overflow-hidden flex flex-col pb-[92px] lg:pb-0' : 'overflow-y-auto pb-32 lg:pb-10'} relative canvas scroll-smooth overscroll-none`}>
+          <main ref={mainRefCallback} className="flex-1 overflow-y-auto pb-32 lg:pb-10 relative canvas scroll-smooth overscroll-none">
             
             {/* Dynamic Pull to Refresh Hex Droplet Spinner */}
             {(pullDistance > 0 || isRefreshing) && (
@@ -1702,7 +1707,7 @@ const AppContextContent: React.FC<any> = ({
             >
               <div 
                 key={activeView} 
-                className={`w-full ${activeView === 'tracker' ? 'h-full flex-1 min-h-0 flex flex-col overflow-hidden' : 'min-h-full'}`}
+                className="w-full min-h-full"
                 style={{
                   filter: blurAmount > 0 ? `blur(${blurAmount}px)` : 'none',
                   transition: pullingRef.current ? 'none' : 'filter 0.3s ease'
@@ -1896,7 +1901,7 @@ const AppContextContent: React.FC<any> = ({
         {fullScreenAlert && (
           <FullScreenAlert 
             alert={fullScreenAlert} 
-            onAcknowledge={acknowledgeAlert} 
+            onAcknowledge={(alertId) => acknowledgeAlert(alertId, currentUser?.name)} 
           />
         )}
 

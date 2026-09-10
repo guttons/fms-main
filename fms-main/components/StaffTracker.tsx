@@ -31,7 +31,8 @@ const DEPOT_ROLES = [
 ];
 
 /**
- * Flexible staff matching helper across IDs, employee IDs (RC numbers), names, and emails
+ * Strict staff matching helper across IDs, employee IDs (RC numbers), names, and emails.
+ * Avoids false partial matches (e.g. "Mohamed" matching every Maldivian staff).
  */
 export const isStaffMatch = (staffMember: any, target?: string | null): boolean => {
   if (!target || !staffMember) return false;
@@ -39,29 +40,64 @@ export const isStaffMatch = (staffMember: any, target?: string | null): boolean 
   const sId = (staffMember.id || '').trim().toLowerCase();
   const sEmp = (staffMember.employeeId || '').trim().toLowerCase();
   const cleanEmp = sEmp.replace(/^[a-z]-?/i, ''); // "A-6600" -> "6600"
+  const cleanTarget = t.replace(/^[a-z]-?/i, '');
   const sName = (staffMember.name || '').trim().toLowerCase();
   const sEmail = (staffMember.email || '').trim().toLowerCase();
 
-  if (t === sId) return true;
-  if (t === sEmp) return true;
-  if (cleanEmp && (t === cleanEmp || t === `a-${cleanEmp}` || t === `rc-${cleanEmp}` || t.endsWith(cleanEmp))) return true;
-  if (t === sName) return true;
-  if (t === sEmail) return true;
-  if (sName.length > 3 && t.length > 3) {
-    if (sName.includes(t) || t.includes(sName)) return true;
+  // 1. Direct ID or Employee ID match
+  if (t === sId || t === sEmp) return true;
+  if (cleanEmp && cleanTarget && cleanEmp === cleanTarget) return true;
+
+  // 2. Direct email match
+  if (sEmail && t === sEmail) return true;
+
+  // 3. Direct full name match
+  if (sName && t === sName) return true;
+
+  // 4. Tokenized name match: only if sharing at least 2 distinct significant tokens (length >= 3)
+  const sTokens = sName.split(/\s+/).filter(tok => tok.length >= 3);
+  const tTokens = t.split(/\s+/).filter(tok => tok.length >= 3);
+  if (sTokens.length >= 2 && tTokens.length >= 2) {
+    const sharedTokens = sTokens.filter(tok => tTokens.includes(tok));
+    if (sharedTokens.length >= 2) return true;
   }
+
   return false;
 };
+
+/**
+ * Validates whether a flight log occurred on today's operational date
+ */
+export const isTodayLog = (log: FlightLog, todayDateStr?: string): boolean => {
+  if (!log) return false;
+  const today = todayDateStr || new Date().toISOString().split('T')[0];
+  if (log.operationalDate && log.operationalDate === today) return true;
+  if (log.timestampStart && log.timestampStart.startsWith(today)) return true;
+  if (log.timestampFinalEnd && log.timestampFinalEnd.startsWith(today)) return true;
+  return false;
+};
+
+export const SHIFTS = ['Morning', 'Evening', 'Night'] as const;
+export const ROLE_FILTERS = ['ALL', 'ITP', 'DEPOT', 'ON_JOB', 'ON_BREAK'] as const;
 
 export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
   const { staff, flightJobs, equipment, flightLogs: contextFlightLogs } = useOperationalData();
   const [remoteFlightLogs, setRemoteFlightLogs] = useState<FlightLog[]>([]);
+  const [remoteStaffList, setRemoteStaffList] = useState<StaffMember[]>([]);
+  const [onlinePresenceMap, setOnlinePresenceMap] = useState<Map<string, any>>(new Map());
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'ALL' | 'ITP' | 'DEPOT' | 'ON_JOB' | 'ON_BREAK'>('ALL');
   const [selectedStaff, setSelectedStaff] = useState<any | null>(null);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
-  const [selectedShift, setSelectedShift] = useState('Morning');
+  const [selectedShift, setSelectedShift] = useState<'Morning' | 'Evening' | 'Night'>('Morning');
+  const [currentUserStatus, setCurrentUserStatus] = useState<string>(() => {
+    try {
+      return localStorage.getItem('fms_staff_status_' + user.id) || 'ONLINE';
+    } catch {
+      return 'ONLINE';
+    }
+  });
 
   // Supervisor Password Reset Modal state
   const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
@@ -82,6 +118,64 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
     isAuthenticated: true,
     skipLifecycle: true
   });
+
+  // Access guard: Staff Tracker is visible only to ITP Managers and Admins
+  const isAuthorized = user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN;
+
+  // 1. Subscribe to Supabase Realtime Presence channel for instantaneous multi-device tracking
+  useEffect(() => {
+    const channel = supabase.channel('fms_staff_presence_monitor');
+    
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        const newMap = new Map<string, any>();
+        Object.values(state).forEach((presences: any) => {
+          if (Array.isArray(presences)) {
+            presences.forEach((p: any) => {
+              if (p.id) newMap.set(p.id, p);
+              if (p.employeeId) newMap.set(p.employeeId, p);
+            });
+          }
+        });
+        setOnlinePresenceMap(newMap);
+      })
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'staff' },
+        async () => {
+          try {
+            const fresh = await supabaseService.getStaff(true);
+            if (fresh && fresh.length > 0) setRemoteStaffList(fresh);
+          } catch (e) {
+            console.warn('[StaffTracker] Realtime staff update failed:', e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // 2. Poll Supabase staff table every 10 seconds as a reliable background fallback
+  const fetchFreshStaff = useCallback(async () => {
+    try {
+      const fresh = await supabaseService.getStaff(true);
+      if (fresh && fresh.length > 0) {
+        setRemoteStaffList(fresh);
+      }
+    } catch (err) {
+      console.warn('[StaffTracker] Remote staff poll:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchFreshStaff();
+    const interval = setInterval(fetchFreshStaff, 10000);
+    return () => clearInterval(interval);
+  }, [fetchFreshStaff]);
 
   // Fetch today's flight logs from Supabase API to ensure completed liters and flight counts are 100% accurate
   const loadTodayFlightLogs = useCallback(async () => {
@@ -126,9 +220,12 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
     ].includes(user.role);
   }, [user.role]);
 
-  // Compute enriched staff data
+  // Compute enriched staff data with real-time multi-device sync and today-only metrics
   const enrichedStaff = useMemo(() => {
-    return staff.map((s: any) => {
+    const effectiveStaff = remoteStaffList.length > 0 ? remoteStaffList : staff;
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    return effectiveStaff.map((s: any) => {
       // Check active in-progress job
       const activeJob = flightJobs.find(j => 
         (j.status === 'IN_PROGRESS' || j.status === 'ASSIGNED') &&
@@ -141,13 +238,16 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
         activeVehicle = equipment.find(e => e.id === activeJob.vehicleId || e.name === activeJob.vehicleId) || null;
       }
 
-      // Today's completed flight operations
+      // Today's completed flight operations (STRICTLY TODAY — no mock/historical logs)
       const matchedFlightLogs = allFlightLogs.filter(log => {
         return (
-          isStaffMatch(s, log.operatorId) ||
-          isStaffMatch(s, log.operatorName) ||
-          isStaffMatch(s, log.officer) ||
-          isStaffMatch(s, log.tacticalOperator)
+          isTodayLog(log, todayStr) &&
+          (
+            isStaffMatch(s, log.operatorId) ||
+            isStaffMatch(s, log.operatorName) ||
+            isStaffMatch(s, log.officer) ||
+            isStaffMatch(s, log.tacticalOperator)
+          )
         );
       });
 
@@ -176,30 +276,52 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
 
       const completedJobsTodayCount = completedFlightNumbers.size;
 
-      // Determine live status: if currently on an in-progress job, prioritize ON_JOB
-      let liveStatus = s.current_status || s.currentStatus || 'OFFLINE';
-      if (activeJob && activeJob.status === 'IN_PROGRESS') {
-        liveStatus = 'ON_JOB';
-      } else if (liveStatus === 'OFFLINE' && (s.id === user.id)) {
-        liveStatus = 'ONLINE';
+      // Real-time presence from other devices
+      const presence = onlinePresenceMap.get(s.id) || (s.employeeId ? onlinePresenceMap.get(s.employeeId) : null);
+      const dbStatus = s.current_status || s.currentStatus || 'OFFLINE';
+      const lastActive = presence?.lastActive || s.last_active_at || s.lastActiveAt;
+
+      let isRecentlyActive = false;
+      if (lastActive) {
+        const diffMs = Date.now() - new Date(lastActive).getTime();
+        isRecentlyActive = diffMs < 15 * 60 * 1000; // Active within past 15 mins
       }
 
-      // Read real location (from Supabase or local state if current user)
+      // Determine live duty status accurately
+      let liveStatus = 'OFFLINE';
+      if (activeJob && activeJob.status === 'IN_PROGRESS') {
+        liveStatus = 'ON_JOB';
+      } else if (presence) {
+        liveStatus = presence.status || 'ONLINE';
+      } else if (s.id === user.id) {
+        liveStatus = currentUserStatus;
+      } else if (isRecentlyActive && ['ONLINE', 'IDLE', 'ON_BREAK'].includes(dbStatus)) {
+        liveStatus = dbStatus;
+      } else if (dbStatus === 'ON_JOB' && activeJob) {
+        liveStatus = 'ON_JOB';
+      } else {
+        liveStatus = 'OFFLINE';
+      }
+
+      // Read real location (from presence, Supabase, or local state if current user)
       const loc = (s.id === user.id && currentLocation) 
         ? currentLocation 
-        : s.current_location || s.currentLocation || null;
+        : presence?.location || s.current_location || s.currentLocation || null;
 
       // Determine time since last active
       let timeSince = '';
-      const lastActive = s.last_active_at || s.lastActiveAt;
-      if (lastActive) {
+      if (presence) {
+        timeSince = 'Active now (Live)';
+      } else if (s.id === user.id) {
+        timeSince = 'Active now';
+      } else if (lastActive) {
         const diffMs = Date.now() - new Date(lastActive).getTime();
         const diffMins = Math.floor(diffMs / 60000);
         if (diffMins < 1) timeSince = 'Active now';
         else if (diffMins < 60) timeSince = `${diffMins}m ago`;
         else timeSince = `${Math.floor(diffMins / 60)}h ${diffMins % 60}m ago`;
-      } else if (s.id === user.id) {
-        timeSince = 'Active now';
+      } else {
+        timeSince = 'Offline';
       }
 
       return {
@@ -213,7 +335,7 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
         timeSince
       };
     });
-  }, [staff, flightJobs, equipment, allFlightLogs, user.id, currentLocation]);
+  }, [remoteStaffList, staff, flightJobs, equipment, allFlightLogs, onlinePresenceMap, user.id, currentLocation, currentUserStatus]);
 
   const filteredStaff = useMemo(() => {
     return enrichedStaff.filter((s: any) => {
@@ -289,12 +411,15 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
             }
           }
 
-          // 2. Add real completed operations from flight logs
+          // 2. Add real completed operations from today's flight logs
+          const todayStr = new Date().toISOString().split('T')[0];
           const staffLogs = allFlightLogs.filter(log => 
-            isStaffMatch(selectedStaff, log.operatorId) ||
-            isStaffMatch(selectedStaff, log.operatorName) ||
-            isStaffMatch(selectedStaff, log.officer) ||
-            isStaffMatch(selectedStaff, log.tacticalOperator)
+            isTodayLog(log, todayStr) && (
+              isStaffMatch(selectedStaff, log.operatorId) ||
+              isStaffMatch(selectedStaff, log.operatorName) ||
+              isStaffMatch(selectedStaff, log.officer) ||
+              isStaffMatch(selectedStaff, log.tacticalOperator)
+            )
           );
 
           staffLogs.forEach(log => {
@@ -362,6 +487,10 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
 
   const handleSelfStatusChange = async (newStatus: string) => {
     haptic('TAP');
+    setCurrentUserStatus(newStatus);
+    try {
+      localStorage.setItem('fms_staff_status_' + user.id, newStatus);
+    } catch (e) {}
     await updateStatus(newStatus);
     await logActivity('STATUS_CHANGE', { newStatus });
   };
@@ -410,6 +539,20 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
     }
   };
 
+  if (!isAuthorized) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-surface">
+        <div className="w-16 h-16 rounded-3xl bg-error/10 border border-error/20 flex items-center justify-center text-error mb-4">
+          <ShieldAlert className="w-8 h-8 text-error" />
+        </div>
+        <h2 className="text-xl font-[900] uppercase text-on-surface tracking-tight">Access Restricted</h2>
+        <p className="text-xs text-on-surface-dim mt-2 max-w-sm">
+          The Individual Staff Tracker is an executive supervisory module restricted to ITP Managers and System Administrators.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full bg-surface p-4 sm:p-6 md:p-8 overflow-hidden">
       
@@ -431,16 +574,25 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
 
         {/* Global Controls */}
         <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-          {/* Shift Selector */}
-          <div className="flex bg-surface-dim p-1 rounded-xl border border-outline">
-            {['Morning', 'Evening', 'Night'].map(shift => (
+          {/* Shift Selector with animated kinetic slider */}
+          <div className="relative grid grid-cols-3 bg-surface-container-low p-1 rounded-2xl border border-outline w-full sm:w-[280px] h-[38px] shadow-xs">
+            <div 
+              className="absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform"
+              style={{
+                width: 'calc((100% - 8px) / 3)',
+                left: '4px',
+                transform: `translateX(${SHIFTS.indexOf(selectedShift) * 100}%)`
+              }}
+            />
+            {SHIFTS.map(shift => (
               <button
                 key={shift}
+                type="button"
                 onClick={() => { haptic('TAP'); setSelectedShift(shift); }}
-                className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
+                className={`relative z-10 flex items-center justify-center rounded-xl text-[11px] font-black uppercase tracking-[0.1em] transition-colors duration-300 active:scale-95 cursor-pointer select-none ${
                   selectedShift === shift 
-                    ? 'bg-primary text-white shadow-sm' 
-                    : 'text-on-surface-dim hover:text-on-surface'
+                    ? 'text-white' 
+                    : 'text-on-surface-dim opacity-70 hover:opacity-100'
                 }`}
               >
                 {shift}
@@ -472,7 +624,7 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
               <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-black text-sm border border-primary/20">
                 {user.name.slice(0, 2).toUpperCase()}
               </div>
-              <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-surface bg-emerald-500 animate-pulse"></div>
+              <div className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-surface ${currentUserStatus === 'ON_BREAK' ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'}`}></div>
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -484,7 +636,9 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
               <p className="text-[10px] text-on-surface-dim font-mono mt-0.5 flex items-center gap-2 flex-wrap">
                 <span>Shift: {selectedShift}</span>
                 <span>•</span>
-                <span>Status: <strong className="text-emerald-500 uppercase">On Duty</strong></span>
+                <span>Status: <strong className={currentUserStatus === 'ON_BREAK' ? "text-amber-500 uppercase" : "text-emerald-500 uppercase"}>
+                  {currentUserStatus === 'ON_BREAK' ? 'On Break' : 'On Duty'}
+                </strong></span>
                 {currentLocation?.zone && (
                   <>
                     <span>•</span>
@@ -497,35 +651,46 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
             </div>
           </div>
 
-          {/* Quick status actions */}
+          {/* Quick status actions with clear active distinguishability */}
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <button
+              type="button"
               onClick={() => handleSelfStatusChange('ONLINE')}
-              className="px-2.5 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 text-[10px] font-bold uppercase hover:bg-emerald-500/20 transition-all flex items-center gap-1.5"
+              className={`px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                currentUserStatus !== 'ON_BREAK'
+                  ? 'bg-emerald-500 text-white shadow-md ring-2 ring-emerald-400/40 hover:bg-emerald-600'
+                  : 'bg-surface-container-high/40 hover:bg-surface-container text-on-surface-dim hover:text-on-surface border border-outline font-bold'
+              }`}
             >
-              <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+              <div className={`w-2 h-2 rounded-full ${currentUserStatus !== 'ON_BREAK' ? 'bg-white animate-pulse' : 'bg-emerald-500/50'}`}></div>
               Available
             </button>
             <button
+              type="button"
               onClick={() => handleSelfStatusChange('ON_BREAK')}
-              className="px-2.5 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-500 text-[10px] font-bold uppercase hover:bg-amber-500/20 transition-all flex items-center gap-1.5"
+              className={`px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                currentUserStatus === 'ON_BREAK'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-md ring-2 ring-amber-400/40 hover:bg-amber-400'
+                  : 'bg-surface-container-high/40 hover:bg-surface-container text-on-surface-dim hover:text-on-surface border border-outline font-bold'
+              }`}
             >
-              <Coffee className="w-3 h-3" />
+              <Coffee className={`w-3.5 h-3.5 ${currentUserStatus === 'ON_BREAK' ? 'text-slate-950' : 'opacity-60'}`} />
               Break
             </button>
             <button
+              type="button"
               onClick={() => {
                 haptic('TAP');
                 if (isTrackingLocation) stopLocationTracking();
                 else startLocationTracking();
               }}
-              className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95 ${
                 isTrackingLocation 
-                  ? 'bg-blue-500 text-white border-blue-500 shadow-sm' 
-                  : 'bg-surface-dim text-on-surface-dim border-outline hover:text-on-surface'
+                  ? 'kinetic-gradient text-white shadow-premium' 
+                  : 'bg-surface-container-high/40 text-on-surface-dim hover:text-on-surface border border-outline hover:bg-surface-container font-bold'
               }`}
             >
-              <Navigation className={`w-3 h-3 ${isTrackingLocation ? 'animate-spin' : ''}`} />
+              <Navigation className={`w-3.5 h-3.5 ${isTrackingLocation ? 'animate-spin' : ''}`} />
               {isTrackingLocation ? 'GPS Tracking Active' : 'Enable GPS'}
             </button>
           </div>
@@ -537,19 +702,19 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
          ───────────────────────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row justify-between gap-4 mb-5">
         <div className="flex gap-2 p-2 bg-surface/60 backdrop-blur-md rounded-2xl border border-outline overflow-x-auto custom-scrollbar">
-          <div className="px-4 py-1.5 flex flex-col items-center justify-center border-r border-outline/50 flex-shrink-0">
+          <div className="px-4 py-1.5 flex flex-col items-center justify-center border-r border-outline flex-shrink-0">
             <span className="text-xl font-black text-on-surface">{stats.onDuty}</span>
             <span className="text-[9px] text-on-surface-dim uppercase tracking-wider">On Duty</span>
           </div>
-          <div className="px-4 py-1.5 flex flex-col items-center justify-center border-r border-outline/50 flex-shrink-0">
+          <div className="px-4 py-1.5 flex flex-col items-center justify-center border-r border-outline flex-shrink-0">
             <span className="text-xl font-black text-blue-500">{stats.onJob}</span>
             <span className="text-[9px] text-on-surface-dim uppercase tracking-wider">On Flight Job</span>
           </div>
-          <div className="px-4 py-1.5 flex flex-col items-center justify-center border-r border-outline/50 flex-shrink-0">
+          <div className="px-4 py-1.5 flex flex-col items-center justify-center border-r border-outline flex-shrink-0">
             <span className="text-xl font-black text-emerald-500">{stats.idle}</span>
             <span className="text-[9px] text-on-surface-dim uppercase tracking-wider">Idle / Avail</span>
           </div>
-          <div className="px-4 py-1.5 flex flex-col items-center justify-center border-r border-outline/50 flex-shrink-0">
+          <div className="px-4 py-1.5 flex flex-col items-center justify-center border-r border-outline flex-shrink-0">
             <span className="text-xl font-black text-amber-500">{stats.onBreak}</span>
             <span className="text-[9px] text-on-surface-dim uppercase tracking-wider">On Break</span>
           </div>
@@ -561,15 +726,24 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
 
         <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
           <Filter className="w-3.5 h-3.5 text-on-surface-dim flex-shrink-0" />
-          <div className="flex bg-surface-dim p-1 rounded-xl border border-outline flex-shrink-0">
-            {(['ALL', 'ITP', 'DEPOT', 'ON_JOB', 'ON_BREAK'] as const).map(role => (
+          <div className="relative grid grid-cols-5 bg-surface-container-low p-1 rounded-2xl border border-outline flex-shrink-0 min-w-[350px] sm:min-w-[420px] h-[38px] shadow-xs">
+            <div 
+              className="absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform"
+              style={{
+                width: 'calc((100% - 8px) / 5)',
+                left: '4px',
+                transform: `translateX(${ROLE_FILTERS.indexOf(roleFilter) * 100}%)`
+              }}
+            />
+            {ROLE_FILTERS.map(role => (
               <button
                 key={role}
+                type="button"
                 onClick={() => { haptic('TAP'); setRoleFilter(role); }}
-                className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${
+                className={`relative z-10 flex items-center justify-center px-2 text-[10px] font-black uppercase tracking-wider rounded-xl transition-colors duration-300 cursor-pointer select-none active:scale-95 ${
                   roleFilter === role 
-                    ? 'bg-primary text-white shadow-sm' 
-                    : 'text-on-surface-dim hover:text-on-surface'
+                    ? 'text-white' 
+                    : 'text-on-surface-dim opacity-70 hover:opacity-100'
                 }`}
               >
                 {role.replace('_', ' ')}
@@ -668,7 +842,7 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
                     </div>
                   )}
                   
-                  <div className="flex items-center justify-between text-[9px] text-on-surface-dim pt-2 border-t border-outline/30">
+                  <div className="flex items-center justify-between text-[9px] text-on-surface-dim pt-2 border-t border-outline">
                     <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {s.timeSince || 'Offline'}</span>
                     <span className="text-primary font-bold group-hover:underline">Track Dossier →</span>
                   </div>
@@ -823,9 +997,9 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => { setShowPasswordResetModal(true); setPasswordResetSuccess(false); }}
-                      className="flex-1 py-2 px-3 bg-surface border border-outline rounded-xl text-[10px] font-black uppercase text-on-surface hover:border-primary transition-colors flex items-center justify-center gap-1.5"
+                      className="flex-1 py-3 px-4 kinetic-gradient text-white rounded-xl text-[10px] font-black uppercase tracking-wider shadow-premium hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      <KeyRound className="w-3.5 h-3.5 text-primary" /> Reset Password
+                      <KeyRound className="w-3.5 h-3.5" /> Reset Password
                     </button>
                   </div>
                 </div>
@@ -852,7 +1026,7 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
                     </p>
                   </div>
                 ) : (
-                  <div className="relative border-l border-outline/50 ml-3 pl-5 space-y-4">
+                  <div className="relative border-l border-outline ml-3 pl-5 space-y-4">
                     {activityLogs.map((log, idx) => (
                       <div key={log.id || idx} className="relative">
                         <div className="absolute -left-[27px] w-5 h-5 rounded-full bg-surface border border-outline flex items-center justify-center shadow-xs">
@@ -882,7 +1056,7 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
             <div className="p-4 border-t border-outline bg-surface-dim/20 flex justify-end">
               <button
                 onClick={() => setSelectedStaff(null)}
-                className="py-2.5 px-6 rounded-xl bg-surface border border-outline text-xs font-black uppercase tracking-wider hover:border-primary transition-colors"
+                className="py-2.5 px-6 rounded-xl kinetic-gradient text-white text-xs font-black uppercase tracking-wider shadow-premium hover:scale-[1.02] active:scale-95 transition-all cursor-pointer"
               >
                 Close Dossier
               </button>
@@ -925,14 +1099,14 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
                 <div className="flex gap-2 pt-2">
                   <button
                     onClick={() => setShowPasswordResetModal(false)}
-                    className="flex-1 py-2 rounded-xl border border-outline text-[10px] font-black uppercase text-on-surface-dim hover:text-on-surface"
+                    className="flex-1 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-container border border-outline text-[10px] font-black uppercase text-on-surface-dim hover:text-on-surface hover:scale-95 active:scale-90 transition-all cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleSupervisorResetPassword}
                     disabled={isResettingPassword || !newTempPassword}
-                    className="flex-1 py-2 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-wider shadow-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+                    className="flex-1 py-2.5 rounded-xl kinetic-gradient text-white text-[10px] font-black uppercase tracking-wider shadow-premium hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 cursor-pointer"
                   >
                     {isResettingPassword ? 'Resetting...' : 'Confirm Reset'}
                   </button>

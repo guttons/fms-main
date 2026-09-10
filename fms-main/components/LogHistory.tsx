@@ -1756,7 +1756,6 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                           value={editForm.seaplanePumpId}
                           onChange={e => setEditForm({...editForm, seaplanePumpId: e.target.value})}
                           className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
-                          placeholder="E.G. SP-04"
                         />
                       </div>
                       <div>
@@ -1856,7 +1855,6 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                           value={editForm.marineVesselName}
                           onChange={e => setEditForm({...editForm, marineVesselName: e.target.value})}
                           className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
-                          placeholder="E.G. MV SEA BREEZE"
                         />
                       </div>
                       <div>
@@ -1866,7 +1864,6 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                           value={editForm.marineRefuellerId}
                           onChange={e => setEditForm({...editForm, marineRefuellerId: e.target.value})}
                           className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
-                          placeholder="E.G. RF-10"
                         />
                       </div>
                     </div>
@@ -2050,7 +2047,6 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                           value={editForm.fillingVehicleReg}
                           onChange={e => setEditForm({...editForm, fillingVehicleReg: e.target.value})}
                           className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
-                          placeholder="E.G. 8Q-XYZ"
                         />
                       </div>
                     </div>

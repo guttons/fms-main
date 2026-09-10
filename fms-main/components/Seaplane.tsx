@@ -241,7 +241,6 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                                 value={formData.pumpId}
                                 onChange={handleInputChange}
                                 className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" 
-                                placeholder="E.G. HP-01" 
                             />
                          </div>
 

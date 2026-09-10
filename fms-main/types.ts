@@ -193,10 +193,13 @@ export interface ForecastScenario {
 
 export interface Alert {
   id: string;
-  severity: 'low' | 'medium' | 'critical';
+  severity: 'low' | 'medium' | 'critical' | 'warning';
   message: string;
   timestamp: string;
   acknowledged: boolean;
+  acknowledgedAt?: string;
+  acknowledged_at?: string;
+  acknowledgedBy?: string;
   targetRole?: UserRole;
   alertType?: string;
   flightNumber?: string;

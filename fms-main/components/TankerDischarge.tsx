@@ -1675,7 +1675,6 @@ export const TankerDischarge: React.FC = () => {
                                 <input 
                                   type="number" 
                                   step="0.0001"
-                                  placeholder="e.g. 789.7"
                                   className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank1.before.densityObserved}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'before', 'densityObserved', e.target.value)}
@@ -1685,7 +1684,6 @@ export const TankerDischarge: React.FC = () => {
                                 <input 
                                   type="number" 
                                   step="0.0001"
-                                  placeholder="e.g. 782.5"
                                   className="w-full bg-surface-container-low border border-outline text-on-surface px-2.5 md:px-4 py-3 rounded-xl text-xs font-bold text-right font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={activeTanks.tank1.after.densityObserved}
                                   onChange={(e) => handleMeasurementChange(reportType, 'tank1', 'after', 'densityObserved', e.target.value)}

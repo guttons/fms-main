@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
-import { Check, AlertTriangle, Info, X, AlertOctagon, Download } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Info, X, AlertOctagon, Download, BellRing } from 'lucide-react';
 import { sendNativeNotification } from '../utils/pwa';
 
-export type NotificationType = 'success' | 'error' | 'warning' | 'info';
+export type NotificationType = 'success' | 'error' | 'warning' | 'info' | 'critical';
 
 interface NotificationAction {
   label: string;
@@ -62,11 +62,23 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     if (typeof messageOrPayload === 'object' && messageOrPayload !== null) {
       finalMessage = messageOrPayload.message || messageOrPayload.title || '';
-      if (messageOrPayload.type && ['success', 'error', 'warning', 'info'].includes(messageOrPayload.type)) {
+      if (messageOrPayload.type && ['success', 'error', 'warning', 'info', 'critical'].includes(messageOrPayload.type)) {
         finalType = messageOrPayload.type;
       }
     } else {
       finalMessage = String(messageOrPayload ?? '');
+    }
+
+    // Auto-detect High Alerts from message content for unmistakable visual hierarchy
+    const msgLower = finalMessage.toLowerCase();
+    if (
+      msgLower.includes('high alert') ||
+      msgLower.includes('request fueling') ||
+      msgLower.includes('no fuel required') ||
+      msgLower.includes('no-uplift') ||
+      msgLower.includes('critical')
+    ) {
+      finalType = 'critical';
     }
 
     const id = Math.random().toString(36).substring(2, 9);
@@ -101,14 +113,14 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   return (
     <NotificationContext.Provider value={{ notify, notifyWithAction, dismiss, clear }}>
       {children}
-      <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:bottom-6 sm:right-6 z-[1000000] flex flex-col gap-3 pointer-events-none max-w-md w-auto sm:w-[380px]">
-        {notifications.length > 0 && (
+      <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:bottom-6 sm:right-6 z-[1000000] flex flex-col gap-2.5 pointer-events-none max-w-md w-auto sm:w-[400px]">
+        {notifications.slice(0, 3).map((n) => (
           <Toast 
-            key={notifications[0].id} 
-            notification={notifications[0]} 
-            onClose={() => removeNotification(notifications[0].id)} 
+            key={n.id} 
+            notification={n} 
+            onClose={() => removeNotification(n.id)} 
           />
-        )}
+        ))}
       </div>
     </NotificationContext.Provider>
   );
@@ -117,9 +129,9 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 const Toast: React.FC<{ notification: Notification; onClose: () => void }> = ({ notification, onClose }) => {
   const { type, message, action } = notification;
   const [isDismissing, setIsDismissing] = useState(false);
+  const dur = notification.duration !== undefined ? notification.duration : 5000;
 
   useEffect(() => {
-    const dur = notification.duration !== undefined ? notification.duration : 5000;
     if (dur > 0) {
       const timer = setTimeout(() => {
         setIsDismissing(true);
@@ -127,7 +139,7 @@ const Toast: React.FC<{ notification: Notification; onClose: () => void }> = ({ 
       }, dur);
       return () => clearTimeout(timer);
     }
-  }, [notification.id, notification.duration, onClose]);
+  }, [notification.id, dur, onClose]);
 
   const handleDismiss = () => {
     setIsDismissing(true);
@@ -135,50 +147,84 @@ const Toast: React.FC<{ notification: Notification; onClose: () => void }> = ({ 
   };
 
   const config = {
-    success: {
-      icon: <Check className="w-4 h-4 sm:w-5 sm:h-5" />,
-      borderColor: 'border-l-success',
-      iconClasses: 'bg-success/10 text-success',
-      labelColor: 'text-success',
-      label: 'Success'
+    critical: {
+      icon: <BellRing className="w-5 h-5 text-red-400 animate-bounce" />,
+      containerClasses: 'bg-gradient-to-r from-red-950/95 via-rose-950/90 to-surface-lowest text-white border-red-500/40 border-l-[6px] border-l-red-500 shadow-2xl',
+      iconClasses: 'bg-red-500/20 text-red-400 ring-1 ring-red-500/30',
+      labelColor: 'text-red-400',
+      badgeBg: 'bg-red-500/25 border-red-500/40 text-red-300',
+      progressBar: 'bg-gradient-to-r from-red-500 via-rose-400 to-amber-400',
+      label: 'HIGH ALERT',
+      isCritical: true,
     },
     error: {
-      icon: <AlertOctagon className="w-4 h-4 sm:w-5 sm:h-5" />,
-      borderColor: 'border-l-error',
-      iconClasses: 'bg-error/10 text-error',
-      labelColor: 'text-error',
-      label: 'Error'
+      icon: <AlertOctagon className="w-5 h-5 text-rose-400" />,
+      containerClasses: 'bg-gradient-to-r from-rose-950/90 via-surface-lowest to-surface-lowest text-white border-rose-500/30 border-l-[6px] border-l-rose-500 shadow-2xl',
+      iconClasses: 'bg-rose-500/15 text-rose-400 ring-1 ring-rose-500/30',
+      labelColor: 'text-rose-400',
+      badgeBg: 'bg-rose-500/15 border-rose-500/30 text-rose-300',
+      progressBar: 'bg-rose-500',
+      label: 'SYSTEM ERROR',
+      isCritical: false,
     },
     warning: {
-      icon: <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5" />,
-      borderColor: 'border-l-warning',
-      iconClasses: 'bg-warning/10 text-warning',
-      labelColor: 'text-warning',
-      label: 'Warning'
+      icon: <AlertTriangle className="w-5 h-5 text-amber-400" />,
+      containerClasses: 'bg-gradient-to-r from-amber-950/90 via-surface-lowest to-surface-lowest text-white border-amber-500/30 border-l-[6px] border-l-amber-500 shadow-2xl',
+      iconClasses: 'bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30',
+      labelColor: 'text-amber-400',
+      badgeBg: 'bg-amber-500/15 border-amber-500/30 text-amber-300',
+      progressBar: 'bg-amber-500',
+      label: 'WARNING',
+      isCritical: false,
+    },
+    success: {
+      icon: <CheckCircle className="w-5 h-5 text-emerald-400" />,
+      containerClasses: 'bg-gradient-to-r from-emerald-950/90 via-surface-lowest to-surface-lowest text-white border-emerald-500/30 border-l-[6px] border-l-emerald-500 shadow-2xl',
+      iconClasses: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30',
+      labelColor: 'text-emerald-400',
+      badgeBg: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300',
+      progressBar: 'bg-emerald-500',
+      label: 'SUCCESS',
+      isCritical: false,
     },
     info: {
-      icon: <Info className="w-4 h-4 sm:w-5 sm:h-5" />,
-      borderColor: 'border-l-primary',
-      iconClasses: 'bg-primary/10 text-primary',
-      labelColor: 'text-primary',
-      label: 'Info'
+      icon: <Info className="w-5 h-5 text-sky-400" />,
+      containerClasses: 'bg-gradient-to-r from-sky-950/90 via-surface-lowest to-surface-lowest text-white border-sky-500/30 border-l-[6px] border-l-sky-500 shadow-2xl',
+      iconClasses: 'bg-sky-500/15 text-sky-400 ring-1 ring-sky-500/30',
+      labelColor: 'text-sky-400',
+      badgeBg: 'bg-sky-500/15 border-sky-500/30 text-sky-300',
+      progressBar: 'bg-sky-500',
+      label: 'INFORMATION',
+      isCritical: false,
     }
   }[type];
 
   return (
     <div
-      className={`pointer-events-auto flex items-stretch gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-outline/30 border-l-4 ${config.borderColor} shadow-premium bg-surface-lowest text-on-surface transition-all duration-300 transform group ${
+      className={`pointer-events-auto relative overflow-hidden flex items-stretch gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border backdrop-blur-xl transition-all duration-300 transform group ${
+        config.containerClasses
+      } ${
         isDismissing 
           ? 'opacity-0 translate-y-2 scale-95' 
           : 'opacity-100 translate-y-0 scale-100 animate-slide-up'
       }`}
     >
-      <div className={`flex items-center justify-center p-1.5 sm:p-2 rounded-lg sm:rounded-xl shrink-0 ${config.iconClasses}`}>
+      <div className={`flex items-center justify-center p-2 rounded-xl shrink-0 self-center ${config.iconClasses}`}>
         {config.icon}
       </div>
-      <div className="flex-1 flex flex-col justify-center py-0.5 min-w-0">
-        <p className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest ${config.labelColor} mb-0.5`}>{config.label}</p>
-        <p className="text-xs sm:text-sm font-bold leading-tight">
+      <div className="flex-1 flex flex-col justify-center py-0.5 min-w-0 pr-1">
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-[900] tracking-widest border uppercase ${config.badgeBg}`}>
+            {config.isCritical && (
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              </span>
+            )}
+            {config.label}
+          </span>
+        </div>
+        <p className="text-xs sm:text-[13px] font-bold leading-snug text-white/95 break-words">
           {typeof message === 'object' && message !== null ? (message as any).message || (message as any).title || JSON.stringify(message) : String(message ?? '')}
         </p>
         {action && (
@@ -187,7 +233,7 @@ const Toast: React.FC<{ notification: Notification; onClose: () => void }> = ({ 
               action.onClick();
               handleDismiss();
             }}
-            className="mt-2 self-start flex items-center gap-1.5 px-3 py-1.5 kinetic-gradient text-white text-[9px] font-black uppercase tracking-[0.1em] rounded-lg shadow-md active:scale-95 transition-all"
+            className="mt-2.5 self-start flex items-center gap-1.5 px-3 py-1.5 kinetic-gradient text-white text-[9px] font-black uppercase tracking-[0.1em] rounded-lg shadow-md active:scale-95 transition-all"
           >
             <Download className="w-3 h-3" />
             {action.label}
@@ -196,10 +242,23 @@ const Toast: React.FC<{ notification: Notification; onClose: () => void }> = ({ 
       </div>
       <button
         onClick={handleDismiss}
-        className="flex items-center justify-center p-1 rounded-lg hover:bg-surface-dim transition-colors shrink-0 self-start"
+        className="flex items-center justify-center p-1 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors shrink-0 self-start"
+        title="Dismiss notification"
       >
-        <X className="w-4 h-4 opacity-40 group-hover:opacity-100" />
+        <X className="w-4 h-4" />
       </button>
+
+      {/* Sleek countdown timer progress bar */}
+      {dur > 0 && (
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10 overflow-hidden">
+          <div 
+            className={`h-full ${config.progressBar}`}
+            style={{
+              animation: `toast-progress ${dur}ms linear forwards`
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 };

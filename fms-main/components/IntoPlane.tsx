@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { FlightLog, User, FlightJob, Equipment, EquipmentStatus, UserRole, isDomesticFlight } from '../types';
 import { MOCK_USERS, PIT_MAPPING } from '../constants';
-import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Users, Lock, Calendar, X, CreditCard, Ban, Eye, Zap, Bell, Droplet, PlaneLanding, PlaneTakeoff, ArrowRightCircle, Check, Pencil, Plane } from 'lucide-react';
+import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Users, Lock, Calendar, X, CreditCard, Ban, Eye, Zap, Bell, BellOff, BellRing, Megaphone, ExternalLink, Droplet, PlaneLanding, PlaneTakeoff, ArrowRightCircle, Check, CheckCheck, RotateCcw, Pencil, Plane, Fuel } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
+import { flightRadarService } from '../services/flightRadarService';
+import { getWatchedFlightIds, saveWatchedFlightIds } from '../services/watchedFlightsService';
 import { equipmentBadgeClass, equipmentDotClass, getEquipmentHexColor } from '../utils/equipmentColors';
 import { useNotification } from '../context/NotificationContext';
 
@@ -48,6 +50,25 @@ const getAirlineName = (flightNumber: string, externalFlights: any[]) => {
     'VP': 'Villa Air'
   };
   return airlineCodes[code] || '';
+};
+
+const formatTimeSafe = (val?: any): string => {
+  if (!val) return '';
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(trimmed)) {
+      return trimmed.slice(0, 5);
+    }
+    const d = new Date(trimmed);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    }
+    return trimmed;
+  }
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    return val.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  }
+  return '';
 };
 
 const isOperator = (role: UserRole) => role === UserRole.ITP_OPERATOR || role === UserRole.ITP_SUPERVISOR;
@@ -150,7 +171,6 @@ const EditAircraftModal: React.FC<{
               required
               value={acType}
               onChange={(e) => setAcType(e.target.value.toUpperCase())}
-              placeholder="e.g. A350-900"
               className="w-full px-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black uppercase tracking-wider focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all"
             />
             <div className="flex flex-wrap gap-1.5 mt-2.5">
@@ -180,7 +200,6 @@ const EditAircraftModal: React.FC<{
               required
               value={acReg}
               onChange={(e) => setAcReg(e.target.value.toUpperCase())}
-              placeholder="e.g. 9V-SKT"
               className="w-full px-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black uppercase tracking-wider focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all text-primary"
             />
           </div>
@@ -392,12 +411,27 @@ const ScreenDashboard: React.FC<{
     selectedBriefingDate,
     domesticAssignments,
     externalFlights,
+    internationalSchedules,
     updateFlightJob
   } = useOperationalData();
   const [viewMode, setViewMode] = useState<'INT' | 'DOM' | 'ADHOC'>('INT');
   const [filterMyTasks, setFilterMyTasks] = useState(false);
   const [editingAircraftJob, setEditingAircraftJob] = useState<FlightJob | null>(null);
   const [editingStandJob, setEditingStandJob] = useState<FlightJob | null>(null);
+  const [watchedIds, setWatchedIds] = useState<Set<string>>(() => getWatchedFlightIds(user.id));
+
+  const toggleWatch = useCallback((flightNumber: string) => {
+    setWatchedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(flightNumber)) {
+        next.delete(flightNumber);
+      } else {
+        next.add(flightNumber);
+      }
+      saveWatchedFlightIds(user.id, next);
+      return next;
+    });
+  }, [user.id]);
 
   const renderStatusBadge = (status?: string) => {
     if (!status) return null;
@@ -448,6 +482,269 @@ const ScreenDashboard: React.FC<{
     );
   };
   const [activeMenuJobId, setActiveMenuJobId] = useState<string | null>(null);
+  const [activeDetailsJobId, setActiveDetailsJobId] = useState<string | null>(null);
+
+  // Local cache for flight fuel dispatch status and timings to guarantee instantaneous UI updates
+  const [dispatchCache, setDispatchCache] = useState<Record<string, {
+    status: 'REQUEST_FUELING' | 'NO_FUEL';
+    requestedTime: string;
+    requestedAt?: string;
+    acknowledged?: boolean;
+    acknowledgedTime?: string;
+    acknowledgedAt?: string;
+    acknowledgedBy?: string;
+  }>>(() => {
+    try {
+      const saved = localStorage.getItem('fms_flight_fuel_dispatches');
+      if (!saved) return {};
+      const parsed = JSON.parse(saved);
+      const migrated: Record<string, any> = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        if (typeof v === 'string') {
+          migrated[k] = {
+            status: v,
+            requestedTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+            acknowledged: false
+          };
+        } else if (v && typeof v === 'object') {
+          migrated[k] = v;
+        }
+      }
+      return migrated;
+    } catch {
+      return {};
+    }
+  });
+
+  const updateDispatchCache = useCallback((
+    cleanFlight: string, 
+    record: {
+      status: 'REQUEST_FUELING' | 'NO_FUEL';
+      requestedTime: string;
+      requestedAt?: string;
+      acknowledged?: boolean;
+      acknowledgedTime?: string;
+      acknowledgedAt?: string;
+      acknowledgedBy?: string;
+    } | null
+  ) => {
+    setDispatchCache(prev => {
+      const next = { ...prev };
+      if (record === null) {
+        delete next[cleanFlight];
+      } else {
+        next[cleanFlight] = record;
+      }
+      try {
+        localStorage.setItem('fms_flight_fuel_dispatches', JSON.stringify(next));
+      } catch (e) {
+        console.warn('Failed to persist dispatch cache', e);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSendFuelAlert = useCallback(async (job: FlightJob, alertType: 'REQUEST_FUELING' | 'NO_FUEL') => {
+    const cleanFlight = (job.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+    const timeNow = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const isoNow = new Date().toISOString();
+
+    // Clear any prior alerts (including old cancellations or stale alerts) for this flight
+    const staleAlerts = (alerts || []).filter(a => {
+      const aType = a.alertType || '';
+      const isDispatch = aType === 'REQUEST_FUELING' || aType === 'NO_FUEL' || aType === 'ALERT_CANCELLED';
+      if (!isDispatch) return false;
+      const aFlt = (a.flightNumber || a.metadata?.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+      if (aFlt && aFlt === cleanFlight) return true;
+      const msgClean = (a.message || '').replace(/\s+/g, '').toUpperCase();
+      return msgClean.includes(cleanFlight);
+    });
+    if (staleAlerts.length > 0) {
+      try {
+        await deleteAlerts(staleAlerts.map(a => a.id));
+      } catch (e) {
+        console.warn('Failed to delete old alerts', e);
+      }
+    }
+
+    // Set cache with requested timestamp
+    updateDispatchCache(cleanFlight, {
+      status: alertType,
+      requestedTime: timeNow,
+      requestedAt: isoNow,
+      acknowledged: false
+    });
+
+    const usersList = staff && staff.length > 0 ? staff : MOCK_USERS;
+    const assignee = usersList.find(u => u.id === job.assignedTo || u.name.toLowerCase() === (job.assignedTo || '').toLowerCase());
+    const assigneeName = assignee?.name || job.assignedTo || null;
+    const officer = job.assignedOfficer ? usersList.find(u => u.id === job.assignedOfficer || u.name.toLowerCase() === (job.assignedOfficer || '').toLowerCase()) : null;
+    const officerName = officer?.name || job.assignedOfficer || null;
+
+    const alertMeta = {
+      aircraftReg: job.aircraftReg,
+      stand: job.stand,
+      eta: job.eta || job.sta,
+      flightNumber: job.flightNumber,
+      requestedTime: timeNow,
+      requestedAt: isoNow
+    };
+
+    let dispatched = false;
+    const isNoFuel = alertType === 'NO_FUEL';
+    const label = isNoFuel ? 'No Fuel required' : 'Fueling Requested';
+
+    try {
+      const alertSeverity: 'critical' | 'warning' = isNoFuel ? 'warning' : 'critical';
+
+      if (job.assignedTo) {
+        await createAlert({
+          severity: alertSeverity,
+          alertType,
+          flightNumber: job.flightNumber,
+          message: `Into-Plane: ${label} for Flight ${job.flightNumber}${assigneeName ? ` (Operator: ${assigneeName})` : ''}.`,
+          timestamp: isoNow,
+          acknowledged: false,
+          targetRole: UserRole.ITP_OPERATOR,
+          assignedStaffId: job.assignedTo,
+          senderId: user.id,
+          senderName: user.name,
+          metadata: alertMeta
+        });
+        dispatched = true;
+      }
+
+      if (job.assignedOfficer) {
+        await createAlert({
+          severity: alertSeverity,
+          alertType,
+          flightNumber: job.flightNumber,
+          message: `Into-Plane: ${label} for Flight ${job.flightNumber}${officerName ? ` (Officer: ${officerName})` : ''}.`,
+          timestamp: isoNow,
+          acknowledged: false,
+          targetRole: UserRole.ITP_OFFICER,
+          assignedStaffId: job.assignedOfficer,
+          senderId: user.id,
+          senderName: user.name,
+          metadata: alertMeta
+        });
+        dispatched = true;
+      }
+
+      if (!dispatched) {
+        await createAlert({
+          severity: alertSeverity,
+          alertType,
+          flightNumber: job.flightNumber,
+          message: `Into-Plane: ${label} for Flight ${job.flightNumber} (Stand ${job.stand || 'TBA'}).`,
+          timestamp: isoNow,
+          acknowledged: false,
+          targetRole: UserRole.ITP_OPERATOR,
+          senderId: user.id,
+          senderName: user.name,
+          metadata: alertMeta
+        });
+      }
+
+      notify(
+        isNoFuel
+          ? `No-Fuel alert sent for flight ${job.flightNumber}.`
+          : `Fuel Request sent for flight ${job.flightNumber}!`,
+        'success'
+      );
+    } catch (err) {
+      console.error('Failed to send fuel alert:', err);
+      notify('Failed to dispatch alert.', 'error');
+    }
+  }, [alerts, createAlert, deleteAlerts, notify, staff, updateDispatchCache, user.id, user.name]);
+
+  const handleCancelAlert = useCallback(async (job: FlightJob) => {
+    const cleanFlight = (job.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+    updateDispatchCache(cleanFlight, null);
+
+    try {
+      // 1. Delete all existing dispatch alerts for this flight
+      const matchingAlerts = (alerts || []).filter(a => {
+        const aType = a.alertType || '';
+        const isDispatchType = aType === 'REQUEST_FUELING' || aType === 'NO_FUEL' ||
+          (a.message && (a.message.toLowerCase().includes('requested') || a.message.toLowerCase().includes('no fuel')));
+        if (!isDispatchType) return false;
+
+        const aFlt = (a.flightNumber || a.metadata?.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+        if (aFlt && aFlt === cleanFlight) return true;
+        const msgClean = (a.message || '').replace(/\s+/g, '').toUpperCase();
+        return msgClean.includes(cleanFlight);
+      });
+
+      if (matchingAlerts.length > 0) {
+        await deleteAlerts(matchingAlerts.map(a => a.id));
+      }
+
+      // 2. Dispatch ALERT_CANCELLED alert so assigned staff gets cancellation notice
+      const cancelTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      const alertMeta = {
+        aircraftReg: job.aircraftReg,
+        stand: job.stand,
+        eta: job.eta || job.sta,
+        flightNumber: job.flightNumber,
+        cancelledAt: cancelTime,
+        cancelledBy: user.name
+      };
+
+      let dispatchedCancel = false;
+      if (job.assignedTo) {
+        await createAlert({
+          severity: 'warning',
+          alertType: 'ALERT_CANCELLED',
+          flightNumber: job.flightNumber,
+          message: `ALERT CANCELLED: Dispatch alert for Flight ${job.flightNumber} has been cancelled by Manager ${user.name}.`,
+          timestamp: new Date().toISOString(),
+          acknowledged: false,
+          targetRole: UserRole.ITP_OPERATOR,
+          assignedStaffId: job.assignedTo,
+          senderId: user.id,
+          senderName: user.name,
+          metadata: alertMeta
+        });
+        dispatchedCancel = true;
+      }
+      if (job.assignedOfficer) {
+        await createAlert({
+          severity: 'warning',
+          alertType: 'ALERT_CANCELLED',
+          flightNumber: job.flightNumber,
+          message: `ALERT CANCELLED: Dispatch alert for Flight ${job.flightNumber} has been cancelled by Manager ${user.name}.`,
+          timestamp: new Date().toISOString(),
+          acknowledged: false,
+          targetRole: UserRole.ITP_OFFICER,
+          assignedStaffId: job.assignedOfficer,
+          senderId: user.id,
+          senderName: user.name,
+          metadata: alertMeta
+        });
+        dispatchedCancel = true;
+      }
+      if (!dispatchedCancel) {
+        await createAlert({
+          severity: 'warning',
+          alertType: 'ALERT_CANCELLED',
+          flightNumber: job.flightNumber,
+          message: `ALERT CANCELLED: Dispatch alert for Flight ${job.flightNumber} (Stand ${job.stand || 'TBA'}) cancelled by Manager.`,
+          timestamp: new Date().toISOString(),
+          acknowledged: false,
+          targetRole: UserRole.ITP_OPERATOR,
+          senderId: user.id,
+          senderName: user.name,
+          metadata: alertMeta
+        });
+      }
+
+      notify(`Cancelled alert for flight ${job.flightNumber}. Crew notified.`, 'info');
+    } catch (err) {
+      console.error('Failed to cancel alert:', err);
+      notify('Failed to cancel alert request.', 'error');
+    }
+  }, [alerts, createAlert, deleteAlerts, notify, updateDispatchCache, user.id, user.name]);
   
   const shiftRanges: Record<string, { start: string; end: string; crossesMidnight: boolean }> = {
     'Morning': { start: '07:30', end: '16:00', crossesMidnight: false },
@@ -754,13 +1051,61 @@ const ScreenDashboard: React.FC<{
 
       const airlineCode = (job.flightNumber || '').replace(/\s+/g, '').slice(0, 2).toLowerCase();
       const logoUrl = airlineCode.length === 2 ? `https://fis.com.mv/tail/${airlineCode.toUpperCase()}.png` : null;
-      const activeAlert = (alerts || []).find(a => 
-          !a.acknowledged && 
-          (a.message.toLowerCase().includes('requested') || a.message.toLowerCase().includes('no fuel')) &&
-          a.message.includes(job.flightNumber)
-      );
-      const isAlreadyRequested = !!activeAlert;
-      const isNoFuelAlert = activeAlert?.message.toLowerCase().includes('no fuel');
+      const cleanFlight = (job.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+      
+      // Find related dispatch alerts (unacknowledged or acknowledged), sorted newest first
+      const relatedAlerts = (alerts || []).filter(a => {
+          const aType = a.alertType || '';
+          const isDispatchType = aType === 'REQUEST_FUELING' || aType === 'NO_FUEL' ||
+              (a.message && (a.message.toLowerCase().includes('requested') || a.message.toLowerCase().includes('no fuel')));
+          if (!isDispatchType) return false;
+
+          const aFlt = (a.flightNumber || a.metadata?.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+          if (aFlt && aFlt === cleanFlight) return true;
+          const msgClean = (a.message || '').replace(/\s+/g, '').toUpperCase();
+          return msgClean.includes(cleanFlight);
+      }).sort((a, b) => new Date(b.timestamp || b.acknowledgedAt || 0).getTime() - new Date(a.timestamp || a.acknowledgedAt || 0).getTime());
+
+      const latestAlert = relatedAlerts[0];
+      const unackAlert = relatedAlerts.find(a => !a.acknowledged);
+      const cached = cleanFlight ? dispatchCache[cleanFlight] : undefined;
+
+      let dispatchStatus: 'REQUEST_FUELING' | 'NO_FUEL' | null = null;
+      let isDispatchAcknowledged = false;
+      let dispatchRequestedTime = '';
+      let dispatchAcknowledgedTime = '';
+      let dispatchAcknowledgedBy = '';
+
+      if (unackAlert) {
+          dispatchStatus = (unackAlert.alertType === 'NO_FUEL' || (unackAlert.message && unackAlert.message.toLowerCase().includes('no fuel')))
+              ? 'NO_FUEL'
+              : 'REQUEST_FUELING';
+          isDispatchAcknowledged = false;
+          dispatchRequestedTime = formatTimeSafe(unackAlert.metadata?.requestedTime || unackAlert.metadata?.requestedAt || unackAlert.timestamp) || new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      } else if (latestAlert && latestAlert.acknowledged) {
+          dispatchStatus = (latestAlert.alertType === 'NO_FUEL' || (latestAlert.message && latestAlert.message.toLowerCase().includes('no fuel')))
+              ? 'NO_FUEL'
+              : 'REQUEST_FUELING';
+          isDispatchAcknowledged = true;
+          dispatchRequestedTime = formatTimeSafe(latestAlert.metadata?.requestedTime || latestAlert.metadata?.requestedAt || latestAlert.timestamp) || new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+          const ackDate = latestAlert.acknowledgedAt || latestAlert.acknowledged_at || latestAlert.metadata?.acknowledgedAt || latestAlert.metadata?.acknowledgedTime || cached?.acknowledgedTime || cached?.acknowledgedAt;
+          if (ackDate) {
+              dispatchAcknowledgedTime = formatTimeSafe(ackDate);
+          }
+          if (!dispatchAcknowledgedTime) {
+              dispatchAcknowledgedTime = formatTimeSafe(latestAlert.timestamp) || dispatchRequestedTime || '--:--';
+          }
+          dispatchAcknowledgedBy = latestAlert.acknowledgedBy || latestAlert.metadata?.acknowledgedBy || cached?.acknowledgedBy || 'Crew';
+      } else if (cached) {
+          dispatchStatus = cached.status;
+          isDispatchAcknowledged = !!cached.acknowledged;
+          dispatchRequestedTime = formatTimeSafe(cached.requestedTime || cached.requestedAt);
+          dispatchAcknowledgedTime = formatTimeSafe(cached.acknowledgedTime || cached.acknowledgedAt);
+          if (isDispatchAcknowledged && !dispatchAcknowledgedTime) {
+              dispatchAcknowledgedTime = dispatchRequestedTime || '--:--';
+          }
+          dispatchAcknowledgedBy = cached.acknowledgedBy || '';
+      }
 
       // Find active vehicle (Eq ID) for in-progress jobs
       let activeEqId = job.vehicleId;
@@ -777,18 +1122,24 @@ const ScreenDashboard: React.FC<{
 
       const activeEquipmentUsage = job.equipmentUsage || 'HYDRANT';
       const airlineName = getAirlineName(job.flightNumber, externalFlights);
+      const isWatched = watchedIds.has(job.flightNumber);
+      const isIntl = viewMode === 'INT' && !isDomesticFlight(job) && !(job as any).isAdhoc;
+      const inboundFlightNumber = isIntl ? flightRadarService.resolveInboundFlightNumber(job, externalFlights, internationalSchedules) : job.flightNumber;
 
       return (
-          <div key={job.id} className={`bg-surface-container-lowest p-6 rounded-2xl relative overflow-hidden transition-all shrink-0 border ${isAssignedToMe ? 'border-primary border-l-[6px] shadow-sm' : 'border-outline opacity-80'}`}>
+          <div key={job.id} className={`bg-surface-container-lowest p-6 rounded-2xl relative transition-all shrink-0 border ${isAssignedToMe ? 'border-primary border-l-[6px] shadow-sm' : 'border-outline opacity-80'} ${activeMenuJobId === job.id || activeDetailsJobId === job.id ? 'z-40' : 'z-10'}`}>
               <div className="relative z-10">
-                  <div className="flex justify-between items-center mb-6 gap-4 w-full relative">
-                      <div className="min-w-0 flex-1">
-                          <div className="flex flex-col">
-                              <div className="flex flex-wrap items-center gap-2">
-                                  {/* Yellow gradient stand badge next to flight number on desktop view */}
+                  {/* Job Card Header */}
+                  <div className="mb-4 sm:mb-6 w-full relative">
+                      {/* Top Row: Flight number & stand on left, Action buttons on right (mobile & desktop aligned) */}
+                      <div className="flex items-center justify-between gap-2 sm:gap-4 w-full">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                              {/* Stand badge & Flight Number (always grouped together on the same row) */}
+                              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                                  {/* Yellow gradient stand badge next to flight number */}
                                   <div 
                                       onClick={canEditStand ? (e) => { e.stopPropagation(); setEditingStandJob(job); } : undefined}
-                                      className={`hidden md:flex items-center gap-1 bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider ${
+                                      className={`flex items-center gap-1 bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider shrink-0 ${
                                           canEditStand ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500' : ''
                                       }`}
                                       title={canEditStand ? "Click to change stand" : undefined}
@@ -796,280 +1147,481 @@ const ScreenDashboard: React.FC<{
                                       <span>{job.stand || 'TBA'}</span>
                                       {canEditStand && <Pencil className="w-2.5 h-2.5 opacity-60" />}
                                   </div>
-                                  <h3 className="text-2xl sm:text-3xl font-[900] text-on-surface tracking-tighter leading-none">{job.flightNumber}</h3>
-                                  
-                                  {/* Logo */}
-                                  {logoUrl && (
-                                      <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
-                                          <img
-                                              src={logoUrl}
-                                              alt=""
-                                              aria-hidden="true"
-                                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                              className="w-full h-full object-contain select-none flex-shrink-0"
-                                          />
-                                      </div>
-                                  )}
 
-                                  {/* Mobile-only Airline Name (after logo & flight number) */}
-                                  {airlineName && (
-                                      <span className="md:hidden text-[11px] font-black text-on-surface-dim opacity-50 uppercase tracking-wider ml-1 self-center">
-                                          {airlineName}
-                                      </span>
-                                  )}
+                                  {/* Flight Number */}
+                                  <h3 className="text-2xl sm:text-3xl font-[900] text-on-surface tracking-tighter leading-none shrink-0 whitespace-nowrap">{job.flightNumber}</h3>
+                              </div>
 
-                                  {/* Desktop-only details: type, reg, and route on the same row as flight number after logo */}
-                                  <div className="hidden md:flex items-center gap-2.5 text-[11px] sm:text-[12px] font-bold text-on-surface-dim">
-                                      <span className="opacity-20">|</span>
-                                      <span className="opacity-60">{job.aircraftType}</span>
-                                      <span className="opacity-20">|</span>
-                                      <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black text-on-surface-dim border-transparent uppercase tracking-wider">{job.aircraftReg}</span>
-                                      {canEditAircraft && (
-                                          <button
-                                              type="button"
-                                              onClick={(e) => { e.stopPropagation(); setEditingAircraftJob(job); }}
-                                              className="p-1 rounded-md hover:bg-surface-container text-on-surface-dim hover:text-primary transition-all opacity-60 hover:opacity-100 cursor-pointer"
-                                              title="Edit Aircraft Type & Registration"
-                                          >
-                                              <Pencil className="w-3 h-3" />
-                                          </button>
-                                      )}
-                                      {job.route && (
+                              {/* Tail Logo right next to flight number (desktop only; mobile displays logo on row 2 near airline name) */}
+                              {logoUrl && (
+                                  <div className="hidden md:flex w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0 items-center justify-center">
+                                      <img
+                                          src={logoUrl}
+                                          alt=""
+                                          aria-hidden="true"
+                                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                          className="w-full h-full object-contain select-none flex-shrink-0"
+                                      />
+                                  </div>
+                              )}
+
+                              {/* Dispatch Status Badge (Rendered AFTER airline logo, NO glow, NO bounce) */}
+                              {dispatchStatus === 'REQUEST_FUELING' && (
+                                  <div 
+                                      className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black tracking-wider uppercase shrink-0 select-none border shadow-sm ${
+                                          isDispatchAcknowledged
+                                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40'
+                                              : 'bg-rose-500/15 text-rose-400 border-rose-500/40'
+                                      }`}
+                                      title={
+                                          isDispatchAcknowledged 
+                                              ? `Fuel Requested at ${dispatchRequestedTime || '--:--'} • Acknowledged at ${dispatchAcknowledgedTime || '--:--'}${dispatchAcknowledgedBy ? ` by ${dispatchAcknowledgedBy}` : ''}`
+                                              : `Fuel Requested at ${dispatchRequestedTime || '--:--'} • Pending Crew Acknowledgment`
+                                      }
+                                  >
+                                      {isDispatchAcknowledged ? (
                                           <>
-                                              <span className="opacity-20">|</span>
-                                              {renderRoute(job.route, "text-primary text-[10px]", job.isDomestic)}
+                                              <CheckCheck className="w-3 h-3 text-emerald-400" />
+                                              <span>FUEL REQ</span>
+                                              {dispatchAcknowledgedTime ? (
+                                                  <span className="opacity-90 font-mono text-[9px]">✓ {dispatchAcknowledgedTime}</span>
+                                              ) : (
+                                                  <span className="opacity-90 font-mono text-[9px]">✓ ACK</span>
+                                              )}
+                                          </>
+                                      ) : (
+                                          <>
+                                              <Fuel className="w-3 h-3 text-rose-400" />
+                                              <span>FUEL REQ</span>
+                                              {dispatchRequestedTime && <span className="opacity-80 font-mono text-[9px]">{dispatchRequestedTime}</span>}
                                           </>
                                       )}
                                   </div>
-                              </div>
-
-                              {/* Desktop-only Airline Name (below flight number and logo) */}
-                              {airlineName && (
-                                  <div className="hidden md:block text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1">
-                                      {airlineName}
+                              )}
+                              {dispatchStatus === 'NO_FUEL' && (
+                                  <div 
+                                      className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black tracking-wider uppercase shrink-0 select-none border shadow-sm ${
+                                          isDispatchAcknowledged
+                                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40'
+                                              : 'bg-amber-500/15 text-amber-400 border-amber-500/40'
+                                      }`}
+                                      title={
+                                          isDispatchAcknowledged 
+                                              ? `No Fuel confirmed at ${dispatchRequestedTime || '--:--'} • Acknowledged at ${dispatchAcknowledgedTime || '--:--'}${dispatchAcknowledgedBy ? ` by ${dispatchAcknowledgedBy}` : ''}`
+                                              : `No Fuel confirmed at ${dispatchRequestedTime || '--:--'} • Pending Crew Acknowledgment`
+                                      }
+                                  >
+                                      {isDispatchAcknowledged ? (
+                                          <>
+                                              <CheckCheck className="w-3 h-3 text-emerald-400" />
+                                              <span>NO FUEL</span>
+                                              {dispatchAcknowledgedTime ? (
+                                                  <span className="opacity-90 font-mono text-[9px]">✓ {dispatchAcknowledgedTime}</span>
+                                              ) : (
+                                                  <span className="opacity-90 font-mono text-[9px]">✓ ACK</span>
+                                              )}
+                                          </>
+                                      ) : (
+                                          <>
+                                              <Ban className="w-3 h-3 text-amber-400" />
+                                              <span>NO FUEL</span>
+                                              {dispatchRequestedTime && <span className="opacity-80 font-mono text-[9px]">{dispatchRequestedTime}</span>}
+                                          </>
+                                      )}
                                   </div>
                               )}
+
+                              {/* Desktop-only details: type, reg, and route */}
+                              <div className="hidden md:flex items-center gap-2.5 text-[11px] sm:text-[12px] font-bold text-on-surface-dim">
+                                  <span className="opacity-20">|</span>
+                                  <span className="opacity-60">{job.aircraftType}</span>
+                                  <span className="opacity-20">|</span>
+                                  <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black text-on-surface-dim border-transparent uppercase tracking-wider">{job.aircraftReg}</span>
+                                  {canEditAircraft && (
+                                      <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); setEditingAircraftJob(job); }}
+                                          className="p-1 rounded-md hover:bg-surface-container text-on-surface-dim hover:text-primary transition-all opacity-60 hover:opacity-100 cursor-pointer"
+                                          title="Edit Aircraft Type & Registration"
+                                      >
+                                          <Pencil className="w-3 h-3" />
+                                      </button>
+                                  )}
+                                  {job.route && (
+                                      <>
+                                          <span className="opacity-20">|</span>
+                                          {renderRoute(job.route, "text-primary text-[10px]", job.isDomestic)}
+                                      </>
+                                  )}
+                              </div>
                           </div>
 
-                          {/* Mobile-only details: Stand, type, reg, and route grouped together on the same row */}
-                          <div className="flex flex-wrap items-center mt-2 text-on-surface-dim text-[11px] sm:text-[12px] font-bold gap-x-2 gap-y-1.5 md:hidden">
-                               <div 
-                                   onClick={canEditStand ? (e) => { e.stopPropagation(); setEditingStandJob(job); } : undefined}
-                                   className={`flex items-center whitespace-nowrap ${canEditStand ? 'cursor-pointer hover:text-primary transition-colors' : ''}`}
-                                   title={canEditStand ? "Click to change stand" : undefined}
-                               >
-                                   <MapPin className="w-3.5 h-3.5 mr-1 text-primary opacity-60 shrink-0" />
-                                   <span>{job.stand || 'TBA'}</span>
-                                   {canEditStand && <Pencil className="w-2.5 h-2.5 ml-1 opacity-60 text-primary" />}
-                                </div>
-                               <span className="opacity-20 shrink-0">|</span>
-                               <span className="opacity-60 whitespace-nowrap">{job.aircraftType}</span>
-                               <span className="opacity-20 shrink-0">|</span>
-                               <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black text-on-surface-dim border-transparent uppercase tracking-wider whitespace-nowrap">{job.aircraftReg}</span>
-                               {canEditAircraft && (
-                                   <button
-                                       type="button"
-                                       onClick={(e) => { e.stopPropagation(); setEditingAircraftJob(job); }}
-                                       className="p-1 rounded-md hover:bg-surface-container text-on-surface-dim hover:text-primary transition-all opacity-60 hover:opacity-100 cursor-pointer"
-                                       title="Edit Aircraft Type & Registration"
-                                   >
-                                       <Pencil className="w-3 h-3" />
-                                   </button>
-                               )}
-                               {job.route && (
-                                 <>
-                                   <span className="opacity-20 shrink-0">|</span>
-                                   {renderRoute(job.route, "text-primary text-[9px] sm:text-[10px] tracking-wide whitespace-nowrap", job.isDomestic)}
-                                 </>
-                               )}
+                          {/* Desktop Center-Aligned Timings (lg+ only) */}
+                          <div className="hidden lg:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/30 px-4 py-2 rounded-xl border border-outline absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm pointer-events-none">
+                              <div className="flex items-center gap-2">
+                                  <span className="opacity-40 text-[10px]">STA</span>
+                                  <span className="text-on-surface text-[14px] font-black tracking-tight">{job.sta || '--:--'}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                  <span className="text-primary opacity-60 text-[10px]">ETA</span>
+                                  <span className={`${delayed ? 'text-error' : 'text-primary'} text-[14px] font-black tracking-tight`}>{job.eta || '--:--'}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                  <span className="text-warning opacity-60 text-[10px]">STD</span>
+                                  <span className="text-warning text-[14px] font-black tracking-tight">{job.std || '--:--'}</span>
+                              </div>
                           </div>
-                      </div>
 
-                      {/* Desktop Center-Aligned Timings (lg+ only) */}
-                      <div className="hidden lg:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/30 px-4 py-2 rounded-xl border border-outline absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm">
-                          <div className="flex items-center gap-2">
-                              <span className="opacity-40 text-[10px]">STA</span>
-                              <span className="text-on-surface text-[14px] font-black tracking-tight">{job.sta || '--:--'}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                              <span className="text-primary opacity-60 text-[10px]">ETA</span>
-                              <span className={`${delayed ? 'text-error' : 'text-primary'} text-[14px] font-black tracking-tight`}>{job.eta || '--:--'}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                              <span className="text-warning opacity-60 text-[10px]">STD</span>
-                              <span className="text-warning text-[14px] font-black tracking-tight">{job.std || '--:--'}</span>
-                          </div>
-                      </div>
-
-                      {/* Actions row (right-aligned, same row as flight number and logo on mobile) */}
-                      <div className="flex items-center gap-2 sm:gap-3 shrink-0 z-20 relative">
-                           {/* requested button to click for ITP MANAGER to send requested alerts to the assigned officer and operator */}
-                           {(user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN) && (
-                               isAlreadyRequested ? (
-                                   <button 
-                                       onClick={async () => {
-                                           try {
-                                               const matchingAlerts = (alerts || []).filter(a => 
-                                                   !a.acknowledged && 
-                                                   (a.message.toLowerCase().includes('requested') || a.message.toLowerCase().includes('no fuel')) &&
-                                                   a.message.includes(job.flightNumber)
-                                               );
-                                               if (matchingAlerts.length > 0) {
-                                                   await deleteAlerts(matchingAlerts.map(a => a.id));
-                                               }
-                                               notify(`Cancelled alert request for flight ${job.flightNumber}.`, 'info');
-                                           } catch (err) {
-                                               console.error(err);
-                                               notify('Failed to cancel alert request.', 'error');
-                                           }
-                                       }}
-                                       className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all bg-red-500/10 text-red-500 hover:bg-red-500/20 active:scale-95 border border-red-500/25 shadow-sm cursor-pointer"
-                                       title={isNoFuelAlert ? "No Fuel Alert Active. Click to Cancel." : "Fuel Request Active. Click to Cancel."}
-                                   >
-                                       {isNoFuelAlert ? <Ban className="w-5 h-5" /> : <Bell className="w-5 h-5" />}
-                                   </button>
-                               ) : (
-                                   <div className="relative">
+                          {/* Action buttons (compact on mobile to sit next to flight number) */}
+                          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 z-20 relative">
+                               {/* Track and Alert buttons: ONLY shown for International flights, hidden for Domestic & Ad-Hoc */}
+                               {isIntl && (
+                                   <>
+                                       {/* Track on FlightRadar24 live map using resolved INBOUND flight number */}
                                        <button 
-                                           onClick={() => setActiveMenuJobId(activeMenuJobId === job.id ? null : job.id)}
-                                           className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all bg-amber-500/10 text-amber-500 border border-amber-500/25 hover:bg-amber-500/20 active:scale-95 shadow-sm cursor-pointer"
-                                           title="Send Alert Menu"
+                                           type="button"
+                                           onClick={(e) => {
+                                               e.stopPropagation();
+                                               window.open(flightRadarService.getFlightWebUrl(inboundFlightNumber), '_blank', 'noopener,noreferrer');
+                                           }}
+                                           className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 active:scale-95 border border-sky-500/25 shadow-sm cursor-pointer"
+                                           title={`Track inbound flight ${inboundFlightNumber} live on FlightRadar24 map`}
                                        >
-                                           <Bell className="w-5 h-5" />
+                                           <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5" />
                                        </button>
 
-                                       {activeMenuJobId === job.id && (
-                                           <>
-                                               <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setActiveMenuJobId(null); }} />
-                                               <div className="absolute right-0 top-12 z-50 w-56 bg-surface border border-outline rounded-xl shadow-premium p-1.5 flex flex-col gap-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                                       {/* Personal ETA Arrival Alert Watch Toggle */}
+                                       <button 
+                                           type="button"
+                                           onClick={(e) => {
+                                               e.stopPropagation();
+                                               if (isAssignedToMe) {
+                                                   notify(`Flight ${job.flightNumber} is assigned to you. High ETA alerts are active automatically.`, 'info');
+                                                   return;
+                                               }
+                                               toggleWatch(job.flightNumber);
+                                               if (isWatched) {
+                                                   notify(`ETA alert watch disabled for ${job.flightNumber}.`, 'info');
+                                               } else {
+                                                   notify(`ETA alert notifications enabled for ${job.flightNumber}!`, 'success');
+                                               }
+                                           }}
+                                            className={`w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all border shadow-sm cursor-pointer active:scale-95 ${
+                                                isAssignedToMe
+                                                    ? 'bg-violet-500/10 text-violet-400 border-violet-500/25 hover:bg-violet-500/20'
+                                                    : isWatched
+                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25 shadow-sm hover:bg-emerald-500/20'
+                                                    : 'bg-surface-container-high/40 text-on-surface-dim hover:text-on-surface hover:bg-surface-container border-outline'
+                                            }`}
+                                            title={
+                                                isAssignedToMe
+                                                    ? 'Assigned to you - ETA alerts are active automatically'
+                                                    : isWatched
+                                                    ? `ETA Alert Watch active for ${job.flightNumber}. Click to turn off.`
+                                                    : `Turn on ETA alerts for ${job.flightNumber}`
+                                            }
+                                        >
+                                            {isAssignedToMe ? (
+                                                <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-violet-400" />
+                                            ) : isWatched ? (
+                                                <BellRing className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
+                                            ) : (
+                                                <BellOff className="w-4 h-4 sm:w-5 sm:h-5 opacity-40 hover:opacity-70 transition-opacity" />
+                                            )}
+                                        </button>
+
+                                        {/* ITP MANAGER Fuel Alert Dispatch Menu Button (Distinct States) */}
+                                        {(user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN) && (
+                                            dispatchStatus ? (
+                                                /* ACTIVE / ACKNOWLEDGED DISPATCH BUTTON (Opens anchored popover) */
+                                                <div className="relative">
+                                                    <button 
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setActiveMenuJobId(null);
+                                                            setActiveDetailsJobId(activeDetailsJobId === job.id ? null : job.id);
+                                                        }}
+                                                        className={`w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer relative shrink-0 ${
+                                                            isDispatchAcknowledged
+                                                                ? 'bg-emerald-600 text-white border border-emerald-400/60 hover:bg-emerald-500'
+                                                                : dispatchStatus === 'REQUEST_FUELING'
+                                                                    ? 'bg-rose-600 text-white font-black border border-rose-400 hover:bg-rose-500'
+                                                                    : 'bg-amber-500 text-slate-950 font-black border border-amber-400 hover:bg-amber-400'
+                                                        }`}
+                                                        title={
+                                                            isDispatchAcknowledged
+                                                                ? `${dispatchStatus === 'REQUEST_FUELING' ? 'Fuel Request' : 'No-Fuel'} ACKNOWLEDGED by ${dispatchAcknowledgedBy || 'crew'} at ${dispatchAcknowledgedTime || '--:--'} (Req ${dispatchRequestedTime || '--:--'}). Click for options.`
+                                                                : `${dispatchStatus === 'REQUEST_FUELING' ? 'Fuel Request' : 'No-Fuel'} PENDING since ${dispatchRequestedTime || '--:--'}. Click for options.`
+                                                        }
+                                                    >
+                                                        {isDispatchAcknowledged ? (
+                                                            <CheckCheck className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                                                        ) : dispatchStatus === 'REQUEST_FUELING' ? (
+                                                            <Fuel className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                                                        ) : (
+                                                            <Ban className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950" />
+                                                        )}
+
+                                                        {/* Static badge pip indicator (NO ping, NO neon glow) */}
+                                                        <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                                                            <span className={`relative inline-flex rounded-full h-2.5 w-2.5 border border-slate-900 ${
+                                                                isDispatchAcknowledged ? 'bg-emerald-300' : dispatchStatus === 'REQUEST_FUELING' ? 'bg-rose-300' : 'bg-amber-300'
+                                                            }`}></span>
+                                                        </span>
+                                                    </button>
+
+                                                    {activeDetailsJobId === job.id && (
+                                                        <>
+                                                            <div 
+                                                                className="fixed inset-0 z-40" 
+                                                                onClick={(e) => { 
+                                                                    e.stopPropagation(); 
+                                                                    setActiveDetailsJobId(null); 
+                                                                }} 
+                                                            />
+                                                            <div 
+                                                                className="absolute right-0 top-12 z-50 w-64 max-w-[calc(100vw-3rem)] bg-surface border border-outline rounded-2xl shadow-2xl p-3 flex flex-col gap-2.5 animate-in fade-in slide-in-from-top-2 duration-200 text-on-surface"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                {/* Header */}
+                                                                <div className="flex items-center justify-between border-b border-outline-variant pb-2">
+                                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                                        <span className="text-xs font-black tracking-tight truncate">{job.flightNumber}</span>
+                                                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0 ${
+                                                                            isDispatchAcknowledged
+                                                                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                                                                : dispatchStatus === 'REQUEST_FUELING'
+                                                                                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                                                                    : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                                                        }`}>
+                                                                            {isDispatchAcknowledged ? 'Acknowledged' : 'Pending Ack'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <button 
+                                                                        type="button" 
+                                                                        onClick={(e) => { e.stopPropagation(); setActiveDetailsJobId(null); }}
+                                                                        className="p-1 rounded-lg hover:bg-surface-container text-on-surface-dim hover:text-on-surface cursor-pointer shrink-0"
+                                                                    >
+                                                                        <X className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </div>
+
+                                                                {/* Timings */}
+                                                                <div className="bg-surface-container-low rounded-xl p-2.5 flex flex-col gap-1.5 text-[11px] border border-outline-variant">
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="text-on-surface-dim font-medium">Type:</span>
+                                                                        <span className="font-bold text-on-surface">
+                                                                            {dispatchStatus === 'REQUEST_FUELING' ? 'Fuel Request' : 'No Fuel Required'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="text-on-surface-dim font-medium">Stand:</span>
+                                                                        <span className="font-bold text-on-surface">{job.stand || 'TBA'}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="text-on-surface-dim font-medium">Requested:</span>
+                                                                        <span className="font-mono font-bold text-on-surface">
+                                                                            {dispatchRequestedTime || '--:--'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="text-on-surface-dim font-medium">Acknowledged:</span>
+                                                                        <span className={`font-mono font-bold ${isDispatchAcknowledged ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                                                            {isDispatchAcknowledged ? (dispatchAcknowledgedTime || '--:--') : 'Awaiting Crew'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Actions */}
+                                                                <div className="flex flex-col gap-1.5 pt-0.5">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={async (e) => {
+                                                                            e.stopPropagation();
+                                                                            setActiveDetailsJobId(null);
+                                                                            await handleCancelAlert(job);
+                                                                        }}
+                                                                        className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-rose-500/15 text-rose-300 border border-rose-500/25 hover:bg-rose-500/20 text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95"
+                                                                    >
+                                                                        <Ban className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                                                                        <span>Cancel Alert</span>
+                                                                    </button>
+
+                                                                    {dispatchStatus === 'REQUEST_FUELING' && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={async (e) => {
+                                                                            e.stopPropagation();
+                                                                            setActiveDetailsJobId(null);
+                                                                            await handleSendFuelAlert(job, 'NO_FUEL');
+                                                                        }}
+                                                                        className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/25 hover:bg-amber-500/25 text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95"
+                                                                    >
+                                                                        <Ban className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                                                        <span>Switch to No Fuel</span>
+                                                                    </button>
+                                                                    )}
+
+                                                                    {dispatchStatus === 'NO_FUEL' && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={async (e) => {
+                                                                                e.stopPropagation();
+                                                                                setActiveDetailsJobId(null);
+                                                                                await handleSendFuelAlert(job, 'REQUEST_FUELING');
+                                                                            }}
+                                                                            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-rose-600/20 text-rose-300 border border-rose-500/25 hover:bg-rose-600/25 text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95"
+                                                                        >
+                                                                            <Fuel className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                                                                            <span>Switch to Fuel Request</span>
+                                                                        </button>
+                                                                    )}
+
+                                                                    {!isDispatchAcknowledged && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={async (e) => {
+                                                                                e.stopPropagation();
+                                                                                setActiveDetailsJobId(null);
+                                                                                await handleSendFuelAlert(job, dispatchStatus!);
+                                                                            }}
+                                                                            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer border border-outline-variant active:scale-95"
+                                                                        >
+                                                                            {dispatchStatus === 'REQUEST_FUELING' ? (
+                                                                                <Fuel className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                                                                            ) : (
+                                                                                <Ban className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                                                            )}
+                                                                            <span>Re-send Alert</span>
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                /* STATE 1: IDLE (Clean Megaphone icon only - NO REQ text) */
+                                                <div className="relative">
                                                    <button 
-                                                       onClick={async (e) => {
+                                                       type="button"
+                                                       onClick={(e) => {
                                                            e.stopPropagation();
-                                                           setActiveMenuJobId(null);
-                                                           try {
-                                                               const alertMeta = {
-                                                                   aircraftReg: job.aircraftReg,
-                                                                   stand: job.stand,
-                                                                   eta: job.eta || job.sta,
-                                                                   flightNumber: job.flightNumber
-                                                               };
-
-                                                               if (job.assignedTo) {
-                                                                   await createAlert({
-                                                                       severity: 'critical',
-                                                                       alertType: 'REQUEST_FUELING',
-                                                                       flightNumber: job.flightNumber,
-                                                                       message: `Into-Plane: Alert requested for Flight ${job.flightNumber}${assigneeName ? ` (Operator: ${assigneeName})` : ''}.`,
-                                                                       timestamp: new Date().toISOString(),
-                                                                       acknowledged: false,
-                                                                       targetRole: UserRole.ITP_OPERATOR,
-                                                                       assignedStaffId: job.assignedTo,
-                                                                       metadata: alertMeta
-                                                                   });
-                                                               }
-
-                                                               if (job.assignedOfficer) {
-                                                                   await createAlert({
-                                                                       severity: 'critical',
-                                                                       alertType: 'REQUEST_FUELING',
-                                                                       flightNumber: job.flightNumber,
-                                                                       message: `Into-Plane: Alert requested for Flight ${job.flightNumber}${officerName ? ` (Officer: ${officerName})` : ''}.`,
-                                                                       timestamp: new Date().toISOString(),
-                                                                       acknowledged: false,
-                                                                       targetRole: UserRole.ITP_OFFICER,
-                                                                       assignedStaffId: job.assignedOfficer,
-                                                                       metadata: alertMeta
-                                                                   });
-                                                               }
-
-                                                               notify(`High Alert Request Fueling sent for flight ${job.flightNumber}!`, 'success');
-                                                           } catch (err) {
-                                                               console.error(err);
-                                                               notify('Failed to send request alert.', 'error');
-                                                           }
+                                                           setActiveDetailsJobId(null);
+                                                           setActiveMenuJobId(activeMenuJobId === job.id ? null : job.id);
                                                        }}
-                                                       className="w-full text-left px-3.5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/10 hover:text-amber-500 text-on-surface-dim transition-all flex items-center gap-2 cursor-pointer"
+                                                       className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all bg-amber-500/10 text-amber-400 border border-amber-500/25 hover:bg-amber-500/20 active:scale-95 shadow-sm cursor-pointer relative shrink-0"
+                                                       title="Manager: Dispatch Fuel Request / No-Fuel to Crew"
                                                    >
-                                                       <Bell className="w-3.5 h-3.5" />
-                                                       Request Fueling
+                                                       <Megaphone className="w-4 h-4 sm:w-5 sm:h-5" />
                                                    </button>
-                                                   <button 
-                                                       onClick={async (e) => {
-                                                           e.stopPropagation();
-                                                           setActiveMenuJobId(null);
-                                                           try {
-                                                               const alertMeta = {
-                                                                   aircraftReg: job.aircraftReg,
-                                                                   stand: job.stand,
-                                                                   eta: job.eta || job.sta,
-                                                                   flightNumber: job.flightNumber
-                                                               };
 
-                                                               if (job.assignedTo) {
-                                                                   await createAlert({
-                                                                       severity: 'critical',
-                                                                       alertType: 'NO_FUEL',
-                                                                       flightNumber: job.flightNumber,
-                                                                       message: `Into-Plane: No Fuel required for Flight ${job.flightNumber}${assigneeName ? ` (Operator: ${assigneeName})` : ''}.`,
-                                                                       timestamp: new Date().toISOString(),
-                                                                       acknowledged: false,
-                                                                       targetRole: UserRole.ITP_OPERATOR,
-                                                                       assignedStaffId: job.assignedTo,
-                                                                       metadata: alertMeta
-                                                                   });
-                                                               }
-
-                                                               if (job.assignedOfficer) {
-                                                                   await createAlert({
-                                                                       severity: 'critical',
-                                                                       alertType: 'NO_FUEL',
-                                                                       flightNumber: job.flightNumber,
-                                                                       message: `Into-Plane: No Fuel required for Flight ${job.flightNumber}${officerName ? ` (Officer: ${officerName})` : ''}.`,
-                                                                       timestamp: new Date().toISOString(),
-                                                                       acknowledged: false,
-                                                                       targetRole: UserRole.ITP_OFFICER,
-                                                                       assignedStaffId: job.assignedOfficer,
-                                                                       metadata: alertMeta
-                                                                   });
-                                                               }
-
-                                                               notify(`High Alert No-Uplift sent for flight ${job.flightNumber}!`, 'success');
-                                                           } catch (err) {
-                                                               console.error(err);
-                                                               notify('Failed to send No-Uplift alert.', 'error');
-                                                           }
-                                                       }}
-                                                       className="w-full text-left px-3.5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-red-500/10 hover:text-red-500 text-on-surface-dim transition-all flex items-center gap-2 cursor-pointer border-t border-outline/20 pt-2"
-                                                   >
-                                                       <Ban className="w-3.5 h-3.5" />
-                                                       No Fuel Required
-                                                   </button>
+                                                   {activeMenuJobId === job.id && (
+                                                       <>
+                                                            <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setActiveMenuJobId(null); }} />
+                                                            <div className="absolute right-0 top-12 z-50 w-56 bg-surface border border-outline rounded-xl shadow-premium p-1.5 flex flex-col gap-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={async (e) => {
+                                                                        e.stopPropagation();
+                                                                        setActiveMenuJobId(null);
+                                                                        await handleSendFuelAlert(job, 'REQUEST_FUELING');
+                                                                    }}
+                                                                    className="w-full text-left px-3.5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-rose-500/10 hover:text-rose-400 text-on-surface-dim transition-all flex items-center gap-2 cursor-pointer"
+                                                                >
+                                                                    <Fuel className="w-4 h-4 text-rose-400" />
+                                                                    <span>Request Fueling</span>
+                                                                </button>
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={async (e) => {
+                                                                        e.stopPropagation();
+                                                                        setActiveMenuJobId(null);
+                                                                        await handleSendFuelAlert(job, 'NO_FUEL');
+                                                                    }}
+                                                                    className="w-full text-left px-3.5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/10 hover:text-amber-400 text-on-surface-dim transition-all flex items-center gap-2 cursor-pointer border-t border-outline-variant pt-2"
+                                                                >
+                                                                    <Ban className="w-4 h-4 text-amber-400" />
+                                                                    <span>No Fuel Required</span>
+                                                                </button>
+                                                           </div>
+                                                        </>
+                                                   )}
                                                </div>
-                                           </>
+                                           )
                                        )}
-                                   </div>
-                               )
-                           )}
+                                       
+                                   </>
+                               )}
 
-                           {/* play action button if assigned to me, manager/admin, or completed */}
-                           {(canLogFlight || job.status === 'COMPLETED') && (
-                               <button 
-                                   onClick={() => {
-                                       if (job.status === 'COMPLETED') {
-                                           notify(`Log for ${job.flightNumber} is already finalized.`, "info");
-                                       } else if (canLogFlight) {
-                                           onStartJob(job);
-                                       }
-                                   }}
-                                   className={`w-10 h-10 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm cursor-pointer
-                                        ${job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/20' : 'kinetic-gradient text-white hover:scale-[1.05] active:scale-95 shadow-premium'}
-                                    `}
-                                   title={job.status === 'COMPLETED' ? 'View Log' : 'Start Job'}
-                               >
-                                   {job.status === 'COMPLETED' ? <ChevronRight className="w-6 h-6 sm:w-7 sm:h-7 stroke-[3]" /> : <Play className="w-[24px] h-[24px] sm:w-[28px] sm:h-[28px] flex-shrink-0 ml-0.5 sm:ml-1" fill="white" color="white" strokeWidth={2.5} />}
-                               </button>
-                           )}
+                               {/* play action button if assigned to me, manager/admin, or completed */}
+                               {(canLogFlight || job.status === 'COMPLETED') && (
+                                   <button 
+                                       onClick={() => {
+                                           if (job.status === 'COMPLETED') {
+                                               notify(`Log for ${job.flightNumber} is already finalized.`, "info");
+                                           } else if (canLogFlight) {
+                                               onStartJob(job);
+                                           }
+                                       }}
+                                       className={`w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm cursor-pointer
+                                            ${job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/20' : 'kinetic-gradient text-white hover:scale-[1.05] active:scale-95 shadow-premium'}
+                                        `}
+                                       title={job.status === 'COMPLETED' ? 'View Log' : 'Start Job'}
+                                   >
+                                       {job.status === 'COMPLETED' ? <ChevronRight className="w-5 h-5 sm:w-7 sm:h-7 stroke-[3]" /> : <Play className="w-[18px] h-[18px] sm:w-[24px] sm:h-[24px] flex-shrink-0 ml-0.5" fill="white" color="white" strokeWidth={2.5} />}
+                                   </button>
+                               )}
+                          </div>
                       </div>
+
+                      {/* Row 2 on Mobile: Tail Logo + Airline Name + Type + Reg + Route (Full Width) */}
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-2.5 text-on-surface-dim text-[11px] font-bold md:hidden">
+                          {logoUrl && (
+                              <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
+                                  <img
+                                      src={logoUrl}
+                                      alt=""
+                                      aria-hidden="true"
+                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                      className="w-full h-full object-contain select-none"
+                                  />
+                              </div>
+                          )}
+                          {airlineName && (
+                              <span className="text-[11px] font-black text-on-surface-dim opacity-70 uppercase tracking-wider">
+                                  {airlineName}
+                              </span>
+                          )}
+                          <span className="opacity-20 shrink-0">|</span>
+                          <span className="opacity-60 whitespace-nowrap">{job.aircraftType}</span>
+                          <span className="opacity-20 shrink-0">|</span>
+                          <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] font-black text-on-surface-dim border-transparent uppercase tracking-wider whitespace-nowrap">{job.aircraftReg}</span>
+                          {canEditAircraft && (
+                              <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); setEditingAircraftJob(job); }}
+                                  className="p-1 rounded-md hover:bg-surface-container text-on-surface-dim hover:text-primary transition-all opacity-60 hover:opacity-100 cursor-pointer"
+                                  title="Edit Aircraft Type & Registration"
+                              >
+                                  <Pencil className="w-3 h-3" />
+                              </button>
+                          )}
+                          {job.route && (
+                              <>
+                                  <span className="opacity-20 shrink-0">|</span>
+                                  {renderRoute(job.route, "text-primary text-[9px] tracking-wide whitespace-nowrap", job.isDomestic)}
+                              </>
+                          )}
+                      </div>
+
+                      {/* Desktop-only Airline Name (below flight number) */}
+                      {airlineName && (
+                          <div className="hidden md:block text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1">
+                              {airlineName}
+                          </div>
+                      )}
                   </div>
 
                   <div className="mt-6 pt-6 border-t border-outline/50 space-y-4">
@@ -1301,7 +1853,6 @@ const ScreenTimestamps: React.FC<{
                               type="text"
                               value={activeFlight?.aircraftType || ''}
                               onChange={(e) => onInputChange('aircraftType', e.target.value.toUpperCase())}
-                              placeholder="e.g. A320"
                               className="w-full px-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[12px] font-black uppercase tracking-wider focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all"
                           />
                       </div>
@@ -1311,7 +1862,6 @@ const ScreenTimestamps: React.FC<{
                               type="text"
                               value={activeFlight?.aircraftReg || ''}
                               onChange={(e) => onInputChange('aircraftReg', e.target.value.toUpperCase())}
-                              placeholder="e.g. 9V-SKT"
                               className="w-full px-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[12px] font-black uppercase tracking-wider focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all text-primary"
                           />
                       </div>

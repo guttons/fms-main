@@ -18,15 +18,26 @@ export const FullScreenAlert: React.FC<FullScreenAlertProps> = ({ alert, onAckno
   useEffect(() => {
     let vibrationInterval: ReturnType<typeof setInterval>;
     
-    if (alert.alertType === 'REQUEST_FUELING' || alert.alertType === 'NO_FUEL') {
-      alertSoundEngine.playHighAlertAlarm();
-    } else if (alert.alertType === 'ETA_5MIN') {
-      alertSoundEngine.playEtaCritical();
-    } else if (alert.alertType === 'ETA_15MIN') {
-      alertSoundEngine.playEtaWarning();
-    } else if (alert.alertType === 'LANDED') {
-      alertSoundEngine.playLandingChime();
-    }
+    const startAlertAudio = async () => {
+      try {
+        alertSoundEngine.unlock();
+        if (alert.alertType === 'REQUEST_FUELING' || alert.alertType === 'NO_FUEL') {
+          await alertSoundEngine.playHighAlertAlarm();
+        } else if (alert.alertType === 'ALERT_CANCELLED') {
+          await alertSoundEngine.playEtaWarning();
+        } else if (alert.alertType === 'ETA_5MIN') {
+          await alertSoundEngine.playEtaCritical();
+        } else if (alert.alertType === 'ETA_15MIN') {
+          await alertSoundEngine.playEtaWarning();
+        } else if (alert.alertType === 'LANDED') {
+          await alertSoundEngine.playLandingChime();
+        }
+      } catch (e) {
+        console.warn('[FullScreenAlert] Audio playback deferred until user interaction:', e);
+      }
+    };
+
+    startAlertAudio();
 
     if (navigator.vibrate) {
       navigator.vibrate([500, 200, 500, 200, 500]);
@@ -35,17 +46,12 @@ export const FullScreenAlert: React.FC<FullScreenAlertProps> = ({ alert, onAckno
       }, 3000);
     }
 
-    // Auto-acknowledge after 90 seconds
-    const autoAckTimer = setTimeout(() => {
-      handleAcknowledge();
-    }, 90000);
-
+    // Critical alerts require explicit staff acknowledgment — never auto-dismiss
     return () => {
       if (vibrationInterval) clearInterval(vibrationInterval);
-      clearTimeout(autoAckTimer);
       alertSoundEngine.stop();
     };
-  }, [alert.id]);
+  }, [alert.id, alert.alertType]);
 
   useEffect(() => {
     let timerId: ReturnType<typeof setInterval>;
@@ -112,15 +118,26 @@ export const FullScreenAlert: React.FC<FullScreenAlertProps> = ({ alert, onAckno
   let pulsingBorderClass = 'animate-pulse';
   let Icon = AlertTriangle;
   
-  if (alert.alertType === 'NO_FUEL' || alert.alertType === 'ETA_5MIN') {
+  if (alert.alertType === 'ALERT_CANCELLED') {
+    themeColorClass = 'text-rose-400';
+    themeBorderClass = 'border-rose-500/50';
+    themeBgClass = 'bg-rose-500/10';
+    Icon = Ban;
+  } else if (alert.alertType === 'REQUEST_FUELING') {
+    themeColorClass = 'text-rose-400';
+    themeBorderClass = 'border-rose-500/50';
+    themeBgClass = 'bg-rose-500/10';
+    Icon = Fuel;
+  } else if (alert.alertType === 'NO_FUEL') {
+    themeColorClass = 'text-amber-400';
+    themeBorderClass = 'border-amber-500/50';
+    themeBgClass = 'bg-amber-500/10';
+    Icon = Ban;
+  } else if (alert.alertType === 'ETA_5MIN') {
     themeColorClass = 'text-error';
     themeBorderClass = 'border-error/50';
     themeBgClass = 'bg-error/10';
-    if (alert.alertType === 'NO_FUEL') Icon = Ban;
-    if (alert.alertType === 'ETA_5MIN') Icon = BellRing;
-  } else if (alert.alertType === 'REQUEST_FUELING') {
-    themeColorClass = 'text-warning';
-    Icon = Fuel;
+    Icon = BellRing;
   } else if (alert.alertType === 'ETA_15MIN') {
     themeColorClass = 'text-warning';
     Icon = Clock;
@@ -132,7 +149,10 @@ export const FullScreenAlert: React.FC<FullScreenAlertProps> = ({ alert, onAckno
   }
 
   return (
-    <div className="fixed inset-0 z-[9999999] flex flex-col items-center justify-center bg-black/80 backdrop-blur-xl p-4 sm:p-8">
+    <div 
+      onClick={() => alertSoundEngine.unlock()}
+      className="fixed inset-0 z-[9999999] flex flex-col items-center justify-center bg-black/80 backdrop-blur-xl p-4 sm:p-8"
+    >
       <div className="absolute top-8 left-1/2 -translate-x-1/2 flex items-center gap-3">
         <Logo className="w-8 h-8 sm:w-10 sm:h-10" />
         <div className="text-on-surface text-xl sm:text-2xl font-black tracking-widest uppercase">FMS Alert</div>
@@ -147,8 +167,14 @@ export const FullScreenAlert: React.FC<FullScreenAlertProps> = ({ alert, onAckno
         </div>
 
         <h2 className={`text-xl sm:text-2xl font-black uppercase tracking-widest ${themeColorClass} mb-2 relative z-10`}>
-          {alert.alertType?.replace('_', ' ') || 'ALERT'}
+          {alert.alertType === 'ALERT_CANCELLED' ? 'ALERT CANCELLED' : alert.alertType === 'NO_FUEL' ? 'NO FUEL REQUIRED' : (alert.alertType?.replace(/_/g, ' ') || 'ALERT')}
         </h2>
+
+        {alert.message && alert.alertType === 'ALERT_CANCELLED' && (
+          <p className="text-xs sm:text-sm font-bold text-rose-300 max-w-sm mb-4 relative z-10 bg-rose-500/10 border border-rose-500/30 px-3.5 py-2 rounded-xl">
+            {alert.message}
+          </p>
+        )}
 
         {alert.flightNumber && (
           <div className="text-4xl sm:text-6xl font-black text-on-surface tracking-wider mb-6 relative z-10">

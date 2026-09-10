@@ -69,7 +69,7 @@ interface OperationalDataContextType {
   addFlightJob: (job: FlightJob) => Promise<void>;
   deleteFlightJob: (id: string) => Promise<void>;
   createAlert: (alert: Omit<Alert, 'id'>) => Promise<boolean>;
-  acknowledgeAlert: (id: string) => Promise<void>;
+  acknowledgeAlert: (id: string, staffName?: string) => Promise<void>;
   acknowledgeAllAlerts: (ids: string[]) => Promise<void>;
   clearAllAlerts: () => Promise<void>;
   deleteAlerts: (ids: string[]) => Promise<void>;
@@ -175,24 +175,38 @@ const INITIAL_SHIPMENTS: ShipmentData[] = [
 export const deduplicateAlerts = (rawAlerts: Alert[]): { uniqueAlerts: Alert[]; duplicateIds: string[] } => {
   if (!Array.isArray(rawAlerts)) return { uniqueAlerts: [], duplicateIds: [] };
 
+  // 1. Sort raw alerts so UNACKNOWLEDGED alerts ALWAYS take priority over acknowledged ones,
+  // and newer alerts take priority over older ones.
+  const sorted = [...rawAlerts].sort((a, b) => {
+    // Unacknowledged (false) comes before acknowledged (true)
+    if (!a.acknowledged && b.acknowledged) return -1;
+    if (a.acknowledged && !b.acknowledged) return 1;
+    // Then newest first
+    const timeA = new Date(a.timestamp || 0).getTime();
+    const timeB = new Date(b.timestamp || 0).getTime();
+    return timeB - timeA;
+  });
+
   const seen = new Set<string>();
   const uniqueAlerts: Alert[] = [];
   const duplicateIds: string[] = [];
 
-  for (const alert of rawAlerts) {
+  for (const alert of sorted) {
     if (!alert || !alert.id) continue;
 
-    const cleanFlight = (alert.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+    const cleanFlight = (alert.flightNumber || alert.metadata?.flightNumber || '').replace(/\s+/g, '').toUpperCase();
     const type = alert.alertType || 'GENERAL';
     const target = alert.assignedStaffId || alert.targetRole || 'ALL';
+    // Distinguish acknowledged from unacknowledged so historical alerts NEVER purge an active alert!
+    const ackState = alert.acknowledged ? 'ACK' : 'UNACK';
 
     let dedupeKey: string;
-    if (['LANDED', 'ETA_15MIN', 'ETA_5MIN', 'REQUEST_FUELING', 'NO_FUEL'].includes(type) && cleanFlight) {
-      // For tactical alerts on a flight, deduplicate strictly by type, flight number, and target
-      dedupeKey = `${type}:${cleanFlight}:${target}`;
+    if (['LANDED', 'ETA_15MIN', 'ETA_5MIN', 'REQUEST_FUELING', 'NO_FUEL', 'ALERT_CANCELLED'].includes(type) && cleanFlight) {
+      // For tactical alerts on a flight, deduplicate by type, flight number, target, and ackState
+      dedupeKey = `${type}:${cleanFlight}:${target}:${ackState}`;
     } else {
-      // For general alerts, deduplicate by message and target
-      dedupeKey = `${type}:${target}:${(alert.message || '').trim()}`;
+      // For general alerts, deduplicate by message, target, and ackState
+      dedupeKey = `${type}:${target}:${(alert.message || '').trim()}:${ackState}`;
     }
 
     if (seen.has(dedupeKey)) {
@@ -1468,16 +1482,18 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     if (alertData.alertType && ['LANDED', 'ETA_15MIN', 'ETA_5MIN', 'REQUEST_FUELING', 'NO_FUEL'].includes(alertData.alertType)) {
       const cleanFlt = (alertData.flightNumber || '').replace(/\s+/g, '').toUpperCase();
       const duplicateExists = (alerts || []).some(a => {
+        if (a.acknowledged) return false; // Acknowledged or past alerts must NEVER block new requests!
         if (a.alertType !== alertData.alertType) return false;
-        const aFlt = (a.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+        const aFlt = (a.flightNumber || a.metadata?.flightNumber || '').replace(/\s+/g, '').toUpperCase();
         if (cleanFlt && aFlt && cleanFlt !== aFlt) return false;
+        if (cleanFlt && !aFlt) return false;
         if (alertData.assignedStaffId && a.assignedStaffId === alertData.assignedStaffId) return true;
         if (alertData.targetRole && a.targetRole === alertData.targetRole) return true;
         return a.message === alertData.message;
       });
 
       if (duplicateExists || pendingAlertHashes.current.has(alertHash)) {
-        console.warn(`[Duplicate Blocked] ${alertData.alertType} alert already exists for ${alertData.flightNumber}`);
+        console.warn(`[Duplicate Blocked] Active unacknowledged ${alertData.alertType} alert already exists for ${alertData.flightNumber}`);
         return false;
       }
     }
@@ -1620,25 +1636,64 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     });
   }, [mergedFlightJobs, alerts, flightJobs]);
 
-  const acknowledgeAlert = async (id: string) => {
+  const acknowledgeAlert = async (id: string, staffName?: string) => {
     try {
+      const nowIso = new Date().toISOString();
+      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
       const targetAlert = (alerts || []).find(a => a.id === id);
-      const cleanFlt = targetAlert?.flightNumber?.replace(/\s+/g, '').toUpperCase();
+      const cleanFlt = (targetAlert?.flightNumber || targetAlert?.metadata?.flightNumber || '').replace(/\s+/g, '').toUpperCase();
       
+      const ackMeta = {
+        acknowledgedAt: nowIso,
+        acknowledgedTime: nowTime,
+        acknowledgedBy: staffName || appUser?.name || 'Staff'
+      };
+
       // Batch acknowledge all matching tactical alerts for this flight
       const matchingIds = (alerts || [])
         .filter(a => {
           if (a.id === id) return true;
-          if (targetAlert?.alertType && ['LANDED', 'ETA_15MIN', 'ETA_5MIN', 'REQUEST_FUELING', 'NO_FUEL'].includes(targetAlert.alertType)) {
-            const aFlt = (a.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+          if (targetAlert?.alertType && ['LANDED', 'ETA_15MIN', 'ETA_5MIN', 'REQUEST_FUELING', 'NO_FUEL', 'ALERT_CANCELLED'].includes(targetAlert.alertType)) {
+            const aFlt = (a.flightNumber || a.metadata?.flightNumber || '').replace(/\s+/g, '').toUpperCase();
             return a.alertType === targetAlert.alertType && (!cleanFlt || !aFlt || aFlt === cleanFlt);
           }
           return false;
         })
         .map(a => a.id);
 
-      await supabaseService.acknowledgeAllAlerts(matchingIds);
-      setAlerts(prev => prev.map(a => matchingIds.includes(a.id) ? { ...a, acknowledged: true } : a));
+      await supabaseService.acknowledgeAllAlerts(matchingIds, ackMeta);
+      setAlerts(prev => prev.map(a => {
+        if (!matchingIds.includes(a.id)) return a;
+        return { 
+          ...a, 
+          acknowledged: true,
+          acknowledgedAt: nowIso,
+          acknowledged_at: nowIso,
+          acknowledgedBy: ackMeta.acknowledgedBy,
+          metadata: {
+            ...(a.metadata || {}),
+            ...ackMeta
+          }
+        };
+      }));
+
+      // Also update local storage dispatch cache if it matches a flight
+      if (cleanFlt) {
+        try {
+          const raw = localStorage.getItem('fms_flight_fuel_dispatches');
+          const cache = raw ? JSON.parse(raw) : {};
+          if (cache[cleanFlt]) {
+            cache[cleanFlt] = {
+              ...(typeof cache[cleanFlt] === 'object' ? cache[cleanFlt] : { type: cache[cleanFlt] }),
+              acknowledged: true,
+              acknowledgedTime: nowTime,
+              acknowledgedAt: nowIso,
+              acknowledgedBy: staffName || appUser?.name || 'Staff'
+            };
+            localStorage.setItem('fms_flight_fuel_dispatches', JSON.stringify(cache));
+          }
+        } catch {}
+      }
     } catch (error) {
       console.error('Failed to acknowledge alert:', error);
       throw error;
@@ -1647,8 +1702,10 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
   const acknowledgeAllAlerts = async (ids: string[]) => {
     try {
-      await supabaseService.acknowledgeAllAlerts(ids);
-      setAlerts(prev => prev.map(a => ids.includes(a.id) ? { ...a, acknowledged: true } : a));
+      const nowIso = new Date().toISOString();
+      const nowTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      await supabaseService.acknowledgeAllAlerts(ids, { acknowledgedAt: nowIso, acknowledgedTime: nowTime });
+      setAlerts(prev => prev.map(a => ids.includes(a.id) ? { ...a, acknowledged: true, acknowledgedAt: nowIso, acknowledged_at: nowIso } : a));
     } catch (error) {
       console.error('Failed to acknowledge all alerts:', error);
       throw error;

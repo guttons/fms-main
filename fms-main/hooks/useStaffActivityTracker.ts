@@ -52,6 +52,13 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
   const [currentLocation, setCurrentLocation] = useState<any | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const presenceChannelRef = useRef<any>(null);
+  const statusRef = useRef<string>('ONLINE');
+  const currentLocationRef = useRef<any>(null);
+
+  useEffect(() => {
+    currentLocationRef.current = currentLocation;
+  }, [currentLocation]);
 
   /**
    * Logs an activity to localStorage (and staff_activity_log table if remote tracking is enabled)
@@ -91,9 +98,22 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
    */
   const updateStatus = useCallback(async (status: string, jobId?: string, vehicleId?: string) => {
     if (!user) return;
+    statusRef.current = status;
     try {
       // Always persist current status to localStorage for instant local access
       localStorage.setItem(`fms_staff_status_${user.id}`, status);
+
+      // Broadcast real-time presence immediately to all connected devices
+      if (presenceChannelRef.current) {
+        presenceChannelRef.current.track({
+          id: user.id,
+          name: user.name,
+          role: user.role,
+          status,
+          location: currentLocationRef.current,
+          lastActive: new Date().toISOString()
+        }).catch(() => {});
+      }
 
       if (!ENABLE_REMOTE_STAFF_TRACKING) return;
 
@@ -104,7 +124,10 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
       if (jobId !== undefined) updates.current_job_id = jobId;
       if (vehicleId !== undefined) updates.current_vehicle_id = vehicleId;
 
-      const { error } = await supabase.from('staff').update(updates).eq('id', user.id);
+      const { error } = await supabase.from('staff')
+        .update(updates)
+        .or(`id.eq.${user.id},employee_id.eq.${user.id}`);
+
       if (error) {
         console.warn('[Staff Tracker] Failed to update status in Supabase:', error.message || error);
       }
@@ -132,9 +155,22 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
     };
 
     setCurrentLocation(locationData);
+    currentLocationRef.current = locationData;
     setIsTrackingLocation(true);
     setShowLocationPrompt(false);
     setIsRequestingLocation(false);
+
+    // Broadcast updated location on presence channel
+    if (presenceChannelRef.current) {
+      presenceChannelRef.current.track({
+        id: user.id,
+        name: user.name,
+        role: user.role,
+        status: statusRef.current,
+        location: locationData,
+        lastActive: new Date().toISOString()
+      }).catch(() => {});
+    }
 
     try {
       // Save to localStorage for instant local access
@@ -144,8 +180,8 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
       if (ENABLE_REMOTE_STAFF_TRACKING) {
         const { error } = await supabase.from('staff').update({ 
           current_location: locationData,
-          last_active_at: new Date().toISOString()
-        }).eq('id', user.id);
+          last_active_at: new Date().toISOString() 
+        }).or(`id.eq.${user.id},employee_id.eq.${user.id}`);
 
         if (error) {
           console.warn('[Staff Tracker] Failed to sync location to Supabase:', error.message || error);
@@ -233,22 +269,52 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
   // Check and prompt on login / authentication
   useEffect(() => {
     if (isAuthenticated && user) {
+      // Connect to Realtime Presence channel
+      const channel = supabase.channel('fms_staff_presence', {
+        config: { presence: { key: user.id } }
+      });
+      presenceChannelRef.current = channel;
+
+      channel.subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({
+            id: user.id,
+            name: user.name,
+            role: user.role,
+            status: statusRef.current,
+            location: currentLocationRef.current,
+            lastActive: new Date().toISOString()
+          }).catch(() => {});
+        }
+      });
+
       if (!skipLifecycle) {
         // On mount/login
         logActivity('LOGIN');
         updateStatus('ONLINE');
 
-        // Heartbeat every 5 minutes to update last_active_at (if remote tracking is enabled)
-        if (ENABLE_REMOTE_STAFF_TRACKING) {
-          intervalRef.current = setInterval(async () => {
+        // Heartbeat every 60 seconds to update last_active_at and presence
+        intervalRef.current = setInterval(async () => {
+          if (presenceChannelRef.current) {
+            presenceChannelRef.current.track({
+              id: user.id,
+              name: user.name,
+              role: user.role,
+              status: statusRef.current,
+              location: currentLocationRef.current,
+              lastActive: new Date().toISOString()
+            }).catch(() => {});
+          }
+
+          if (ENABLE_REMOTE_STAFF_TRACKING) {
             const { error } = await supabase.from('staff')
               .update({ last_active_at: new Date().toISOString() })
-              .eq('id', user.id);
+              .or(`id.eq.${user.id},employee_id.eq.${user.id}`);
             if (error) {
               console.warn('[Staff Tracker] Heartbeat update failed:', error.message || error);
             }
-          }, 5 * 60 * 1000);
-        }
+          }
+        }, 60 * 1000);
       }
 
       // Check if location permission is already granted or if we should prompt
@@ -278,6 +344,9 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
 
       // Handle beforeunload
       const handleBeforeUnload = () => {
+        if (presenceChannelRef.current) {
+          presenceChannelRef.current.untrack().catch(() => {});
+        }
         if (!skipLifecycle && ENABLE_REMOTE_STAFF_TRACKING) {
           supabase.from('staff_activity_log').insert([{ 
             staff_id: user.id, 
@@ -288,7 +357,7 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
           supabase.from('staff').update({ 
             current_status: 'OFFLINE', 
             last_active_at: new Date().toISOString() 
-          }).eq('id', user.id).then();
+          }).or(`id.eq.${user.id},employee_id.eq.${user.id}`).then();
         }
       };
       
@@ -302,6 +371,12 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
         }
         window.removeEventListener('beforeunload', handleBeforeUnload);
         
+        if (presenceChannelRef.current) {
+          presenceChannelRef.current.untrack().catch(() => {});
+          supabase.removeChannel(presenceChannelRef.current);
+          presenceChannelRef.current = null;
+        }
+
         if (!skipLifecycle) {
           logActivity('LOGOUT');
           updateStatus('OFFLINE');

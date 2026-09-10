@@ -184,21 +184,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       case UserRole.ITP_OPERATOR:
       case UserRole.ITP_SUPERVISOR:
       case UserRole.ITP_HD_OPERATOR:
-        return [
-          { id: 'tracker', label: 'Flight Tracker', icon: Radar },
-          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
-        ];
+        return [];
 
       case UserRole.ITP_OFFICER:
         return [
-          { id: 'tracker', label: 'Flight Tracker', icon: Radar },
-          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
         ];
 
       case UserRole.ITP_MANAGER:
         return [
-          { id: 'tracker', label: 'Flight Tracker', icon: Radar },
           { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
@@ -206,7 +200,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
       case UserRole.DEPOT_OPERATOR:
         return [
-          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
           { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
           { id: 'seaplane', label: 'Seaplane Ops', icon: Sailboat },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
@@ -214,7 +207,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
       case UserRole.DEPOT_MANAGER:
         return [
-          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
           { id: 'marine-loading', label: 'Marine Provisioning', icon: Ship },
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
           { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
@@ -236,7 +228,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
       case UserRole.FUEL_MANAGEMENT:
         return [
-          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'history', label: 'Log History', icon: History },
@@ -247,7 +238,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
       case UserRole.ADMIN:
         return [
-          { id: 'tracker', label: 'Flight Tracker', icon: Radar },
           { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
           { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },

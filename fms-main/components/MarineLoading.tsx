@@ -466,7 +466,6 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
                                     type="text" 
                                     name="vesselName"
                                     required
-                                    placeholder="E.G. MV SEA BREEZE"
                                     value={formData.vesselName}
                                     onChange={handleInputChange}
                                     className="w-full pl-14 pr-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all"

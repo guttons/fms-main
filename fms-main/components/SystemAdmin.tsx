@@ -454,10 +454,10 @@ const StaffTab: React.FC<{
             ) : (
               <>
                 <Field label="Full Name" required>
-                  <input className={inputCls} placeholder="e.g. Ahmed Rizwan" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+                  <input className={inputCls} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
                 </Field>
                 <Field label="RC Number / Employee ID" required>
-                  <input className={inputCls} placeholder="e.g. A-3046" value={form.employeeId} onChange={e => setForm(p => ({ ...p, employeeId: e.target.value }))} />
+                  <input className={inputCls} value={form.employeeId} onChange={e => setForm(p => ({ ...p, employeeId: e.target.value }))} />
                 </Field>
                 <Field label="Email Address">
                   <input className={inputCls} placeholder="name@macl.aero" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
@@ -683,7 +683,7 @@ const EquipmentTab: React.FC<{ push: (msg: string, type?: NotificationType) => v
         <Modal title={editing ? 'Edit Equipment' : 'Add Equipment'} onClose={() => setShowModal(false)}>
           <div className="space-y-5">
             <Field label="Equipment ID / Name" required>
-              <input className={inputCls} placeholder="e.g. RF-18" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+              <input className={inputCls} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
             </Field>
             <Field label="Type" required>
               <div className="relative">
@@ -893,7 +893,7 @@ const TanksTab: React.FC<{ push: (msg: string, type?: NotificationType) => void;
         <Modal title={editing ? 'Edit Tank' : 'Add Tank'} onClose={() => setShowModal(false)}>
           <div className="space-y-5">
             <Field label="Tank Name / ID" required>
-              <input className={inputCls} placeholder="e.g. TK-104 (NFF)" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+              <input className={inputCls} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
             </Field>
             <Field label="Fuel Type" required>
               <div className="relative">
@@ -1086,14 +1086,14 @@ const VesselsTab: React.FC<{ push: (msg: string, type?: NotificationType) => voi
         <Modal title={editing ? 'Edit Vessel' : 'Add Vessel'} onClose={() => setShowModal(false)}>
           <div className="space-y-5">
             <Field label="Vessel Name" required>
-              <input className={inputCls} placeholder="e.g. MT OCEAN PRIDE" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+              <input className={inputCls} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
             </Field>
             <div className="grid grid-cols-2 gap-4">
               <Field label="IMO Number">
-                <input className={inputCls} placeholder="e.g. 9876543" maxLength={7} value={form.imo || ''} onChange={e => setForm(p => ({ ...p, imo: e.target.value.replace(/\D/g, '').slice(0, 7) }))} />
+                <input className={inputCls} maxLength={7} value={form.imo || ''} onChange={e => setForm(p => ({ ...p, imo: e.target.value.replace(/\D/g, '').slice(0, 7) }))} />
               </Field>
               <Field label="Flag State">
-                <input className={inputCls} placeholder="e.g. Panama" value={form.flag || ''} onChange={e => setForm(p => ({ ...p, flag: e.target.value }))} />
+                <input className={inputCls} value={form.flag || ''} onChange={e => setForm(p => ({ ...p, flag: e.target.value }))} />
               </Field>
             </div>
             <Field label="Status" required>

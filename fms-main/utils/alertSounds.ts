@@ -46,10 +46,23 @@ export class AlertSoundEngine {
   }
 
   public async resume(): Promise<void> {
-    const ctx = this.getContext();
-    if (ctx.state === 'suspended') {
-      await ctx.resume();
+    try {
+      const ctx = this.getContext();
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+    } catch (e) {
+      console.warn('[AlertSoundEngine] resume failed:', e);
     }
+  }
+
+  public unlock(): void {
+    try {
+      const ctx = this.getContext();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+    } catch (e) {}
   }
 
   public async playHighAlertAlarm(): Promise<void> {
@@ -237,3 +250,13 @@ export class AlertSoundEngine {
 }
 
 export const alertSoundEngine = AlertSoundEngine.getInstance();
+
+// Automatically unlock the Web Audio context on the first user interaction anywhere on the document
+if (typeof window !== 'undefined') {
+  const unlockAudio = () => {
+    alertSoundEngine.unlock();
+  };
+  ['pointerdown', 'keydown', 'touchstart', 'click'].forEach(evt => {
+    window.addEventListener(evt, unlockAudio, { passive: true });
+  });
+}

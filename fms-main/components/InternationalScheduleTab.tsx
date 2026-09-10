@@ -919,7 +919,6 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                   <input
                     type="text"
                     required
-                    placeholder="EK652"
                     value={flightNumber}
                     onChange={e => setFlightNumber(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-on-surface uppercase focus:border-primary"
@@ -931,7 +930,6 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                   <input
                     type="text"
                     required
-                    placeholder="Emirates"
                     value={airlineName}
                     onChange={e => setAirlineName(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-on-surface focus:border-primary"
@@ -944,7 +942,6 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                   <label className="block text-[10px] font-black uppercase text-on-surface-dim mb-1">IATA Code</label>
                   <input
                     type="text"
-                    placeholder="EK"
                     value={airlineCode}
                     onChange={e => setAirlineCode(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-on-surface uppercase focus:border-primary"
@@ -955,7 +952,6 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                   <label className="block text-[10px] font-black uppercase text-on-surface-dim mb-1">Origin</label>
                   <input
                     type="text"
-                    placeholder="DXB"
                     value={origin}
                     onChange={e => setOrigin(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-on-surface uppercase focus:border-primary"
@@ -966,7 +962,6 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                   <label className="block text-[10px] font-black uppercase text-on-surface-dim mb-1">Destination</label>
                   <input
                     type="text"
-                    placeholder="MLE"
                     value={destination}
                     onChange={e => setDestination(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-on-surface uppercase focus:border-primary"
@@ -1030,7 +1025,6 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
                   <input
                     type="text"
                     required
-                    placeholder="B777-300ER"
                     value={aircraftType}
                     onChange={e => setAircraftType(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-surface-container-low border border-outline text-on-surface focus:border-primary"

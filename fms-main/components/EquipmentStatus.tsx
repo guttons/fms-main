@@ -995,7 +995,6 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                   className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-sm text-on-surface focus:border-primary outline-none"
                   value={maintForm.description}
                   onChange={e => setMaintForm({...maintForm, description: e.target.value})}
-                  placeholder="E.g. Lock issue & gear transmission"
                 />
               </div>
               <div>
