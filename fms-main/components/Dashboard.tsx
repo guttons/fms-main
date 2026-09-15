@@ -13,6 +13,7 @@ import { useOperationalData } from '../context/OperationalDataContext';
 import { useNotification } from '../context/NotificationContext';
 import { equipmentBadgeClass, equipmentDotClass, equipmentBadgeSoftClass } from '../utils/equipmentColors';
 import { TankStatusGrid } from './TankStatusGrid';
+import { StockIcon } from './StockIcon';
 
 const fmtVol = (n: number) => {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}ML`;
@@ -206,10 +207,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
         setAllDomesticAssignments(domesticData || []);
         setAllEquipmentAssignments([...(dailyEq || []), ...(dieselEq || [])]);
 
+        if (domesticData && domesticData.length > 0) {
+          localStorage.setItem('fms_domestic_assignments', JSON.stringify(domesticData));
+        }
+
         if (isItpOperator) {
           // Filter for current user specific tasks
           const myTeam = domesticData?.find(d => d.operator1_id === user.id || d.operator2_id === user.id);
-          if (myTeam) setMyDomesticTeam(myTeam);
+          if (myTeam) {
+            setMyDomesticTeam(myTeam);
+            localStorage.setItem('fms_my_domestic_team', JSON.stringify(myTeam));
+          }
 
           const allEq = [...(dailyEq || []), ...(dieselEq || [])];
           const myEqs = allEq.filter(d => d.operator1_id === user.id || d.operator2_id === user.id);
@@ -279,7 +287,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
     const myDomesticFlights = myDomesticTeam 
       ? domesticFlights
-          .filter((f: any) => f.assignedTeam === myDomesticTeam.team_name)
           .sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''))
       : [];
 
@@ -568,16 +575,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
         {/* Domestic Assignment */}
         {myDomesticTeam && (
             <div className="space-y-4">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Domestic Operations</h3>
+                <h3 className="label-sm text-on-surface-dim uppercase tracking-wider">Domestic Operations</h3>
                 <div className="bg-surface-dim rounded-xl shadow-sm border border-outline border-l-4 border-l-primary overflow-hidden flex flex-col md:flex-row mb-4">
                     <div className="p-6 flex-1">
                         <div className="flex items-center space-x-3 mb-2">
-                            <div className="p-2 bg-blue-50 rounded-lg">
-                                <Users className="w-6 h-6 text-blue-600" />
+                            <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20 flex items-center justify-center">
+                                <Users className="w-6 h-6 text-primary" />
                             </div>
-                            <span className="text-2xl font-black text-slate-800">{myDomesticTeam.team_name}</span>
+                            <span className="text-2xl font-black text-on-surface">{myDomesticTeam.team_name}</span>
                         </div>
-                        <p className="text-slate-500 text-sm">You are assigned to Domestic Operations for this shift.</p>
+                        <p className="text-on-surface-dim text-sm">You are assigned to Domestic Operations for this shift.</p>
                     </div>
                 </div>
 
@@ -629,17 +636,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                 </div>
                                 <div className="bg-surface-dim p-6 flex flex-col justify-center border-t md:border-t-0 md:border-l border-outline w-full md:w-48">
                                       {flight.status !== 'COMPLETED' ? (
-                                         [UserRole.ITP_OPERATOR, UserRole.ITP_SUPERVISOR].includes(user.role) ? (
-                                             <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider text-center opacity-40">VIEW ONLY</span>
-                                         ) : (
-                                            <button 
-                                              onClick={() => onStartJob?.(flight as any)}
-                                              className="btn-command w-full text-[10px] py-3 lg:py-4 flex items-center justify-center group"
-                                            >
-                                                <Play className="w-3 h-3 mr-2 group-hover:scale-125 transition-transform" />
-                                                START JOB
-                                            </button>
-                                         )
+                                         <button 
+                                           onClick={() => {
+                                             if (flight.vehicleId) {
+                                               onStartJob?.(flight as any, flight.vehicleId);
+                                             } else {
+                                               const rfEquip = (equipment || []).filter(eq => 
+                                                 eq.id.startsWith('RF') && (eq.currentVolume || 0) > 0 && 
+                                                 (eq.status === EqStatus.AVAILABLE || eq.id === localStorage.getItem(`fms_last_selected_vehicle_${user.id}`))
+                                               );
+                                               const saved = localStorage.getItem(`fms_last_selected_vehicle_${user.id}`);
+                                               const defaultSelected = (saved && rfEquip.some(e => e.id === saved)) ? saved : (rfEquip[0]?.id || '');
+                                               setEquipPickerSelected(defaultSelected);
+                                               setEquipPickerJob({ ...flight, equipmentUsage: flight.equipmentUsage || 'REFUELLER', isDomestic: true });
+                                             }
+                                           }}
+                                           className="btn-command w-full text-[10px] py-3 lg:py-4 flex items-center justify-center group"
+                                         >
+                                             <Play className="w-3 h-3 mr-2 group-hover:scale-125 transition-transform" />
+                                             START JOB
+                                         </button>
                                       ) : (
                                          <button disabled className="w-full bg-surface-lowest text-on-surface-dim opacity-50 font-black py-3 lg:py-4 rounded-2xl text-[10px] cursor-not-allowed uppercase tracking-[0.2em]">
                                              TASK LOGGED
@@ -652,7 +668,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                     </div>
                 ) : (
                     <div className="bg-surface-dim p-6 text-center rounded-xl border border-dashed border-outline">
-                        <p className="text-slate-500 font-medium">No domestic flights currently scheduled for {myDomesticTeam.team_name}.</p>
+                        <p className="text-on-surface-dim font-medium">No domestic flights currently scheduled for this shift.</p>
                     </div>
                 )}
             </div>
@@ -1678,7 +1694,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
               <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.4em] mt-2 opacity-40">Live Tank Farm Telemetry</p>
             </div>
             <div className="px-4 py-2 bg-surface-dim border border-outline rounded-xl flex items-center space-x-3 w-fit">
-              <Database className="w-4 h-4 text-primary animate-pulse" />
+              <StockIcon className="w-4 h-4 text-primary animate-pulse" />
               <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest whitespace-nowrap">{(tanks || []).length} Units Online</span>
             </div>
           </div>
@@ -1760,21 +1776,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                 .filter(eq => {
                   const isRf = eq.id.startsWith('RF');
                   const isHd = eq.id.startsWith('HD');
-                  const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER';
+                  const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER' || equipPickerJob?.isDomestic || isDomesticFlight(equipPickerJob);
                   const isHdJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'HYDRANT';
                   
                   if (isRfJob) {
-                    // RF Job: only show RF equipment, and only if available (or currently selected), and has volume > 0
+                    // RF Job / Domestic: only show RF equipment, and only if available (or currently selected), and has volume > 0
                     return isRf && (eq.currentVolume || 0) > 0 && (eq.status === EqStatus.AVAILABLE || eq.id === equipPickerSelected);
                   }
                   if (isHdJob) {
                     // HD Job: show ALL HD equipment
                     return isHd;
                   }
-                  return false;
+                  return (isRf && (eq.currentVolume || 0) > 0 && (eq.status === EqStatus.AVAILABLE || eq.id === equipPickerSelected)) || isHd;
                 })
                 .map(eq => {
-                  const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER';
+                  const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER' || equipPickerJob?.isDomestic || isDomesticFlight(equipPickerJob);
                   const activeJob = (flightJobs || []).find(fj => fj.status === 'IN_PROGRESS' && fj.vehicleId?.toUpperCase() === eq.id.toUpperCase());
                   const isSelected = equipPickerSelected === eq.id;
                   const isDisabled = !isRfJob && !!activeJob;
@@ -1825,11 +1841,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                 const list = (equipment || []).filter(eq => {
                   const isRf = eq.id.startsWith('RF');
                   const isHd = eq.id.startsWith('HD');
-                  const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER';
+                  const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER' || equipPickerJob?.isDomestic || isDomesticFlight(equipPickerJob);
                   const isHdJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'HYDRANT';
                   if (isRfJob) return isRf && (eq.currentVolume || 0) > 0 && (eq.status === EqStatus.AVAILABLE || eq.id === equipPickerSelected);
                   if (isHdJob) return isHd;
-                  return false;
+                  return (isRf && (eq.currentVolume || 0) > 0 && (eq.status === EqStatus.AVAILABLE || eq.id === equipPickerSelected)) || isHd;
                 });
                 return list.length === 0 ? (
                   <div className="p-6 text-center">

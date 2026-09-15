@@ -29,9 +29,11 @@ import {
   BookOpen,
   BarChart3,
   Radar,
-  Users
+  Users,
+  Gauge
 } from 'lucide-react';
 import { Logo } from './Logo';
+import { StockIcon } from './StockIcon';
 import { haptic } from '../utils/haptics';
 
 interface SidebarProps {
@@ -92,13 +94,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'history', label: 'Log History', icon: History },
+          { id: 'performance', label: 'Refueling Performance', icon: Gauge },
           { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
         ];
 
       case UserRole.DEPOT_OPERATOR:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'stock', label: 'Tank Levels', icon: Database },
+          { id: 'stock', label: 'Tank Levels', icon: StockIcon },
           { id: 'bridging', label: 'Refueler Loading', icon: Droplet },
           { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
           { id: 'seaplane', label: 'Seaplane Ops', icon: Sailboat },
@@ -110,7 +113,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       case UserRole.DEPOT_MANAGER:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'stock', label: 'Stock Reconciliation', icon: Database },
+          { id: 'stock', label: 'Stock Reconciliation', icon: StockIcon },
           { id: 'bridging', label: 'Transfer Oversight', icon: Droplet },
           { id: 'marine-loading', label: 'Marine Provisioning', icon: Ship },
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
@@ -159,6 +162,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'history', label: 'Log History', icon: History },
+          { id: 'performance', label: 'Refueling Performance', icon: Gauge },
           { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
           { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
           { id: 'executive', label: 'Executive Module', icon: Briefcase },
@@ -175,7 +179,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'intoplane', label: 'Into-Plane Ops', icon: Plane },
           { id: 'equipment', label: 'Equipment Status', icon: Truck },
           { id: 'history', label: 'Log History', icon: History },
-          { id: 'stock', label: 'Stock Management', icon: Database },
+          { id: 'performance', label: 'Refueling Performance', icon: Gauge },
+          { id: 'stock', label: 'Stock Management', icon: StockIcon },
           { id: 'bridging', label: 'Transfer Oversight', icon: Droplet },
           { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
           { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },

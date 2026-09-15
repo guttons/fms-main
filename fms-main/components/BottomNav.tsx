@@ -30,6 +30,7 @@ import {
   Radar,
   Users
 } from 'lucide-react';
+import { StockIcon } from './StockIcon';
 import { BottomSheet, SheetAction, SheetDivider, SheetSectionHeader } from './BottomSheet';
 import { haptic } from '../utils/haptics';
 
@@ -108,7 +109,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       case UserRole.DEPOT_OPERATOR:
         return [
           { id: 'dashboard', label: 'Status', icon: LayoutDashboard },
-          { id: 'stock', label: 'Tanks', icon: Database },
+          { id: 'stock', label: 'Tanks', icon: StockIcon },
           { id: 'bridging', label: 'Loading', icon: Droplet },
           { id: 'marine', label: 'Marine', icon: Anchor },
           { id: 'lfs-afs', label: 'Stations', icon: Fuel },
@@ -117,7 +118,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       case UserRole.DEPOT_MANAGER:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'stock', label: 'Stock', icon: Database },
+          { id: 'stock', label: 'Stock', icon: StockIcon },
           { id: 'bridging', label: 'Transfer', icon: Droplet },
           { id: 'forecasting', label: 'Forecast', icon: TrendingUp },
           { id: 'depot-reports', label: 'Reports', icon: BarChart3 },
@@ -162,7 +163,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           { id: 'admin', label: 'Admin', icon: Settings },
           { id: 'schedule', label: 'Schedule', icon: Calendar },
           { id: 'intoplane', label: 'Refuel', icon: Plane },
-          { id: 'stock', label: 'Stock', icon: Database },
+          { id: 'stock', label: 'Stock', icon: StockIcon },
         ];
 
       case UserRole.CUSTOMER:

@@ -124,6 +124,167 @@ export const EditStandModal: React.FC<{
   );
 };
 
+export const EditFuelRequestModal: React.FC<{
+  flight: FlightJob;
+  onClose: () => void;
+  onSave: (updates: {
+    std?: string;
+    tobt?: string;
+    frtAirline?: string;
+    frtAocc?: string;
+    frtFor?: string;
+  }) => Promise<void> | void;
+}> = ({ flight, onClose, onSave }) => {
+  const [std, setStd] = useState(flight.std || '');
+  const [tobt, setTobt] = useState(flight.tobt || '');
+  const [frtAirline, setFrtAirline] = useState(flight.frtAirline || '');
+  const [frtAocc, setFrtAocc] = useState(flight.frtAocc || '');
+  const [frtFor, setFrtFor] = useState(flight.frtFor || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await onSave({
+        std: std.trim() || undefined,
+        tobt: tobt.trim() || undefined,
+        frtAirline: frtAirline.trim() || undefined,
+        frtAocc: frtAocc.trim() || undefined,
+        frtFor: frtFor.trim() || undefined
+      });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-surface border border-outline rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-premium text-on-surface animate-in zoom-in-95 duration-200 relative">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base sm:text-lg font-black tracking-tight uppercase">Departure & Fuel Request Timings</h3>
+              <p className="text-[10px] font-black text-primary uppercase tracking-widest">
+                {flight.flightNumber} • STAND {flight.stand} • {flight.aircraftReg || flight.aircraftType || ''}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl text-on-surface-dim hover:text-on-surface hover:bg-surface-dim transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-1.5 opacity-60">
+                Scheduled Dep (STD)
+              </label>
+              <input
+                type="text"
+                placeholder="HH:MM"
+                value={std}
+                onChange={(e) => setStd(e.target.value)}
+                className="w-full px-4 py-2.5 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black tracking-wider focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all font-mono text-on-surface"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-1.5 font-bold">
+                TOBT (DEP STD Change)
+              </label>
+              <input
+                type="text"
+                placeholder="HH:MM"
+                value={tobt}
+                onChange={(e) => setTobt(e.target.value)}
+                className="w-full px-4 py-2.5 bg-surface-dim border border-amber-500/40 rounded-2xl text-[13px] font-black tracking-wider focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 outline-none transition-all font-mono text-amber-400"
+              />
+              <span className="text-[8px] text-on-surface-dim opacity-50 block mt-0.5">Target Off-Block Time</span>
+            </div>
+          </div>
+
+          <div className="p-4 bg-surface-dim/50 border border-outline/60 rounded-2xl space-y-3">
+            <span className="block text-[9px] font-black text-primary uppercase tracking-widest">
+              Fuel Request Times (FRT)
+            </span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-wider mb-1 opacity-70">
+                  FRT Airline
+                </label>
+                <input
+                  type="text"
+                  placeholder="HH:MM"
+                  value={frtAirline}
+                  onChange={(e) => setFrtAirline(e.target.value)}
+                  className="w-full px-3 py-2 bg-surface border border-outline rounded-xl text-xs font-black tracking-wider focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-mono text-on-surface"
+                />
+                <span className="text-[8px] text-on-surface-dim opacity-50 block mt-0.5">Airline Request</span>
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-wider mb-1 opacity-70">
+                  FRT AOCC
+                </label>
+                <input
+                  type="text"
+                  placeholder="HH:MM"
+                  value={frtAocc}
+                  onChange={(e) => setFrtAocc(e.target.value)}
+                  className="w-full px-3 py-2 bg-surface border border-outline rounded-xl text-xs font-black tracking-wider focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-mono text-on-surface"
+                />
+                <span className="text-[8px] text-on-surface-dim opacity-50 block mt-0.5">AOCC Request</span>
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-wider mb-1 opacity-70">
+                  FRT For
+                </label>
+                <input
+                  type="text"
+                  placeholder="HH:MM"
+                  value={frtFor}
+                  onChange={(e) => setFrtFor(e.target.value)}
+                  className="w-full px-3 py-2 bg-surface border border-outline rounded-xl text-xs font-black tracking-wider focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-mono text-on-surface"
+                />
+                <span className="text-[8px] text-on-surface-dim opacity-50 block mt-0.5">Requested For</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 bg-surface-dim border border-outline text-on-surface-dim hover:text-on-surface rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 py-3 kinetic-gradient text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-premium disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {saving ? 'Saving...' : 'Save Timings'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
 interface ScheduleProps {
   user?: any;
   onStartJob?: (job: FlightJob) => void;
@@ -132,6 +293,7 @@ interface ScheduleProps {
 export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
   const { notify } = useNotification();
   const [editingStandFlight, setEditingStandFlight] = useState<any | null>(null);
+  const [editingFrtFlight, setEditingFrtFlight] = useState<FlightJob | null>(null);
   const isItpManagerOrAdmin = user?.role === UserRole.ITP_MANAGER || user?.role === UserRole.ADMIN;
   const {
     equipment,
@@ -372,6 +534,10 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
     const sta = formData.get('sta') as string;
     const eta = formData.get('eta') as string;
     const std = formData.get('std') as string;
+    const tobt = formData.get('tobt') as string;
+    const frtAirline = formData.get('frtAirline') as string;
+    const frtAocc = formData.get('frtAocc') as string;
+    const frtFor = formData.get('frtFor') as string;
 
     if (!flight || !route || !ac || !stand || !sta || !eta || !std) return;
 
@@ -385,6 +551,10 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
         sta,
         eta,
         std,
+        tobt: tobt?.trim() || undefined,
+        frtAirline: frtAirline?.trim() || undefined,
+        frtAocc: frtAocc?.trim() || undefined,
+        frtFor: frtFor?.trim() || undefined,
         assignedTo: '',
         status: 'PENDING',
         date: todayDate,
@@ -456,6 +626,16 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
     return timeStr >= range.start && timeStr <= range.end;
   };
 
+  const isAdhocFlight = (f: any) => {
+    if (!f) return false;
+    if (f.isAdhoc) return true;
+    if (typeof f.id === 'string' && f.id.startsWith('ah-')) return true;
+    const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+    return (briefingInfo?.staffAssignments?.adhocFlights || []).some(
+      (af: any) => af && (af.id === f.id || (af.flightNumber && af.flightNumber.replace(/\s+/g, '').toLowerCase() === cleanNo))
+    );
+  };
+
   const scheduledFlights = useMemo(() => {
     const frozen = briefingInfo?.staffAssignments?.frozenFlights;
 
@@ -463,7 +643,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
     const liveFiltered = (flightJobs || []).filter(f => {
       const isDep = f.type ? f.type === 'departure' : !!f.std;
       const matchesDate = !f.date || f.date.split('T')[0] === todayDate;
-      return !isDomesticFlight(f) && isDep && isFlightInShift(f.std) && matchesDate;
+      return !isDomesticFlight(f) && !isAdhocFlight(f) && isDep && isFlightInShift(f.std) && matchesDate;
     });
 
     if (frozen?.intl && frozen.intl.length > 0) {
@@ -474,8 +654,8 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
         flightMap.set(cleanNo, f);
       });
 
-      // Merge frozen flights onto the map (ensure domestic flights are excluded)
-      frozen.intl.filter((ff: any) => !isDomesticFlight(ff)).forEach((ff: any) => {
+      // Merge frozen flights onto the map (ensure domestic and adhoc flights are excluded)
+      frozen.intl.filter((ff: any) => !isDomesticFlight(ff) && !isAdhocFlight(ff)).forEach((ff: any) => {
         const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
         const existing = flightMap.get(cleanNo);
         flightMap.set(cleanNo, {
@@ -596,6 +776,33 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
     ].includes(u.role));
   })();
 
+  const getStaffInitials = (name: string) => {
+    if (!name) return '??';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  // Filter operators for Status Board: only show staff from the selected shift
+  // based on the staffs on International allocations assigned
+  const statusBoardOperators = useMemo(() => {
+    const allStaff = (staff && staff.length > 0 ? staff : MOCK_USERS);
+    const assignedIds = new Set<string>();
+
+    scheduledFlights.forEach((f: any) => {
+      if (f.assignedTo) assignedIds.add(f.assignedTo);
+      if (f.assignedOfficer) assignedIds.add(f.assignedOfficer);
+    });
+
+    if (assignedIds.size === 0) {
+      return [];
+    }
+
+    return Array.from(assignedIds)
+      .map(id => allStaff.find(u => u.id === id) || operators.find(u => u.id === id))
+      .filter((u): u is typeof allStaff[0] => !!u);
+  }, [scheduledFlights, staff, operators]);
+
   useEffect(() => {
     if (briefingInfo?.dieselNeeds) {
       setDieselNeeds(briefingInfo.dieselNeeds);
@@ -639,6 +846,23 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
     } catch (err) {
       console.error('Failed to update stand:', err);
       notify('Failed to update flight stand. Please try again.', 'error');
+    }
+  };
+
+  const handleSaveFrt = async (updates: {
+    std?: string;
+    tobt?: string;
+    frtAirline?: string;
+    frtAocc?: string;
+    frtFor?: string;
+  }) => {
+    if (!editingFrtFlight) return;
+    try {
+      await updateFlightJob(editingFrtFlight.id, updates);
+      notify(`Timings & FRT updated for Flight ${editingFrtFlight.flightNumber}`, 'success');
+    } catch (err) {
+      console.error('Failed to update timings & FRT:', err);
+      notify('Failed to update timings. Please try again.', 'error');
     }
   };
 
@@ -1006,7 +1230,13 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                             </div>
                           </td>
                           <td className="px-4 py-6 whitespace-nowrap">
-                            <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-dim/30 px-4 py-2 rounded-full border border-outline w-fit">
+                            <div 
+                              onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFrtFlight(item); } : undefined}
+                              className={`flex items-center gap-3 text-[10px] font-black uppercase tracking-widest bg-surface-dim/30 px-3.5 py-2 rounded-full border border-outline w-fit ${
+                                isItpManagerOrAdmin ? 'cursor-pointer hover:border-primary/60 hover:bg-surface-dim/70 active:scale-[0.98] transition-all' : ''
+                              }`}
+                              title={isItpManagerOrAdmin ? "Click to record / edit DEP STD, TOBT, and FRT" : undefined}
+                            >
                               <div className="flex items-center gap-1.5">
                                 <span className="text-on-surface-dim opacity-40">STA</span>
                                 <span className="text-on-surface text-xs font-black tracking-tight">{(item as any).sta || '--:--'}</span>
@@ -1019,6 +1249,21 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                                 <span className="text-warning opacity-60">STD</span>
                                 <span className="text-warning text-xs font-black tracking-tight">{(item as any).std || '--:--'}</span>
                               </div>
+                              {item.tobt && (
+                                <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-md border border-amber-500/30">
+                                  <span className="opacity-70 text-[9px]">TOBT</span>
+                                  <span className="text-xs font-black tracking-tight">{item.tobt}</span>
+                                </div>
+                              )}
+                              {(item.frtAirline || item.frtAocc || item.frtFor) && (
+                                <div className="flex items-center gap-1 bg-primary/10 text-primary px-1.5 py-0.5 rounded-md border border-primary/20 text-[9px]">
+                                  <span className="opacity-70">FRT</span>
+                                  <span>{item.frtFor || item.frtAirline || item.frtAocc}</span>
+                                </div>
+                              )}
+                              {isItpManagerOrAdmin && (
+                                <Clock className="w-3 h-3 text-primary opacity-50 hover:opacity-100 transition-opacity ml-0.5" />
+                              )}
                             </div>
                           </td>
                           <td className="px-4 py-6 whitespace-nowrap w-[320px]">
@@ -1114,7 +1359,13 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2 mb-6 p-3 bg-surface-dim rounded-xl border border-outline">
+                      <div 
+                        onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFrtFlight(item); } : undefined}
+                        className={`grid ${item.tobt ? 'grid-cols-4' : 'grid-cols-3'} gap-2 mb-6 p-3 bg-surface-dim rounded-xl border border-outline ${
+                          isItpManagerOrAdmin ? 'cursor-pointer hover:border-primary/50 transition-colors' : ''
+                        }`}
+                        title={isItpManagerOrAdmin ? "Click to record / edit DEP STD, TOBT, and FRT" : undefined}
+                      >
                         <div className="text-center border-r border-outline/30">
                           <p className="text-[8px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-1">STA</p>
                           <p className="text-[11px] font-[900] text-on-surface">{(item as any).sta || '--:--'}</p>
@@ -1123,10 +1374,16 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                           <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${delayed ? 'text-error opacity-60' : 'text-primary opacity-60'}`}>ETA</p>
                           <p className={`text-[11px] font-[900] ${delayed ? 'text-error' : 'text-primary'}`}>{item.eta}</p>
                         </div>
-                        <div className="text-center">
+                        <div className={`text-center ${item.tobt ? 'border-r border-outline/30' : ''}`}>
                           <p className="text-[8px] font-black text-warning opacity-60 uppercase tracking-widest mb-1">STD</p>
                           <p className="text-[11px] font-[900] text-warning">{(item as any).std || '--:--'}</p>
                         </div>
+                        {item.tobt && (
+                          <div className="text-center">
+                            <p className="text-[8px] font-black text-amber-400 opacity-80 uppercase tracking-widest mb-1">TOBT</p>
+                            <p className="text-[11px] font-[900] text-amber-400">{item.tobt}</p>
+                          </div>
+                        )}
                       </div>
 
                       <div className="space-y-3">
@@ -1364,7 +1621,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                       <tr>
                         <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">TASK ID</th>
                         <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">ASSET / SECTOR</th>
-                        <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">ETD/ETA</th>
+                        <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STD</th>
                         <th className="px-4 py-5 text-left text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em]">STATUS</th>
                       </tr>
                     </thead>
@@ -1413,21 +1670,21 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                               </div>
                             </td>
                             <td className="px-4 py-6 whitespace-nowrap">
-                              <div className="text-sm font-black tracking-tight">{flight.aircraftType}</div>
+                              <div className="text-sm font-black tracking-tight text-on-surface">{flight.aircraftReg}</div>
                               <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1 flex items-center gap-1.5">
-                                <span>{flight.aircraftReg}</span>
+                                <span>{flight.aircraftType}</span>
                                 {flight.route && (
                                   <>
                                     <span>•</span>
-                                    {renderRoute(flight.route, "text-[10px]")}
+                                    {renderRoute(flight.route, "text-[10px]", true)}
                                   </>
                                 )}
                               </div>
                             </td>
                             <td className="px-4 py-6 whitespace-nowrap">
-                              <div className="flex items-center text-sm font-black">
+                              <div className="flex items-center text-sm font-black text-warning">
                                 <Clock className="w-4 h-4 mr-2.5 opacity-40" />
-                                {flight.eta}
+                                {flight.std || '--:--'}
                               </div>
                             </td>
 
@@ -1453,7 +1710,6 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                 ) : (
                   adhocFlightsToRender.map((flight) => {
                   const logoUrl = getLogoUrl(flight.flightNumber);
-                  const delayed = isDelayed(flight.sta, flight.eta);
                   return (
                     <div key={flight.id} className="bg-surface-container-lowest p-5 sm:p-6 rounded-2xl border border-outline group transition-all w-full shadow-sm">
                       <div className="flex justify-between items-start mb-6">
@@ -1487,14 +1743,14 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                                   Ad-Hoc
                                 </span>
                               </div>
-                              <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1 flex items-center gap-1.5 flex-wrap">
-                                <span>{flight.aircraftReg}</span>
-                                <span>•</span>
-                                <span>{flight.aircraftType}</span>
+                              <div className="text-[10px] font-black uppercase tracking-widest mt-1 flex items-center gap-1.5 flex-wrap">
+                                <span className="text-on-surface font-black">{flight.aircraftReg}</span>
+                                <span className="text-on-surface-dim opacity-40">•</span>
+                                <span className="text-on-surface-dim opacity-40 font-bold">{flight.aircraftType}</span>
                                 {flight.route && (
                                   <>
-                                    <span>•</span>
-                                    {renderRoute(flight.route, "text-[10px]")}
+                                    <span className="text-on-surface-dim opacity-40">•</span>
+                                    {renderRoute(flight.route, "text-[10px]", true)}
                                   </>
                                 )}
                               </div>
@@ -1503,19 +1759,23 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2 mb-6 p-3 bg-surface-dim rounded-xl border border-outline">
-                        <div className="text-center border-r border-outline/30">
-                          <p className="text-[8px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-1">STA</p>
-                          <p className="text-[11px] font-[900] text-on-surface">{flight.sta || '--:--'}</p>
+                      <div 
+                        onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFrtFlight(flight); } : undefined}
+                        className={`flex items-center justify-between mb-6 p-3 bg-surface-dim rounded-xl border border-outline ${
+                          isItpManagerOrAdmin ? 'cursor-pointer hover:border-primary/50 transition-colors' : ''
+                        }`}
+                        title={isItpManagerOrAdmin ? "Click to record / edit DEP STD, TOBT, and FRT" : undefined}
+                      >
+                        <div className="flex items-center gap-2">
+                          <p className="text-[8px] font-black text-warning opacity-60 uppercase tracking-widest">STD</p>
+                          <p className="text-[12px] font-[900] text-warning">{flight.std || '--:--'}</p>
                         </div>
-                        <div className="text-center border-r border-outline/30">
-                          <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${delayed ? 'text-error opacity-60' : 'text-primary opacity-60'}`}>ETA</p>
-                          <p className={`text-[11px] font-[900] ${delayed ? 'text-error' : 'text-primary'}`}>{flight.eta}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-[8px] font-black text-warning opacity-60 uppercase tracking-widest mb-1">STD</p>
-                          <p className="text-[11px] font-[900] text-warning">{flight.std || '--:--'}</p>
-                        </div>
+                        {flight.tobt && (
+                          <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-md border border-amber-500/30">
+                            <p className="text-[8px] font-black uppercase tracking-widest opacity-80">TOBT</p>
+                            <p className="text-[11px] font-[900]">{flight.tobt}</p>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex justify-between items-center mt-4 pt-4 border-t border-outline/30">
@@ -1591,129 +1851,177 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
 
           {/* Status Board */}
           {activeTab === 'status' && (
-            <div className="animate-in fade-in slide-in-from-right-4 duration-500 p-4 md:p-8 lg:p-10 space-y-10">
-              <div className="flex items-center">
-                <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
-                  <span className="w-1.5 h-6 bg-primary rounded-full mr-4"></span>
-                  Operator Task Boards
-                </h3>
-                <span className="ml-6 w-8 h-[1px] bg-outline flex-1"></span>
-                <span className="ml-6 text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">{operators.length} Personnel Active</span>
+            <div className="animate-in fade-in slide-in-from-right-4 duration-500 p-4 md:p-6 lg:p-8 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-outline">
+                <div className="flex items-center">
+                  <h3 className="text-sm font-black text-on-surface uppercase tracking-[0.3em] flex items-center">
+                    <span className="w-1.5 h-6 bg-primary rounded-full mr-3.5"></span>
+                    Operator Task Boards
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg bg-surface-dim border border-outline text-on-surface-dim">
+                    {selectedBriefingShift} Shift
+                  </span>
+                  <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">
+                    {statusBoardOperators.length} Personnel Active
+                  </span>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                {operators.map((op) => {
-                  const opTasks = flightJobs.filter((j: any) => j.assignedTo === op.id || j.assignedOfficer === op.id);
-                  const activeTask = opTasks.find((j: any) => j.status === 'IN_PROGRESS');
-                  const pendingCount = opTasks.filter((j: any) => j.status === 'PENDING').length;
-                  const doneCount = opTasks.filter((j: any) => j.status === 'COMPLETED').length;
+              {statusBoardOperators.length === 0 ? (
+                <div className="p-12 text-center rounded-2xl border border-dashed border-outline bg-surface-dim/20 flex flex-col items-center justify-center space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-surface-dim border border-outline flex items-center justify-center text-on-surface-dim opacity-50">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-black text-on-surface uppercase tracking-wider">
+                      No Personnel Allocated in {selectedBriefingShift} Shift
+                    </h4>
+                    <p className="text-[11px] text-on-surface-dim opacity-50 max-w-sm">
+                      Assign operators or officers to flights in the International tab to track their live status here.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
+                  {statusBoardOperators.map((op) => {
+                    const opTasks = scheduledFlights.filter((j: any) => j.assignedTo === op.id || j.assignedOfficer === op.id);
+                    const activeTask = opTasks.find((j: any) => j.status === 'IN_PROGRESS');
+                    const pendingCount = opTasks.filter((j: any) => j.status === 'PENDING').length;
+                    const doneCount = opTasks.filter((j: any) => j.status === 'COMPLETED').length;
 
-                  const eqAssignment = equipmentAssignments.find(a => a.op1 === op.id || a.op2 === op.id);
-                  const domAssignment = domesticTeams.find(a => a.op1 === op.id || a.op2 === op.id);
+                    const eqAssignment = equipmentAssignments.find(a => a.op1 === op.id || a.op2 === op.id);
+                    const domAssignment = domesticTeams.find(a => a.op1 === op.id || a.op2 === op.id);
+                    const initials = getStaffInitials(op.name);
 
-                  return (
-                    <div key={op.id} className="card-premium p-4 sm:p-6 space-y-4 sm:space-y-6 hover:border-primary/20 transition-colors group relative overflow-hidden w-full">
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    return (
+                      <div
+                        key={op.id}
+                        className="card-premium p-3 sm:p-3.5 rounded-xl border border-outline hover:border-primary/30 transition-all group relative overflow-hidden flex flex-col justify-between space-y-2.5 bg-surface"
+                      >
+                        {/* Top glow hover effect */}
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full blur-2xl -mr-12 -mt-12 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
 
-                      {/* Operator Header */}
-                      <div className="flex items-center justify-between relative z-10">
-                        <div className="flex items-center space-x-4">
-                          <img src={op.avatar} alt="" className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl border border-outline shadow-sm group-hover:scale-105 transition-transform shrink-0" />
-                          <div>
-                            <p className="text-[15px] font-[900] text-on-surface uppercase tracking-tight">{op.name}</p>
-                            <p className="text-[10px] font-black text-on-surface-dim opacity-50 uppercase tracking-widest">{op.role.replace('_', ' ')}</p>
+                        {/* Header: Avatar, Name/Role, Status Badge */}
+                        <div className="flex items-center justify-between gap-2 relative z-10">
+                          <div className="flex items-center space-x-2.5 min-w-0">
+                            {op.avatar ? (
+                              <img
+                                src={op.avatar}
+                                alt=""
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                  (e.target as HTMLElement).nextElementSibling?.classList.remove('hidden');
+                                }}
+                                className="w-8 h-8 rounded-lg border border-outline shadow-sm group-hover:scale-105 transition-transform shrink-0 object-cover"
+                              />
+                            ) : null}
+                            <div className={`${op.avatar ? 'hidden' : ''} w-8 h-8 rounded-lg border border-outline bg-surface-dim text-on-surface font-[900] text-[10px] flex items-center justify-center tracking-wider shrink-0 shadow-sm`}>
+                              {initials}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[12px] font-[900] text-on-surface uppercase tracking-tight truncate" title={op.name}>
+                                {op.name}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div
+                            className={`flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-[8px] font-[900] border uppercase tracking-wider shrink-0 transition-all ${
+                              activeTask
+                                ? 'bg-success/10 text-success border-success/30 shadow-[0_0_8px_rgba(34,197,94,0.15)]'
+                                : 'bg-surface-dim text-on-surface-dim border-outline opacity-60'
+                            }`}
+                          >
+                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeTask ? 'bg-success animate-pulse' : 'bg-on-surface-dim opacity-40'}`} />
+                            <span className="whitespace-nowrap">
+                              {activeTask ? (
+                                <>{activeTask.flightNumber}{activeTask.vehicleId && <span className="ml-1 opacity-60">({activeTask.vehicleId})</span>}</>
+                              ) : 'Standby'}
+                            </span>
                           </div>
                         </div>
-                        <div className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-full text-[9px] font-[900] border uppercase tracking-widest transition-all ${activeTask
-                          ? 'bg-success/10 text-success border-success/20 shadow-[0_0_12px_rgba(34,197,94,0.1)]'
-                          : 'bg-surface-dim text-on-surface-dim border-outline opacity-50'
-                          }`}>
-                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeTask ? 'bg-success shadow-[0_0_8px_rgba(34,197,94,0.4)] animate-pulse' : 'bg-on-surface-dim opacity-30'}`} />
-                          <span className="whitespace-nowrap">
-                            {activeTask ? (
-                              <><span className="hidden sm:inline">Refueling </span>{activeTask.flightNumber}{activeTask.vehicleId && <span className="ml-1 opacity-60">({activeTask.vehicleId})</span>}</>
-                            ) : 'Standby'}
-                          </span>
-                        </div>
-                      </div>
 
-                      {/* Mini stats */}
-                      <div className="grid grid-cols-3 gap-2 sm:gap-4 relative z-10">
-                        <div className="bg-surface-dim/70 backdrop-blur-sm p-3 sm:p-4 rounded-xl sm:rounded-2xl flex flex-col items-center border border-outline/50 group-hover:border-outline transition-all">
-                          <span className="text-lg sm:text-xl font-[900] text-on-surface tracking-tighter leading-none mb-1 sm:mb-2">{opTasks.length}</span>
-                          <span className="text-[8px] sm:text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Total</span>
-                        </div>
-                        <div className="bg-warning/5 p-3 sm:p-4 rounded-xl sm:rounded-2xl flex flex-col items-center border border-warning/10 border-dashed group-hover:border-solid transition-all">
-                          <span className="text-lg sm:text-xl font-[900] text-warning tracking-tighter leading-none mb-1 sm:mb-2">{pendingCount}</span>
-                          <span className="text-[8px] sm:text-[9px] font-black text-warning opacity-60 uppercase tracking-widest">Pending</span>
-                        </div>
-                        <div className="bg-success/5 p-3 sm:p-4 rounded-xl sm:rounded-2xl flex flex-col items-center border border-success/10 border-dashed group-hover:border-solid transition-all">
-                          <span className="text-lg sm:text-xl font-[900] text-success tracking-tighter leading-none mb-1 sm:mb-2">{doneCount}</span>
-                          <span className="text-[8px] sm:text-[9px] font-black text-success opacity-60 uppercase tracking-widest">Done</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-4 relative z-10">
-                        {/* Equipment/Assignment Badge */}
+                        {/* Equipment / Assignment Badge if any */}
                         {(eqAssignment || domAssignment) && (
-                          <div className="flex items-center space-x-3 bg-surface-lowest border border-outline px-4 py-3 rounded-2xl">
+                          <div className="flex items-center gap-1.5 bg-surface-dim/50 border border-outline/50 px-2 py-1 rounded-lg text-[9px] font-black text-on-surface relative z-10">
                             {eqAssignment ? (
                               <>
-                                <Truck className="w-4 h-4 text-on-surface-dim opacity-40" />
-                                <span className="text-[11px] font-black text-on-surface uppercase tracking-wider">{eqAssignment.eqNumber} <span className="opacity-50 text-[9px]">({eqAssignment.eqType})</span></span>
-                                <span className="text-[9px] text-on-surface-dim opacity-30 uppercase tracking-widest ml-auto">{eqAssignment.shift_type || 'Active'} Shift</span>
+                                <Truck className="w-3 h-3 text-primary opacity-70 shrink-0" />
+                                <span className="uppercase tracking-wider">{eqAssignment.eqNumber}</span>
+                                <span className="opacity-40 text-[8px]">({eqAssignment.eqType})</span>
+                                <span className="text-[8px] text-on-surface-dim opacity-40 uppercase tracking-widest ml-auto">{eqAssignment.shift_type || 'Active'}</span>
                               </>
                             ) : (
                               <>
-                                <Users className="w-4 h-4 text-primary opacity-60" />
-                                <span className="text-[11px] font-black text-primary uppercase tracking-wider">{domAssignment?.name}</span>
-                                <span className="text-[9px] text-primary opacity-40 uppercase tracking-widest ml-auto">Domestic Ops</span>
+                                <Users className="w-3 h-3 text-primary opacity-70 shrink-0" />
+                                <span className="uppercase tracking-wider text-primary truncate">{domAssignment?.name}</span>
+                                <span className="text-[8px] text-primary opacity-50 uppercase tracking-widest ml-auto">Domestic</span>
                               </>
                             )}
                           </div>
                         )}
 
-                        {/* Tasks list */}
-                        {opTasks.length > 0 && (
-                          <div className="space-y-2.5">
-                            {opTasks.map(job => {
-                              const delayed = isDelayed(job.sta, job.eta);
-                              const ds = (delayed && job.status === 'PENDING') ? 'DELAYED' : job.status;
-                              return (
-                                <div key={job.id} className="flex items-center justify-between bg-surface-lowest border border-outline p-4 sm:px-5 sm:py-3.5 rounded-xl sm:rounded-2xl group/task hover:border-primary/20 transition-all gap-2">
-                                  <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
-                                    <Plane className="w-4 h-4 text-on-surface-dim opacity-20 group-hover/task:rotate-12 transition-transform shrink-0" />
-                                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 min-w-0">
-                                      <span className="text-[11px] sm:text-[13px] font-[900] text-on-surface tracking-tighter uppercase italic">{job.flightNumber}</span>
-                                      <span className="text-[9px] sm:text-[10px] font-bold text-on-surface-dim opacity-40 uppercase tracking-widest truncate">{job.aircraftType}</span>
-                                      {job.vehicleId && (
-                                        <span className="text-[8px] sm:text-[9px] font-black text-primary uppercase tracking-widest bg-primary/10 px-1.5 sm:px-2 py-0.5 rounded-md border border-primary/20 shrink-0">
-                                          {job.vehicleId}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <span className={`text-[8px] sm:text-[9px] font-black uppercase px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl border transition-all shrink-0 ${ds === 'COMPLETED' ? 'text-success border-success/20 bg-success/5' :
-                                    ds === 'DELAYED' ? 'text-error border-error/20 bg-error/10 animate-pulse' :
-                                      ds === 'IN_PROGRESS' ? 'text-warning border-warning/20 bg-warning/5 animate-pulse' :
-                                        'text-on-surface-dim border-outline opacity-40'
-                                    }`}>{ds.replace('_', ' ')}</span>
-                                </div>
-                              );
-                            })}
+                        {/* Mini stats: Total / Pending / Done */}
+                        <div className="grid grid-cols-3 gap-1 bg-surface-dim/40 p-1.5 rounded-xl border border-outline/40 relative z-10">
+                          <div className="flex flex-col items-center py-0.5">
+                            <span className="text-xs sm:text-sm font-[900] text-on-surface leading-none">{opTasks.length}</span>
+                            <span className="text-[7.5px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-0.5">Total</span>
                           </div>
-                        )}
+                          <div className="flex flex-col items-center py-0.5 border-x border-outline/30">
+                            <span className="text-xs sm:text-sm font-[900] text-warning leading-none">{pendingCount}</span>
+                            <span className="text-[7.5px] font-black text-warning opacity-70 uppercase tracking-widest mt-0.5">Pending</span>
+                          </div>
+                          <div className="flex flex-col items-center py-0.5">
+                            <span className="text-xs sm:text-sm font-[900] text-success leading-none">{doneCount}</span>
+                            <span className="text-[7.5px] font-black text-success opacity-70 uppercase tracking-widest mt-0.5">Done</span>
+                          </div>
+                        </div>
 
-                        {opTasks.length === 0 && (
-                          <div className="px-6 py-8 border border-dashed border-outline rounded-[32px] flex flex-col items-center justify-center opacity-40">
-                            <p className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.3em]">No tasks assigned today</p>
-                          </div>
-                        )}
+                        {/* Flight Tasks Chips */}
+                        <div className="relative z-10 pt-0.5">
+                          {opTasks.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 max-h-[72px] overflow-y-auto custom-scrollbar">
+                              {opTasks.map(job => {
+                                const delayed = isDelayed(job.sta, job.eta);
+                                const ds = (delayed && job.status === 'PENDING') ? 'DELAYED' : job.status;
+                                const statusColor = ds === 'COMPLETED'
+                                  ? 'bg-success/15 text-success border-success/30'
+                                  : ds === 'IN_PROGRESS'
+                                    ? 'bg-warning/15 text-warning border-warning/30 animate-pulse'
+                                    : ds === 'DELAYED'
+                                      ? 'bg-error/15 text-error border-error/30 animate-pulse'
+                                      : 'bg-surface-dim text-on-surface-dim border-outline/60';
+                                return (
+                                  <div
+                                    key={job.id}
+                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[8.5px] font-bold ${statusColor}`}
+                                    title={`${job.flightNumber} | ${job.aircraftType || ''} | ${job.vehicleId || ''} | ${ds}`}
+                                  >
+                                    <Plane className="w-2.5 h-2.5 opacity-50 shrink-0" />
+                                    <span className="font-black italic">{job.flightNumber}</span>
+                                    {job.vehicleId && (
+                                      <span className="text-[7.5px] font-black opacity-70">({job.vehicleId})</span>
+                                    )}
+                                    <span className="text-[7px] font-black opacity-80 uppercase ml-0.5">
+                                      {ds === 'IN_PROGRESS' ? 'IN PROG' : ds === 'COMPLETED' ? 'DONE' : ds}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="text-[8.5px] font-bold text-on-surface-dim/40 text-center py-0.5 uppercase tracking-wider">
+                              No flights assigned
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 {/* Live Airport Feed */}
@@ -2034,6 +2342,31 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                   <input name="std" type="time" defaultValue={prefillData?.std || ''} required={!prefillData?.sta} className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" />
                 </div>
               </div>
+
+              {/* Optional TOBT and FRT inputs */}
+              <div className="p-5 bg-surface-dim/40 rounded-2xl border border-outline/50 space-y-4">
+                <span className="block text-[10px] font-black text-primary uppercase tracking-widest">
+                  Target Off-Block & Fuel Request Times (Optional)
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-[9px] font-black text-amber-500 uppercase mb-2 tracking-wider">TOBT</label>
+                    <input name="tobt" type="time" placeholder="HH:MM" className="w-full px-4 py-3 bg-surface border border-amber-500/30 rounded-xl text-[11px] font-black tracking-wider focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none transition-all font-mono text-amber-400" />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-2 tracking-wider opacity-60">FRT Airline</label>
+                    <input name="frtAirline" type="time" placeholder="HH:MM" className="w-full px-4 py-3 bg-surface border border-outline rounded-xl text-[11px] font-black tracking-wider focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-mono" />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-2 tracking-wider opacity-60">FRT AOCC</label>
+                    <input name="frtAocc" type="time" placeholder="HH:MM" className="w-full px-4 py-3 bg-surface border border-outline rounded-xl text-[11px] font-black tracking-wider focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-mono" />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-2 tracking-wider opacity-60">FRT For</label>
+                    <input name="frtFor" type="time" placeholder="HH:MM" className="w-full px-4 py-3 bg-surface border border-outline rounded-xl text-[11px] font-black tracking-wider focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-mono" />
+                  </div>
+                </div>
+              </div>
               <div className="flex justify-end space-x-5 mt-10">
                 <button
                   type="button"
@@ -2061,6 +2394,14 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
           currentStand={editingStandFlight.stand}
           onClose={() => setEditingStandFlight(null)}
           onSave={handleSaveStand}
+        />
+      )}
+
+      {editingFrtFlight && (
+        <EditFuelRequestModal
+          flight={editingFrtFlight}
+          onClose={() => setEditingFrtFlight(null)}
+          onSave={handleSaveFrt}
         />
       )}
 

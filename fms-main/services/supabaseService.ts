@@ -295,6 +295,11 @@ export const supabaseService = {
           let isAdhocVal: boolean | undefined = undefined;
           let typeVal: 'arrival' | 'departure' | undefined = undefined;
           let remarksVal = row.remarks || '';
+          let metaTObt: string | undefined = undefined;
+          let metaFrtAirline: string | undefined = undefined;
+          let metaFrtAocc: string | undefined = undefined;
+          let metaFrtFor: string | undefined = undefined;
+          let metaClearance: string | undefined = undefined;
 
           if (row.remarks && row.remarks.startsWith('{"_fms_meta":')) {
             try {
@@ -305,6 +310,11 @@ export const supabaseService = {
               isAdhocVal = meta.isAdhoc;
               typeVal = meta.type;
               remarksVal = meta.remarks || '';
+              metaTObt = meta.tobt;
+              metaFrtAirline = meta.frtAirline;
+              metaFrtAocc = meta.frtAocc;
+              metaFrtFor = meta.frtFor;
+              metaClearance = meta.timestampClearance;
             } catch (e) {}
           }
 
@@ -332,7 +342,12 @@ export const supabaseService = {
             type: typeVal,
             landed_alert_sent: !!row.landed_alert_sent,
             eta_alert_15_sent: !!row.eta_alert_15_sent,
-            eta_alert_5_sent: !!row.eta_alert_5_sent
+            eta_alert_5_sent: !!row.eta_alert_5_sent,
+            tobt: row.tobt || metaTObt,
+            frtAirline: row.frt_airline || metaFrtAirline,
+            frtAocc: row.frt_aocc || metaFrtAocc,
+            frtFor: row.frt_for || metaFrtFor,
+            timestampClearance: row.timestamp_clearance || metaClearance
           } as FlightJob;
         });
 
@@ -360,6 +375,11 @@ export const supabaseService = {
       isDomestic: job.isDomestic,
       isAdhoc: job.isAdhoc,
       type: job.type,
+      tobt: job.tobt,
+      frtAirline: job.frtAirline,
+      frtAocc: job.frtAocc,
+      frtFor: job.frtFor,
+      timestampClearance: job.timestampClearance,
       remarks: job.remarks || ''
     });
 
@@ -382,7 +402,12 @@ export const supabaseService = {
       pit_number: job.pitNumber || null,
       landed_alert_sent: job.landed_alert_sent || false,
       eta_alert_15_sent: job.eta_alert_15_sent || false,
-      eta_alert_5_sent: job.eta_alert_5_sent || false
+      eta_alert_5_sent: job.eta_alert_5_sent || false,
+      tobt: job.tobt || null,
+      frt_airline: job.frtAirline || null,
+      frt_aocc: job.frtAocc || null,
+      frt_for: job.frtFor || null,
+      timestamp_clearance: job.timestampClearance || null
     };
 
     // 2. Queue mutation in outbox
@@ -420,15 +445,27 @@ export const supabaseService = {
     if ('landed_alert_sent' in updates) row.landed_alert_sent = updates.landed_alert_sent;
     if ('eta_alert_15_sent' in updates) row.eta_alert_15_sent = updates.eta_alert_15_sent;
     if ('eta_alert_5_sent' in updates) row.eta_alert_5_sent = updates.eta_alert_5_sent;
-    if ('remarks' in updates || 'date' in updates || 'route' in updates || 'isDomestic' in updates || 'isAdhoc' in updates || 'type' in updates) {
+    if ('tobt' in updates) row.tobt = updates.tobt === undefined ? null : updates.tobt;
+    if ('frtAirline' in updates) row.frt_airline = updates.frtAirline === undefined ? null : updates.frtAirline;
+    if ('frtAocc' in updates) row.frt_aocc = updates.frtAocc === undefined ? null : updates.frtAocc;
+    if ('frtFor' in updates) row.frt_for = updates.frtFor === undefined ? null : updates.frtFor;
+    if ('timestampClearance' in updates) row.timestamp_clearance = updates.timestampClearance === undefined ? null : updates.timestampClearance;
+
+    if ('remarks' in updates || 'date' in updates || 'route' in updates || 'isDomestic' in updates || 'isAdhoc' in updates || 'type' in updates || 'tobt' in updates || 'frtAirline' in updates || 'frtAocc' in updates || 'frtFor' in updates || 'timestampClearance' in updates) {
+      const merged = { ...existing, ...updates };
       const metaString = JSON.stringify({
         _fms_meta: true,
-        date: updates.date,
-        route: updates.route,
-        isDomestic: updates.isDomestic,
-        isAdhoc: updates.isAdhoc,
-        type: updates.type,
-        remarks: updates.remarks || ''
+        date: merged?.date,
+        route: merged?.route,
+        isDomestic: merged?.isDomestic,
+        isAdhoc: merged?.isAdhoc,
+        type: merged?.type,
+        tobt: merged?.tobt,
+        frtAirline: merged?.frtAirline,
+        frtAocc: merged?.frtAocc,
+        frtFor: merged?.frtFor,
+        timestampClearance: merged?.timestampClearance,
+        remarks: merged?.remarks || ''
       });
       row.remarks = metaString;
     }

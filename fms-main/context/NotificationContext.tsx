@@ -149,7 +149,7 @@ const Toast: React.FC<{ notification: Notification; onClose: () => void }> = ({ 
   const config = {
     critical: {
       icon: <BellRing className="w-5 h-5 text-red-400 animate-bounce" />,
-      containerClasses: 'bg-gradient-to-r from-red-950/95 via-rose-950/90 to-surface-lowest text-white border-red-500/40 border-l-[6px] border-l-red-500 shadow-2xl',
+      containerClasses: 'bg-gradient-to-r from-red-950/95 via-rose-950/90 to-slate-950/95 text-white border-red-500/40 border-l-[6px] border-l-red-500 shadow-2xl',
       iconClasses: 'bg-red-500/20 text-red-400 ring-1 ring-red-500/30',
       labelColor: 'text-red-400',
       badgeBg: 'bg-red-500/25 border-red-500/40 text-red-300',
@@ -159,7 +159,7 @@ const Toast: React.FC<{ notification: Notification; onClose: () => void }> = ({ 
     },
     error: {
       icon: <AlertOctagon className="w-5 h-5 text-rose-400" />,
-      containerClasses: 'bg-gradient-to-r from-rose-950/90 via-surface-lowest to-surface-lowest text-white border-rose-500/30 border-l-[6px] border-l-rose-500 shadow-2xl',
+      containerClasses: 'bg-gradient-to-r from-rose-950/95 via-slate-900/95 to-slate-950/95 text-white border-rose-500/30 border-l-[6px] border-l-rose-500 shadow-2xl',
       iconClasses: 'bg-rose-500/15 text-rose-400 ring-1 ring-rose-500/30',
       labelColor: 'text-rose-400',
       badgeBg: 'bg-rose-500/15 border-rose-500/30 text-rose-300',
@@ -169,7 +169,7 @@ const Toast: React.FC<{ notification: Notification; onClose: () => void }> = ({ 
     },
     warning: {
       icon: <AlertTriangle className="w-5 h-5 text-amber-400" />,
-      containerClasses: 'bg-gradient-to-r from-amber-950/90 via-surface-lowest to-surface-lowest text-white border-amber-500/30 border-l-[6px] border-l-amber-500 shadow-2xl',
+      containerClasses: 'bg-gradient-to-r from-amber-950/95 via-slate-900/95 to-slate-950/95 text-white border-amber-500/30 border-l-[6px] border-l-amber-500 shadow-2xl',
       iconClasses: 'bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30',
       labelColor: 'text-amber-400',
       badgeBg: 'bg-amber-500/15 border-amber-500/30 text-amber-300',
@@ -179,7 +179,7 @@ const Toast: React.FC<{ notification: Notification; onClose: () => void }> = ({ 
     },
     success: {
       icon: <CheckCircle className="w-5 h-5 text-emerald-400" />,
-      containerClasses: 'bg-gradient-to-r from-emerald-950/90 via-surface-lowest to-surface-lowest text-white border-emerald-500/30 border-l-[6px] border-l-emerald-500 shadow-2xl',
+      containerClasses: 'bg-gradient-to-r from-emerald-950/95 via-slate-900/95 to-slate-950/95 text-white border-emerald-500/30 border-l-[6px] border-l-emerald-500 shadow-2xl',
       iconClasses: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30',
       labelColor: 'text-emerald-400',
       badgeBg: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300',
@@ -189,7 +189,7 @@ const Toast: React.FC<{ notification: Notification; onClose: () => void }> = ({ 
     },
     info: {
       icon: <Info className="w-5 h-5 text-sky-400" />,
-      containerClasses: 'bg-gradient-to-r from-sky-950/90 via-surface-lowest to-surface-lowest text-white border-sky-500/30 border-l-[6px] border-l-sky-500 shadow-2xl',
+      containerClasses: 'bg-gradient-to-r from-sky-950/95 via-slate-900/95 to-slate-950/95 text-white border-sky-500/30 border-l-[6px] border-l-sky-500 shadow-2xl',
       iconClasses: 'bg-sky-500/15 text-sky-400 ring-1 ring-sky-500/30',
       labelColor: 'text-sky-400',
       badgeBg: 'bg-sky-500/15 border-sky-500/30 text-sky-300',

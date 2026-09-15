@@ -242,14 +242,24 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
 
   const frozenFlights = briefingInfo?.staffAssignments?.frozenFlights;
 
+  const isAdhocFlight = (f: any) => {
+    if (!f) return false;
+    if (f.isAdhoc) return true;
+    if (typeof f.id === 'string' && f.id.startsWith('ah-')) return true;
+    const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+    return (briefingInfo?.staffAssignments?.adhocFlights || []).some(
+      (af: any) => af && (af.id === f.id || (af.flightNumber && af.flightNumber.replace(/\s+/g, '').toLowerCase() === cleanNo))
+    );
+  };
+
   const intlFlightsToRender = frozenFlights?.intl 
     ? (() => {
         const frozenMap = new Map<string, any>();
-        frozenFlights.intl.filter((ff: any) => !isDomesticFlight(ff)).forEach((ff: any) => {
+        frozenFlights.intl.filter((ff: any) => !isDomesticFlight(ff) && !isAdhocFlight(ff)).forEach((ff: any) => {
           const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
           frozenMap.set(cleanNo, ff);
         });
-        (flightJobs || []).filter(j => !isDomesticFlight(j)).forEach((j: any) => {
+        (flightJobs || []).filter(j => !isDomesticFlight(j) && !isAdhocFlight(j)).forEach((j: any) => {
           const cleanNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
           if (!frozenMap.has(cleanNo)) {
             frozenMap.set(cleanNo, j);
@@ -260,12 +270,12 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
         });
         return Array.from(frozenMap.values()).filter((f: any) => {
           const isDep = f.type ? f.type === 'departure' : !!f.std;
-          return !isDomesticFlight(f) && isDep && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate) && (isHistoricalView || (f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED'));
+          return !isDomesticFlight(f) && !isAdhocFlight(f) && isDep && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate) && (isHistoricalView || (f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED'));
         }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
       })()
     : (flightJobs || []).filter(f => {
         const isDep = f.type ? f.type === 'departure' : !!f.std;
-        return !isDomesticFlight(f) && isDep && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate) && (isHistoricalView || (f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED'));
+        return !isDomesticFlight(f) && !isAdhocFlight(f) && isDep && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate) && (isHistoricalView || (f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED'));
       }).sort((a, b) => (a.std || '').localeCompare(b.std || ''));
 
   const domesticFlightsToRender = frozenFlights?.domestic 
@@ -327,6 +337,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
   const [isAddAdhocModalOpen, setIsAddAdhocModalOpen] = useState(false);
   const [adhocFlightNumber, setAdhocFlightNumber] = useState('');
   const [adhocStd, setAdhocStd] = useState('');
+  const [adhocStdError, setAdhocStdError] = useState<string | null>(null);
   const [adhocDestination, setAdhocDestination] = useState('');
   const [adhocReg, setAdhocReg] = useState('');
   const [adhocType, setAdhocType] = useState('');
@@ -617,22 +628,46 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
 
   const handleAddAdhocFlight = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adhocFlightNumber.trim()) return;
+    setAdhocStdError(null);
+
+    const flt = adhocFlightNumber.trim().toUpperCase();
+    const dest = adhocDestination.trim().toUpperCase();
+    const reg = adhocReg.trim().toUpperCase();
+    const type = adhocType.trim().toUpperCase();
+    const co = adhocCo.trim().toUpperCase();
+    const op = adhocOperatorName.trim().toUpperCase();
+    const stdInput = adhocStd.trim();
+
+    if (!flt || !dest || !reg || !type || !co || !op) {
+      notify('Please fill in all required fields (only DEP time is optional).', 'error');
+      return;
+    }
+
+    let formattedStd = '---';
+    if (stdInput) {
+      const match = stdInput.match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+      if (!match) {
+        setAdhocStdError('Please enter a valid time (HH:MM from 00:00 to 23:59)');
+        notify('Invalid DEP / STD time format. Use HH:MM.', 'error');
+        return;
+      }
+      formattedStd = `${match[1].padStart(2, '0')}:${match[2]}`;
+    }
 
     const newAdhoc = {
       id: `ah-custom-${Date.now()}`,
-      flightNumber: adhocFlightNumber.trim(),
-      std: adhocStd.trim() || '---',
+      flightNumber: flt,
+      std: formattedStd,
       sta: '---',
-      route: adhocDestination.trim() || '---',
-      destination: adhocDestination.trim() || '---',
+      route: dest,
+      destination: dest,
       stand: '---',
       status: 'PENDING',
       isAdhoc: true,
-      aircraftReg: adhocReg.trim() || '---',
-      aircraftType: adhocType.trim() || '---',
-      co: adhocCo.trim() || undefined,
-      operatorName: adhocOperatorName.trim() || undefined,
+      aircraftReg: reg,
+      aircraftType: type,
+      co: co,
+      operatorName: op,
       date: selectedBriefingDate
     };
 
@@ -650,6 +685,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
       setIsAddAdhocModalOpen(false);
       setAdhocFlightNumber('');
       setAdhocStd('');
+      setAdhocStdError(null);
       setAdhocDestination('');
       setAdhocReg('');
       setAdhocType('');
@@ -1315,7 +1351,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                         {renderStatusBadge(flight.status)}
                       </div>
                       <div className="text-[10px] opacity-40 font-bold uppercase tracking-wider text-on-surface">
-                        ETA: {flight.eta} • DEP: {flight.std}
+                        DEP: {flight.std || '--:--'}
                       </div>
                     </div>
                   ))}
@@ -1824,71 +1860,93 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                 <input 
                   type="text"
                   required
+                  style={{ textTransform: 'uppercase' }}
                   value={adhocFlightNumber}
-                  onChange={(e) => setAdhocFlightNumber(e.target.value)}
-                  className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
+                  onChange={(e) => setAdhocFlightNumber(e.target.value.toUpperCase())}
+                  className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning uppercase"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">DEP / STD (Time)</label>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider">DEP / STD (Time)</label>
+                    <span className="text-[9px] text-on-surface-dim opacity-50 uppercase tracking-wider">Optional</span>
+                  </div>
                   <input 
                     type="text"
+                    placeholder="HH:MM"
+                    style={{ textTransform: 'uppercase' }}
                     value={adhocStd}
-                    onChange={(e) => setAdhocStd(e.target.value)}
-                    className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
+                    onChange={(e) => {
+                      setAdhocStd(e.target.value.toUpperCase());
+                      setAdhocStdError(null);
+                    }}
+                    className={`w-full text-xs font-mono font-bold p-3 border rounded-xl text-on-surface focus:outline-none uppercase ${adhocStdError ? 'border-error bg-error/5 focus:border-error' : 'border-outline bg-surface-dim focus:border-warning'}`}
                   />
+                  {adhocStdError && (
+                    <p className="text-[9px] font-bold text-error mt-1 tracking-wide">{adhocStdError}</p>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Destination</label>
+                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Destination *</label>
                   <input 
                     type="text"
+                    required
+                    style={{ textTransform: 'uppercase' }}
                     value={adhocDestination}
-                    onChange={(e) => setAdhocDestination(e.target.value)}
-                    className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
+                    onChange={(e) => setAdhocDestination(e.target.value.toUpperCase())}
+                    className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning uppercase"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Reg</label>
+                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Reg *</label>
                   <input 
                     type="text"
+                    required
+                    style={{ textTransform: 'uppercase' }}
                     value={adhocReg}
-                    onChange={(e) => setAdhocReg(e.target.value)}
-                    className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
+                    onChange={(e) => setAdhocReg(e.target.value.toUpperCase())}
+                    className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning uppercase"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Type</label>
+                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Type *</label>
                   <input 
                     type="text"
+                    required
+                    style={{ textTransform: 'uppercase' }}
                     value={adhocType}
-                    onChange={(e) => setAdhocType(e.target.value)}
-                    className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
+                    onChange={(e) => setAdhocType(e.target.value.toUpperCase())}
+                    className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning uppercase"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">C/O (Customer Name)</label>
+                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">C/O (Customer Name) *</label>
                 <input 
                   type="text"
+                  required
+                  style={{ textTransform: 'uppercase' }}
                   value={adhocCo}
-                  onChange={(e) => setAdhocCo(e.target.value)}
-                  className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
+                  onChange={(e) => setAdhocCo(e.target.value.toUpperCase())}
+                  className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning uppercase"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Operator Name</label>
+                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Operator Name *</label>
                 <input 
                   type="text"
+                  required
+                  style={{ textTransform: 'uppercase' }}
                   value={adhocOperatorName}
-                  onChange={(e) => setAdhocOperatorName(e.target.value)}
-                  className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning"
+                  onChange={(e) => setAdhocOperatorName(e.target.value.toUpperCase())}
+                  className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning uppercase"
                 />
               </div>
 
@@ -1903,7 +1961,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-4 py-2.5 bg-warning text-slate-950 hover:bg-warning-hover rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-md shadow-warning/20 disabled:opacity-50"
+                  className="px-4 py-2.5 bg-warning text-slate-950 hover:bg-warning-hover rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-md shadow-warning/20 disabled:opacity-50 cursor-pointer"
                 >
                   {isSaving ? 'Adding...' : 'Add Flight'}
                 </button>

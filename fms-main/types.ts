@@ -116,6 +116,13 @@ export interface FlightJob {
   landed_alert_sent?: boolean;
   eta_alert_15_sent?: boolean;
   eta_alert_5_sent?: boolean;
+  tobt?: string;                 // Target Off-Block Time (DEP STD change)
+  frtAirline?: string;           // Fuel Request Time - Airline
+  frtAocc?: string;              // Fuel Request Time - AOCC
+  frtFor?: string;               // Fuel Requested For Time
+  timestampClearance?: string;   // Ramp clearance / safety zone exit
+  co?: string;
+  operatorName?: string;
 }
 
 export interface FlightLog {
@@ -132,14 +139,21 @@ export interface FlightLog {
   operationalDate?: string;
   logType?: 'FLIGHT' | 'SEAPLANE' | 'FILLING_STATION' | 'MARINE' | 'BRIDGING';
   
+  // Timing & Planning Milestones
+  std?: string;                   // Scheduled Time of Departure
+  tobt?: string;                  // Target Off-Block Time
+  frtAirline?: string;            // Fuel Request Time - Airline
+  frtAocc?: string;               // Fuel Request Time - AOCC
+  frtFor?: string;                // Fuel Requested For Time
+
   // Granular Timestamps
   timestampArrived?: string;      // Arrived at Stand
   timestampPosition?: string;     // Positioned at Aircraft
-  timestampStart?: string;        // Commenced Pumping
-  timestampInitialEnd?: string;   // Initial Stop
-  timestampFinalStart?: string;   // Top-up Start (Optional)
-  timestampFinalEnd?: string;     // Final Stop / Completed
-  timestampClearance?: string;    // Documents signed, leaving safety zone
+  timestampStart?: string;        // Commenced Pumping (INITIAL SET)
+  timestampInitialEnd?: string;   // Initial Stop (INITIAL END)
+  timestampFinalStart?: string;   // Top-up Start (FINAL SET - Optional)
+  timestampFinalEnd?: string;     // Final Stop / Completed (FINAL END / FUEL END)
+  timestampClearance?: string;    // Documents signed, leaving safety zone (CLEARANCE)
 
   // Metering
   meterOpen?: number;
@@ -346,4 +360,17 @@ export const isDomesticFlight = (flight: any): boolean => {
   if (flight.isDomestic === true) return true;
   if (flight.category && String(flight.category).toLowerCase() === 'domestic') return true;
   return false;
+};
+
+export const cleanRemarks = (rawRemarks?: string | null): string => {
+  if (!rawRemarks) return '';
+  const trimmed = String(rawRemarks).trim();
+  if (!trimmed || trimmed === '-' || trimmed === 'N/A' || trimmed.toLowerCase() === 'no operational remarks.') return '';
+  // Filter out automated migration string "Customer: ..." which was not entered by users
+  if (/^Customer\s*:\s*/i.test(trimmed)) {
+    const afterCustomer = trimmed.replace(/^Customer\s*:\s*[^;,|.\n]*/i, '').trim();
+    const remaining = afterCustomer.replace(/^[,;|\-\s]+/, '').trim();
+    return remaining;
+  }
+  return trimmed;
 };

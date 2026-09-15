@@ -17,6 +17,7 @@ import { EquipmentStatus } from './components/EquipmentStatus';
 import { MarineLoading } from './components/MarineLoading';
 import { LfsAfs } from './components/LfsAfs';
 import { FuelReports } from './components/FuelReports';
+import { RefuelingPerformance } from './components/RefuelingPerformance';
 import { Login } from './components/Login';
 import { Logo } from './components/Logo';
 import { BottomNav } from './components/BottomNav';
@@ -33,7 +34,7 @@ import { LocationPromptModal } from './components/LocationPromptModal';
 import { FullScreenAlert } from './components/FullScreenAlert';
 import { supabaseService } from './services/supabaseService';
 import { User, UserRole, FlightJob, Alert, EquipmentStatus as EqStatusEnum } from './types';
-import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, Eclipse, CheckCircle, Share2, Smartphone, Trash2, Download, Laptop, Globe, RefreshCw, Users, ArrowRight, Sparkles, BellRing } from 'lucide-react';
+import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, AlertCircle, Sun, Moon, Eclipse, CheckCircle, Share2, Smartphone, Trash2, Download, Laptop, Globe, RefreshCw, Users, ArrowRight, Sparkles, BellRing, MapPin } from 'lucide-react';
 import { updatePWAManifestAndTheme, requestNotificationPermission, sendNativeNotification, subscribeToWebPush, unsubscribeFromWebPush, getPushSubscription } from './utils/pwa';
 import { haptic, isHapticEnabled, setHapticEnabled, isReducedMotion, setReducedMotion } from './utils/haptics';
 import { syncEngine } from './services/syncEngine';
@@ -319,6 +320,8 @@ const AppContextContent: React.FC<any> = ({
   const {
     showLocationPrompt,
     startLocationTracking,
+    stopLocationTracking,
+    isTrackingLocation,
     dismissLocationPrompt,
     isRequestingLocation
   } = useStaffActivityTracker({ user: currentUser, isAuthenticated: !!currentUser });
@@ -1013,6 +1016,21 @@ const AppContextContent: React.FC<any> = ({
         return <LfsAfs user={currentUser} />;
       case 'history':
         return <LogHistory user={currentUser} />;
+      case 'performance':
+        if (![UserRole.ITP_MANAGER, UserRole.ADMIN, UserRole.FUEL_MANAGEMENT].includes(currentUser?.role as UserRole)) {
+          return (
+            <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-300">
+              <div className="w-24 h-24 bg-error/10 rounded-[32px] flex items-center justify-center mb-6 border border-error/20 shadow-premium">
+                <AlertCircle className="w-10 h-10 text-error shadow-glow" />
+              </div>
+              <h2 className="text-xl sm:text-2xl font-[900] text-on-surface mb-2 tracking-tighter uppercase italic">ACCESS DENIED</h2>
+              <p className="text-on-surface-dim max-w-sm uppercase tracking-widest text-[9px] font-black opacity-60">
+                You do not have administrative authorization to view refueling performance analytics. Security log updated.
+              </p>
+            </div>
+          );
+        }
+        return <RefuelingPerformance user={currentUser!} />;
       case 'schedule':
         return (
           <Schedule 
@@ -1561,11 +1579,8 @@ const AppContextContent: React.FC<any> = ({
                                     <BellRing className="w-4 h-4" />
                                   </div>
                                   <div>
-                                    <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight flex items-center gap-1.5">
+                                    <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight">
                                       Push Alerts
-                                      <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-primary/10 text-primary uppercase">
-                                        iOS 16.4+ / Android
-                                      </span>
                                     </h4>
                                     <p className="text-[9px] font-bold text-on-surface-dim opacity-50">
                                       {isPushSubscribed ? 'Delivering when app is closed' : 'Receive lock screen alerts'}
@@ -1575,10 +1590,10 @@ const AppContextContent: React.FC<any> = ({
                                 <button
                                   disabled={isPushLoading}
                                   onClick={handleTogglePushNotifications}
-                                  className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center gap-1.5 ${
+                                  className={`px-3.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center gap-1.5 ${
                                     isPushSubscribed
                                       ? 'bg-success/15 text-success border border-success/30 hover:bg-error/10 hover:text-error hover:border-error/30'
-                                      : 'bg-primary text-white shadow-sm hover:opacity-90'
+                                      : 'kinetic-gradient text-white shadow-premium hover:scale-105'
                                   }`}
                                 >
                                   {isPushLoading ? (
@@ -1589,8 +1604,37 @@ const AppContextContent: React.FC<any> = ({
                                       Enabled
                                     </>
                                   ) : (
-                                    'Enable'
+                                    'ENABLE'
                                   )}
+                                </button>
+                            </div>
+
+                            {/* Location Services Toggle */}
+                            <div className="p-4 bg-surface-dim/40 rounded-[32px] flex items-center justify-between hover:scale-[1.02] transition-all duration-300">
+                                <div className="flex items-center space-x-3 text-left">
+                                  <div className={`p-2.5 rounded-lg transition-all ${isTrackingLocation ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary'}`}>
+                                    <MapPin className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <h4 className="text-[11px] font-black text-on-surface uppercase tracking-tight">Location Services</h4>
+                                    <p className="text-[9px] font-bold text-on-surface-dim opacity-50">
+                                      {isTrackingLocation ? 'Airfield positioning active' : 'Airfield positioning disabled'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    if (isTrackingLocation) {
+                                      stopLocationTracking();
+                                      haptic('TOGGLE');
+                                    } else {
+                                      startLocationTracking();
+                                      haptic('TOGGLE');
+                                    }
+                                  }}
+                                  className={`relative w-11 h-6 rounded-full transition-all duration-300 ${isTrackingLocation ? 'bg-success' : 'bg-outline/40'}`}
+                                >
+                                  <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 ${isTrackingLocation ? 'left-[22px]' : 'left-0.5'}`} />
                                 </button>
                             </div>
 

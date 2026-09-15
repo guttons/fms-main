@@ -655,7 +655,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         route: routeStr,
         date: fDateStr,
         type: f.type,
-        isDomestic: true
+        isDomestic: true,
+        vehicleId: currentStatus === 'IN_PROGRESS' ? matchingJob?.vehicleId : undefined
       };
     });
 
@@ -771,7 +772,16 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
   });
   const [flightLogs, setFlightLogs] = useState<FlightLog[]>([]);
-  const [domesticAssignments, setDomesticAssignments] = useState<any[]>([]);
+  const [domesticAssignments, setDomesticAssignments] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('fms_domestic_assignments');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
   const [staff, setStaff] = useState<StaffMember[]>(() => {
     try {
       const saved = localStorage.getItem('fms_staff_list');
@@ -1017,8 +1027,22 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       } catch (e) {
         console.warn('Failed to fetch service tank setting:', e);
       }
-      if (fetchedDomAssign && Array.isArray(fetchedDomAssign)) {
-        setDomesticAssignments(mapDomesticAssignments(fetchedDomAssign));
+      let finalDomAssign = fetchedDomAssign;
+      if (!finalDomAssign || finalDomAssign.length === 0) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (todayStr !== selectedBriefingDate) {
+          try {
+            const todayAssign = await supabaseService.getDomesticAssignments(todayStr);
+            if (todayAssign && todayAssign.length > 0) {
+              finalDomAssign = todayAssign;
+            }
+          } catch (e) {}
+        }
+      }
+      if (finalDomAssign && Array.isArray(finalDomAssign) && finalDomAssign.length > 0) {
+        const mapped = mapDomesticAssignments(finalDomAssign);
+        setDomesticAssignments(mapped);
+        localStorage.setItem('fms_domestic_assignments', JSON.stringify(mapped));
       }
       
     } catch (error) {
@@ -1263,8 +1287,18 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   };
 
   const updateFlightJob = async (id: string, updates: Partial<FlightJob>) => {
-    const isDbJob = flightJobs.some(j => j.id === id);
+    const cleanUpdatesFlight = (updates.flightNumber || '').replace(/\s+/g, '').toLowerCase();
     let targetFlightNo = updates.flightNumber || '';
+
+    const existingJob = flightJobs.find(j => 
+      j.id === id || 
+      (cleanUpdatesFlight && (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanUpdatesFlight)
+    );
+
+    if (existingJob) {
+      targetFlightNo = existingJob.flightNumber || targetFlightNo;
+    }
+    const isDbJob = !!existingJob;
 
     if (!isDbJob) {
       const virtualJob = mergedFlightJobs.find(j => j.id === id) 
@@ -1272,10 +1306,14 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         || (briefingInfo?.staffAssignments?.adhocFlights || []).find((j: any) => j.id === id);
       if (virtualJob) {
         const isDom = isDomesticFlight(virtualJob) || isDomesticFlight(updates) || isDomesticFlight({ flightNumber: targetFlightNo });
+        const isAdhoc = !!(virtualJob.isAdhoc || updates.isAdhoc || virtualJob.id?.startsWith('ah-'));
         const fullJob: FlightJob = {
           ...virtualJob,
           ...updates,
           isDomestic: isDom,
+          isAdhoc: isAdhoc,
+          co: updates.co !== undefined ? updates.co : virtualJob.co,
+          operatorName: updates.operatorName !== undefined ? updates.operatorName : virtualJob.operatorName,
           date: virtualJob.date ? virtualJob.date.split('T')[0] : selectedBriefingDate,
           isVirtual: undefined
         };
@@ -1302,13 +1340,15 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         }
       }
     } else {
-      setFlightJobs(prev => prev.map(job => 
-        job.id === id ? { ...job, ...updates } : job
-      ));
-      const existingJob = flightJobs.find(j => j.id === id);
-      if (existingJob) {
-        targetFlightNo = existingJob.flightNumber || targetFlightNo;
-      }
+      const cleanTarget = (targetFlightNo || '').replace(/\s+/g, '').toLowerCase();
+      setFlightJobs(prev => prev.map(job => {
+        const matchesId = job.id === id || (existingJob && job.id === existingJob.id);
+        const matchesFlightNo = cleanTarget && (job.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanTarget;
+        if (matchesId || matchesFlightNo) {
+          return { ...job, ...updates };
+        }
+        return job;
+      }));
     }
 
     // Also update frozenFlights in briefingInfo state if it exists
@@ -1359,7 +1399,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     if (appUser) {
       try {
         if (isDbJob) {
-          await supabaseService.updateFlightJob(id, updates);
+          await supabaseService.updateFlightJob(existingJob?.id || id, updates);
         }
         if (updatedBriefing && newBriefingInfo && newBriefingInfo.staffAssignments) {
           await supabaseService.upsertShiftBriefingInfo(
@@ -1752,6 +1792,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
   const updateDomesticAssignment = async (teamName: string, op1: string, op2: string) => {
     setDomesticAssignments(prev => {
+      let updated: any[];
       const existingIdx = prev.findIndex(da => da.team_name === teamName);
       if (existingIdx >= 0) {
         const copy = [...prev];
@@ -1762,9 +1803,9 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           operator1_id: op1, 
           operator2_id: op2 
         };
-        return copy;
+        updated = copy;
       } else {
-        return [...prev, { 
+        updated = [...prev, { 
           date: selectedBriefingDate, 
           assignment_date: selectedBriefingDate,
           team_name: teamName, 
@@ -1774,6 +1815,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           operator2_id: op2 
         }];
       }
+      localStorage.setItem('fms_domestic_assignments', JSON.stringify(updated));
+      return updated;
     });
 
     if (appUser) {

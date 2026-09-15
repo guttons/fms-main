@@ -4,8 +4,8 @@ import { MOCK_USERS } from '../constants';
 import { FileText, Search, Download, Filter, X, Calendar, Plane, Anchor, Droplet, Fuel, Truck, Sailboat, AlertTriangle, Gauge } from 'lucide-react';
 import { Logo } from './Logo';
 import { useOperationalData } from '../context/OperationalDataContext';
+import { FlightLog, User, UserRole, EquipmentType, cleanRemarks } from '../types';
 import { supabaseService } from '../services/supabaseService';
-import { FlightLog, User, UserRole, EquipmentType } from '../types';
 
 const parseGroundLog = (log: FlightLog) => {
   const parts = (log.flightNumber || '').split('-');
@@ -192,9 +192,18 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     meterClose: 0,
     remarks: '',
     date: '',
+    std: '',
+    tobt: '',
+    frtAirline: '',
+    frtAocc: '',
+    frtFor: '',
     timeArrived: '',
     timePosition: '',
     timeStart: '',
+    timeInitialEnd: '',
+    timeFinalStart: '',
+    timeFinalEnd: '',
+    timeClearance: '',
     timeEnd: '',
     isDomestic: false,
     intDom: '',
@@ -523,10 +532,18 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           meterOpen: Number(editForm.meterOpen),
           meterClose: Number(editForm.meterClose),
           remarks: editForm.remarks,
+          std: editForm.std || undefined,
+          tobt: editForm.tobt || undefined,
+          frtAirline: editForm.frtAirline || undefined,
+          frtAocc: editForm.frtAocc || undefined,
+          frtFor: editForm.frtFor || undefined,
           timestampArrived: combineDateAndTime(editForm.date, editForm.timeArrived),
           timestampPosition: combineDateAndTime(editForm.date, editForm.timePosition),
           timestampStart: combineDateAndTime(editForm.date, editForm.timeStart),
-          timestampInitialEnd: combineDateAndTime(editForm.date, editForm.timeEnd),
+          timestampInitialEnd: combineDateAndTime(editForm.date, editForm.timeInitialEnd || editForm.timeEnd),
+          timestampFinalStart: combineDateAndTime(editForm.date, editForm.timeFinalStart),
+          timestampFinalEnd: combineDateAndTime(editForm.date, editForm.timeFinalEnd),
+          timestampClearance: combineDateAndTime(editForm.date, editForm.timeClearance),
           isDomestic: editForm.isDomestic,
           intDom: editForm.intDom
         });
@@ -1181,11 +1198,20 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                        volume: log.volume || 0,
                                        meterOpen: log.meterOpen || 0,
                                        meterClose: log.meterClose || 0,
-                                       remarks: log.remarks || '',
+                                       remarks: cleanRemarks(log.remarks),
                                        date: primaryDate,
+                                       std: log.std || '',
+                                       tobt: log.tobt || '',
+                                       frtAirline: log.frtAirline || '',
+                                       frtAocc: log.frtAocc || '',
+                                       frtFor: log.frtFor || '',
                                        timeArrived: getLocalTimePart(log.timestampArrived),
                                        timePosition: getLocalTimePart(log.timestampPosition),
                                        timeStart: getLocalTimePart(log.timestampStart),
+                                       timeInitialEnd: getLocalTimePart(log.timestampInitialEnd),
+                                       timeFinalStart: getLocalTimePart(log.timestampFinalStart),
+                                       timeFinalEnd: getLocalTimePart(log.timestampFinalEnd),
+                                       timeClearance: getLocalTimePart(log.timestampClearance),
                                        timeEnd: getLocalTimePart(log.timestampFinalEnd || log.timestampInitialEnd),
                                        isDomestic: log.isDomestic ?? false,
                                        intDom: log.intDom || (log.isDomestic ? 'DOM' : 'INT'),
@@ -1251,88 +1277,135 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                       );
                                     }
                                     return (
-                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-in fade-in duration-300">
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Airline / Customer</span>
-                                         <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.co || log.airline || 'N/A'}</span>
+                                      <div className="space-y-6 animate-in fade-in duration-300">
+                                        {/* Schedule & Fuel Request Times */}
+                                        <div className="bg-surface-lowest/60 border border-outline/60 rounded-2xl p-4">
+                                          <span className="block text-[8px] font-black text-primary uppercase tracking-[0.2em] mb-3">
+                                            Departure & Fuel Request Timings (FRT)
+                                          </span>
+                                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                                            <div className="flex flex-col gap-1">
+                                              <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">STD</span>
+                                              <span className="text-[11px] font-mono font-bold text-warning">{log.std || 'N/A'}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                              <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">TOBT</span>
+                                              <span className="text-[11px] font-mono font-bold text-primary">{log.tobt || 'N/A'}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                              <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">FRT Airline</span>
+                                              <span className="text-[11px] font-mono text-on-surface">{log.frtAirline || 'N/A'}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                              <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">FRT AOCC</span>
+                                              <span className="text-[11px] font-mono text-on-surface">{log.frtAocc || 'N/A'}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                              <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">FRT For</span>
+                                              <span className="text-[11px] font-mono font-bold text-primary">{log.frtFor || 'N/A'}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        {/* Granular Operational Timings */}
+                                        <div className="bg-surface-lowest/60 border border-outline/60 rounded-2xl p-4">
+                                          <span className="block text-[8px] font-black text-primary uppercase tracking-[0.2em] mb-3">
+                                            Refuelling Milestone Timings
+                                          </span>
+                                          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-4">
+                                            <div className="flex flex-col gap-1">
+                                              <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Arrived</span>
+                                              <span className="text-[11px] font-mono text-on-surface">{formatTime(log.timestampArrived)}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                              <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Positioned</span>
+                                              <span className="text-[11px] font-mono text-on-surface">{formatTime(log.timestampPosition)}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                              <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Initial Set</span>
+                                              <span className="text-[11px] font-mono text-success font-bold">{formatTime(log.timestampStart)}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                              <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Initial End</span>
+                                              <span className="text-[11px] font-mono text-on-surface">{formatTime(log.timestampInitialEnd)}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                              <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Final Set</span>
+                                              <span className="text-[11px] font-mono text-on-surface">{formatTime(log.timestampFinalStart)}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                              <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Final End</span>
+                                              <span className="text-[11px] font-mono text-error font-bold">{formatTime(log.timestampFinalEnd)}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                              <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Fuel End</span>
+                                              <span className="text-[11px] font-mono text-error font-bold">{formatTime(log.timestampFinalEnd || log.timestampInitialEnd)}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                              <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Clearance</span>
+                                              <span className="text-[11px] font-mono text-primary font-bold">{formatTime(log.timestampClearance)}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        {/* Metering, Stand & Personnel Details */}
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                          <div className="flex flex-col gap-1">
+                                            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Airline / Customer</span>
+                                            <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.co || log.airline || 'N/A'}</span>
+                                          </div>
+                                          <div className="flex flex-col gap-1">
+                                            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Payment Type</span>
+                                            <span className="text-[11px] font-black text-warning uppercase tracking-widest">{log.paymentType || 'CREDIT'}</span>
+                                          </div>
+                                          <div className="flex flex-col gap-1">
+                                            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Pit Number</span>
+                                            <span className="text-[11px] font-mono text-on-surface">{log.pitNumber || 'N/A'}</span>
+                                          </div>
+                                          <div className="flex flex-col gap-1">
+                                            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Stand</span>
+                                            <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.stand || 'N/A'}</span>
+                                          </div>
+                                          <div className="flex flex-col gap-1">
+                                            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Opening Meter</span>
+                                            <span className="text-[11px] font-mono text-on-surface">{log.meterOpen !== undefined && log.meterOpen !== null ? log.meterOpen.toLocaleString() : 'N/A'}</span>
+                                          </div>
+                                          <div className="flex flex-col gap-1">
+                                            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Closing Meter</span>
+                                            <span className="text-[11px] font-mono text-on-surface">{log.meterClose !== undefined && log.meterClose !== null ? log.meterClose.toLocaleString() : (log.meterOpen !== undefined && log.volume ? (log.meterOpen + log.volume).toLocaleString() : 'N/A')}</span>
+                                          </div>
+                                          <div className="flex flex-col gap-1">
+                                            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Pressure (PSI)</span>
+                                            <span className="text-[11px] font-mono text-on-surface">{log.psi !== undefined && log.psi !== null ? log.psi : 'N/A'}</span>
+                                          </div>
+                                          <div className="flex flex-col gap-1">
+                                            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Flow Rate (LPM)</span>
+                                            <span className="text-[11px] font-mono text-on-surface">{log.lpm !== undefined && log.lpm !== null ? log.lpm : 'N/A'}</span>
+                                          </div>
+                                          <div className="flex flex-col gap-1">
+                                            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Officer</span>
+                                            <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{officerName}</span>
+                                          </div>
+                                          <div className="flex flex-col gap-1">
+                                            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">RF Operator</span>
+                                            <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.tacticalOperator || 'N/A'}</span>
+                                          </div>
+                                          <div className="flex flex-col gap-1">
+                                            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Operator Name</span>
+                                            <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.operatorName || 'N/A'}</span>
+                                          </div>
+                                          <div className="flex flex-col gap-1">
+                                            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC Compliance</span>
+                                            <span className="text-[11px] font-black text-success uppercase tracking-widest">
+                                              P:{log.panelCheck ? 'PASS' : 'FAIL'} | WAC:{log.walkAroundCheck ? 'PASS' : 'FAIL'} | A:{log.appearanceCheck ? 'PASS' : 'FAIL'} | CWD:{log.waterCheck ? 'PASS' : 'FAIL'}
+                                            </span>
+                                          </div>
+                                          <div className="flex flex-col gap-1 col-span-2 md:col-span-4">
+                                            <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Remarks</span>
+                                            <span className="text-[11px] text-on-surface opacity-80">{cleanRemarks(log.remarks) || 'No operational remarks.'}</span>
+                                          </div>
+                                        </div>
                                       </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Timestamp</span>
-                                         <span className="text-[11px] font-mono text-on-surface">
-                                           {log.created_at 
-                                             ? new Date(log.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: false }) 
-                                             : (log.timestampStart 
-                                                 ? new Date(log.timestampStart).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: false }) 
-                                                 : 'N/A')}
-                                         </span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Payment Type</span>
-                                         <span className="text-[11px] font-black text-warning uppercase tracking-widest">{log.paymentType || 'CREDIT'}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Pit Number</span>
-                                         <span className="text-[11px] font-mono text-on-surface">{log.pitNumber || 'N/A'}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Arrived</span>
-                                         <span className="text-[11px] font-mono text-on-surface">{formatTime(log.timestampArrived)}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Positioned</span>
-                                         <span className="text-[11px] font-mono text-on-surface">{formatTime(log.timestampPosition)}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Dispense Start</span>
-                                         <span className="text-[11px] font-mono text-success">{formatTime(log.timestampStart)}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Dispense End</span>
-                                         <span className="text-[11px] font-mono text-error">{formatTime(log.timestampFinalEnd || log.timestampInitialEnd)}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Opening Meter</span>
-                                         <span className="text-[11px] font-mono text-on-surface">{log.meterOpen !== undefined && log.meterOpen !== null ? log.meterOpen.toLocaleString() : 'N/A'}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Closing Meter</span>
-                                         <span className="text-[11px] font-mono text-on-surface">{log.meterClose !== undefined && log.meterClose !== null ? log.meterClose.toLocaleString() : (log.meterOpen !== undefined && log.volume ? (log.meterOpen + log.volume).toLocaleString() : 'N/A')}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Pressure (PSI)</span>
-                                         <span className="text-[11px] font-mono text-on-surface">{log.psi !== undefined && log.psi !== null ? log.psi : 'N/A'}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Flow Rate (LPM)</span>
-                                         <span className="text-[11px] font-mono text-on-surface">{log.lpm !== undefined && log.lpm !== null ? log.lpm : 'N/A'}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Officer</span>
-                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{officerName}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">RF Operator</span>
-                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.tacticalOperator || 'N/A'}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Operator Name</span>
-                                         <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.operatorName || 'N/A'}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Stand</span>
-                                         <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.stand || 'N/A'}</span>
-                                      </div>
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC Compliance</span>
-                                         <span className="text-[11px] font-black text-success uppercase tracking-widest">
-                                            P:{log.panelCheck ? 'PASS' : 'FAIL'} | A:{log.appearanceCheck ? 'PASS' : 'FAIL'} | W:{log.waterCheck ? 'PASS' : 'FAIL'}
-                                         </span>
-                                      </div>
-                                      <div className="flex flex-col gap-1 col-span-2 md:col-span-4">
-                                         <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Remarks</span>
-                                         <span className="text-[11px] text-on-surface opacity-80">{log.remarks || 'No operational remarks.'}</span>
-                                      </div>
-                                   </div>
                                     );
                                   })()}
 
@@ -1365,7 +1438,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                        </div>
                                        <div className="flex flex-col gap-1 col-span-2 md:col-span-5">
                                           <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Remarks</span>
-                                          <span className="text-[11px] text-on-surface opacity-80">{log.remarks || 'No operational remarks.'}</span>
+                                          <span className="text-[11px] text-on-surface opacity-80">{cleanRemarks(log.remarks) || 'No operational remarks.'}</span>
                                        </div>
                                     </div>
                                  )}
@@ -1687,45 +1760,144 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                         </div>
                       </div>
                       
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      {/* Flight Departure & Fuel Request Timings */}
+                      <div className="p-4 bg-surface-dim/40 rounded-2xl border border-outline space-y-3">
+                        <span className="block text-[9px] font-black text-primary uppercase tracking-widest">
+                          Departure & Fuel Request Timings (FRT)
+                        </span>
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                          <div>
+                            <label className="block text-[8px] font-black text-warning uppercase tracking-wider mb-1">STD</label>
+                            <input 
+                              type="text"
+                              placeholder="HH:MM"
+                              value={editForm.std}
+                              onChange={e => setEditForm({...editForm, std: e.target.value})}
+                              className="w-full bg-surface-lowest border border-outline rounded-xl px-2.5 py-1.5 text-on-surface text-[11px] font-mono font-bold focus:border-primary outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[8px] font-black text-amber-500 uppercase tracking-wider mb-1">TOBT</label>
+                            <input 
+                              type="text"
+                              placeholder="HH:MM"
+                              value={editForm.tobt}
+                              onChange={e => setEditForm({...editForm, tobt: e.target.value})}
+                              className="w-full bg-surface-lowest border border-amber-500/30 rounded-xl px-2.5 py-1.5 text-amber-400 text-[11px] font-mono font-bold focus:border-amber-500 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[8px] font-black text-on-surface-dim uppercase tracking-wider mb-1 opacity-70">FRT Airline</label>
+                            <input 
+                              type="text"
+                              placeholder="HH:MM"
+                              value={editForm.frtAirline}
+                              onChange={e => setEditForm({...editForm, frtAirline: e.target.value})}
+                              className="w-full bg-surface-lowest border border-outline rounded-xl px-2.5 py-1.5 text-on-surface text-[11px] font-mono font-bold focus:border-primary outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[8px] font-black text-on-surface-dim uppercase tracking-wider mb-1 opacity-70">FRT AOCC</label>
+                            <input 
+                              type="text"
+                              placeholder="HH:MM"
+                              value={editForm.frtAocc}
+                              onChange={e => setEditForm({...editForm, frtAocc: e.target.value})}
+                              className="w-full bg-surface-lowest border border-outline rounded-xl px-2.5 py-1.5 text-on-surface text-[11px] font-mono font-bold focus:border-primary outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[8px] font-black text-on-surface-dim uppercase tracking-wider mb-1 opacity-70">FRT For</label>
+                            <input 
+                              type="text"
+                              placeholder="HH:MM"
+                              value={editForm.frtFor}
+                              onChange={e => setEditForm({...editForm, frtFor: e.target.value})}
+                              className="w-full bg-surface-lowest border border-outline rounded-xl px-2.5 py-1.5 text-on-surface text-[11px] font-mono font-bold focus:border-primary outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Operational Timestamps */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <div>
-                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Arrived</label>
+                          <label className="block text-[8px] font-black text-on-surface-dim uppercase tracking-widest mb-1">Arrived</label>
                           <input 
                             type="time"
                             value={editForm.timeArrived}
                             onChange={e => setEditForm({...editForm, timeArrived: e.target.value})}
-                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-2.5 py-1.5 text-on-surface text-[11px] font-bold focus:border-primary outline-none"
                           />
                         </div>
                         <div>
-                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Positioned</label>
+                          <label className="block text-[8px] font-black text-on-surface-dim uppercase tracking-widest mb-1">Positioned</label>
                           <input 
                             type="time"
                             value={editForm.timePosition}
                             onChange={e => setEditForm({...editForm, timePosition: e.target.value})}
-                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-2.5 py-1.5 text-on-surface text-[11px] font-bold focus:border-primary outline-none"
                           />
                         </div>
                         <div>
-                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Dispense Start</label>
+                          <label className="block text-[8px] font-black text-on-surface-dim uppercase tracking-widest mb-1">Initial Set (Start)</label>
                           <input 
                             type="time"
                             value={editForm.timeStart}
                             onChange={e => setEditForm({...editForm, timeStart: e.target.value})}
-                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-2.5 py-1.5 text-on-surface text-[11px] font-bold focus:border-primary outline-none text-success"
                           />
                         </div>
                         <div>
-                          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5">Dispense End</label>
+                          <label className="block text-[8px] font-black text-on-surface-dim uppercase tracking-widest mb-1">Initial End</label>
                           <input 
                             type="time"
-                            value={editForm.timeEnd}
-                            onChange={e => setEditForm({...editForm, timeEnd: e.target.value})}
-                            className="w-full bg-surface-lowest border border-outline rounded-xl px-3 py-2 text-on-surface text-[12px] font-bold focus:border-primary outline-none"
+                            value={editForm.timeInitialEnd || editForm.timeEnd}
+                            onChange={e => setEditForm({...editForm, timeInitialEnd: e.target.value, timeEnd: e.target.value})}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-2.5 py-1.5 text-on-surface text-[11px] font-bold focus:border-primary outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[8px] font-black text-on-surface-dim uppercase tracking-widest mb-1">Final Set (Top-Up)</label>
+                          <input 
+                            type="time"
+                            value={editForm.timeFinalStart}
+                            onChange={e => setEditForm({...editForm, timeFinalStart: e.target.value})}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-2.5 py-1.5 text-on-surface text-[11px] font-bold focus:border-primary outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[8px] font-black text-on-surface-dim uppercase tracking-widest mb-1">Final End (Top-Up)</label>
+                          <input 
+                            type="time"
+                            value={editForm.timeFinalEnd}
+                            onChange={e => setEditForm({...editForm, timeFinalEnd: e.target.value})}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-2.5 py-1.5 text-on-surface text-[11px] font-bold focus:border-primary outline-none text-error"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <label className="block text-[8px] font-black text-on-surface-dim uppercase tracking-widest mb-1">Clearance Time</label>
+                          <input 
+                            type="time"
+                            value={editForm.timeClearance}
+                            onChange={e => setEditForm({...editForm, timeClearance: e.target.value})}
+                            className="w-full bg-surface-lowest border border-outline rounded-xl px-2.5 py-1.5 text-on-surface text-[11px] font-bold focus:border-primary outline-none text-primary"
                           />
                         </div>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Operational Remarks */}
+                  <div>
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Operational Remarks</h4>
+                    <textarea 
+                      value={editForm.remarks}
+                      onChange={e => setEditForm({...editForm, remarks: e.target.value})}
+                      rows={2}
+                      className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-on-surface text-[12px] font-bold focus:border-primary outline-none resize-none"
+                      placeholder="Enter any additional operational remarks..."
+                    />
                   </div>
                 </>
               )}
@@ -2312,20 +2484,6 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                     </div>
                   </div>
                 </>
-              )}
-
-              {/* Remarks */}
-              {resolveLogType(editingLog) === 'FLIGHT' && (
-                <div>
-                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-widest mb-2">Remarks</label>
-                  <textarea 
-                    value={editForm.remarks}
-                    onChange={e => setEditForm({...editForm, remarks: e.target.value})}
-                    rows={2}
-                    className="w-full bg-surface-lowest border border-outline rounded-xl px-4 py-3 text-on-surface text-[12px] font-bold focus:border-primary outline-none resize-none"
-                    placeholder="Enter any additional details or remarks..."
-                  />
-                </div>
               )}
             </div>
 

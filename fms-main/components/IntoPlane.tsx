@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { FlightLog, User, FlightJob, Equipment, EquipmentStatus, UserRole, isDomesticFlight } from '../types';
+import { FlightLog, User, FlightJob, Equipment, EquipmentStatus, UserRole, isDomesticFlight, cleanRemarks } from '../types';
 import { MOCK_USERS, PIT_MAPPING } from '../constants';
 import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Users, Lock, Calendar, X, CreditCard, Ban, Eye, Zap, Bell, BellOff, BellRing, Megaphone, ExternalLink, Droplet, PlaneLanding, PlaneTakeoff, ArrowRightCircle, Check, CheckCheck, RotateCcw, Pencil, Plane, Fuel } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
@@ -419,6 +419,32 @@ const ScreenDashboard: React.FC<{
   const [editingAircraftJob, setEditingAircraftJob] = useState<FlightJob | null>(null);
   const [editingStandJob, setEditingStandJob] = useState<FlightJob | null>(null);
   const [watchedIds, setWatchedIds] = useState<Set<string>>(() => getWatchedFlightIds(user.id));
+  const [localDomesticAssignments, setLocalDomesticAssignments] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('fms_domestic_assignments');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  useEffect(() => {
+    const loadAssignments = async () => {
+      try {
+        const todayDate = new Date().toISOString().split('T')[0];
+        const data = await supabaseService.getDomesticAssignments(todayDate);
+        if (data && data.length > 0) {
+          setLocalDomesticAssignments(data);
+          localStorage.setItem('fms_domestic_assignments', JSON.stringify(data));
+        }
+      } catch (err) {
+        console.warn('Failed to load domestic assignments in IntoPlane:', err);
+      }
+    };
+    loadAssignments();
+  }, []);
 
   const toggleWatch = useCallback((flightNumber: string) => {
     setWatchedIds(prev => {
@@ -765,9 +791,19 @@ const ScreenDashboard: React.FC<{
 
   const frozenFlights = briefingInfo?.staffAssignments?.frozenFlights;
 
+  const isAdhocFlight = (f: any) => {
+    if (!f) return false;
+    if (f.isAdhoc) return true;
+    if (typeof f.id === 'string' && f.id.startsWith('ah-')) return true;
+    const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+    return (briefingInfo?.staffAssignments?.adhocFlights || []).some(
+      (af: any) => af && (af.id === f.id || (af.flightNumber && af.flightNumber.replace(/\s+/g, '').toLowerCase() === cleanNo))
+    );
+  };
+
   const liveIntlList = (flightJobs || []).filter(f => {
     const isDep = f.type ? f.type === 'departure' : !!f.std;
-    return !isDomesticFlight(f) && isDep && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate);
+    return !isDomesticFlight(f) && !isAdhocFlight(f) && isDep && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate);
   });
 
   const getStatusForFlightDate = (cleanNo: string, flightDate: string, defaultStatus: string = 'PENDING') => {
@@ -831,7 +867,7 @@ const ScreenDashboard: React.FC<{
   });
 
   if (frozenFlights?.intl) {
-    frozenFlights.intl.filter((ff: any) => !isDomesticFlight(ff)).forEach((ff: any) => {
+    frozenFlights.intl.filter((ff: any) => !isDomesticFlight(ff) && !isAdhocFlight(ff)).forEach((ff: any) => {
       const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
       const existing = intlJobsMap.get(cleanNo);
       const flightDate = ff.date ? ff.date.split('T')[0] : selectedBriefingDate;
@@ -940,8 +976,66 @@ const ScreenDashboard: React.FC<{
       route: merged.route,
       isAdhoc: true,
       vehicleId: merged.vehicleId,
+      co: merged.co || f.co,
+      operatorName: merged.operatorName || f.operatorName,
     };
   }).sort((a: any, b: any) => (a.std || a.sta || '').localeCompare(b.std || b.sta || ''));
+
+  const isDomesticTeamMember = useMemo(() => {
+    if (!user) return false;
+
+    // Check cached myTeam for instant detection
+    try {
+      const savedMyTeam = localStorage.getItem('fms_my_domestic_team');
+      if (savedMyTeam) {
+        const parsed = JSON.parse(savedMyTeam);
+        const teamName = (parsed?.team_name || '').toLowerCase();
+        if (teamName.includes('team 1') || teamName.includes('team 2') || teamName.includes('team 3')) {
+          const op1 = (parsed?.operator1_id || parsed?.op1 || '').toLowerCase();
+          const op2 = (parsed?.operator2_id || parsed?.op2 || '').toLowerCase();
+          const uid = (user.id || '').toLowerCase();
+          const uname = (user.name || '').toLowerCase();
+          if ((uid && (op1 === uid || op2 === uid)) || (uname && (op1 === uname || op2 === uname))) {
+            return true;
+          }
+        }
+      }
+    } catch (e) {}
+
+    const userTokens = new Set<string>();
+    if (user.id) userTokens.add(user.id.toLowerCase());
+    if (user.name) userTokens.add(user.name.toLowerCase());
+
+    const staffList = (staff && staff.length > 0 ? staff : MOCK_USERS);
+    staffList.forEach(s => {
+      if (s.id.toLowerCase() === (user.id || '').toLowerCase() || s.name.toLowerCase() === (user.name || '').toLowerCase()) {
+        userTokens.add(s.id.toLowerCase());
+        userTokens.add(s.name.toLowerCase());
+      }
+    });
+
+    const allAssignments = [
+      ...(domesticAssignments || []),
+      ...(localDomesticAssignments || [])
+    ];
+
+    return allAssignments.some(da => {
+      const teamName = (da.team_name || '').toLowerCase();
+      const isTargetTeam = teamName.includes('team 1') || teamName.includes('team 2') || teamName.includes('team 3');
+      if (!isTargetTeam) return false;
+
+      const op1 = (da.operator1_id || da.op1 || '').toLowerCase();
+      const op2 = (da.operator2_id || da.op2 || '').toLowerCase();
+      if (!op1 && !op2) return false;
+
+      if (userTokens.has(op1) || userTokens.has(op2)) return true;
+      const targetOp1 = staffList.find(s => s.id.toLowerCase() === op1 || s.name.toLowerCase() === op1);
+      if (targetOp1 && (userTokens.has(targetOp1.id.toLowerCase()) || userTokens.has(targetOp1.name.toLowerCase()))) return true;
+      const targetOp2 = staffList.find(s => s.id.toLowerCase() === op2 || s.name.toLowerCase() === op2);
+      if (targetOp2 && (userTokens.has(targetOp2.id.toLowerCase()) || userTokens.has(targetOp2.name.toLowerCase()))) return true;
+      return false;
+    });
+  }, [user, domesticAssignments, localDomesticAssignments, staff]);
 
   const isJobAssignedToUser = (job: FlightJob) => {
     if (!job || !user) return false;
@@ -981,8 +1075,8 @@ const ScreenDashboard: React.FC<{
   };
 
   const filteredIntlJobs = filterMyTasks ? intlJobs.filter(isJobAssignedToUser) : intlJobs;
-  const filteredDomesticJobs = filterMyTasks ? domesticJobs.filter(isJobAssignedToUser) : domesticJobs;
-  const filteredAdhocJobs = filterMyTasks ? adhocJobs.filter(isJobAssignedToUser) : adhocJobs;
+  const filteredDomesticJobs = filterMyTasks ? (isDomesticTeamMember ? domesticJobs : domesticJobs.filter(isJobAssignedToUser)) : domesticJobs;
+  const filteredAdhocJobs = filterMyTasks ? (isDomesticTeamMember ? adhocJobs : adhocJobs.filter(isJobAssignedToUser)) : adhocJobs;
 
   const activeJobs = 
       viewMode === 'INT' ? filteredIntlJobs : 
@@ -1028,8 +1122,11 @@ const ScreenDashboard: React.FC<{
   const renderJobCard = (job: FlightJob) => {
       const isAssignedToMe = isJobAssignedToUser(job);
       const isManagerOrAdmin = user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN;
-      const canLogFlight = isAssignedToMe || isManagerOrAdmin;
-      const canEditAircraft = isAssignedToMe || isManagerOrAdmin;
+      const isDomesticOrAdhoc = !!(job.isDomestic || (job as any).isAdhoc || isDomesticFlight(job) || viewMode === 'DOM' || viewMode === 'ADHOC');
+      const isAdhocFlightJob = !!((job as any).isAdhoc || (typeof job.id === 'string' && job.id.startsWith('ah-')) || viewMode === 'ADHOC' || (briefingInfo?.staffAssignments?.adhocFlights || []).some((af: any) => af && (af.id === job.id || (af.flightNumber && af.flightNumber.replace(/\s+/g, '').toLowerCase() === (job.flightNumber || '').replace(/\s+/g, '').toLowerCase()))));
+      const adhocCo = (job as any).co || (briefingInfo?.staffAssignments?.adhocFlights || []).find((af: any) => af && (af.id === job.id || (af.flightNumber && af.flightNumber.replace(/\s+/g, '').toLowerCase() === (job.flightNumber || '').replace(/\s+/g, '').toLowerCase())))?.co;
+      const canLogFlight = isAssignedToMe || isManagerOrAdmin || (isDomesticTeamMember && isDomesticOrAdhoc);
+      const canEditAircraft = isAssignedToMe || isManagerOrAdmin || (isDomesticTeamMember && isDomesticOrAdhoc);
       const canEditStand = isManagerOrAdmin;
       const usersList = staff && staff.length > 0 ? staff : MOCK_USERS;
       const assignee = usersList.find(u => u.id === job.assignedTo || u.name.toLowerCase() === (job.assignedTo || '').toLowerCase());
@@ -1127,10 +1224,10 @@ const ScreenDashboard: React.FC<{
       const inboundFlightNumber = isIntl ? flightRadarService.resolveInboundFlightNumber(job, externalFlights, internationalSchedules) : job.flightNumber;
 
       return (
-          <div key={job.id} className={`bg-surface-container-lowest p-6 rounded-2xl relative transition-all shrink-0 border ${isAssignedToMe ? 'border-primary border-l-[6px] shadow-sm' : 'border-outline opacity-80'} ${activeMenuJobId === job.id || activeDetailsJobId === job.id ? 'z-40' : 'z-10'}`}>
+          <div key={job.id} className={`bg-surface-container-lowest p-4 sm:p-5 rounded-2xl relative transition-all shrink-0 border ${isAssignedToMe ? 'border-primary border-l-[6px] shadow-sm' : isDomesticOrAdhoc ? 'border-outline/70 shadow-sm' : 'border-outline opacity-80'} ${activeMenuJobId === job.id || activeDetailsJobId === job.id ? 'z-40' : 'z-10'}`}>
               <div className="relative z-10">
                   {/* Job Card Header */}
-                  <div className="mb-4 sm:mb-6 w-full relative">
+                  <div className={isDomesticOrAdhoc ? "w-full relative" : "mb-2.5 sm:mb-3 w-full relative"}>
                       {/* Top Row: Flight number & stand on left, Action buttons on right (mobile & desktop aligned) */}
                       <div className="flex items-center justify-between gap-2 sm:gap-4 w-full">
                           <div className="flex items-center gap-2 flex-wrap min-w-0">
@@ -1152,17 +1249,39 @@ const ScreenDashboard: React.FC<{
                                   <h3 className="text-2xl sm:text-3xl font-[900] text-on-surface tracking-tighter leading-none shrink-0 whitespace-nowrap">{job.flightNumber}</h3>
                               </div>
 
-                              {/* Tail Logo right next to flight number (desktop only; mobile displays logo on row 2 near airline name) */}
-                              {logoUrl && (
-                                  <div className="hidden md:flex w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0 items-center justify-center">
-                                      <img
-                                          src={logoUrl}
-                                          alt=""
-                                          aria-hidden="true"
-                                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                          className="w-full h-full object-contain select-none flex-shrink-0"
-                                      />
+                              {/* Domestic airline logo & name next to flight number */}
+                              {(job.isDomestic || isDomesticFlight(job) || viewMode === 'DOM') ? (
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                      {logoUrl && (
+                                          <div className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 flex items-center justify-center">
+                                              <img
+                                                  src={logoUrl}
+                                                  alt=""
+                                                  aria-hidden="true"
+                                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                  className="w-full h-full object-contain select-none"
+                                              />
+                                          </div>
+                                      )}
+                                      {airlineName && (
+                                          <span className="text-[11px] sm:text-xs font-black text-on-surface-dim opacity-70 uppercase tracking-wider whitespace-nowrap">
+                                              {airlineName}
+                                          </span>
+                                      )}
                                   </div>
+                              ) : (
+                                  /* Tail Logo right next to flight number (desktop only for international; mobile displays logo on row 2) */
+                                  logoUrl && (
+                                      <div className="hidden md:flex w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0 items-center justify-center">
+                                          <img
+                                              src={logoUrl}
+                                              alt=""
+                                              aria-hidden="true"
+                                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                              className="w-full h-full object-contain select-none flex-shrink-0"
+                                          />
+                                      </div>
+                                  )
                               )}
 
                               {/* Dispatch Status Badge (Rendered AFTER airline logo, NO glow, NO bounce) */}
@@ -1231,12 +1350,12 @@ const ScreenDashboard: React.FC<{
                                   </div>
                               )}
 
-                              {/* Desktop-only details: type, reg, and route */}
+                              {/* Desktop-only details: reg, type, and route */}
                               <div className="hidden md:flex items-center gap-2.5 text-[11px] sm:text-[12px] font-bold text-on-surface-dim">
                                   <span className="opacity-20">|</span>
-                                  <span className="opacity-60">{job.aircraftType}</span>
+                                  <span className="font-black text-on-surface tracking-tight">{job.aircraftReg}</span>
                                   <span className="opacity-20">|</span>
-                                  <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black text-on-surface-dim border-transparent uppercase tracking-wider">{job.aircraftReg}</span>
+                                  <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black text-on-surface-dim border-transparent uppercase tracking-wider">{job.aircraftType}</span>
                                   {canEditAircraft && (
                                       <button
                                           type="button"
@@ -1250,27 +1369,43 @@ const ScreenDashboard: React.FC<{
                                   {job.route && (
                                       <>
                                           <span className="opacity-20">|</span>
-                                          {renderRoute(job.route, "text-primary text-[10px]", job.isDomestic)}
+                                          {renderRoute(job.route, "text-primary text-[10px]", job.isDomestic || (job as any).isAdhoc)}
+                                      </>
+                                  )}
+                                  {activeEqId && (
+                                      <>
+                                          <span className="opacity-20">|</span>
+                                          <div className={`flex items-center space-x-1 px-2 py-0.5 rounded-md border shadow-sm shrink-0 ${equipmentBadgeClass(activeEqId)}`}>
+                                              <Truck className="w-3 h-3" />
+                                              <span className="text-[9px] font-black uppercase tracking-widest leading-none">{activeEqId}</span>
+                                          </div>
                                       </>
                                   )}
                               </div>
                           </div>
 
                           {/* Desktop Center-Aligned Timings (lg+ only) */}
-                          <div className="hidden lg:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/30 px-4 py-2 rounded-xl border border-outline absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm pointer-events-none">
-                              <div className="flex items-center gap-2">
-                                  <span className="opacity-40 text-[10px]">STA</span>
-                                  <span className="text-on-surface text-[14px] font-black tracking-tight">{job.sta || '--:--'}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                  <span className="text-primary opacity-60 text-[10px]">ETA</span>
-                                  <span className={`${delayed ? 'text-error' : 'text-primary'} text-[14px] font-black tracking-tight`}>{job.eta || '--:--'}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
+                          {isDomesticOrAdhoc ? (
+                              <div className="hidden lg:flex items-center gap-2 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/30 px-3.5 py-1.5 rounded-xl border border-outline absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm pointer-events-none">
                                   <span className="text-warning opacity-60 text-[10px]">STD</span>
                                   <span className="text-warning text-[14px] font-black tracking-tight">{job.std || '--:--'}</span>
                               </div>
-                          </div>
+                          ) : (
+                              <div className="hidden lg:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/30 px-4 py-2 rounded-xl border border-outline absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm pointer-events-none">
+                                  <div className="flex items-center gap-2">
+                                      <span className="opacity-40 text-[10px]">STA</span>
+                                      <span className="text-on-surface text-[14px] font-black tracking-tight">{job.sta || '--:--'}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                      <span className="text-primary opacity-60 text-[10px]">ETA</span>
+                                      <span className={`${delayed ? 'text-error' : 'text-primary'} text-[14px] font-black tracking-tight`}>{job.eta || '--:--'}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                      <span className="text-warning opacity-60 text-[10px]">STD</span>
+                                      <span className="text-warning text-[14px] font-black tracking-tight">{job.std || '--:--'}</span>
+                                  </div>
+                              </div>
+                          )}
 
                           {/* Action buttons (compact on mobile to sit next to flight number) */}
                           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 z-20 relative">
@@ -1555,93 +1690,179 @@ const ScreenDashboard: React.FC<{
                                    </>
                                )}
 
-                               {/* play action button if assigned to me, manager/admin, or completed */}
-                               {(canLogFlight || job.status === 'COMPLETED') && (
-                                   <button 
-                                       onClick={() => {
-                                           if (job.status === 'COMPLETED') {
-                                               notify(`Log for ${job.flightNumber} is already finalized.`, "info");
-                                           } else if (canLogFlight) {
-                                               onStartJob(job);
-                                           }
-                                       }}
-                                       className={`w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm cursor-pointer
-                                            ${job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/20' : 'kinetic-gradient text-white hover:scale-[1.05] active:scale-95 shadow-premium'}
-                                        `}
-                                       title={job.status === 'COMPLETED' ? 'View Log' : 'Start Job'}
-                                   >
-                                       {job.status === 'COMPLETED' ? <ChevronRight className="w-5 h-5 sm:w-7 sm:h-7 stroke-[3]" /> : <Play className="w-[18px] h-[18px] sm:w-[24px] sm:h-[24px] flex-shrink-0 ml-0.5" fill="white" color="white" strokeWidth={2.5} />}
-                                   </button>
-                               )}
+                                {/* Status badge: ONLY for domestic and ad-hoc cards on desktop! */}
+                                {isDomesticOrAdhoc && (
+                                    <div className="hidden lg:flex items-center gap-1.5 shrink-0">
+                                        {displayStatus === 'IN_PROGRESS' && (
+                                            <span className="text-[8px] font-black text-warning uppercase tracking-widest animate-pulse">ACTIVE FUELING</span>
+                                        )}
+                                        {renderStatusBadge(displayStatus)}
+                                    </div>
+                                )}
+
+                                {/* play action button if assigned to me, manager/admin, or completed */}
+                                {(canLogFlight || job.status === 'COMPLETED') && (
+                                    <button 
+                                        onClick={() => {
+                                            if (job.status === 'COMPLETED') {
+                                                notify(`Log for ${job.flightNumber} is already finalized.`, "info");
+                                            } else if (canLogFlight) {
+                                                onStartJob(job);
+                                            }
+                                        }}
+                                         className={`w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm cursor-pointer
+                                              ${job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/20' : 'kinetic-gradient text-white hover:scale-[1.05] active:scale-95 shadow-premium'}
+                                         `}
+                                         title={job.status === 'COMPLETED' ? 'View Log' : 'Start Job'}
+                                     >
+                                         {job.status === 'COMPLETED' ? <ChevronRight className="w-5 h-5 sm:w-7 sm:h-7 stroke-[3]" /> : <Play className="w-[18px] h-[18px] sm:w-[24px] sm:h-[24px] flex-shrink-0 ml-0.5" fill="white" color="white" strokeWidth={2.5} />}
+                                     </button>
+                                 )}
+                            </div>
+                        </div>
+
+                      {/* Row 2 on Mobile: */}
+                      {isDomesticOrAdhoc ? (
+                          /* For Domestic / Ad-hoc: Reg + Type + Destination + STD (ALL ON ONE ROW) */
+                          <div className="flex items-center gap-2 mt-2 text-on-surface-dim text-[11px] font-bold md:hidden overflow-x-auto no-scrollbar whitespace-nowrap">
+                              <span className="font-black text-on-surface tracking-tight whitespace-nowrap">{job.aircraftReg}</span>
+                              <span className="opacity-20 shrink-0">|</span>
+                              <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] font-black text-on-surface-dim border-transparent uppercase tracking-wider whitespace-nowrap">{job.aircraftType}</span>
+                              {canEditAircraft && (
+                                  <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); setEditingAircraftJob(job); }}
+                                      className="p-1 rounded-md hover:bg-surface-container text-on-surface-dim hover:text-primary transition-all opacity-60 hover:opacity-100 cursor-pointer"
+                                      title="Edit Aircraft Type & Registration"
+                                  >
+                                      <Pencil className="w-3 h-3" />
+                                  </button>
+                              )}
+                              {job.route && (
+                                  <>
+                                      <span className="opacity-20 shrink-0">|</span>
+                                      {renderRoute(job.route, "text-primary text-[9px] tracking-wide whitespace-nowrap", true)}
+                                  </>
+                              )}
+                              {isAdhocFlightJob && (
+                                  <>
+                                      <span className="opacity-20 shrink-0">|</span>
+                                      <span className="text-warning font-black text-[10px] tracking-wider whitespace-nowrap">STD {job.std || '--:--'}</span>
+                                  </>
+                              )}
                           </div>
-                      </div>
+                      ) : (
+                          /* For International: Tail Logo + Airline Name + Reg + Type + Route */
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-2 text-on-surface-dim text-[11px] font-bold md:hidden">
+                              {logoUrl && (
+                                  <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
+                                      <img
+                                          src={logoUrl}
+                                          alt=""
+                                          aria-hidden="true"
+                                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                          className="w-full h-full object-contain select-none"
+                                      />
+                                  </div>
+                              )}
+                              {airlineName && (
+                                  <span className="text-[11px] font-black text-on-surface-dim opacity-70 uppercase tracking-wider">
+                                      {airlineName}
+                                  </span>
+                              )}
+                              <span className="opacity-20 shrink-0">|</span>
+                              <span className="font-black text-on-surface tracking-tight whitespace-nowrap">{job.aircraftReg}</span>
+                              <span className="opacity-20 shrink-0">|</span>
+                              <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] font-black text-on-surface-dim border-transparent uppercase tracking-wider whitespace-nowrap">{job.aircraftType}</span>
+                              {canEditAircraft && (
+                                  <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); setEditingAircraftJob(job); }}
+                                      className="p-1 rounded-md hover:bg-surface-container text-on-surface-dim hover:text-primary transition-all opacity-60 hover:opacity-100 cursor-pointer"
+                                      title="Edit Aircraft Type & Registration"
+                                  >
+                                      <Pencil className="w-3 h-3" />
+                                  </button>
+                              )}
+                              {job.route && (
+                                  <>
+                                      <span className="opacity-20 shrink-0">|</span>
+                                      {renderRoute(job.route, "text-primary text-[9px] tracking-wide whitespace-nowrap", false)}
+                                  </>
+                              )}
+                          </div>
+                      )}
 
-                      {/* Row 2 on Mobile: Tail Logo + Airline Name + Type + Reg + Route (Full Width) */}
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-2.5 text-on-surface-dim text-[11px] font-bold md:hidden">
-                          {logoUrl && (
-                              <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
-                                  <img
-                                      src={logoUrl}
-                                      alt=""
-                                      aria-hidden="true"
-                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                      className="w-full h-full object-contain select-none"
-                                  />
+                      {/* Row 3 on Mobile for Domestic / Ad-hoc: Bottom Left (C/O or STD / activeEq) + Bottom Right (Status Badge) */}
+                      {isDomesticOrAdhoc && (
+                          <div className="flex items-center justify-between gap-2 mt-2 pt-0.5 md:hidden">
+                              <div className="flex items-center gap-2 min-w-0">
+                                  {isAdhocFlightJob ? (
+                                      adhocCo ? (
+                                          <div className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wider truncate">
+                                              <span className="text-primary/70">C/O:</span>
+                                              <span className="text-on-surface truncate">{adhocCo}</span>
+                                          </div>
+                                      ) : null
+                                  ) : (
+                                      <>
+                                          <div className="flex items-center gap-1.5 shrink-0">
+                                              <span className="text-[9px] font-black text-warning/70 uppercase tracking-widest">STD</span>
+                                              <span className="text-[13px] sm:text-sm font-[900] text-warning tracking-tight">{job.std || '--:--'}</span>
+                                          </div>
+                                          {activeEqId && (
+                                              <div className={`flex items-center space-x-1 px-2 py-0.5 rounded-md border shadow-sm shrink-0 ${equipmentBadgeClass(activeEqId)}`}>
+                                                  <Truck className="w-3 h-3" />
+                                                  <span className="text-[9px] font-black uppercase tracking-widest leading-none">{activeEqId}</span>
+                                              </div>
+                                          )}
+                                      </>
+                                  )}
                               </div>
-                          )}
-                          {airlineName && (
-                              <span className="text-[11px] font-black text-on-surface-dim opacity-70 uppercase tracking-wider">
-                                  {airlineName}
-                              </span>
-                          )}
-                          <span className="opacity-20 shrink-0">|</span>
-                          <span className="opacity-60 whitespace-nowrap">{job.aircraftType}</span>
-                          <span className="opacity-20 shrink-0">|</span>
-                          <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] font-black text-on-surface-dim border-transparent uppercase tracking-wider whitespace-nowrap">{job.aircraftReg}</span>
-                          {canEditAircraft && (
-                              <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); setEditingAircraftJob(job); }}
-                                  className="p-1 rounded-md hover:bg-surface-container text-on-surface-dim hover:text-primary transition-all opacity-60 hover:opacity-100 cursor-pointer"
-                                  title="Edit Aircraft Type & Registration"
-                              >
-                                  <Pencil className="w-3 h-3" />
-                              </button>
-                          )}
-                          {job.route && (
-                              <>
-                                  <span className="opacity-20 shrink-0">|</span>
-                                  {renderRoute(job.route, "text-primary text-[9px] tracking-wide whitespace-nowrap", job.isDomestic)}
-                              </>
-                          )}
-                      </div>
+                              <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                                  {displayStatus === 'IN_PROGRESS' && (
+                                      <span className="text-[8px] font-black text-warning uppercase tracking-widest animate-pulse">ACTIVE FUELING</span>
+                                  )}
+                                  {renderStatusBadge(displayStatus)}
+                              </div>
+                          </div>
+                      )}
 
-                      {/* Desktop-only Airline Name (below flight number) */}
-                      {airlineName && (
+                      {/* Desktop-only Airline Name (below flight number) for International */}
+                      {airlineName && !(job.isDomestic || isDomesticFlight(job) || viewMode === 'DOM') && (
                           <div className="hidden md:block text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1">
                               {airlineName}
                           </div>
                       )}
+
+                      {/* Desktop-only C/O for Ad-hoc (below flight number) */}
+                      {isAdhocFlightJob && adhocCo && (
+                          <div className="hidden md:block text-[10px] font-black uppercase tracking-widest mt-1">
+                              <span className="text-primary/70">C/O:</span> <span className="text-on-surface-dim font-black">{adhocCo}</span>
+                          </div>
+                      )}
                   </div>
 
-                  <div className="mt-6 pt-6 border-t border-outline/50 space-y-4">
-                      {/* Timings displayed on mobile + tablet view — moved above operator/status */}
-                      <div className="grid grid-cols-3 gap-2 p-3 bg-surface-dim rounded-xl border border-outline lg:hidden">
+                  {/* Compact Bottom Details (International flights only) */}
+                  {!isDomesticOrAdhoc && (
+                    <div className="mt-2.5 pt-2.5 border-t border-outline/40 space-y-2.5">
+                      {/* Timings displayed on mobile + tablet view */}
+                      <div className="grid grid-cols-3 gap-2 p-2.5 bg-surface-dim rounded-xl border border-outline lg:hidden">
                           <div className="text-center border-r border-outline/30">
-                              <p className="text-[8px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-1">STA</p>
+                              <p className="text-[8px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-0.5">STA</p>
                               <p className="text-[11px] font-[900] text-on-surface">{job.sta || '--:--'}</p>
                           </div>
                           <div className="text-center border-r border-outline/30">
-                              <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${delayed ? 'text-error opacity-60' : 'text-primary opacity-60'}`}>ETA</p>
+                              <p className={`text-[8px] font-black uppercase tracking-widest mb-0.5 ${delayed ? 'text-error opacity-60' : 'text-primary opacity-60'}`}>ETA</p>
                               <p className={`text-[11px] font-[900] ${delayed ? 'text-error' : 'text-primary'}`}>{job.eta || '--:--'}</p>
                           </div>
                           <div className="text-center">
-                              <p className="text-[8px] font-black text-warning opacity-60 uppercase tracking-widest mb-1">STD</p>
+                              <p className="text-[8px] font-black text-warning opacity-60 uppercase tracking-widest mb-0.5">STD</p>
                               <p className="text-[11px] font-[900] text-warning">{job.std || '--:--'}</p>
                           </div>
                       </div>
 
-                      {/* Row 2: Operator/Team/EQ (Left) & Status/Active Fueling (Right) */}
+                      {/* Row 2: Operator/Team/EQ (Left) & Status Badge (Right) */}
                       <div className="flex items-center justify-between gap-4">
                           <div className="flex items-center text-on-surface-dim font-bold gap-3 flex-wrap">
                                {viewMode === 'INT' && (
@@ -1662,12 +1883,6 @@ const ScreenDashboard: React.FC<{
                                        )}
                                    </>
                                )}
-                               {viewMode === 'DOM' && (job as any).assignedTeam && job.status !== 'PENDING' && (
-                                   <div className="flex items-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest">
-                                       <Users className="w-3.5 h-3.5 mr-1.5 text-primary opacity-70" />
-                                       <span>{(job as any).assignedTeam}</span>
-                                   </div>
-                               )}
                                {activeEqId && (
                                    <div className={`flex items-center space-x-1 px-2 py-0.5 rounded-md border shadow-sm animate-in fade-in zoom-in-95 duration-500 shrink-0 ${equipmentBadgeClass(activeEqId)}`}>
                                        <Truck className="w-3 h-3" />
@@ -1675,15 +1890,17 @@ const ScreenDashboard: React.FC<{
                                    </div>
                                )}
                           </div>
-                          
-                          <div className="flex items-center gap-2 shrink-0">
+
+                          {/* Right: Status badge for International on desktop and mobile */}
+                          <div className="flex items-center gap-1.5 shrink-0">
                               {displayStatus === 'IN_PROGRESS' && (
-                                  <span className="text-[8px] font-black text-warning uppercase tracking-widest animate-pulse">ACTIVE FUELING</span>
+                                  <span className="text-[8px] font-black text-warning uppercase tracking-widest animate-pulse hidden sm:inline">ACTIVE FUELING</span>
                               )}
                               {renderStatusBadge(displayStatus)}
                           </div>
                       </div>
-                  </div>
+                    </div>
+                  )}
               </div>
           </div>
       );
@@ -1891,23 +2108,39 @@ const ScreenTimestamps: React.FC<{
           </div>
 
           {activeFlight?.isAdhoc && (
-              <div className="card-premium p-6 border-outline overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
-                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">C/O (Billing Account)</label>
-                  <div className="flex items-center gap-2 max-w-full overflow-hidden">
-                      <span className="text-2xl sm:text-3xl font-mono font-black text-on-surface-dim opacity-30 shrink-0">C/O-</span>
+              <>
+                  <div className="card-premium p-6 border-outline overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
+                      <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">C/O (Billing Account)</label>
+                      <div className="flex items-center gap-2 max-w-full overflow-hidden">
+                          <span className="text-2xl sm:text-3xl font-mono font-black text-on-surface-dim opacity-30 shrink-0">C/O-</span>
+                          <input 
+                              type="text" 
+                              disabled={isOperator(user.role)}
+                              className="flex-1 min-w-0 text-3xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-primary placeholder:text-primary/10 uppercase tracking-widest"
+                              placeholder="ENTER ACCOUNT"
+                              value={activeFlight.co?.replace(/^C\/O-/i, '') || ''}
+                              onChange={(e) => {
+                                  const val = e.target.value.replace(/^C\/O-/i, '').toUpperCase();
+                                  onInputChange('co', val ? `C/O-${val}` : '');
+                              }}
+                          />
+                      </div>
+                  </div>
+
+                  <div className="card-premium p-6 border-outline overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
+                      <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Operator Name</label>
                       <input 
                           type="text" 
                           disabled={isOperator(user.role)}
-                          className="flex-1 min-w-0 text-3xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-primary placeholder:text-primary/10 uppercase tracking-widest"
-                          placeholder="ENTER ACCOUNT"
-                          value={activeFlight.co?.replace(/^C\/O-/i, '') || ''}
+                          className="w-full text-2xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-on-surface placeholder:text-on-surface/20 uppercase tracking-widest"
+                          placeholder="ENTER OPERATOR NAME"
+                          value={activeFlight.operatorName || ''}
                           onChange={(e) => {
-                              const val = e.target.value.replace(/^C\/O-/i, '').toUpperCase();
-                              onInputChange('co', val ? `C/O-${val}` : '');
+                              onInputChange('operatorName', e.target.value.toUpperCase());
                           }}
                       />
                   </div>
-              </div>
+              </>
           )}
 
           {activeFlight?.vehicleId?.startsWith('HD') && (
@@ -1948,6 +2181,56 @@ const ScreenTimestamps: React.FC<{
                         </div>
                     )}
                 </div>
+            </div>
+          )}
+          {/* Flight Departure & Fuel Request Information Banner */}
+          {(activeFlight?.std || activeFlight?.tobt || activeFlight?.frtAirline || activeFlight?.frtAocc || activeFlight?.frtFor) && (
+            <div className="card-premium p-4 sm:p-5 border-outline bg-surface-container-lowest/90 rounded-2xl flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="block text-[8px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-50">
+                    Departure Timings
+                  </span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {activeFlight.std && (
+                      <span className="font-mono text-warning font-black text-xs">
+                        STD: {activeFlight.std}
+                      </span>
+                    )}
+                    {activeFlight.tobt && (
+                      <span className="font-mono text-amber-400 font-black text-xs bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                        TOBT: {activeFlight.tobt}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {(activeFlight.frtAirline || activeFlight.frtAocc || activeFlight.frtFor) && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {activeFlight.frtAirline && (
+                    <span className="px-2.5 py-1 bg-surface-dim rounded-lg border border-outline text-[10px] font-mono">
+                      <strong className="text-on-surface-dim font-bold opacity-60">FRT Airline: </strong>
+                      <span className="text-on-surface font-black">{activeFlight.frtAirline}</span>
+                    </span>
+                  )}
+                  {activeFlight.frtAocc && (
+                    <span className="px-2.5 py-1 bg-surface-dim rounded-lg border border-outline text-[10px] font-mono">
+                      <strong className="text-on-surface-dim font-bold opacity-60">FRT AOCC: </strong>
+                      <span className="text-on-surface font-black">{activeFlight.frtAocc}</span>
+                    </span>
+                  )}
+                  {activeFlight.frtFor && (
+                    <span className="px-2.5 py-1 bg-primary/10 text-primary rounded-lg border border-primary/20 text-[10px] font-mono font-black">
+                      <strong className="opacity-70">FRT For: </strong>
+                      <span>{activeFlight.frtFor}</span>
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -2349,12 +2632,15 @@ const ScreenMetering: React.FC<{
 const ScreenQC: React.FC<{ 
   activeFlight: Partial<FlightLog> | null, 
   onInputChange: (field: keyof FlightLog, value: any) => void, 
+  onTimestamp?: (field: keyof FlightLog) => void,
+  setManualTime?: (field: keyof FlightLog, val: string) => void,
+  getLocalTimeValue?: (iso?: string) => string,
   onSubmit: () => void, 
   onBack: () => void,
   onClose: () => void,
   loading: boolean,
   user: User
-}> = ({ activeFlight, onInputChange, onSubmit, onBack, onClose, loading, user }) => {
+}> = ({ activeFlight, onInputChange, onTimestamp, setManualTime, getLocalTimeValue, onSubmit, onBack, onClose, loading, user }) => {
   const qcCheckDetails: Record<string, { title: string, subtitle: string }> = {
     panelCheck: {
       title: 'Panel Check',
@@ -2418,17 +2704,68 @@ const ScreenQC: React.FC<{
                    </label>
                );
            })}
-           
-           <div className="pt-6">
-               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Task Remarks & Feedback</label>
-               <textarea 
-                   className="w-full bg-surface-container-low border-2 border-outline rounded-2xl p-5 text-sm font-bold text-on-surface outline-none focus:border-primary transition-all min-h-[120px] placeholder:opacity-20 disabled:opacity-50"
-                   placeholder={isOperator(user.role) ? 'No remarks' : 'Enter any operational remarks, delays, or equipment issues...'}
-                   value={activeFlight?.remarks || ''}
-                   onChange={(e) => onInputChange('remarks', e.target.value)}
-                   disabled={isOperator(user.role)}
-               />
+
+           {/* Operation Clearance (Log Clearance Time) */}
+           <div className="pt-4 border-t border-outline/40">
+              <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-3 opacity-50">
+                 Safety & Ramp Clearance Milestone
+              </label>
+              <div className="flex gap-4 items-stretch w-full">
+                  <button 
+                      type="button"
+                      onClick={() => onTimestamp ? onTimestamp('timestampClearance') : undefined}
+                      disabled={isOperator(user.role)}
+                      className={`flex-1 p-5 sm:p-6 rounded-2xl border-2 text-left transition-all relative overflow-hidden group
+                          ${activeFlight?.timestampClearance 
+                              ? 'bg-success/5 border-success text-on-surface' 
+                              : isOperator(user.role)
+                                  ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
+                                  : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
+                      `}
+                  >
+                      <div className="relative z-10">
+                          <span className="block text-[9px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-1">Safety Milestone</span>
+                          <span className={`block text-lg sm:text-xl font-[900] tracking-tighter ${activeFlight?.timestampClearance ? 'text-success' : 'text-on-surface'}`}>
+                              LOG CLEARANCE TIME
+                          </span>
+                          {activeFlight?.timestampClearance && (
+                              <span className="block mt-2 font-black text-[10px] uppercase tracking-widest text-success flex items-center">
+                                   <Clock className="w-3.5 h-3.5 mr-1.5 opacity-60"/>
+                                   {new Date(activeFlight.timestampClearance).toLocaleTimeString([], { hour12: false })}
+                              </span>
+                          )}
+                      </div>
+                      {!activeFlight?.timestampClearance && <CheckCircle className="absolute right-4 bottom-4 w-12 h-12 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
+                      {activeFlight?.timestampClearance && <CheckCircle className="absolute right-4 bottom-4 w-12 h-12 text-success opacity-10" />}
+                  </button>
+                  <div className="card-premium p-4 border-outline flex flex-col justify-center items-center w-36 sm:w-44 shrink-0">
+                      <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-2 text-center">Manual Time</span>
+                      <div className="relative w-full">
+                          <input 
+                              type="time"
+                              disabled={isOperator(user.role)}
+                              value={activeFlight?.timestampClearance && getLocalTimeValue ? getLocalTimeValue(activeFlight.timestampClearance) : ''}
+                              onChange={(e) => setManualTime ? setManualTime('timestampClearance', e.target.value) : undefined}
+                              className="w-full text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
+                          />
+                      </div>
+                  </div>
+              </div>
            </div>
+
+            {/* Task Remarks & Operational Notes */}
+            <div className="pt-4 border-t border-outline/40">
+               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-3 opacity-50">
+                  Task Remarks & Operational Notes
+               </label>
+               <textarea 
+                 className="w-full bg-surface-dim border border-outline rounded-2xl p-4 text-xs font-bold text-on-surface outline-none focus:border-primary transition-all min-h-[90px] placeholder:opacity-30 disabled:opacity-50"
+                 placeholder={isOperator(user.role) ? 'No remarks' : 'Enter any operational remarks, delays, or equipment notes...'}
+                 value={cleanRemarks(activeFlight?.remarks)}
+                 onChange={(e) => onInputChange('remarks', e.target.value)}
+                 disabled={isOperator(user.role)}
+               />
+            </div>
         </div>
 
         <div className="mt-auto pt-10 space-y-6">
@@ -2465,7 +2802,7 @@ const ScreenQC: React.FC<{
 
 export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob, initialVehicleId, onClearInitialVehicleId }) => {
   const { notify } = useNotification();
-  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, externalFlights, staff, refreshData, selectedBriefingDate, tanks, updateTankLevel, serviceTankId } = useOperationalData();
+  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, externalFlights, staff, refreshData, selectedBriefingDate, tanks, updateTankLevel, serviceTankId, briefingInfo } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(null);
   const [paymentType, setPaymentType] = useState<'CREDIT' | 'CASH' | 'VOID'>('CREDIT');
@@ -2605,6 +2942,8 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   const flightJobsRef = React.useRef(flightJobs);
   const updateEquipmentStatusRef = React.useRef(updateEquipmentStatus);
   const updateFlightJobRef = React.useRef(updateFlightJob);
+  const activeJobRef = React.useRef<{ jobId?: string; flightNumber?: string; vehicleId?: string } | null>(null);
+  const isSubmittingOrCompletingRef = React.useRef(false);
 
   useEffect(() => {
     activeFlightRef.current = activeFlight;
@@ -2626,34 +2965,69 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     updateFlightJobRef.current = updateFlightJob;
   }, [updateFlightJob]);
 
+  const cancelActiveFlightJob = () => {
+    const currentActive = activeFlightRef.current || activeFlight;
+    const currentJobInfo = activeJobRef.current;
+    const targetVehicleId = currentActive?.vehicleId || currentJobInfo?.vehicleId || selectedVehicleIdRef.current || selectedVehicleId;
+
+    // 1. Release equipment back to AVAILABLE
+    if (targetVehicleId) {
+      updateEquipmentStatusRef.current(targetVehicleId, EquipmentStatus.AVAILABLE);
+    }
+
+    // 2. Revert flight job back to PENDING so it can be re-started without active fueling
+    const rawFlightNo = currentActive?.flightNumber || currentJobInfo?.flightNumber || '';
+    const normFlightNo = rawFlightNo.replace(/\s+/g, '').toUpperCase();
+    const knownJobId = (currentActive as any)?.jobId || (currentActive as any)?.id || currentJobInfo?.jobId;
+
+    const allJobs = flightJobsRef.current || flightJobs || [];
+    const matching = allJobs.find(j => 
+      (knownJobId && j.id === knownJobId) ||
+      (normFlightNo && (j.flightNumber || '').replace(/\s+/g, '').toUpperCase() === normFlightNo && j.status !== 'COMPLETED')
+    );
+
+    const finalJobId = matching?.id || knownJobId;
+    if (finalJobId) {
+      updateFlightJobRef.current(finalJobId, { 
+        status: 'PENDING', 
+        vehicleId: undefined,
+        flightNumber: rawFlightNo || matching?.flightNumber
+      });
+    }
+
+    activeJobRef.current = null;
+    activeFlightRef.current = null;
+    setActiveFlight(null);
+  };
+
   useEffect(() => {
     return () => {
-      const activeFl = activeFlightRef.current;
-      const vehicleId = activeFl?.vehicleId || selectedVehicleIdRef.current;
-      const jobs = flightJobsRef.current;
-
-      if (activeFl && vehicleId && !isSubmittingOrCompletingRef.current) {
-        // Release equipment status
-        updateEquipmentStatusRef.current(vehicleId, EquipmentStatus.AVAILABLE);
-
-        // Revert flight job back to PENDING so it can be re-started
-        const cancelledJob = (jobs || []).find(j => j.flightNumber === activeFl.flightNumber && j.status === 'IN_PROGRESS');
-        if (cancelledJob) {
-          updateFlightJobRef.current(cancelledJob.id, { status: 'PENDING', vehicleId: undefined });
-        }
+      if (!isSubmittingOrCompletingRef.current && (activeFlightRef.current || activeJobRef.current)) {
+        cancelActiveFlightJob();
       }
     };
   }, []);
 
   const startJob = (job: FlightJob, vehicleIdOverride?: string) => {
     const activeVehicleId = vehicleIdOverride || selectedVehicleId;
-    const isRfJob = job.equipmentUsage?.toUpperCase() === 'REFUELLER';
+    const isDomFlight = !!job.isDomestic || isDomesticFlight(job);
+    const isRfJob = job.equipmentUsage?.toUpperCase() === 'REFUELLER' || isDomFlight;
     const isHdJob = job.equipmentUsage?.toUpperCase() === 'HYDRANT';
     const isSelectedRf = activeVehicleId?.toUpperCase().startsWith('RF');
     const isSelectedHd = activeVehicleId?.toUpperCase().startsWith('HD');
 
+    if (!activeVehicleId) {
+      notify(`Please select an equipment to start this flight.`, 'warning');
+      const rfEquip = (equipment || []).filter(eq => (isRfJob ? eq.id.startsWith('RF') : true) && (eq.currentVolume || 0) > 0 && eq.status === EquipmentStatus.AVAILABLE);
+      const saved = localStorage.getItem(`fms_last_selected_vehicle_${user.id}`);
+      const defaultSelected = (saved && rfEquip.some(e => e.id === saved)) ? saved : (rfEquip[0]?.id || '');
+      setEquipPickerSelected(defaultSelected);
+      setEquipPickerJob(job);
+      return;
+    }
+
     if (isRfJob && !isSelectedRf) {
-      notify(`This job is assigned as REFUELLER (RF). You must select an RF equipment to start it.`, 'error');
+      notify(`This job requires a REFUELLER (RF). You must select an RF equipment to start it.`, 'error');
       const rfEquip = (equipment || []).filter(eq => eq.id.startsWith('RF') && (eq.currentVolume || 0) > 0 && eq.status === EquipmentStatus.AVAILABLE);
       const saved = localStorage.getItem(`fms_last_selected_vehicle_${user.id}`);
       const defaultSelected = (saved && rfEquip.some(e => e.id === saved)) ? saved : (rfEquip[0]?.id || '');
@@ -2675,14 +3049,30 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     updateEquipmentStatus(activeVehicleId, EquipmentStatus.IN_USE);
 
     // Update flight job status to IN_PROGRESS so Operator Oversight reflects active tasks
-    const matchingJob = (flightJobs || []).find(j => j.flightNumber === job.flightNumber && j.status === 'PENDING');
-    if (matchingJob) {
-      updateFlightJob(matchingJob.id, { 
+    const normJobNo = (job.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+    const matchingJob = (flightJobs || []).find(j => 
+      (job.id && j.id === job.id) ||
+      ((j.flightNumber || '').replace(/\s+/g, '').toUpperCase() === normJobNo && j.status !== 'COMPLETED')
+    );
+    const targetJobId = matchingJob?.id || job.id;
+    const effectiveAssignee = (user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN) 
+      ? (matchingJob?.assignedTo || job.assignedTo || user.id) 
+      : user.id;
+
+    if (targetJobId) {
+      updateFlightJob(targetJobId, { 
         status: 'IN_PROGRESS', 
         vehicleId: activeVehicleId, 
-        assignedTo: matchingJob.assignedTo || user.id 
+        assignedTo: effectiveAssignee,
+        flightNumber: job.flightNumber
       });
     }
+
+    activeJobRef.current = {
+      jobId: targetJobId,
+      flightNumber: job.flightNumber,
+      vehicleId: activeVehicleId
+    };
 
     // Fetch last meterClose for this vehicle
     // Use parseFloat to handle both string and number values from BigQuery API
@@ -2707,14 +3097,20 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
     setSelectedVehicleId(activeVehicleId);
 
+    const matchingAdhoc = (briefingInfo?.staffAssignments?.adhocFlights || []).find((af: any) => 
+      af && (af.id === job.id || (af.flightNumber && af.flightNumber.replace(/\s+/g, '').toLowerCase() === (job.flightNumber || '').replace(/\s+/g, '').toLowerCase()))
+    );
+    const resolvedCo = (job as any).co || matchingAdhoc?.co || '';
+    const resolvedOperatorName = (job as any).operatorName || matchingAdhoc?.operatorName || '';
+
     setActiveFlight({
+      id: targetJobId,
+      jobId: targetJobId,
       flightNumber: job.flightNumber,
       aircraftReg: job.aircraftReg,
       aircraftType: job.aircraftType,
       stand: job.stand,
-      operatorId: (user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN) 
-        ? (job.assignedTo || user.id) 
-        : user.id,
+      operatorId: effectiveAssignee,
       vehicleId: activeVehicleId,
       status: 'PENDING',
       meterOpen: initialMeter,
@@ -2723,18 +3119,33 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       walkAroundCheck: false,
       appearanceCheck: false,
       waterCheck: false,
-      remarks: '',
+      remarks: cleanRemarks(job.remarks || ''),
       isAdhoc: job.isAdhoc,
       route: job.route,
-      isDomestic: job.isDomestic,
+      isDomestic: isDomFlight,
       officer: job.assignedOfficer || '',
       operationalDate: job.date || selectedBriefingDate || new Date().toISOString().split('T')[0],
-    });
+      std: job.std,
+      tobt: job.tobt,
+      frtAirline: job.frtAirline,
+      frtAocc: job.frtAocc,
+      frtFor: job.frtFor,
+      timestampClearance: job.timestampClearance,
+      co: resolvedCo,
+      operatorName: resolvedOperatorName,
+    } as any);
     navigateToScreen('timestamps');
   };
 
   const handleTimestamp = (field: keyof FlightLog) => {
     if (!activeFlight) return;
+
+    if (field === 'timestampClearance') {
+      if (!activeFlight.timestampStart && !activeFlight.timestampInitialEnd) {
+        notify('Cannot log Clearance before fueling has commenced or completed.', 'warning');
+        return;
+      }
+    }
 
     const TIMESTAMP_SEQUENCE: (keyof FlightLog)[] = [
       'timestampArrived',
@@ -2783,9 +3194,16 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
     setActiveFlight(prev => {
       if (!prev) return prev;
+      const nextVal = prev[field] ? undefined : new Date().toISOString();
+      if (field === 'timestampClearance') {
+        const targetId = prev.id || (prev as any).jobId;
+        if (targetId) {
+          updateFlightJob(targetId, { timestampClearance: nextVal });
+        }
+      }
       return {
         ...prev,
-        [field]: prev[field] ? undefined : new Date().toISOString()
+        [field]: nextVal
       };
     });
   };
@@ -2826,6 +3244,12 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
             notify(`Cannot undo "${FIELD_LABELS[field]}". Please undo "${FIELD_LABELS[subsequentField]}" first.`, 'warning');
             return;
           }
+        }
+      }
+      if (field === 'timestampClearance') {
+        const targetId = activeFlight.id || (activeFlight as any).jobId;
+        if (targetId) {
+          updateFlightJob(targetId, { timestampClearance: undefined });
         }
       }
       handleInputChange(field, undefined);
@@ -2869,10 +3293,16 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     const localDate = new Date();
     localDate.setFullYear(year, month - 1, day);
     localDate.setHours(hours, minutes, 0, 0);
-    handleInputChange(field, localDate.toISOString());
-  };
+    const isoVal = localDate.toISOString();
+    handleInputChange(field, isoVal);
 
-  const isSubmittingOrCompletingRef = React.useRef(false);
+    if (field === 'timestampClearance') {
+      const targetId = activeFlight.id || (activeFlight as any).jobId;
+      if (targetId) {
+        updateFlightJob(targetId, { timestampClearance: isoVal });
+      }
+    }
+  };
 
   const navigateToScreen = (screen: 'dashboard' | 'timestamps' | 'metering' | 'qc') => {
     setCurrentScreen(screen);
@@ -2887,19 +3317,11 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     isSubmittingOrCompletingRef.current = true;
     if (successMessage) {
       notify(successMessage, "success");
+      activeJobRef.current = null;
+      activeFlightRef.current = null;
+      setActiveFlight(null);
     } else {
-      // It's a cancel: release equipment and revert flight job status
-      const vehicleToRelease = activeFlight?.vehicleId || selectedVehicleId;
-      if (vehicleToRelease) {
-        updateEquipmentStatus(vehicleToRelease, EquipmentStatus.AVAILABLE);
-      }
-      // Revert flight job back to PENDING so it can be re-started
-      if (activeFlight) {
-        const cancelledJob = (flightJobs || []).find(j => j.flightNumber === activeFlight.flightNumber && j.status === 'IN_PROGRESS');
-        if (cancelledJob) {
-          updateFlightJob(cancelledJob.id, { status: 'PENDING', vehicleId: undefined });
-        }
-      }
+      cancelActiveFlightJob();
     }
     
     let stepsBack = 0;
@@ -2907,56 +3329,57 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     else if (currentScreen === 'metering') stepsBack = -2;
     else if (currentScreen === 'qc') stepsBack = -3;
 
+    setCurrentScreen('dashboard');
+
     if (stepsBack < 0) {
-      window.history.go(stepsBack);
-    } else {
-      setActiveFlight(null);
-      setCurrentScreen('dashboard');
+      try {
+        window.history.go(stepsBack);
+      } catch (e) {}
     }
+    setTimeout(() => {
+      isSubmittingOrCompletingRef.current = false;
+    }, 200);
   };
 
   const handleBackToDashboard = () => {
     isSubmittingOrCompletingRef.current = true;
-    // If a job was started, release the equipment and revert flight job status
-    const vehicleToRelease = activeFlight?.vehicleId || selectedVehicleId;
-    if (vehicleToRelease) {
-      updateEquipmentStatus(vehicleToRelease, EquipmentStatus.AVAILABLE);
-    }
-    if (activeFlight) {
-      const cancelledJob = (flightJobs || []).find(j => j.flightNumber === activeFlight.flightNumber && j.status === 'IN_PROGRESS');
-      if (cancelledJob) {
-        updateFlightJob(cancelledJob.id, { status: 'PENDING', vehicleId: undefined });
-      }
-    }
-    setActiveFlight(null);
+    cancelActiveFlightJob();
     setCurrentScreen('dashboard');
+
+    if (window.history.state?.itpScreen) {
+      try {
+        window.history.back();
+      } catch (e) {}
+    }
+
+    setTimeout(() => {
+      isSubmittingOrCompletingRef.current = false;
+    }, 150);
   };
 
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
       if (isSubmittingOrCompletingRef.current) {
-        if (!e.state?.itpScreen || e.state.itpScreen === 'dashboard') {
-          isSubmittingOrCompletingRef.current = false;
-          setActiveFlight(null);
-          setCurrentScreen('dashboard');
-        }
+        setActiveFlight(null);
+        setCurrentScreen('dashboard');
         return;
       }
 
-      if (e.state && e.state.fmsActive) {
-        const targetScreen = e.state.itpScreen || 'dashboard';
+      const targetScreen = e.state?.itpScreen;
+      if (targetScreen && ['timestamps', 'metering', 'qc'].includes(targetScreen)) {
         if (targetScreen !== currentScreen) {
-          if (targetScreen === 'dashboard') {
-            handleBackToDashboard();
-          } else {
-            setCurrentScreen(targetScreen);
-          }
+          setCurrentScreen(targetScreen);
+        }
+      } else {
+        // Popped back to dashboard (or out of ITP sub-screens)
+        if (currentScreen !== 'dashboard') {
+          handleBackToDashboard();
         }
       }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [currentScreen, activeFlight, selectedVehicleId]);
+  }, [currentScreen]);
 
   const handleInputChange = (field: keyof FlightLog, value: any) => {
     setActiveFlight(prev => {
@@ -3039,6 +3462,11 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         timestampFinalStart: activeFlight.timestampFinalStart,
         timestampFinalEnd: activeFlight.timestampFinalEnd,
         timestampClearance: activeFlight.timestampClearance || new Date().toISOString(),
+        std: activeFlight.std,
+        tobt: activeFlight.tobt,
+        frtAirline: activeFlight.frtAirline,
+        frtAocc: activeFlight.frtAocc,
+        frtFor: activeFlight.frtFor,
         meterOpen: activeFlight.meterOpen,
         volume: activeFlight.volume || 0,
         panelCheck: activeFlight.panelCheck || false,
@@ -3110,9 +3538,12 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       }
 
       // Find matching flight job and mark it as COMPLETED in the database
-      const matchingJob = (flightJobs || []).find(job => job.flightNumber === activeFlight.flightNumber && job.status !== 'COMPLETED');
+      const matchingJob = (flightJobs || []).find(job => (activeFlight.id && job.id === activeFlight.id) || (job.flightNumber === activeFlight.flightNumber && job.status !== 'COMPLETED'));
       if (matchingJob) {
-        await updateFlightJob(matchingJob.id, { status: 'COMPLETED' });
+        await updateFlightJob(matchingJob.id, { 
+          status: 'COMPLETED',
+          timestampClearance: logToSave.timestampClearance
+        });
       }
 
       await refreshData();
@@ -3476,7 +3907,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 onTimestamp={handleTimestamp} 
                 onInputChange={handleInputChange}
                 onNext={() => navigateToScreen('metering')}
-                onBack={() => window.history.back()}
+                onBack={handleBackToDashboard}
                 user={user}
                 getLocalTimeValue={getLocalTimeValue}
                 setManualTime={setManualTime}
@@ -3500,6 +3931,9 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
               <ScreenQC 
                 activeFlight={activeFlight} 
                 onInputChange={handleInputChange}
+                onTimestamp={handleTimestamp}
+                setManualTime={setManualTime}
+                getLocalTimeValue={getLocalTimeValue}
                 onSubmit={() => setShowConfirmModal(true)}
                 onBack={() => window.history.back()}
                 onClose={() => completeOrCancelJobAndExit()}
@@ -3554,7 +3988,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                   .filter(eq => {
                     const isRf = eq.id.startsWith('RF');
                     const isHd = eq.id.startsWith('HD');
-                    const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER';
+                    const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER' || equipPickerJob?.isDomestic || isDomesticFlight(equipPickerJob);
                     const isHdJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'HYDRANT';
                     
                     if (isRfJob) {
@@ -3563,10 +3997,10 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                     if (isHdJob) {
                       return isHd;
                     }
-                    return false;
+                    return (isRf && (eq.currentVolume || 0) > 0 && (eq.status === EquipmentStatus.AVAILABLE || eq.id === equipPickerSelected)) || isHd;
                   })
                   .map(eq => {
-                    const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER';
+                    const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER' || equipPickerJob?.isDomestic || isDomesticFlight(equipPickerJob);
                     const activeJob = (flightJobs || []).find(fj => fj.status === 'IN_PROGRESS' && fj.vehicleId?.toUpperCase() === eq.id.toUpperCase());
                     const isSelected = equipPickerSelected === eq.id;
                     const isDisabled = !isRfJob && !!activeJob;
@@ -3617,11 +4051,11 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                   const list = (equipment || []).filter(eq => {
                     const isRf = eq.id.startsWith('RF');
                     const isHd = eq.id.startsWith('HD');
-                    const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER';
+                    const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER' || equipPickerJob?.isDomestic || isDomesticFlight(equipPickerJob);
                     const isHdJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'HYDRANT';
                     if (isRfJob) return isRf && (eq.currentVolume || 0) > 0 && (eq.status === EquipmentStatus.AVAILABLE || eq.id === equipPickerSelected);
                     if (isHdJob) return isHd;
-                    return false;
+                    return (isRf && (eq.currentVolume || 0) > 0 && (eq.status === EquipmentStatus.AVAILABLE || eq.id === equipPickerSelected)) || isHd;
                   });
                   return list.length === 0 ? (
                     <div className="p-6 text-center">
