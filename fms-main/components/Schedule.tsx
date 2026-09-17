@@ -298,10 +298,13 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
   const {
     equipment,
     flightJobs,
+    rawFlightJobs,
     briefingInfo,
     updateFlightJob,
     addFlightJob,
     deleteFlightJob,
+    flightLogs,
+    updateFlightLog,
     staff,
     selectedBriefingShift,
     setSelectedBriefingShift,
@@ -658,22 +661,120 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
       frozen.intl.filter((ff: any) => !isDomesticFlight(ff) && !isAdhocFlight(ff)).forEach((ff: any) => {
         const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
         const existing = flightMap.get(cleanNo);
+        const liveJob = (flightJobs || []).find(fj => {
+          const c = (fj.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+          const jDate = fj.date ? fj.date.split('T')[0] : '';
+          if (jDate && todayDate && jDate !== todayDate) return false;
+          const dateMatch = !jDate || !todayDate || jDate === todayDate;
+          return dateMatch && (c === cleanNo || (fj.id && (fj.id === ff.id || fj.id === existing?.id)));
+        });
+
+        const rawDbJob = (rawFlightJobs || []).find(j => {
+          const c = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+          const jDate = j.date ? j.date.split('T')[0] : '';
+          if (jDate && todayDate && jDate !== todayDate) return false;
+          const dateMatch = !jDate || !todayDate || jDate === todayDate;
+          return dateMatch && (c === cleanNo || j.id === ff.id || j.id === existing?.id);
+        });
+
+        const effectiveStatus = (rawDbJob && (rawDbJob.status === 'IN_PROGRESS' || rawDbJob.status === 'COMPLETED'))
+          ? rawDbJob.status
+          : (liveJob && (liveJob.status === 'IN_PROGRESS' || liveJob.status === 'COMPLETED'))
+          ? liveJob.status
+          : (existing?.status || ff.status || rawDbJob?.status || liveJob?.status || 'PENDING');
+
         flightMap.set(cleanNo, {
           ...(existing || {}),
           ...ff,
-          // Preserve any live db updates such as status or stand
-          stand: existing?.stand || ff.stand,
-          status: existing?.status || ff.status,
-          assignedTo: existing?.assignedTo || ff.assignedTo,
-          assignedOfficer: existing?.assignedOfficer || ff.assignedOfficer,
+          // Preserve any live db updates such as status, stand, assignments, vehicle, or timings
+          stand: rawDbJob?.stand || liveJob?.stand || existing?.stand || ff.stand,
+          status: effectiveStatus,
+          std: rawDbJob?.std || liveJob?.std || existing?.std || ff.std,
+          tobt: rawDbJob?.tobt || liveJob?.tobt || existing?.tobt || ff.tobt,
+          frtAirline: rawDbJob?.frtAirline || liveJob?.frtAirline || existing?.frtAirline || ff.frtAirline,
+          frtAocc: rawDbJob?.frtAocc || liveJob?.frtAocc || existing?.frtAocc || ff.frtAocc,
+          frtFor: rawDbJob?.frtFor || liveJob?.frtFor || existing?.frtFor || ff.frtFor,
+          assignedTo: (rawDbJob && rawDbJob.assignedTo !== undefined && rawDbJob.assignedTo !== null)
+            ? rawDbJob.assignedTo
+            : (liveJob && liveJob.assignedTo !== undefined && liveJob.assignedTo !== null)
+            ? liveJob.assignedTo
+            : (existing && existing.assignedTo !== undefined && existing.assignedTo !== null)
+            ? existing.assignedTo
+            : (ff.assignedTo || ''),
+          assignedOfficer: (rawDbJob && rawDbJob.assignedOfficer !== undefined && rawDbJob.assignedOfficer !== null)
+            ? rawDbJob.assignedOfficer
+            : (liveJob && liveJob.assignedOfficer !== undefined && liveJob.assignedOfficer !== null)
+            ? liveJob.assignedOfficer
+            : (existing && existing.assignedOfficer !== undefined && existing.assignedOfficer !== null)
+            ? existing.assignedOfficer
+            : (ff.assignedOfficer || ''),
+          vehicleId: rawDbJob?.vehicleId !== undefined ? rawDbJob.vehicleId : (liveJob?.vehicleId !== undefined ? liveJob.vehicleId : (existing?.vehicleId || ff.vehicleId)),
         });
       });
 
-      return Array.from(flightMap.values()).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+      const seenKeys = new Set<string>();
+      return Array.from(flightMap.values()).filter(f => {
+        if (!f.id || seenKeys.has(f.id)) return false;
+        seenKeys.add(f.id);
+        return true;
+      }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
     }
 
-    return [...liveFiltered].sort((a, b) => (a.std || '').localeCompare(b.std || ''));
-  }, [flightJobs, selectedBriefingShift, todayDate, briefingInfo]);
+    // Reconcile non-frozen flights with any live job updates strictly matching the operational date
+    const reconciledLive = liveFiltered.map(f => {
+      const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      const flightDate = f.date ? f.date.split('T')[0] : todayDate;
+      const liveJob = (flightJobs || []).find(fj => {
+        const c = (fj.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const jDate = fj.date ? fj.date.split('T')[0] : '';
+        if (jDate && flightDate && jDate !== flightDate) return false;
+        return (c === cleanNo || (fj.id && fj.id === f.id)) && (!jDate || !flightDate || jDate === flightDate);
+      });
+      const rawDbJob = (rawFlightJobs || []).find(j => {
+        const c = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const jDate = j.date ? j.date.split('T')[0] : '';
+        if (jDate && flightDate && jDate !== flightDate) return false;
+        return (c === cleanNo || j.id === f.id) && (!jDate || !flightDate || jDate === flightDate);
+      });
+      const effectiveStatus = (rawDbJob && (rawDbJob.status === 'IN_PROGRESS' || rawDbJob.status === 'COMPLETED'))
+        ? rawDbJob.status
+        : (liveJob && (liveJob.status === 'IN_PROGRESS' || liveJob.status === 'COMPLETED'))
+        ? liveJob.status
+        : (f.status || rawDbJob?.status || liveJob?.status || 'PENDING');
+
+      if (liveJob || rawDbJob) {
+        return {
+          ...f,
+          stand: rawDbJob?.stand || liveJob?.stand || f.stand,
+          status: effectiveStatus,
+          std: rawDbJob?.std || liveJob?.std || f.std,
+          tobt: rawDbJob?.tobt || liveJob?.tobt || f.tobt,
+          frtAirline: rawDbJob?.frtAirline || liveJob?.frtAirline || f.frtAirline,
+          frtAocc: rawDbJob?.frtAocc || liveJob?.frtAocc || f.frtAocc,
+          frtFor: rawDbJob?.frtFor || liveJob?.frtFor || f.frtFor,
+          assignedTo: (rawDbJob && rawDbJob.assignedTo !== undefined && rawDbJob.assignedTo !== null)
+            ? rawDbJob.assignedTo
+            : (liveJob && liveJob.assignedTo !== undefined && liveJob.assignedTo !== null)
+            ? liveJob.assignedTo
+            : (f.assignedTo || ''),
+          assignedOfficer: (rawDbJob && rawDbJob.assignedOfficer !== undefined && rawDbJob.assignedOfficer !== null)
+            ? rawDbJob.assignedOfficer
+            : (liveJob && liveJob.assignedOfficer !== undefined && liveJob.assignedOfficer !== null)
+            ? liveJob.assignedOfficer
+            : (f.assignedOfficer || ''),
+          vehicleId: rawDbJob?.vehicleId !== undefined ? rawDbJob.vehicleId : (liveJob?.vehicleId !== undefined ? liveJob.vehicleId : f.vehicleId),
+        };
+      }
+      return f;
+    });
+
+    const seenKeys = new Set<string>();
+    return reconciledLive.filter(f => {
+      if (!f.id || seenKeys.has(f.id)) return false;
+      seenKeys.add(f.id);
+      return true;
+    }).sort((a, b) => (a.std || '').localeCompare(b.std || ''));
+  }, [flightJobs, rawFlightJobs, selectedBriefingShift, todayDate, briefingInfo]);
 
   const domesticFlightsToRender = useMemo(() => {
     const frozen = briefingInfo?.staffAssignments?.frozenFlights;
@@ -694,29 +795,90 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
       frozen.domestic.forEach((ff: any) => {
         const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
         const existing = flightMap.get(cleanNo);
+        const liveJob = (flightJobs || []).find(fj => {
+          const c = (fj.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+          const jDate = fj.date ? fj.date.split('T')[0] : '';
+          if (jDate && todayDate && jDate !== todayDate) return false;
+          return (c === cleanNo || (fj.id && (fj.id === ff.id || fj.id === existing?.id))) && (!jDate || !todayDate || jDate === todayDate);
+        });
+        const rawDbJob = (rawFlightJobs || []).find(fj => {
+          const c = (fj.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+          const jDate = fj.date ? fj.date.split('T')[0] : '';
+          if (jDate && todayDate && jDate !== todayDate) return false;
+          return (c === cleanNo || (fj.id && (fj.id === ff.id || fj.id === existing?.id))) && (!jDate || !todayDate || jDate === todayDate);
+        });
+        const effectiveStatus = (rawDbJob && (rawDbJob.status === 'IN_PROGRESS' || rawDbJob.status === 'COMPLETED'))
+          ? rawDbJob.status
+          : (liveJob && (liveJob.status === 'IN_PROGRESS' || liveJob.status === 'COMPLETED'))
+          ? liveJob.status
+          : (existing?.status || ff.status || 'PENDING');
+
         flightMap.set(cleanNo, {
           ...(existing || {}),
           ...ff,
-          stand: existing?.stand || ff.stand,
-          status: existing?.status || ff.status,
+          stand: rawDbJob?.stand || liveJob?.stand || existing?.stand || ff.stand,
+          status: effectiveStatus,
+          vehicleId: rawDbJob?.vehicleId || liveJob?.vehicleId || existing?.vehicleId || ff.vehicleId,
         });
       });
 
       return Array.from(flightMap.values()).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
     }
 
-    return [...liveFiltered].sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
-  }, [domesticFlights, selectedBriefingShift, todayDate, briefingInfo]);
+    return [...liveFiltered].map(f => {
+      const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      const flightDate = f.date ? f.date.split('T')[0] : todayDate;
+      const liveJob = (flightJobs || []).find(fj => {
+        const c = (fj.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const jDate = fj.date ? fj.date.split('T')[0] : '';
+        if (jDate && flightDate && jDate !== flightDate) return false;
+        return (c === cleanNo || (fj.id && fj.id === f.id)) && (!jDate || !flightDate || jDate === flightDate);
+      });
+      const rawDbJob = (rawFlightJobs || []).find(fj => {
+        const c = (fj.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const jDate = fj.date ? fj.date.split('T')[0] : '';
+        if (jDate && flightDate && jDate !== flightDate) return false;
+        return (c === cleanNo || (fj.id && fj.id === f.id)) && (!jDate || !flightDate || jDate === flightDate);
+      });
+      const effectiveStatus = (rawDbJob && (rawDbJob.status === 'IN_PROGRESS' || rawDbJob.status === 'COMPLETED'))
+        ? rawDbJob.status
+        : (liveJob && (liveJob.status === 'IN_PROGRESS' || liveJob.status === 'COMPLETED'))
+        ? liveJob.status
+        : (f.status || 'PENDING');
+      return {
+        ...f,
+        status: effectiveStatus,
+        vehicleId: rawDbJob?.vehicleId || liveJob?.vehicleId || f.vehicleId
+      };
+    }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+  }, [domesticFlights, flightJobs, rawFlightJobs, selectedBriefingShift, todayDate, briefingInfo]);
 
   const adhocFlightsToRender = useMemo(() => {
     const raw = (briefingInfo?.staffAssignments?.adhocFlights || [])
       .filter((af: any) => af && af.id !== 'ah1' && af.id !== 'ah2');
     return raw.map((af: any) => {
       const cleanNo = (af.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-      const matchJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
-      return matchJob ? { ...af, ...matchJob } : af;
+      const flightDate = af.date ? af.date.split('T')[0] : todayDate;
+      const matchJob = (flightJobs || []).find(j => {
+        const c = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const jDate = j.date ? j.date.split('T')[0] : '';
+        if (jDate && flightDate && jDate !== flightDate) return false;
+        return (c === cleanNo || j.id === af.id) && (!jDate || !flightDate || jDate === flightDate);
+      });
+      const rawDbJob = (rawFlightJobs || []).find(j => {
+        const c = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const jDate = j.date ? j.date.split('T')[0] : '';
+        if (jDate && flightDate && jDate !== flightDate) return false;
+        return (c === cleanNo || j.id === af.id) && (!jDate || !flightDate || jDate === flightDate);
+      });
+      return {
+        ...af,
+        ...(matchJob || {}),
+        status: rawDbJob?.status || matchJob?.status || af.status || 'PENDING',
+        vehicleId: rawDbJob?.vehicleId || matchJob?.vehicleId || af.vehicleId
+      };
     });
-  }, [briefingInfo, flightJobs]);
+  }, [briefingInfo, flightJobs, rawFlightJobs, todayDate]);
 
   const domesticTeams = [
     { id: 't1', name: 'Team 1', op1: '', op2: '' },
@@ -739,10 +901,10 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
   );
 
   // Filter operators by those marked present (attendees) in the selected briefing shift
+  const allStaff = (staff && staff.length > 0 ? staff : MOCK_USERS);
   const briefingAttendees = briefingInfo?.staffAssignments?.attendees || [];
 
   const operators = (() => {
-    const allStaff = (staff && staff.length > 0 ? staff : MOCK_USERS);
     if (briefingAttendees.length > 0) {
       return briefingAttendees
         .map(id => allStaff.find(u => u.id === id))
@@ -833,9 +995,16 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
     loadAssignments();
   }, [currentShiftLabel, todayDate, rfHdEquipment.length]);
 
-  const handleAssignFlight = (flightId: string, field: 'assignedTo' | 'assignedOfficer' | 'equipmentUsage', value: string) => {
+  const handleAssignFlight = (flightId: string, field: 'assignedTo' | 'assignedOfficer' | 'equipmentUsage', value: string, flightMeta?: any) => {
     if (isHistoricalView) return;
-    updateFlightJob(flightId, { [field]: value });
+    const meta = flightMeta || (scheduledFlights || []).find((f: any) => f.id === flightId) || (flightJobs || []).find(f => f.id === flightId);
+    const resolvedFlightNumber = meta?.flightNumber || (flightId.startsWith('departure-') || flightId.startsWith('arrival-') ? flightId.split('-')[1] : undefined);
+    const resolvedDate = meta?.date ? meta.date.split('T')[0] : (flightId.startsWith('departure-') || flightId.startsWith('arrival-') ? flightId.split('-')[2] : todayDate);
+    updateFlightJob(flightId, { 
+      [field]: value,
+      flightNumber: resolvedFlightNumber,
+      date: resolvedDate || todayDate
+    });
   };
 
   const handleSaveStand = async (newStand: string) => {
@@ -859,6 +1028,36 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
     if (!editingFrtFlight) return;
     try {
       await updateFlightJob(editingFrtFlight.id, updates);
+
+      // Retrospectively sync with saved flight log in BigQuery/state if flight was already completed/logged
+      const cleanEditingFlight = (editingFrtFlight.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+      const flightDate = editingFrtFlight.date ? editingFrtFlight.date.split('T')[0] : todayDate;
+
+      const matchingLogs = (flightLogs || []).filter(log => {
+        if (!log || !log.flightNumber) return false;
+        const logFlight = log.flightNumber.replace(/\s+/g, '').toUpperCase();
+        if (logFlight !== cleanEditingFlight) return false;
+        const logDate = log.operationalDate ? log.operationalDate.split('T')[0] : '';
+        if (logDate && flightDate && logDate !== flightDate) return false;
+        return true;
+      });
+
+      for (const log of matchingLogs) {
+        if (log.id && updateFlightLog) {
+          try {
+            await updateFlightLog(log.id, {
+              std: updates.std,
+              tobt: updates.tobt,
+              frtAirline: updates.frtAirline,
+              frtAocc: updates.frtAocc,
+              frtFor: updates.frtFor,
+            });
+          } catch (logErr) {
+            console.warn(`[Schedule] Could not update saved flight log ${log.id} with FRT:`, logErr);
+          }
+        }
+      }
+
       notify(`Timings & FRT updated for Flight ${editingFrtFlight.flightNumber}`, 'success');
     } catch (err) {
       console.error('Failed to update timings & FRT:', err);
@@ -904,24 +1103,32 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
 
   const renderOperatorSelect = (value: string, onChange: (val: string) => void, disabled?: boolean) => {
     const isDisabled = disabled || isHistoricalView;
+    const isAssigned = Boolean(value && (operators.some(op => op.id === value) || allStaff.some(s => s.id === value)));
+    const extraStaff = (value && !operators.some(op => op.id === value)) ? allStaff.find(s => s.id === value) : null;
+
     return (
       <div className="relative group/select">
         <select
-          value={value || ""}
+          value={isAssigned ? value : ""}
           onChange={(e) => onChange(e.target.value)}
           disabled={isDisabled}
           className={`block w-full text-[10px] font-bold rounded-xl focus:border-primary px-3 py-2 border uppercase tracking-wider appearance-none transition-colors ${
             isDisabled
               ? 'bg-surface-dim/40 text-on-surface-dim/40 border-outline/30 cursor-not-allowed select-none opacity-40'
-              : (value || "")
+              : isAssigned
                 ? 'bg-surface-dim text-on-surface border-outline'
                 : 'bg-surface-dim text-error border-outline'
           }`}
         >
-          <option value="" className="bg-surface-dim text-on-surface">-- UNASSIGNED --</option>
+          <option value="" className="bg-surface-dim text-error font-bold">-- UNASSIGNED --</option>
           {operators.map(op => (
             <option key={op.id} value={op.id} className="bg-surface-dim text-on-surface">{op.name.toUpperCase()}</option>
           ))}
+          {extraStaff && (
+            <option key={extraStaff.id} value={extraStaff.id} className="bg-surface-dim text-on-surface">
+              {extraStaff.name.toUpperCase()}
+            </option>
+          )}
         </select>
         <ChevronDown className={`absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-on-surface-dim pointer-events-none ${isDisabled ? 'opacity-20' : 'opacity-40'}`} />
       </div>
@@ -1271,17 +1478,17 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                               <div className="flex space-x-2">
                                 <div className="flex-1">
                                   <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OPERATOR</label>
-                                  {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val), isDeparted)}
+                                  {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val, item), isDeparted)}
                                 </div>
                                 <div className="flex-1">
                                   <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OFFICER</label>
-                                  {renderOperatorSelect(item.assignedOfficer || '', (val) => handleAssignFlight(item.id, 'assignedOfficer', val), isDeparted)}
+                                  {renderOperatorSelect(item.assignedOfficer || '', (val) => handleAssignFlight(item.id, 'assignedOfficer', val, item), isDeparted)}
                                 </div>
                               </div>
                             ) : (
                               <div>
                                 <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OPERATOR</label>
-                                {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val), isDeparted)}
+                                {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val, item), isDeparted)}
                               </div>
                             )}
                           </td>
@@ -1289,7 +1496,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                             <div className="flex justify-end items-center gap-3">
                               {renderStatusBadge(item.status)}
                               <button 
-                                onClick={() => handleAssignFlight(item.id, 'equipmentUsage', activeEquipmentUsage === 'HYDRANT' ? 'REFUELLER' : 'HYDRANT')} 
+                                onClick={() => handleAssignFlight(item.id, 'equipmentUsage', activeEquipmentUsage === 'HYDRANT' ? 'REFUELLER' : 'HYDRANT', item)} 
                                 className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all shrink-0 cursor-pointer ${
                                   activeEquipmentUsage === 'HYDRANT' 
                                     ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white border-transparent' 
@@ -1390,7 +1597,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                         <div className="flex justify-between items-center">
                           <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Assigned Crew</label>
                           <button 
-                            onClick={() => handleAssignFlight(item.id, 'equipmentUsage', activeEquipmentUsage === 'HYDRANT' ? 'REFUELLER' : 'HYDRANT')} 
+                            onClick={() => handleAssignFlight(item.id, 'equipmentUsage', activeEquipmentUsage === 'HYDRANT' ? 'REFUELLER' : 'HYDRANT', item)} 
                             className={`px-3 py-1 text-[8px] font-black uppercase rounded transition-all cursor-pointer ${
                               activeEquipmentUsage === 'HYDRANT' 
                                 ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white border-transparent' 
@@ -1404,17 +1611,17 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                           <div className="grid grid-cols-2 gap-2">
                             <div>
                               <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OPERATOR</label>
-                              {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val), isDeparted)}
+                              {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val, item), isDeparted)}
                             </div>
                             <div>
                               <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OFFICER</label>
-                              {renderOperatorSelect(item.assignedOfficer || '', (val) => handleAssignFlight(item.id, 'assignedOfficer', val), isDeparted)}
+                              {renderOperatorSelect(item.assignedOfficer || '', (val) => handleAssignFlight(item.id, 'assignedOfficer', val, item), isDeparted)}
                             </div>
                           </div>
                         ) : (
                           <div>
                             <label className="block text-[8px] font-black text-on-surface-dim uppercase mb-1 tracking-widest opacity-40">OPERATOR</label>
-                            {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val), isDeparted)}
+                            {renderOperatorSelect(item.assignedTo, (val) => handleAssignFlight(item.id, 'assignedTo', val, item), isDeparted)}
                           </div>
                         )}
                       </div>
@@ -1886,10 +2093,36 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
                   {statusBoardOperators.map((op) => {
-                    const opTasks = scheduledFlights.filter((j: any) => j.assignedTo === op.id || j.assignedOfficer === op.id);
-                    const activeTask = opTasks.find((j: any) => j.status === 'IN_PROGRESS');
-                    const pendingCount = opTasks.filter((j: any) => j.status === 'PENDING').length;
-                    const doneCount = opTasks.filter((j: any) => j.status === 'COMPLETED').length;
+                    const rawOpTasks = scheduledFlights.filter((j: any) => j.assignedTo === op.id || j.assignedOfficer === op.id);
+                    const opTasks = rawOpTasks.map((t: any) => {
+                      const normNo = (t.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+                      const tDate = t.date ? t.date.split('T')[0] : selectedBriefingDate;
+                      const live = (flightJobs || []).find(fj => {
+                        const fjDate = fj.date ? fj.date.split('T')[0] : '';
+                        const dateMatches = !fjDate || !tDate || fjDate === tDate;
+                        return dateMatches && ((t.id && fj.id === t.id) || ((fj.flightNumber || '').replace(/\s+/g, '').toUpperCase() === normNo));
+                      });
+                      if (live) {
+                        return { ...t, status: live.status || t.status, vehicleId: live.vehicleId || t.vehicleId };
+                      }
+                      return t;
+                    });
+                    const liveAssigned = (flightJobs || []).find(fj => {
+                      const fjDate = fj.date ? fj.date.split('T')[0] : '';
+                      const dateMatches = !fjDate || !selectedBriefingDate || fjDate === selectedBriefingDate;
+                      return dateMatches && 
+                        (fj.assignedTo === op.id || fj.assignedOfficer === op.id) && 
+                        (fj.status || '').toUpperCase().replace(/[\s_]+/g, '_') === 'IN_PROGRESS';
+                    });
+                    const activeTask = liveAssigned || opTasks.find((j: any) => (j.status || '').toUpperCase().replace(/[\s_]+/g, '_') === 'IN_PROGRESS');
+                    const pendingCount = opTasks.filter((j: any) => { 
+                      const s = (j.status || '').toUpperCase().replace(/[\s_]+/g, '_'); 
+                      return s !== 'COMPLETED' && s !== 'IN_PROGRESS'; 
+                    }).length;
+                    const doneCount = opTasks.filter((j: any) => { 
+                      const s = (j.status || '').toUpperCase().replace(/[\s_]+/g, '_'); 
+                      return s === 'COMPLETED'; 
+                    }).length;
 
                     const eqAssignment = equipmentAssignments.find(a => a.op1 === op.id || a.op2 === op.id);
                     const domAssignment = domesticTeams.find(a => a.op1 === op.id || a.op2 === op.id);

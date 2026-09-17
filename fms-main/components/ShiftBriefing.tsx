@@ -259,23 +259,23 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
           const cleanNo = (ff.flightNumber || '').replace(/\s+/g, '').toLowerCase();
           frozenMap.set(cleanNo, ff);
         });
-        (flightJobs || []).filter(j => !isDomesticFlight(j) && !isAdhocFlight(j)).forEach((j: any) => {
+        (flightJobs || []).filter(j => !isDomesticFlight(j) && !isAdhocFlight(j) && (!j.date || j.date.split('T')[0] === selectedBriefingDate)).forEach((j: any) => {
           const cleanNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
           if (!frozenMap.has(cleanNo)) {
             frozenMap.set(cleanNo, j);
           } else {
             const existing = frozenMap.get(cleanNo);
-            frozenMap.set(cleanNo, { ...existing, status: j.status || existing.status });
+            frozenMap.set(cleanNo, { ...existing, ...j, status: j.status || existing.status });
           }
         });
         return Array.from(frozenMap.values()).filter((f: any) => {
           const isDep = f.type ? f.type === 'departure' : !!f.std;
-          return !isDomesticFlight(f) && !isAdhocFlight(f) && isDep && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate) && (isHistoricalView || (f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED'));
+          return !isDomesticFlight(f) && !isAdhocFlight(f) && isDep && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate) && (isHistoricalView || (f.status !== 'COMPLETED' && f.status?.toUpperCase() !== 'CANCELLED'));
         }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
       })()
     : (flightJobs || []).filter(f => {
         const isDep = f.type ? f.type === 'departure' : !!f.std;
-        return !isDomesticFlight(f) && !isAdhocFlight(f) && isDep && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate) && (isHistoricalView || (f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED'));
+        return !isDomesticFlight(f) && !isAdhocFlight(f) && isDep && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate) && (isHistoricalView || (f.status !== 'COMPLETED' && f.status?.toUpperCase() !== 'CANCELLED'));
       }).sort((a, b) => (a.std || '').localeCompare(b.std || ''));
 
   const domesticFlightsToRender = frozenFlights?.domestic 
@@ -294,16 +294,45 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
             frozenMap.set(cleanNo, { ...existing, status: j.status || existing.status });
           }
         });
+        // Merge active domestic jobs from flightJobs
+        (flightJobs || []).filter(j => isDomesticFlight(j) && (!j.date || j.date.split('T')[0] === selectedBriefingDate)).forEach((j: any) => {
+          const cleanNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+          const existing = frozenMap.get(cleanNo);
+          if (existing) {
+            frozenMap.set(cleanNo, { ...existing, ...j, status: j.status || existing.status });
+          }
+        });
         return Array.from(frozenMap.values()).filter((f: any) => {
-          return f.type === 'departure' && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate) && (isHistoricalView || (f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED'));
+          return f.type === 'departure' && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate) && (isHistoricalView || (f.status !== 'COMPLETED' && f.status?.toUpperCase() !== 'CANCELLED'));
         }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
       })()
-    : (domesticFlights || []).filter(f => {
-        return f.type === 'departure' && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate) && (isHistoricalView || (f.status !== 'COMPLETED' && f.status !== 'IN_PROGRESS' && f.status?.toUpperCase() !== 'CANCELLED'));
-      }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+    : (domesticFlights || []).map(f => {
+        const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const liveJob = (flightJobs || []).find(j => {
+          if (!j || !j.flightNumber) return false;
+          const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+          if (jNo !== cleanNo) return false;
+          const jDate = j.date ? j.date.split('T')[0] : '';
+          return !jDate || jDate === selectedBriefingDate;
+        });
+        return liveJob ? { ...f, ...liveJob, status: liveJob.status || f.status } : f;
+      }).filter(f => {
+        return f.type === 'departure' && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate) && (isHistoricalView || (f.status !== 'COMPLETED' && f.status?.toUpperCase() !== 'CANCELLED'));
+      }).sort((a, b) => (a.std || '').localeCompare(b.std || ''));
 
   const adhocFlightsToRender = (briefingInfo?.staffAssignments?.adhocFlights || [])
-    .filter((f: any) => f && f.id !== 'ah1' && f.id !== 'ah2');
+    .filter((f: any) => f && f.id !== 'ah1' && f.id !== 'ah2')
+    .map((f: any) => {
+      const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      const liveJob = (flightJobs || []).find(j => {
+        if (!j || !j.flightNumber) return false;
+        const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        if (jNo !== cleanNo) return false;
+        const jDate = j.date ? j.date.split('T')[0] : '';
+        return !jDate || jDate === selectedBriefingDate;
+      });
+      return liveJob ? { ...f, ...liveJob, status: liveJob.status || f.status } : f;
+    });
 
   const formatDateShort = (dateStr: string) => {
     if (!dateStr) return '';

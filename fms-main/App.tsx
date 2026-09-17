@@ -798,9 +798,11 @@ const AppContextContent: React.FC<any> = ({
 
       // Priority 3: Native history state back navigation
       const targetView = e.state?.fmsView;
-      if (targetView && targetView !== activeView) {
-        isNavigatingBackRef.current = true;
-        setActiveView(targetView);
+      if (targetView) {
+        if (targetView !== activeView) {
+          isNavigatingBackRef.current = true;
+          setActiveView(targetView);
+        }
         return;
       }
 
@@ -967,7 +969,7 @@ const AppContextContent: React.FC<any> = ({
             user={currentUser} 
             setActiveView={setActiveView} 
             onStartJob={(job: FlightJob, vehicleId?: string) => {
-              setPendingJob(job);
+              setPendingJob({ ...job, vehicleId: vehicleId || job.vehicleId });
               if (vehicleId) {
                 setPendingVehicleId(vehicleId);
               }
@@ -987,6 +989,7 @@ const AppContextContent: React.FC<any> = ({
             initialVehicleId={pendingVehicleId}
             onClearInitialJob={() => setPendingJob(null)}
             onClearInitialVehicleId={() => setPendingVehicleId(null)}
+            setActiveView={setActiveView}
           />
         );
       case 'forecasting':

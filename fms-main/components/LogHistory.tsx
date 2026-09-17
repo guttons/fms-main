@@ -963,17 +963,16 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                       const operatorName = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => 
                          u.id === log.operatorId || 
                          u.id.toLowerCase() === (log.tacticalOperator || '').toLowerCase() ||
-                         u.name.toLowerCase() === (log.tacticalOperator || '').toLowerCase() ||
-                         u.name.toLowerCase() === (log.operatorName || '').toLowerCase()
-                       )?.name || log.tacticalOperator || log.operatorName || 'Unknown';
+                         u.name.toLowerCase() === (log.tacticalOperator || '').toLowerCase()
+                       )?.name || log.tacticalOperator || '-';
                       const officerName = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => 
                          u.id === log.officer || 
                          u.id.toLowerCase() === (log.officer || '').toLowerCase() ||
                          u.name.toLowerCase() === (log.officer || '').toLowerCase()
-                       )?.name || log.officer || 'N/A';
+                       )?.name || (log.officer && log.officer !== 'ITP Officer' ? log.officer : '-');
                       const isExpanded = expandedLogId === log.id;
                       
-                      const seaplaneOp = log.tacticalOperator || log.operatorName || 'N/A';
+                      const seaplaneOp = log.officer || log.tacticalOperator || '-';
                       const customerName = log.co || log.airline || (log.flightNumber && !log.flightNumber.startsWith('SEAPLANE-') ? log.flightNumber : 'N/A');
                       const pumpId = log.vehicleId || log.aircraftReg.replace('PUMP-', '') || 'N/A';
                       
@@ -1388,11 +1387,11 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                           </div>
                                           <div className="flex flex-col gap-1">
                                             <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">RF Operator</span>
-                                            <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.tacticalOperator || 'N/A'}</span>
+                                            <span className="text-[11px] font-black text-on-surface uppercase tracking-widest">{log.tacticalOperator || '-'}</span>
                                           </div>
                                           <div className="flex flex-col gap-1">
                                             <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">Operator Name</span>
-                                            <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.operatorName || 'N/A'}</span>
+                                            <span className="text-[11px] font-black text-primary uppercase tracking-widest">{log.operatorName || '-'}</span>
                                           </div>
                                           <div className="flex flex-col gap-1">
                                             <span className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">QC Compliance</span>

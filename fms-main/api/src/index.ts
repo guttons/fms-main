@@ -1059,6 +1059,11 @@ const PARAM_TYPES: Record<string, string> = {
   operatorName: 'STRING',
   destination: 'STRING',
   paymentType: 'STRING',
+  std: 'STRING',
+  tobt: 'STRING',
+  frtAirline: 'STRING',
+  frtAocc: 'STRING',
+  frtFor: 'STRING',
 };
 
 app.patch('/operations-log/:id', requireAuth, async (req: Request, res: Response) => {

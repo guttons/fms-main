@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { User, Tank, FlightLog, BridgingLog, Alert, FlightJob, Equipment, StaffMember, UserRole, EquipmentStatus, Vessel, AirlineMaster, FlightMaster, AircraftMaster, AirlineHierarchyNode, InternationalSchedule } from '../types';
+import { User, Tank, FlightLog, BridgingLog, Alert, FlightJob, Equipment, StaffMember, UserRole, EquipmentStatus, Vessel, AirlineMaster, FlightMaster, AircraftMaster, AirlineHierarchyNode, InternationalSchedule, DelayLog } from '../types';
 import { CustomerAccount, UpcomingPayment, Invoice, Receipt, ProformaRecord, FuelRequest, MonthEndVariance, ProcurementPR, SurchargeRecord, MpdSale, CustomsShipment } from '../context/FinanceDataContext';
 import { TANKS, MOCK_USERS, EQUIPMENT } from '../constants';
 import { INITIAL_STAFF_LIST } from '../constants/staffList';
@@ -335,7 +335,7 @@ export const supabaseService = {
             remarks: remarksVal,
             deliveryNumber: row.delivery_number,
             pitNumber: row.pit_number,
-            date: dateVal,
+            date: dateVal || (row.id ? row.id.match(/\d{4}-\d{2}-\d{2}/)?.[0] : undefined),
             route: routeVal,
             isDomestic: isDomesticVal,
             isAdhoc: isAdhocVal,
@@ -365,6 +365,11 @@ export const supabaseService = {
   },
 
   async addFlightJob(job: FlightJob): Promise<void> {
+    if (!job.flightNumber) {
+      console.warn('[Supabase] addFlightJob skipped: flightNumber is required', job);
+      return;
+    }
+
     // 1. Write to local IndexedDB immediately
     await fmsDb.put('flight_jobs', job);
 
@@ -410,16 +415,23 @@ export const supabaseService = {
       timestamp_clearance: job.timestampClearance || null
     };
 
-    // 2. Queue mutation in outbox
-    await fmsDb.enqueueOutbox({
-      action: 'INSERT',
-      entityType: 'flight_job',
-      entityId: job.id,
-      payload: row,
-      idempotencyKey: `fj-ins-${job.id}-${Date.now()}`
-    });
-
-    syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
+    // 2. Direct Supabase upsert with offline outbox fallback
+    try {
+      const { error } = await supabase.from('flight_jobs').upsert([row]);
+      if (error) {
+        console.warn('[Supabase] direct upsert flight_jobs error, enqueuing outbox:', error);
+        throw error;
+      }
+    } catch (e) {
+      await fmsDb.enqueueOutbox({
+        action: 'INSERT',
+        entityType: 'flight_job',
+        entityId: job.id,
+        payload: row,
+        idempotencyKey: `fj-ins-${job.id}-${Date.now()}`
+      });
+      syncEngine.flushOutbox().catch(err => console.warn('[Outbox] Background sync queued offline:', err));
+    }
   },
 
   async updateFlightJob(id: string, updates: Partial<FlightJob>): Promise<void> {
@@ -437,11 +449,11 @@ export const supabaseService = {
     if ('sta' in updates) row.sta = updates.sta === undefined ? null : updates.sta;
     if ('eta' in updates) row.eta = updates.eta === undefined ? null : updates.eta;
     if ('std' in updates) row.std = updates.std === undefined ? null : updates.std;
-    if ('assignedTo' in updates) row.assigned_to = updates.assignedTo === undefined ? null : updates.assignedTo;
-    if ('assignedOfficer' in updates) row.assigned_officer = updates.assignedOfficer === undefined ? null : updates.assignedOfficer;
+    if ('assignedTo' in updates) row.assigned_to = updates.assignedTo ? updates.assignedTo : null;
+    if ('assignedOfficer' in updates) row.assigned_officer = updates.assignedOfficer ? updates.assignedOfficer : null;
     if ('equipmentUsage' in updates) row.equipment_usage = updates.equipmentUsage;
     if ('status' in updates) row.status = updates.status;
-    if ('vehicleId' in updates) row.vehicle_id = updates.vehicleId === undefined ? null : updates.vehicleId;
+    if ('vehicleId' in updates) row.vehicle_id = !updates.vehicleId ? null : updates.vehicleId;
     if ('landed_alert_sent' in updates) row.landed_alert_sent = updates.landed_alert_sent;
     if ('eta_alert_15_sent' in updates) row.eta_alert_15_sent = updates.eta_alert_15_sent;
     if ('eta_alert_5_sent' in updates) row.eta_alert_5_sent = updates.eta_alert_5_sent;
@@ -472,16 +484,30 @@ export const supabaseService = {
     if ('deliveryNumber' in updates) row.delivery_number = updates.deliveryNumber === undefined ? null : updates.deliveryNumber;
     if ('pitNumber' in updates) row.pit_number = updates.pitNumber === undefined ? null : updates.pitNumber;
 
-    // 2. Queue outbox
-    await fmsDb.enqueueOutbox({
-      action: 'UPDATE',
-      entityType: 'flight_job',
-      entityId: id,
-      payload: row,
-      idempotencyKey: `fj-upd-${id}-${Date.now()}`
-    });
-
-    syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
+    // 2. Direct Supabase update with upsert fallback if row not created yet
+    try {
+      const { data, error } = await supabase.from('flight_jobs').update(row).eq('id', id).select('id');
+      if (!data || data.length === 0) {
+        const flightNum = row.flight_number || existing?.flightNumber;
+        if (!flightNum) {
+          console.warn('[Supabase] updateFlightJob cannot insert fallback without flight_number for id:', id);
+          return;
+        }
+        const fullPayload = { id, flight_number: flightNum, ...row };
+        const { error: upsertErr } = await supabase.from('flight_jobs').upsert([fullPayload]);
+        if (upsertErr) throw upsertErr;
+      }
+    } catch (e) {
+      console.warn('[Supabase] direct update flight_jobs error, enqueuing outbox:', e);
+      await fmsDb.enqueueOutbox({
+        action: 'UPDATE',
+        entityType: 'flight_job',
+        entityId: id,
+        payload: row,
+        idempotencyKey: `fj-upd-${id}-${Date.now()}`
+      });
+      syncEngine.flushOutbox().catch(err => console.warn('[Outbox] Background sync queued offline:', err));
+    }
   },
 
   async deleteFlightJob(id: string): Promise<void> {
@@ -614,19 +640,43 @@ export const supabaseService = {
     }
   },
 
-  async createFlightLog(log: Omit<FlightLog, 'id'>): Promise<void> {
+  async createFlightLog(log: Omit<FlightLog, 'id'> & { id?: string }): Promise<FlightLog> {
     console.log('[BigQuery API] POST /operations-log');
+    const generatedId = log.id || `op-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const fullLog: FlightLog = { ...log, id: generatedId };
+
+    // 1. Instantly cache in localStorage so new entries appear immediately and survive page reloads
+    try {
+      const raw = localStorage.getItem('fms_recent_flight_logs');
+      const recent: FlightLog[] = raw ? JSON.parse(raw) : [];
+      const deduped = recent.filter(l => l.id !== fullLog.id && (!fullLog.deliveryNumber || l.deliveryNumber !== fullLog.deliveryNumber));
+      deduped.unshift(fullLog);
+      localStorage.setItem('fms_recent_flight_logs', JSON.stringify(deduped.slice(0, 100)));
+      // Dispatch custom event for real-time reactivity in active tabs
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('fms:flight-log-created', { detail: fullLog }));
+      }
+    } catch (storageErr) {
+      console.warn('[Storage] Failed to cache recent flight log:', storageErr);
+    }
+
     try {
       const headers = await this._bqAuthHeaders();
       const res = await fetch(`${this._bqBase()}/operations-log`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(log),
+        body: JSON.stringify(fullLog),
       });
       if (!res.ok) throw new Error(`BigQuery POST failed: ${res.status} ${await res.text()}`);
+      const data = await res.json().catch(() => ({}));
+      if (data && data.id && data.id !== fullLog.id) {
+        fullLog.id = data.id;
+      }
+      return fullLog;
     } catch (error) {
       console.error('[BigQuery] createFlightLog error:', error);
-      throw error;
+      // Still return fullLog so optimistic local flow succeeded
+      return fullLog;
     }
   },
 
@@ -3241,6 +3291,156 @@ export const supabaseService = {
       target.isActive = isActive;
       await this.saveInternationalSchedule(target);
     }
+  },
+
+  // ── AOCC Delay Records Log ───────────────────────────────────────────────
+  async getDelayLogs(): Promise<DelayLog[]> {
+    if (!this.unmigratedTables.has('delay_logs')) {
+      try {
+        const { data, error } = await supabase
+          .from('delay_logs')
+          .select('*')
+          .order('operational_date', { ascending: false })
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          const mapped: DelayLog[] = data.map((row: any) => ({
+            id: row.id,
+            date: row.operational_date,
+            delayFrom: row.delay_from,
+            operator: row.operator,
+            flightNumber: row.flight_number,
+            delayCode: row.delay_code || '',
+            delayReason: row.delay_reason || '',
+            remarks: row.remarks || '',
+            fuelTeam: row.fuel_team || '',
+            fuelTeamComment: row.fuel_team_comment || '',
+            dutyInCharge: row.duty_in_charge || '',
+            status: row.status || 'PENDING',
+            flightLogId: row.flight_log_id || undefined,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at
+          }));
+          try {
+            localStorage.setItem('fms_delay_logs', JSON.stringify(mapped));
+          } catch (e) {}
+          return mapped;
+        } else if (error && (error.code === '42P01' || error.message?.includes('does not exist'))) {
+          this.unmigratedTables.add('delay_logs');
+        }
+      } catch (e) {
+        this.unmigratedTables.add('delay_logs');
+      }
+    }
+
+    // Local / offline fallback
+    try {
+      const raw = localStorage.getItem('fms_delay_logs');
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return [];
+  },
+
+  async createDelayLog(log: Omit<DelayLog, 'id'>): Promise<DelayLog> {
+    const id = `delay-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const newRecord: DelayLog = {
+      ...log,
+      id,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (!this.unmigratedTables.has('delay_logs')) {
+      try {
+        const row = {
+          operational_date: log.date,
+          delay_from: log.delayFrom,
+          operator: log.operator,
+          flight_number: log.flightNumber,
+          delay_code: log.delayCode,
+          delay_reason: log.delayReason,
+          remarks: log.remarks || null,
+          fuel_team: log.fuelTeam || null,
+          fuel_team_comment: log.fuelTeamComment || null,
+          duty_in_charge: log.dutyInCharge || null,
+          status: log.status || 'PENDING',
+          flight_log_id: log.flightLogId || null
+        };
+        const { data, error } = await supabase.from('delay_logs').insert([row]).select('*').single();
+        if (!error && data) {
+          newRecord.id = data.id;
+          newRecord.createdAt = data.created_at;
+          newRecord.updatedAt = data.updated_at;
+        } else if (error && (error.code === '42P01' || error.message?.includes('does not exist'))) {
+          this.unmigratedTables.add('delay_logs');
+        }
+      } catch (e) {
+        this.unmigratedTables.add('delay_logs');
+      }
+    }
+
+    // Local update
+    try {
+      const existing = await this.getDelayLogs();
+      const updated = [newRecord, ...existing.filter(r => r.id !== newRecord.id)];
+      localStorage.setItem('fms_delay_logs', JSON.stringify(updated));
+    } catch (e) {}
+
+    return newRecord;
+  },
+
+  async updateDelayLog(id: string, updates: Partial<DelayLog>): Promise<void> {
+    if (!this.unmigratedTables.has('delay_logs')) {
+      try {
+        const row: Record<string, any> = { updated_at: new Date().toISOString() };
+        if ('date' in updates) row.operational_date = updates.date;
+        if ('delayFrom' in updates) row.delay_from = updates.delayFrom;
+        if ('operator' in updates) row.operator = updates.operator;
+        if ('flightNumber' in updates) row.flight_number = updates.flightNumber;
+        if ('delayCode' in updates) row.delay_code = updates.delayCode;
+        if ('delayReason' in updates) row.delay_reason = updates.delayReason;
+        if ('remarks' in updates) row.remarks = updates.remarks;
+        if ('fuelTeam' in updates) row.fuel_team = updates.fuelTeam;
+        if ('fuelTeamComment' in updates) row.fuel_team_comment = updates.fuelTeamComment;
+        if ('dutyInCharge' in updates) row.duty_in_charge = updates.dutyInCharge;
+        if ('status' in updates) row.status = updates.status;
+        if ('flightLogId' in updates) row.flight_log_id = updates.flightLogId;
+
+        const { error } = await supabase.from('delay_logs').update(row).eq('id', id);
+        if (error && (error.code === '42P01' || error.message?.includes('does not exist'))) {
+          this.unmigratedTables.add('delay_logs');
+        }
+      } catch (e) {
+        this.unmigratedTables.add('delay_logs');
+      }
+    }
+
+    // Local update
+    try {
+      const existing = await this.getDelayLogs();
+      const updated = existing.map(r => r.id === id ? { ...r, ...updates, updatedAt: new Date().toISOString() } : r);
+      localStorage.setItem('fms_delay_logs', JSON.stringify(updated));
+    } catch (e) {}
+  },
+
+  async deleteDelayLog(id: string): Promise<void> {
+    if (!this.unmigratedTables.has('delay_logs')) {
+      try {
+        const { error } = await supabase.from('delay_logs').delete().eq('id', id);
+        if (error && (error.code === '42P01' || error.message?.includes('does not exist'))) {
+          this.unmigratedTables.add('delay_logs');
+        }
+      } catch (e) {
+        this.unmigratedTables.add('delay_logs');
+      }
+    }
+
+    // Local update
+    try {
+      const existing = await this.getDelayLogs();
+      const updated = existing.filter(r => r.id !== id);
+      localStorage.setItem('fms_delay_logs', JSON.stringify(updated));
+    } catch (e) {}
   }
 };
 

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { User, FlightLog, FlightJob, isDomesticFlight, cleanRemarks } from '../types';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { haptic } from '../utils/haptics';
+import { DelayRecordsLog } from './DelayRecordsLog';
 import { 
   Gauge, 
   Plane, 
@@ -31,6 +32,7 @@ interface RefuelingPerformanceProps {
   user: User;
 }
 
+type PerformanceTab = 'TURNAROUND_MATRIX' | 'DELAY_LOGS';
 type DatePreset = 'ALL' | 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'THIS_MONTH' | 'CUSTOM';
 type CategoryFilter = 'ALL' | 'INTERNATIONAL' | 'DOMESTIC' | 'ADHOC';
 
@@ -139,8 +141,43 @@ const getMinutesBetween = (startStr?: string, endStr?: string): number | null =>
   }
 };
 
+export const getLocalDateString = (d: Date = new Date()): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+export const getLogDate = (item: any): string => {
+  if (item.operationalDate) {
+    return String(item.operationalDate).split('T')[0];
+  }
+  const raw = item.timestampFinalEnd || item.timestampInitialEnd || item.timestampStart || item.timestampClearance || item.created_at || item.date;
+  if (raw) {
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      return getLocalDateString(d);
+    }
+    return String(raw).split('T')[0];
+  }
+  return '';
+};
+
 export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user }) => {
-  const { flightLogs, flightJobs, refreshData, isLoading } = useOperationalData();
+  const { flightLogs, flightJobs, refreshData, isLoading, delayLogs } = useOperationalData();
+
+  // Active View Tab: Performance Matrix vs AOCC Delay Records Log
+  const [activeTab, setActiveTab] = useState<PerformanceTab>('TURNAROUND_MATRIX');
+
+  // Fast map for detecting flights with AOCC delay logs
+  const delayFlightMap = useMemo(() => {
+    const map = new Map<string, any>();
+    (delayLogs || []).forEach(d => {
+      const cleanNo = d.flightNumber.replace(/\s+/g, '').toUpperCase();
+      if (cleanNo) map.set(cleanNo, d);
+    });
+    return map;
+  }, [delayLogs]);
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -212,18 +249,20 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
   }, [updateSliders]);
 
   // Merge flightLogs with corresponding flightJobs to resolve STD, TOBT, FRT, Clearance, and Category (O(N) indexed)
+  // Merge flightLogs with corresponding flightJobs to resolve STD, TOBT, FRT, Clearance, and Category (O(N) indexed)
   const enrichedLogs = useMemo(() => {
     const rawLogs = (flightLogs || []).filter(l => !l.logType || l.logType === 'FLIGHT');
 
-    // Index flightJobs into O(1) lookup Maps to eliminate 18M+ loop iterations
+    // Index flightJobs into O(1) lookup Maps to eliminate redundant lookups
     const jobsByFlightAndDate = new Map<string, FlightJob>();
     const jobsByFlight = new Map<string, FlightJob>();
 
     (flightJobs || []).forEach(j => {
       if (j.flightNumber) {
-        const fnUpper = j.flightNumber.toUpperCase();
-        if (j.date) {
-          jobsByFlightAndDate.set(`${fnUpper}__${j.date}`, j);
+        const fnUpper = j.flightNumber.replace(/\s+/g, '').toUpperCase();
+        const d = (j.date || j.id.match(/\d{4}-\d{2}-\d{2}/)?.[0] || '').split('T')[0];
+        if (d) {
+          jobsByFlightAndDate.set(`${fnUpper}__${d}`, j);
         }
         if (!jobsByFlight.has(fnUpper)) {
           jobsByFlight.set(fnUpper, j);
@@ -231,9 +270,64 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
       }
     });
 
-    return rawLogs.map(log => {
-      const fnUpper = log.flightNumber?.toUpperCase() || '';
-      const opDate = log.operationalDate || '';
+    // Track existing flight log signatures (by delivery number and flightNumber + date)
+    const existingDelivs = new Set<string>();
+    const existingFnDates = new Set<string>();
+    rawLogs.forEach(l => {
+      if (l.deliveryNumber) existingDelivs.add(l.deliveryNumber.trim().toUpperCase());
+      const fn = (l.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+      const d = (l.operationalDate || (l as any).date || '').split('T')[0];
+      if (fn && d) existingFnDates.add(`${fn}__${d}`);
+    });
+
+    // Synthesize entries for any COMPLETED or clearance-stamped flight jobs not yet in rawLogs
+    // This guarantees real-time visibility (<100ms) for newly completed flights without waiting for BigQuery commit latency
+    const syntheticLogs: FlightLog[] = [];
+    (flightJobs || []).forEach(j => {
+      if ((j.status === 'COMPLETED' || j.timestampClearance) && j.flightNumber) {
+        const fn = j.flightNumber.replace(/\s+/g, '').toUpperCase();
+        const d = (j.date || j.id.match(/\d{4}-\d{2}-\d{2}/)?.[0] || getLocalDateString()).split('T')[0];
+        const hasDeliv = j.deliveryNumber && existingDelivs.has(j.deliveryNumber.trim().toUpperCase());
+        const hasFnDate = fn && d && existingFnDates.has(`${fn}__${d}`);
+        if (!hasDeliv && !hasFnDate) {
+          syntheticLogs.push({
+            id: `job-${j.id}`,
+            flightNumber: j.flightNumber,
+            aircraftReg: j.aircraftReg || 'N/A',
+            aircraftType: j.aircraftType || 'N/A',
+            stand: j.stand || '---',
+            operatorId: j.assignedTo || '',
+            vehicleId: j.vehicleId || '',
+            status: 'COMPLETED',
+            logType: 'FLIGHT',
+            deliveryNumber: j.deliveryNumber,
+            operationalDate: d,
+            std: j.std,
+            tobt: j.tobt,
+            frtAirline: j.frtAirline,
+            frtAocc: j.frtAocc,
+            frtFor: j.frtFor,
+            timestampClearance: j.timestampClearance,
+            volume: 0,
+            panelCheck: true,
+            walkAroundCheck: true,
+            appearanceCheck: true,
+            waterCheck: true,
+            remarks: j.remarks || '',
+            isAdhoc: j.isAdhoc,
+            isDomestic: j.isDomestic,
+            airline: (j as any).operatorName || (j as any).co || '',
+            created_at: j.timestampClearance || new Date().toISOString()
+          });
+        }
+      }
+    });
+
+    const allFlightLogs = [...syntheticLogs, ...rawLogs];
+
+    return allFlightLogs.map(log => {
+      const fnUpper = (log.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+      const opDate = (log.operationalDate || (log as any).date || '').split('T')[0];
       const matchingJob = (opDate ? jobsByFlightAndDate.get(`${fnUpper}__${opDate}`) : undefined) || jobsByFlight.get(fnUpper);
 
       const computedFuelEnd = log.timestampFinalEnd || log.timestampInitialEnd;
@@ -269,45 +363,69 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
     });
   }, [flightLogs, flightJobs]);
 
-  // Category counts across current enriched logs
+  // Dynamic Date string anchors based on client's local date
+  const todayStr = useMemo(() => getLocalDateString(new Date()), []);
+  const yesterdayStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return getLocalDateString(d);
+  }, []);
+  const sevenDaysAgoStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return getLocalDateString(d);
+  }, []);
+  const monthStartStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+  }, []);
+
+  // Step 1: Filter enriched logs by the active date preset / custom date range
+  const dateFilteredLogs = useMemo(() => {
+    return enrichedLogs.filter(item => {
+      const logDate = getLogDate(item);
+      if (datePreset === 'TODAY') {
+        if (logDate && logDate !== todayStr) return false;
+      } else if (datePreset === 'YESTERDAY') {
+        if (logDate && logDate !== yesterdayStr) return false;
+      } else if (datePreset === 'LAST_7_DAYS') {
+        if (logDate && (logDate < sevenDaysAgoStr || logDate > todayStr)) return false;
+      } else if (datePreset === 'THIS_MONTH') {
+        if (logDate && (logDate < monthStartStr || logDate > todayStr)) return false;
+      } else if (datePreset === 'CUSTOM') {
+        if (customStartDate && logDate && logDate < customStartDate) return false;
+        if (customEndDate && logDate && logDate > customEndDate) return false;
+      }
+      return true;
+    });
+  }, [enrichedLogs, datePreset, todayStr, yesterdayStr, sevenDaysAgoStr, monthStartStr, customStartDate, customEndDate]);
+
+  // Step 2: Category counts based on the active date filter!
+  // When TODAY is selected, ALL / INT / DOM / AD-HOC will count TODAY's flights!
   const categoryCounts = useMemo(() => {
     let intl = 0;
     let dom = 0;
     let adhoc = 0;
-    enrichedLogs.forEach(item => {
+    dateFilteredLogs.forEach(item => {
       if (item.category === 'INTERNATIONAL') intl++;
       else if (item.category === 'DOMESTIC') dom++;
       else if (item.category === 'ADHOC') adhoc++;
     });
-    return { all: enrichedLogs.length, intl, dom, adhoc };
-  }, [enrichedLogs]);
+    return { all: dateFilteredLogs.length, intl, dom, adhoc };
+  }, [dateFilteredLogs]);
 
-  // Unique Airline options
+  // Unique Airline options for active date window
   const airlineOptions = useMemo(() => {
     const set = new Set<string>();
-    enrichedLogs.forEach(l => {
+    dateFilteredLogs.forEach(l => {
       if (l.airline && l.airline !== 'N/A') set.add(l.airline);
     });
     return Array.from(set).sort();
-  }, [enrichedLogs]);
+  }, [dateFilteredLogs]);
 
-  // Filtered dataset
+  // Step 3: Apply Search Query, Category Filter, and Airline Filter
   const filteredData = useMemo(() => {
-    const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-    
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-    const sevenDaysAgo = new Date(now);
-    sevenDaysAgo.setDate(now.getDate() - 7);
-    const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
-
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthStartStr = monthStart.toISOString().split('T')[0];
-
-    return enrichedLogs.filter(item => {
+    return dateFilteredLogs.filter(item => {
       // 1. Search Query Filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -330,25 +448,9 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
         return false;
       }
 
-      // 4. Date Filter
-      const logDate = (item.operationalDate || (item as any).created_at || '').split('T')[0];
-
-      if (datePreset === 'TODAY') {
-        if (logDate && logDate !== todayStr) return false;
-      } else if (datePreset === 'YESTERDAY') {
-        if (logDate && logDate !== yesterdayStr) return false;
-      } else if (datePreset === 'LAST_7_DAYS') {
-        if (logDate && (logDate < sevenDaysAgoStr || logDate > todayStr)) return false;
-      } else if (datePreset === 'THIS_MONTH') {
-        if (logDate && (logDate < monthStartStr || logDate > todayStr)) return false;
-      } else if (datePreset === 'CUSTOM') {
-        if (customStartDate && logDate && logDate < customStartDate) return false;
-        if (customEndDate && logDate && logDate > customEndDate) return false;
-      }
-
       return true;
     });
-  }, [enrichedLogs, searchQuery, selectedCategory, selectedAirline, datePreset, customStartDate, customEndDate]);
+  }, [dateFilteredLogs, searchQuery, selectedCategory, selectedAirline]);
 
   // Pagination State (Solves performance bottleneck & lag on large datasets)
   const [currentPage, setCurrentPage] = useState(1);
@@ -517,6 +619,12 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
                 <span className="px-2 py-0.5 rounded-md bg-success/15 text-success border border-success/20 text-[9px] font-black tracking-widest uppercase">
                   Audited Live
                 </span>
+                <span 
+                  className="px-2 py-0.5 rounded-md bg-primary/15 text-primary border border-primary/20 text-[9px] font-black tracking-widest uppercase cursor-help hidden sm:inline-flex"
+                  title="Showing active cached operational dataset (latest 10,000 records dynamically loaded from the 137k+ BigQuery historical archive for maximum client speed)"
+                >
+                  {enrichedLogs.length.toLocaleString()} Active Cached (137k+ BigQuery)
+                </span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-[900] text-on-surface tracking-tighter uppercase italic">
                 Refuelling <span className="text-primary">Performance</span>
@@ -540,19 +648,68 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
             <span>Sync</span>
           </button>
 
-          <button
-            onClick={handleExportCSV}
-            disabled={filteredData.length === 0}
-            className="px-5 py-2.5 kinetic-gradient text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-premium hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:pointer-events-none"
-          >
-            <Download className="w-4 h-4" />
-            <span>Export CSV</span>
-          </button>
+          {activeTab === 'TURNAROUND_MATRIX' && (
+            <button
+              onClick={handleExportCSV}
+              disabled={filteredData.length === 0}
+              className="px-5 py-2.5 kinetic-gradient text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-premium hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:pointer-events-none"
+            >
+              <Download className="w-4 h-4" />
+              <span>Export CSV</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Top Tab Switcher: Turnaround Matrix vs AOCC Delay Records Log */}
+      <div className="flex items-center gap-2 p-1.5 bg-surface-dim/60 border border-outline rounded-2xl w-full sm:w-fit backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={() => {
+            haptic('TAP');
+            setActiveTab('TURNAROUND_MATRIX');
+          }}
+          className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'TURNAROUND_MATRIX'
+              ? 'kinetic-gradient text-white shadow-premium'
+              : 'text-on-surface-dim hover:text-on-surface font-bold'
+          }`}
+        >
+          <Gauge className="w-4 h-4" />
+          <span>Turnaround Matrix</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
+            activeTab === 'TURNAROUND_MATRIX' ? 'bg-black/20 text-white' : 'bg-surface text-on-surface-dim border border-outline/40'
+          }`}>
+            {filteredData.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            haptic('TAP');
+            setActiveTab('DELAY_LOGS');
+          }}
+          className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'DELAY_LOGS'
+              ? 'kinetic-gradient text-white shadow-premium'
+              : 'text-on-surface-dim hover:text-on-surface font-bold'
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          <span>AOCC Delay Records Log</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
+            activeTab === 'DELAY_LOGS' ? 'bg-black/20 text-white' : 'bg-surface text-on-surface-dim border border-outline/40'
+          }`}>
+            {(delayLogs || []).length}
+          </span>
+        </button>
+      </div>
+
+      {activeTab === 'TURNAROUND_MATRIX' ? (
+        <>
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Flights */}
         <div className="card-premium p-5 border-outline flex items-center justify-between">
           <div className="space-y-1">
@@ -904,6 +1061,7 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
                   const fuelEndTime = formatDisplayTime(item.fuelEnd);
                   const clearanceTime = formatDisplayTime(item.timestampClearance);
                   const isVoid = String(item.intDom || '').toUpperCase() === 'VOID' || String(item.remarks || '').toUpperCase().includes('CANCELLED');
+                  const delayReport = delayFlightMap.get(item.flightNumber.replace(/\s+/g, '').toUpperCase());
 
                   return (
                     <tr 
@@ -942,6 +1100,22 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
                             }`}>
                               {item.category === 'ADHOC' ? 'ADHOC' : item.category === 'DOMESTIC' ? 'DOM' : 'INT'}
                             </span>
+                          )}
+
+                          {/* AOCC Delay Logged Badge indicator */}
+                          {delayReport && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveTab('DELAY_LOGS');
+                                setSearchQuery(item.flightNumber);
+                              }}
+                              className="px-1.5 py-0.5 rounded text-[8px] font-mono font-black uppercase tracking-wider bg-amber-500/15 text-amber-500 border border-amber-500/30 hover:bg-amber-500/25 transition-all inline-flex items-center gap-1 cursor-pointer"
+                              title={`AOCC Delay Logged (Code ${delayReport.delayCode || 'N/A'}) - Click to view`}
+                            >
+                              <Clock className="w-2.5 h-2.5" />
+                              <span>DELAY</span>
+                            </button>
                           )}
 
                           {isVoid && (
@@ -1146,6 +1320,16 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
           )}
         </div>
       </div>
-    </div>
-  );
+    </>
+  ) : (
+    <DelayRecordsLog
+      user={user}
+      onInspectFlightInMatrix={(flightNum) => {
+        setActiveTab('TURNAROUND_MATRIX');
+        setSearchQuery(flightNum);
+      }}
+    />
+  )}
+</div>
+);
 };

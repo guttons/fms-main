@@ -374,3 +374,28 @@ export const cleanRemarks = (rawRemarks?: string | null): string => {
   }
   return trimmed;
 };
+
+export type DelaySource = 
+  | 'INTERNATIONAL (AOCC/AIRLINE)'
+  | 'DOMESTIC (AOCC)'
+  | 'INT/DOM (MALDIVIAN)'
+  | string;
+
+export interface DelayLog {
+  id: string;
+  date: string;                     // Operational date YYYY-MM-DD
+  delayFrom: DelaySource;           // Dropdown: 'INTERNATIONAL (AOCC/AIRLINE)', 'DOMESTIC (AOCC)', 'INT/DOM (MALDIVIAN)'
+  operator: string;                 // Airline / Operator name
+  flightNumber: string;             // Flight Number e.g. EK652, Q2 104
+  delayCode: string;                // IATA / AOCC Delay Code e.g. 93, 31, 89
+  delayReason: string;              // Delay explanation / reason
+  remarks?: string;                 // Remarks sent from AOCC / Airline
+  fuelTeam?: string;                // Fuel team / crew / vehicle involved
+  fuelTeamComment?: string;         // Fuel team's investigation / defense response
+  dutyInCharge?: string;            // Duty Officer / Manager in charge
+  status?: 'PENDING' | 'RESPONDED' | 'DISPUTED' | 'ACCEPTED';
+  flightLogId?: string;             // Linked Flight Log ID for turnaround cross-check
+  createdAt?: string;
+  updatedAt?: string;
+}
+

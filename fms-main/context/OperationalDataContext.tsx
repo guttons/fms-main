@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightLog, StaffMember, UserRole, Vessel, ShipmentData, InternationalSchedule, ScheduleCrossCheckResult, PredictiveUpliftForecast, isDomesticFlight } from '../types';
+import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightLog, StaffMember, UserRole, Vessel, ShipmentData, InternationalSchedule, ScheduleCrossCheckResult, PredictiveUpliftForecast, isDomesticFlight, DelayLog } from '../types';
 import { EQUIPMENT, TANKS, MOCK_ALERTS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
 import { scheduleImportService } from '../services/scheduleImportService';
@@ -68,6 +68,8 @@ interface OperationalDataContextType {
   updateFlightJob: (id: string, updates: Partial<FlightJob>) => Promise<void>;
   addFlightJob: (job: FlightJob) => Promise<void>;
   deleteFlightJob: (id: string) => Promise<void>;
+  updateFlightLog: (id: string, updates: Partial<FlightLog>) => Promise<void>;
+  addFlightLogEntry: (log: FlightLog) => void;
   createAlert: (alert: Omit<Alert, 'id'>) => Promise<boolean>;
   acknowledgeAlert: (id: string, staffName?: string) => Promise<void>;
   acknowledgeAllAlerts: (ids: string[]) => Promise<void>;
@@ -94,6 +96,10 @@ interface OperationalDataContextType {
   toggleInternationalScheduleActive: (id: string, isActive: boolean) => Promise<void>;
   crossCheckDailyFlights: (dateStr?: string) => ScheduleCrossCheckResult[];
   getPredictiveUpliftForecast: (startDateStr?: string, daysCount?: number, categoryFilter?: 'ALL' | 'INT' | 'DOM') => PredictiveUpliftForecast[];
+  delayLogs: DelayLog[];
+  createDelayLog: (log: Omit<DelayLog, 'id'>) => Promise<DelayLog>;
+  updateDelayLog: (id: string, updates: Partial<DelayLog>) => Promise<void>;
+  deleteDelayLog: (id: string) => Promise<void>;
 }
 
 const OperationalDataContext = createContext<OperationalDataContextType | undefined>(undefined);
@@ -303,6 +309,14 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       return [];
     }
   });
+  const [delayLogs, setDelayLogs] = useState<DelayLog[]>(() => {
+    try {
+      const saved = localStorage.getItem('fms_delay_logs');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [isExternalFlightsLoading, setIsExternalFlightsLoading] = useState(false);
 
   const findRelatedArrival = (depFlight: any, allFlights: any[]) => {
@@ -472,8 +486,9 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       const lfDateStr = lf.date ? lf.date.split('T')[0] : selectedBriefingDate;
       const existingJobIdx = merged.findIndex(
         (job) => {
+          if (lf.id && job.id === lf.id) return true;
           const jobNumNorm = (job.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-          if (jobNumNorm !== lfNumNorm) return false;
+          if (!jobNumNorm || !lfNumNorm || jobNumNorm !== lfNumNorm) return false;
           const jobDateStr = job.date ? job.date.split('T')[0] : '';
           return !jobDateStr || !lfDateStr || jobDateStr === lfDateStr;
         }
@@ -573,7 +588,12 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         });
       }
     });
-    return merged;
+    const seenIds = new Set<string>();
+    return merged.filter(job => {
+      if (!job.id || seenIds.has(job.id)) return false;
+      seenIds.add(job.id);
+      return true;
+    });
   }, [flightJobs, externalFlights, internationalSchedules, selectedBriefingDate]);
 
   const mergedDomesticFlights = useMemo(() => {
@@ -771,7 +791,16 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       return [];
     }
   });
-  const [flightLogs, setFlightLogs] = useState<FlightLog[]>([]);
+  const [flightLogs, setFlightLogs] = useState<FlightLog[]>(() => {
+    try {
+      const saved = localStorage.getItem('fms_recent_flight_logs');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
   const [domesticAssignments, setDomesticAssignments] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem('fms_domestic_assignments');
@@ -953,7 +982,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       // Fetch external flights in parallel without blocking
       refreshExternalFlights();
 
-      const [fetchedTanks, fetchedJobs, fetchedBriefing, fetchedAlerts, fetchedEq, fetchedLogs, fetchedStaff, fetchedDomAssign] = await Promise.all([
+      const [fetchedTanks, fetchedJobs, fetchedBriefing, fetchedAlerts, fetchedEq, fetchedLogs, fetchedStaff, fetchedDomAssign, fetchedDelays] = await Promise.all([
         supabaseService.getTanks(),
         supabaseService.getFlightJobs(),
         supabaseService.getShiftBriefingInfo(selectedBriefingDate, selectedBriefingShift),
@@ -961,7 +990,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         supabaseService.getEquipment(),
         supabaseService.getFlightLogs({ limit: 10000 }),
         supabaseService.getStaff(),
-        supabaseService.getDomesticAssignments(selectedBriefingDate)
+        supabaseService.getDomesticAssignments(selectedBriefingDate),
+        supabaseService.getDelayLogs()
       ]);
 
       if (fetchedTanks && fetchedTanks.length > 0) {
@@ -1010,13 +1040,38 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         setAlerts(uniqueAlerts);
       }
       if (fetchedLogs) {
+        let logsList: FlightLog[] = [];
         if (Array.isArray(fetchedLogs)) {
-          setFlightLogs(fetchedLogs);
+          logsList = fetchedLogs;
         } else if (fetchedLogs.logs && Array.isArray(fetchedLogs.logs)) {
-          setFlightLogs(fetchedLogs.logs);
+          logsList = fetchedLogs.logs;
         }
+
+        // Merge any recently created logs from local cache that may not have committed to BigQuery SELECT query yet
+        try {
+          const cached = localStorage.getItem('fms_recent_flight_logs');
+          if (cached) {
+            const recentLogs: FlightLog[] = JSON.parse(cached);
+            if (Array.isArray(recentLogs) && recentLogs.length > 0) {
+              const fetchedIds = new Set(logsList.map(l => l.id));
+              const fetchedDelivs = new Set(logsList.filter(l => l.deliveryNumber).map(l => l.deliveryNumber));
+              const missingRecent = recentLogs.filter(l => 
+                !fetchedIds.has(l.id) && 
+                (!l.deliveryNumber || !fetchedDelivs.has(l.deliveryNumber))
+              );
+              if (missingRecent.length > 0) {
+                logsList = [...missingRecent, ...logsList];
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[OperationalData] Error merging cached flight logs:', e);
+        }
+
+        setFlightLogs(logsList);
       }
       if (fetchedStaff && fetchedStaff.length > 0) setStaff(fetchedStaff);
+      if (fetchedDelays && Array.isArray(fetchedDelays)) setDelayLogs(fetchedDelays);
       // Fetch service tank setting
       try {
         const savedServiceTank = await supabaseService.getServiceTank();
@@ -1212,6 +1267,15 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       })
       .subscribe();
 
+    const channelDelayLogs = supabase
+      .channel('public:delay_logs')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'delay_logs' }, () => {
+        supabaseService.getDelayLogs().then(data => {
+          if (data) setDelayLogs(data);
+        });
+      })
+      .subscribe();
+
     return () => {
       console.log("PROVIDER: Tearing down listeners for user:", appUser.id);
       if (unsubscribeAppSettings) unsubscribeAppSettings();
@@ -1223,6 +1287,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       if (unsubscribeVessels) unsubscribeVessels();
       if (channelDomAssign) channelDomAssign.unsubscribe();
       if (channelBriefing) channelBriefing.unsubscribe();
+      if (channelDelayLogs) channelDelayLogs.unsubscribe();
     };
   }, [appUser, selectedBriefingDate, selectedBriefingShift]);
 
@@ -1287,13 +1352,41 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   };
 
   const updateFlightJob = async (id: string, updates: Partial<FlightJob>) => {
-    const cleanUpdatesFlight = (updates.flightNumber || '').replace(/\s+/g, '').toLowerCase();
     let targetFlightNo = updates.flightNumber || '';
 
-    const existingJob = flightJobs.find(j => 
-      j.id === id || 
-      (cleanUpdatesFlight && (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanUpdatesFlight)
-    );
+    // If flightNumber was not explicitly provided in updates, look it up by ID
+    if (!targetFlightNo) {
+      const foundInDb = flightJobs.find(j => j.id === id);
+      const foundInVirtual = (mergedFlightJobs || []).find(j => j.id === id)
+        || (mergedDomesticFlights || []).find(j => j.id === id)
+        || (externalFlights || []).find((j: any) => j.id === id)
+        || (briefingInfo?.staffAssignments?.frozenFlights?.intl || []).find((j: any) => j.id === id)
+        || (briefingInfo?.staffAssignments?.frozenFlights?.domestic || []).find((j: any) => j.id === id)
+        || (briefingInfo?.staffAssignments?.adhocFlights || []).find((j: any) => j.id === id);
+      targetFlightNo = foundInDb?.flightNumber || foundInVirtual?.flightNumber || '';
+
+      if (!targetFlightNo && typeof id === 'string' && id.includes('-')) {
+        const parts = id.split('-');
+        if ((parts[0] === 'departure' || parts[0] === 'arrival' || parts[0] === 'fj') && parts[1]) {
+          targetFlightNo = parts[1];
+        }
+      }
+    }
+
+    const cleanUpdatesFlight = (targetFlightNo || '').replace(/\s+/g, '').toLowerCase();
+
+    const updatesDate = updates.date ? updates.date.split('T')[0] : '';
+    const targetDate = updatesDate || selectedBriefingDate;
+
+    const existingJob = flightJobs.find(j => {
+      const jDate = j.date ? j.date.split('T')[0] : '';
+      if (jDate && targetDate && jDate !== targetDate) return false;
+      if (j.id === id) return !jDate || !targetDate || jDate === targetDate;
+      if (!cleanUpdatesFlight) return false;
+      const jFlight = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      if (jFlight !== cleanUpdatesFlight) return false;
+      return !jDate || !targetDate || jDate === targetDate;
+    });
 
     if (existingJob) {
       targetFlightNo = existingJob.flightNumber || targetFlightNo;
@@ -1301,47 +1394,82 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     const isDbJob = !!existingJob;
 
     if (!isDbJob) {
-      const virtualJob = mergedFlightJobs.find(j => j.id === id) 
-        || (mergedDomesticFlights || []).find((j: any) => j.id === id)
-        || (briefingInfo?.staffAssignments?.adhocFlights || []).find((j: any) => j.id === id);
-      if (virtualJob) {
-        const isDom = isDomesticFlight(virtualJob) || isDomesticFlight(updates) || isDomesticFlight({ flightNumber: targetFlightNo });
-        const isAdhoc = !!(virtualJob.isAdhoc || updates.isAdhoc || virtualJob.id?.startsWith('ah-'));
-        const fullJob: FlightJob = {
-          ...virtualJob,
-          ...updates,
-          isDomestic: isDom,
-          isAdhoc: isAdhoc,
-          co: updates.co !== undefined ? updates.co : virtualJob.co,
-          operatorName: updates.operatorName !== undefined ? updates.operatorName : virtualJob.operatorName,
-          date: virtualJob.date ? virtualJob.date.split('T')[0] : selectedBriefingDate,
-          isVirtual: undefined
-        };
-        setFlightJobs(prev => {
-          const normNo = (fullJob.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-          const jobDate = (fullJob.date || '').split('T')[0];
-          const existsIdx = prev.findIndex(j => 
-            j.id === fullJob.id || 
-            ((j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === normNo && (!jobDate || !j.date || j.date.split('T')[0] === jobDate))
-          );
-          if (existsIdx !== -1) {
-            const next = [...prev];
-            next[existsIdx] = { ...next[existsIdx], ...fullJob };
-            return next;
-          }
-          return [...prev, fullJob];
-        });
-        if (appUser) {
-          try {
-            await supabaseService.addFlightJob(fullJob);
-          } catch (error) {
-            console.error('Failed to create flight job in Supabase from virtual:', error);
-          }
+      const matchByFlightOrId = (j: any) => {
+        if (!j) return false;
+        const jDate = j.date ? j.date.split('T')[0] : '';
+        if (jDate && targetDate && jDate !== targetDate) return false;
+        if (j.id === id) return true;
+        if (cleanUpdatesFlight && (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanUpdatesFlight) {
+          return true;
         }
+        return false;
+      };
+
+      const virtualJob = (mergedFlightJobs || []).find(matchByFlightOrId) 
+        || (mergedDomesticFlights || []).find(matchByFlightOrId)
+        || (briefingInfo?.staffAssignments?.adhocFlights || []).find(matchByFlightOrId);
+
+      const finalFlightNum = updates.flightNumber || virtualJob?.flightNumber || targetFlightNo;
+      if (!finalFlightNum) {
+        console.warn('Cannot create flight job without flightNumber for id:', id);
+        return;
+      }
+
+      const resolvedDate = virtualJob?.date ? virtualJob.date.split('T')[0] : targetDate;
+      const isDom = isDomesticFlight(virtualJob || {}) || isDomesticFlight(updates) || isDomesticFlight({ flightNumber: finalFlightNum });
+      const isAdhoc = !!(virtualJob?.isAdhoc || updates.isAdhoc || (virtualJob?.id && String(virtualJob.id).startsWith('ah-')));
+
+      const fallbackId = cleanUpdatesFlight ? `fj-${cleanUpdatesFlight}-${targetDate}` : `fj-${Date.now()}`;
+      const safeJobId = (virtualJob?.id && !flightJobs.some(fj => fj.id === virtualJob.id && fj.date && fj.date.split('T')[0] !== targetDate))
+        ? virtualJob.id
+        : (id || fallbackId);
+
+      const fullJob: FlightJob = {
+        ...virtualJob,
+        ...updates,
+        id: safeJobId,
+        flightNumber: finalFlightNum,
+        aircraftReg: updates.aircraftReg || virtualJob?.aircraftReg || '8Q-TBA',
+        aircraftType: updates.aircraftType || virtualJob?.aircraftType || 'A320',
+        stand: updates.stand || virtualJob?.stand || '---',
+        sta: updates.sta || virtualJob?.sta || '',
+        eta: updates.eta || virtualJob?.eta || '',
+        std: updates.std || virtualJob?.std || '',
+        status: updates.status || virtualJob?.status || 'PENDING',
+        equipmentUsage: updates.equipmentUsage || virtualJob?.equipmentUsage || (isDom ? 'REFUELLER' : 'HYDRANT'),
+        isDomestic: isDom,
+        isAdhoc: isAdhoc,
+        co: updates.co !== undefined ? updates.co : (virtualJob?.co || ''),
+        operatorName: updates.operatorName !== undefined ? updates.operatorName : (virtualJob?.operatorName || ''),
+        date: resolvedDate,
+        isVirtual: undefined
+      };
+
+      setFlightJobs(prev => {
+        const normNo = (fullJob.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const jobDate = (fullJob.date || '').split('T')[0];
+        const existsIdx = prev.findIndex(j => 
+          j.id === fullJob.id || 
+          ((j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === normNo && (!jobDate || !j.date || j.date.split('T')[0] === jobDate))
+        );
+        if (existsIdx !== -1) {
+          const next = [...prev];
+          next[existsIdx] = { ...next[existsIdx], ...fullJob };
+          return next;
+        }
+        return [...prev, fullJob];
+      });
+
+      try {
+        await supabaseService.addFlightJob(fullJob);
+      } catch (error) {
+        console.error('Failed to create flight job in Supabase from virtual:', error);
       }
     } else {
       const cleanTarget = (targetFlightNo || '').replace(/\s+/g, '').toLowerCase();
       setFlightJobs(prev => prev.map(job => {
+        const jDate = job.date ? job.date.split('T')[0] : '';
+        if (jDate && targetDate && jDate !== targetDate) return job;
         const matchesId = job.id === id || (existingJob && job.id === existingJob.id);
         const matchesFlightNo = cleanTarget && (job.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanTarget;
         if (matchesId || matchesFlightNo) {
@@ -1358,9 +1486,14 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     if (briefingInfo?.staffAssignments?.frozenFlights) {
       const frozen = briefingInfo.staffAssignments.frozenFlights;
       const normTarget = (targetFlightNo || '').replace(/\s+/g, '').toLowerCase();
-      const matchFlight = (f: any) => 
-        f.id === id || 
-        (normTarget && (f.flightNumber || '').replace(/\s+/g, '').toLowerCase() === normTarget);
+      const matchFlight = (f: any) => {
+        if (f.id === id) return true;
+        if (!normTarget) return false;
+        const fNorm = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        if (fNorm !== normTarget) return false;
+        const fDate = f.date ? f.date.split('T')[0] : '';
+        return !fDate || !targetDate || fDate === targetDate;
+      };
 
       let updatedIntl = frozen.intl;
       let updatedDomestic = frozen.domestic;
@@ -1396,23 +1529,21 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       }
     }
 
-    if (appUser) {
-      try {
-        if (isDbJob) {
-          await supabaseService.updateFlightJob(existingJob?.id || id, updates);
-        }
-        if (updatedBriefing && newBriefingInfo && newBriefingInfo.staffAssignments) {
-          await supabaseService.upsertShiftBriefingInfo(
-            selectedBriefingDate,
-            selectedBriefingShift,
-            newBriefingInfo.info,
-            newBriefingInfo.dieselNeeds,
-            newBriefingInfo.staffAssignments
-          );
-        }
-      } catch (error) {
-        console.error('Failed to sync flight job update to Supabase:', error);
+    try {
+      if (isDbJob) {
+        await supabaseService.updateFlightJob(existingJob?.id || id, updates);
       }
+      if (updatedBriefing && newBriefingInfo && newBriefingInfo.staffAssignments) {
+        await supabaseService.upsertShiftBriefingInfo(
+          selectedBriefingDate,
+          selectedBriefingShift,
+          newBriefingInfo.info,
+          newBriefingInfo.dieselNeeds,
+          newBriefingInfo.staffAssignments
+        );
+      }
+    } catch (error) {
+      console.error('Failed to sync flight job update to Supabase:', error);
     }
   };
 
@@ -1430,6 +1561,56 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       }
     }
   };
+
+  const updateFlightLog = async (id: string, updates: Partial<FlightLog>) => {
+    setFlightLogs(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
+    try {
+      await supabaseService.updateFlightLog(id, updates);
+    } catch (error) {
+      console.error('Failed to update flight log in BigQuery:', error);
+      throw error;
+    }
+  };
+
+  const addFlightLogEntry = useCallback((log: FlightLog) => {
+    setFlightLogs(prev => {
+      const idx = prev.findIndex(l => 
+        l.id === log.id || 
+        (log.deliveryNumber && l.deliveryNumber === log.deliveryNumber) ||
+        (log.flightNumber && log.operationalDate && l.flightNumber === log.flightNumber && l.operationalDate === log.operationalDate)
+      );
+      if (idx !== -1) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...log };
+        return next;
+      }
+      return [log, ...prev];
+    });
+
+    // Also persist in fms_recent_flight_logs
+    try {
+      const raw = localStorage.getItem('fms_recent_flight_logs');
+      const recent: FlightLog[] = raw ? JSON.parse(raw) : [];
+      const deduped = recent.filter(l => 
+        l.id !== log.id && 
+        (!log.deliveryNumber || l.deliveryNumber !== log.deliveryNumber)
+      );
+      deduped.unshift(log);
+      localStorage.setItem('fms_recent_flight_logs', JSON.stringify(deduped.slice(0, 100)));
+    } catch (e) {}
+  }, []);
+
+  // Real-time listener for newly created flight logs across components
+  useEffect(() => {
+    const handleNewLog = (e: Event) => {
+      const customEvent = e as CustomEvent<FlightLog>;
+      if (customEvent && customEvent.detail) {
+        addFlightLogEntry(customEvent.detail);
+      }
+    };
+    window.addEventListener('fms:flight-log-created', handleNewLog);
+    return () => window.removeEventListener('fms:flight-log-created', handleNewLog);
+  }, [addFlightLogEntry]);
 
   const deleteFlightJob = async (id: string) => {
     const jobToDelete = flightJobs.find(j => j.id === id);
@@ -1909,6 +2090,22 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     );
   };
 
+  const createDelayLog = async (log: Omit<DelayLog, 'id'>) => {
+    const created = await supabaseService.createDelayLog(log);
+    setDelayLogs(prev => [created, ...prev.filter(r => r.id !== created.id)]);
+    return created;
+  };
+
+  const updateDelayLog = async (id: string, updates: Partial<DelayLog>) => {
+    await supabaseService.updateDelayLog(id, updates);
+    setDelayLogs(prev => prev.map(r => r.id === id ? { ...r, ...updates, updatedAt: new Date().toISOString() } : r));
+  };
+
+  const deleteDelayLog = async (id: string) => {
+    await supabaseService.deleteDelayLog(id);
+    setDelayLogs(prev => prev.filter(r => r.id !== id));
+  };
+
   return (
     <OperationalDataContext.Provider value={{
       equipment: equipment || [],
@@ -1931,6 +2128,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       updateFlightJob,
       addFlightJob,
       deleteFlightJob,
+      updateFlightLog,
+      addFlightLogEntry,
       createAlert,
       acknowledgeAlert,
       acknowledgeAllAlerts,
@@ -1969,7 +2168,11 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       deleteAllInternationalSchedules,
       toggleInternationalScheduleActive,
       crossCheckDailyFlights,
-      getPredictiveUpliftForecast
+      getPredictiveUpliftForecast,
+      delayLogs: delayLogs || [],
+      createDelayLog,
+      updateDelayLog,
+      deleteDelayLog
     }}>
       {children}
     </OperationalDataContext.Provider>

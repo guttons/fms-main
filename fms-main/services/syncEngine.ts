@@ -148,14 +148,18 @@ class SyncEngine {
         break;
       }
       case 'flight_job': {
-        if (action === 'UPDATE') {
-          const { error } = await supabase.from('flight_jobs').update(payload).eq('id', item.entityId);
-          if (error) throw error;
-        } else if (action === 'INSERT') {
-          const { error } = await supabase.from('flight_jobs').insert([payload]);
-          if (error) throw error;
-        } else if (action === 'DELETE') {
+        if (action === 'DELETE') {
           const { error } = await supabase.from('flight_jobs').delete().eq('id', item.entityId);
+          if (error) throw error;
+        } else {
+          // If the payload lacks a valid flight_number, purge it from outbox instead of endlessly failing
+          if (!payload || !payload.flight_number) {
+            console.warn(`[SyncEngine] Purging invalid flight_job outbox item ${item.id} without flight_number`);
+            await fmsDb.removeOutboxItem(item.id);
+            break;
+          }
+          const jobPayload = { id: item.entityId, ...payload };
+          const { error } = await supabase.from('flight_jobs').upsert([jobPayload]);
           if (error) throw error;
         }
         break;

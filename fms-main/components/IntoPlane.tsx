@@ -18,6 +18,7 @@ interface IntoPlaneProps {
     onClearInitialJob?: () => void;
     initialVehicleId?: string | null;
     onClearInitialVehicleId?: () => void;
+    setActiveView?: (view: string) => void;
 }
 
 
@@ -395,8 +396,10 @@ const ScreenDashboard: React.FC<{
     selectedVehicleId: string,
     setSelectedVehicleId: (id: string) => void,
     flightLogs: FlightLog[],
-    activeFlight: Partial<FlightLog> | null
-}> = ({ user, onStartJob, selectedVehicleId, setSelectedVehicleId, flightLogs, activeFlight }) => {
+    activeFlight: Partial<FlightLog> | null,
+    onResumeActiveFlight?: () => void,
+    onCancelActiveFlight?: (job?: FlightJob) => void
+}> = ({ user, onStartJob, selectedVehicleId, setSelectedVehicleId, flightLogs, activeFlight, onResumeActiveFlight, onCancelActiveFlight }) => {
   const { notify } = useNotification();
   const { 
     flightJobs, 
@@ -822,6 +825,22 @@ const ScreenDashboard: React.FC<{
       return 'IN_PROGRESS';
     }
 
+    if (activeFlight && (activeFlight.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo && activeFlight.status === 'IN_PROGRESS') {
+      return 'IN_PROGRESS';
+    }
+
+    const liveJob = (flightJobs || []).find(j => {
+      if (!j || !j.flightNumber) return false;
+      const jobNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      if (jobNo !== cleanNo) return false;
+      const jDate = j.date ? j.date.split('T')[0] : '';
+      return !jDate || !flightDate || jDate === flightDate;
+    });
+
+    if (liveJob && (liveJob.status === 'IN_PROGRESS' || liveJob.status === 'COMPLETED')) {
+      return liveJob.status;
+    }
+
     const dbJob = (rawFlightJobs || []).find(j => {
       if (!j || !j.flightNumber) return false;
       const jobNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
@@ -834,7 +853,7 @@ const ScreenDashboard: React.FC<{
       return dbJob.status;
     }
 
-    return defaultStatus;
+    return liveJob?.status || defaultStatus;
   };
 
   const intlJobsMap = new Map<string, any>();
@@ -843,11 +862,21 @@ const ScreenDashboard: React.FC<{
     const flightDate = f.date ? f.date.split('T')[0] : selectedBriefingDate;
     const computedStatus = getStatusForFlightDate(cleanNo, flightDate, f.status || 'PENDING');
     
+    const liveJob = (flightJobs || []).find(j => {
+      if (!j || !j.flightNumber) return false;
+      const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      if (jNo !== cleanNo) return false;
+      const jDate = j.date ? j.date.split('T')[0] : '';
+      if (jDate && flightDate && jDate !== flightDate) return false;
+      return !jDate || !flightDate || jDate === flightDate;
+    });
+
     const dbJob = (rawFlightJobs || []).find(j => {
       if (!j || !j.flightNumber) return false;
       const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
       if (jNo !== cleanNo) return false;
       const jDate = j.date ? j.date.split('T')[0] : '';
+      if (jDate && flightDate && jDate !== flightDate) return false;
       return !jDate || !flightDate || jDate === flightDate;
     });
 
@@ -856,13 +885,21 @@ const ScreenDashboard: React.FC<{
     intlJobsMap.set(cleanNo, {
       ...(existing || {}),
       ...f,
-      id: dbJob?.id || f.id || existing?.id,
+      id: liveJob?.id || dbJob?.id || f.id || existing?.id,
       status: computedStatus,
       fidsStatus: f.status,
-      assignedTo: dbJob?.assignedTo || f.assignedTo || existing?.assignedTo || '',
-      assignedOfficer: dbJob?.assignedOfficer || f.assignedOfficer || existing?.assignedOfficer || '',
-      vehicleId: dbJob?.vehicleId || f.vehicleId || existing?.vehicleId,
-      equipmentUsage: dbJob?.equipmentUsage || f.equipmentUsage || existing?.equipmentUsage || 'HYDRANT',
+      assignedTo: (liveJob && liveJob.assignedTo !== undefined && liveJob.assignedTo !== null)
+        ? liveJob.assignedTo
+        : (dbJob && dbJob.assignedTo !== undefined && dbJob.assignedTo !== null)
+        ? dbJob.assignedTo
+        : (f.assignedTo || existing?.assignedTo || ''),
+      assignedOfficer: (liveJob && liveJob.assignedOfficer !== undefined && liveJob.assignedOfficer !== null)
+        ? liveJob.assignedOfficer
+        : (dbJob && dbJob.assignedOfficer !== undefined && dbJob.assignedOfficer !== null)
+        ? dbJob.assignedOfficer
+        : (f.assignedOfficer || existing?.assignedOfficer || ''),
+      vehicleId: liveJob?.vehicleId !== undefined ? liveJob.vehicleId : (dbJob?.vehicleId !== undefined ? dbJob.vehicleId : (f.vehicleId || existing?.vehicleId)),
+      equipmentUsage: liveJob?.equipmentUsage || dbJob?.equipmentUsage || f.equipmentUsage || existing?.equipmentUsage || 'HYDRANT',
     });
   });
 
@@ -873,24 +910,42 @@ const ScreenDashboard: React.FC<{
       const flightDate = ff.date ? ff.date.split('T')[0] : selectedBriefingDate;
       const computedStatus = getStatusForFlightDate(cleanNo, flightDate, existing?.status || ff.status || 'PENDING');
 
+      const liveJob = (flightJobs || []).find(j => {
+        if (!j || !j.flightNumber) return false;
+        const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        if (jNo !== cleanNo) return false;
+        const jDate = j.date ? j.date.split('T')[0] : '';
+        if (jDate && flightDate && jDate !== flightDate) return false;
+        return !jDate || !flightDate || jDate === flightDate;
+      });
+
       const dbJob = (rawFlightJobs || []).find(j => {
         if (!j || !j.flightNumber) return false;
         const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
         if (jNo !== cleanNo) return false;
         const jDate = j.date ? j.date.split('T')[0] : '';
+        if (jDate && flightDate && jDate !== flightDate) return false;
         return !jDate || !flightDate || jDate === flightDate;
       });
 
       intlJobsMap.set(cleanNo, {
         ...(existing || {}),
         ...ff,
-        id: dbJob?.id || ff.id || existing?.id,
+        id: liveJob?.id || dbJob?.id || ff.id || existing?.id,
         status: computedStatus,
         fidsStatus: existing?.fidsStatus || ff.status,
-        assignedTo: dbJob?.assignedTo || ff.assignedTo || existing?.assignedTo || '',
-        assignedOfficer: dbJob?.assignedOfficer || ff.assignedOfficer || existing?.assignedOfficer || '',
-        vehicleId: dbJob?.vehicleId || ff.vehicleId || existing?.vehicleId,
-        equipmentUsage: dbJob?.equipmentUsage || ff.equipmentUsage || existing?.equipmentUsage || 'HYDRANT',
+        assignedTo: (liveJob && liveJob.assignedTo !== undefined && liveJob.assignedTo !== null)
+          ? liveJob.assignedTo
+          : (dbJob && dbJob.assignedTo !== undefined && dbJob.assignedTo !== null)
+          ? dbJob.assignedTo
+          : (ff.assignedTo || existing?.assignedTo || ''),
+        assignedOfficer: (liveJob && liveJob.assignedOfficer !== undefined && liveJob.assignedOfficer !== null)
+          ? liveJob.assignedOfficer
+          : (dbJob && dbJob.assignedOfficer !== undefined && dbJob.assignedOfficer !== null)
+          ? dbJob.assignedOfficer
+          : (ff.assignedOfficer || existing?.assignedOfficer || ''),
+        vehicleId: liveJob?.vehicleId !== undefined ? liveJob.vehicleId : (dbJob?.vehicleId !== undefined ? dbJob.vehicleId : (ff.vehicleId || existing?.vehicleId)),
+        equipmentUsage: liveJob?.equipmentUsage || dbJob?.equipmentUsage || ff.equipmentUsage || existing?.equipmentUsage || 'HYDRANT',
       });
     });
   }
@@ -957,7 +1012,13 @@ const ScreenDashboard: React.FC<{
 
   const adhocJobs = adhocJobsRaw.map((f: any) => {
     const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-    const matchJob = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+    const flightDate = f.date ? f.date.split('T')[0] : selectedBriefingDate;
+    const matchJob = (flightJobs || []).find(j => {
+      if ((j.flightNumber || '').replace(/\s+/g, '').toLowerCase() !== cleanNo) return false;
+      const jDate = j.date ? j.date.split('T')[0] : '';
+      if (jDate && flightDate && jDate !== flightDate) return false;
+      return !jDate || !flightDate || jDate === flightDate;
+    });
     const merged = matchJob ? { ...f, ...matchJob } : f;
     return {
       ...merged,
@@ -1372,15 +1433,6 @@ const ScreenDashboard: React.FC<{
                                           {renderRoute(job.route, "text-primary text-[10px]", job.isDomestic || (job as any).isAdhoc)}
                                       </>
                                   )}
-                                  {activeEqId && (
-                                      <>
-                                          <span className="opacity-20">|</span>
-                                          <div className={`flex items-center space-x-1 px-2 py-0.5 rounded-md border shadow-sm shrink-0 ${equipmentBadgeClass(activeEqId)}`}>
-                                              <Truck className="w-3 h-3" />
-                                              <span className="text-[9px] font-black uppercase tracking-widest leading-none">{activeEqId}</span>
-                                          </div>
-                                      </>
-                                  )}
                               </div>
                           </div>
 
@@ -1680,6 +1732,20 @@ const ScreenDashboard: React.FC<{
                                                                     <Ban className="w-4 h-4 text-amber-400" />
                                                                     <span>No Fuel Required</span>
                                                                 </button>
+                                                                {displayStatus === 'IN_PROGRESS' && (canLogFlight || user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN) && onCancelActiveFlight && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setActiveMenuJobId(null);
+                                                                            onCancelActiveFlight(job);
+                                                                        }}
+                                                                        className="w-full text-left px-3.5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-error/10 text-error hover:text-error transition-all flex items-center gap-2 cursor-pointer border-t border-outline-variant pt-2"
+                                                                    >
+                                                                        <Ban className="w-4 h-4 text-error" />
+                                                                        <span>Cancel Fueling / Revert</span>
+                                                                    </button>
+                                                                )}
                                                            </div>
                                                         </>
                                                    )}
@@ -1690,15 +1756,30 @@ const ScreenDashboard: React.FC<{
                                    </>
                                )}
 
-                                {/* Status badge: ONLY for domestic and ad-hoc cards on desktop! */}
-                                {isDomesticOrAdhoc && (
-                                    <div className="hidden lg:flex items-center gap-1.5 shrink-0">
-                                        {displayStatus === 'IN_PROGRESS' && (
-                                            <span className="text-[8px] font-black text-warning uppercase tracking-widest animate-pulse">ACTIVE FUELING</span>
-                                        )}
-                                        {renderStatusBadge(displayStatus)}
-                                    </div>
-                                )}
+                                 {/* Status badge near play button: HIDDEN on mobile for all flights; on desktop shown ONLY for DOM and AD-HOC */}
+                                 {isDomesticOrAdhoc && (
+                                     <div className="hidden md:flex items-center gap-1.5 shrink-0">
+                                         {displayStatus === 'IN_PROGRESS' && (
+                                             <span className="text-[8px] font-black text-warning uppercase tracking-widest animate-pulse">ACTIVE FUELING</span>
+                                         )}
+                                         {renderStatusBadge(displayStatus)}
+                                     </div>
+                                 )}
+
+                                 {/* Revert fueling button if flight is currently IN_PROGRESS */}
+                                 {displayStatus === 'IN_PROGRESS' && (canLogFlight || user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN) && onCancelActiveFlight && (
+                                     <button 
+                                         type="button"
+                                         onClick={(e) => {
+                                             e.stopPropagation();
+                                             onCancelActiveFlight(job);
+                                         }}
+                                         className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm cursor-pointer bg-error/10 hover:bg-error text-error hover:text-white border border-error/20 hover:border-error active:scale-95"
+                                         title="Revert Fueling to Pending"
+                                     >
+                                         <Ban className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
+                                     </button>
+                                 )}
 
                                 {/* play action button if assigned to me, manager/admin, or completed */}
                                 {(canLogFlight || job.status === 'COMPLETED') && (
@@ -1713,7 +1794,7 @@ const ScreenDashboard: React.FC<{
                                          className={`w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm cursor-pointer
                                               ${job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/20' : 'kinetic-gradient text-white hover:scale-[1.05] active:scale-95 shadow-premium'}
                                          `}
-                                         title={job.status === 'COMPLETED' ? 'View Log' : 'Start Job'}
+                                         title={job.status === 'COMPLETED' ? 'View Log' : displayStatus === 'IN_PROGRESS' ? 'Resume Fueling' : 'Start Job'}
                                      >
                                          {job.status === 'COMPLETED' ? <ChevronRight className="w-5 h-5 sm:w-7 sm:h-7 stroke-[3]" /> : <Play className="w-[18px] h-[18px] sm:w-[24px] sm:h-[24px] flex-shrink-0 ml-0.5" fill="white" color="white" strokeWidth={2.5} />}
                                      </button>
@@ -1908,6 +1989,49 @@ const ScreenDashboard: React.FC<{
 
   return (
     <div className="p-5 flex flex-col space-y-8 pb-24">
+      {/* Active Fueling Alert & Quick Resume / Cancel Banner */}
+      {activeFlight && activeFlight.status === 'IN_PROGRESS' && (
+        <div className="bg-warning/10 border border-warning/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-premium animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2.5 bg-warning/20 text-warning rounded-xl flex items-center justify-center shrink-0">
+              <Fuel className="w-5 h-5 animate-pulse" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-base font-black text-on-surface uppercase tracking-tight">{activeFlight.flightNumber}</span>
+                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-warning/20 text-warning border border-warning/40">
+                  Active Refueling Session
+                </span>
+              </div>
+              <p className="text-[10px] font-bold text-on-surface-dim opacity-70 uppercase tracking-wider mt-0.5 truncate">
+                Unit {activeFlight.vehicleId} • Stand {activeFlight.stand || 'TBA'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+            {onCancelActiveFlight && (
+              <button
+                type="button"
+                onClick={() => onCancelActiveFlight?.(activeFlight || undefined)}
+                className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider bg-surface-container hover:bg-surface-container-high text-on-surface-dim hover:text-error border border-outline transition-all cursor-pointer"
+              >
+                Cancel Session
+              </button>
+            )}
+            {onResumeActiveFlight && (
+              <button
+                type="button"
+                onClick={onResumeActiveFlight}
+                className="flex-1 sm:flex-initial px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider kinetic-gradient text-white shadow-premium hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Resume Fueling</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Category Toggle */}
       <div className="flex justify-center items-center mt-2 mb-4">
           <div className="bg-surface-container-low p-1 rounded-[22px] border-transparent flex relative w-full max-w-[370px] sm:max-w-[440px] h-[38px]">
@@ -2800,11 +2924,19 @@ const ScreenQC: React.FC<{
   );
 };
 
-export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob, initialVehicleId, onClearInitialVehicleId }) => {
+export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob, initialVehicleId, onClearInitialVehicleId, setActiveView }) => {
   const { notify } = useNotification();
-  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, externalFlights, staff, refreshData, selectedBriefingDate, tanks, updateTankLevel, serviceTankId, briefingInfo } = useOperationalData();
+  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, externalFlights, staff, refreshData, selectedBriefingDate, tanks, updateTankLevel, serviceTankId, briefingInfo, internationalSchedules, addFlightLogEntry } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
-  const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(null);
+  const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(() => {
+    try {
+      const saved = localStorage.getItem(`fms_active_flight_${user?.id || ''}`);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const originViewRef = React.useRef<string | null>(null);
   const [paymentType, setPaymentType] = useState<'CREDIT' | 'CASH' | 'VOID'>('CREDIT');
   const [cashRate, setCashRate] = useState<string>('1.85');
   const [showVoidModal, setShowVoidModal] = useState(false);
@@ -2879,16 +3011,24 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     }
   };
   
-  const hasStartedRef = React.useRef(false);
+  const lastProcessedJobKeyRef = React.useRef<string | null>(null);
 
-  // Auto-start if job passed from dashboard
+  // Auto-start if job passed from dashboard or schedule
   useEffect(() => {
-    if (initialJob && !hasStartedRef.current) {
-      hasStartedRef.current = true;
-      const vehicleToUse = initialJob.vehicleId || initialVehicleId || selectedVehicleId;
-      startJob(initialJob, vehicleToUse);
-      if (onClearInitialJob) onClearInitialJob();
-      if (onClearInitialVehicleId) onClearInitialVehicleId();
+    if (initialJob) {
+      const jobKey = `${initialJob.id || ''}_${initialJob.flightNumber || ''}_${initialJob.vehicleId || initialVehicleId || ''}`;
+      if (lastProcessedJobKeyRef.current !== jobKey) {
+        lastProcessedJobKeyRef.current = jobKey;
+        originViewRef.current = (initialJob as any).originView || 'schedule';
+        const vehicleToUse = initialJob.vehicleId || initialVehicleId || selectedVehicleId;
+        startJob(initialJob, vehicleToUse);
+        setTimeout(() => {
+          if (onClearInitialJob) onClearInitialJob();
+          if (onClearInitialVehicleId) onClearInitialVehicleId();
+        }, 50);
+      }
+    } else {
+      lastProcessedJobKeyRef.current = null;
     }
   }, [initialJob, initialVehicleId]);
 
@@ -2965,10 +3105,14 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     updateFlightJobRef.current = updateFlightJob;
   }, [updateFlightJob]);
 
-  const cancelActiveFlightJob = () => {
+  const cancelActiveFlightJob = (targetJob?: FlightJob) => {
+    // Guard against React SyntheticEvent being passed when invoked directly by onClick
+    const isEvent = targetJob && ('nativeEvent' in (targetJob as any) || typeof (targetJob as any).preventDefault === 'function');
+    const validTargetJob = isEvent ? undefined : targetJob;
     const currentActive = activeFlightRef.current || activeFlight;
+    const jobToCancel = validTargetJob || currentActive;
     const currentJobInfo = activeJobRef.current;
-    const targetVehicleId = currentActive?.vehicleId || currentJobInfo?.vehicleId || selectedVehicleIdRef.current || selectedVehicleId;
+    const targetVehicleId = jobToCancel?.vehicleId || currentActive?.vehicleId || currentJobInfo?.vehicleId || selectedVehicleIdRef.current || selectedVehicleId;
 
     // 1. Release equipment back to AVAILABLE
     if (targetVehicleId) {
@@ -2976,9 +3120,9 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     }
 
     // 2. Revert flight job back to PENDING so it can be re-started without active fueling
-    const rawFlightNo = currentActive?.flightNumber || currentJobInfo?.flightNumber || '';
+    const rawFlightNo = jobToCancel?.flightNumber || currentActive?.flightNumber || currentJobInfo?.flightNumber || '';
     const normFlightNo = rawFlightNo.replace(/\s+/g, '').toUpperCase();
-    const knownJobId = (currentActive as any)?.jobId || (currentActive as any)?.id || currentJobInfo?.jobId;
+    const knownJobId = (jobToCancel as any)?.jobId || (jobToCancel as any)?.id || (currentActive as any)?.jobId || (currentActive as any)?.id || currentJobInfo?.jobId;
 
     const allJobs = flightJobsRef.current || flightJobs || [];
     const matching = allJobs.find(j => 
@@ -2986,29 +3130,46 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       (normFlightNo && (j.flightNumber || '').replace(/\s+/g, '').toUpperCase() === normFlightNo && j.status !== 'COMPLETED')
     );
 
-    const finalJobId = matching?.id || knownJobId;
-    if (finalJobId) {
-      updateFlightJobRef.current(finalJobId, { 
+    const finalJobId = matching?.id || knownJobId || (normFlightNo ? `fj-${normFlightNo}` : undefined);
+    if (finalJobId || normFlightNo) {
+      updateFlightJobRef.current(finalJobId || normFlightNo, { 
         status: 'PENDING', 
-        vehicleId: undefined,
+        vehicleId: '',
         flightNumber: rawFlightNo || matching?.flightNumber
       });
     }
 
-    activeJobRef.current = null;
-    activeFlightRef.current = null;
-    setActiveFlight(null);
+    const currentActiveNo = (currentActive?.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+    if (!validTargetJob || (currentActiveNo && (!normFlightNo || currentActiveNo === normFlightNo)) || !currentActiveNo) {
+      try {
+        localStorage.removeItem(`fms_active_flight_${user?.id || ''}`);
+      } catch {}
+
+      activeJobRef.current = null;
+      activeFlightRef.current = null;
+      setActiveFlight(null);
+    }
+
+    notify(`Fueling for ${rawFlightNo || 'flight'} cancelled and status reverted.`, 'success');
   };
 
+  const isMountedRef = React.useRef(true);
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
-      if (!isSubmittingOrCompletingRef.current && (activeFlightRef.current || activeJobRef.current)) {
-        cancelActiveFlightJob();
-      }
+      isMountedRef.current = false;
     };
   }, []);
 
   const startJob = (job: FlightJob, vehicleIdOverride?: string) => {
+    // If this flight is already active in local session, directly resume to timestamps
+    const cleanJobNo = (job.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+    const cleanActiveNo = (activeFlight?.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+    if (activeFlight && cleanActiveNo === cleanJobNo) {
+      navigateToScreen('timestamps');
+      return;
+    }
+
     const activeVehicleId = vehicleIdOverride || selectedVehicleId;
     const isDomFlight = !!job.isDomestic || isDomesticFlight(job);
     const isRfJob = job.equipmentUsage?.toUpperCase() === 'REFUELLER' || isDomFlight;
@@ -3049,22 +3210,31 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     updateEquipmentStatus(activeVehicleId, EquipmentStatus.IN_USE);
 
     // Update flight job status to IN_PROGRESS so Operator Oversight reflects active tasks
+    const targetFlightDate = job.date ? job.date.split('T')[0] : selectedBriefingDate;
     const normJobNo = (job.flightNumber || '').replace(/\s+/g, '').toUpperCase();
     const matchingJob = (flightJobs || []).find(j => 
       (job.id && j.id === job.id) ||
-      ((j.flightNumber || '').replace(/\s+/g, '').toUpperCase() === normJobNo && j.status !== 'COMPLETED')
+      ((j.flightNumber || '').replace(/\s+/g, '').toUpperCase() === normJobNo && (!j.date || j.date.split('T')[0] === targetFlightDate) && j.status !== 'COMPLETED')
     );
-    const targetJobId = matchingJob?.id || job.id;
-    const effectiveAssignee = (user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN) 
-      ? (matchingJob?.assignedTo || job.assignedTo || user.id) 
-      : user.id;
+    const targetJobId = matchingJob?.id || job.id || (normJobNo ? `fj-${normJobNo}` : `fj-${Date.now()}`);
+    const effectiveAssignee = matchingJob?.assignedTo || job.assignedTo || (user.role === UserRole.ITP_OPERATOR || user.role === UserRole.ITP_HD_OPERATOR ? user.id : '');
 
     if (targetJobId) {
       updateFlightJob(targetJobId, { 
         status: 'IN_PROGRESS', 
         vehicleId: activeVehicleId, 
         assignedTo: effectiveAssignee,
-        flightNumber: job.flightNumber
+        flightNumber: job.flightNumber,
+        aircraftReg: job.aircraftReg || matchingJob?.aircraftReg,
+        aircraftType: job.aircraftType || matchingJob?.aircraftType,
+        stand: job.stand || matchingJob?.stand,
+        sta: job.sta || matchingJob?.sta,
+        eta: job.eta || matchingJob?.eta,
+        std: job.std || matchingJob?.std,
+        date: targetFlightDate,
+        route: job.route || matchingJob?.route,
+        isDomestic: isDomFlight,
+        isAdhoc: job.isAdhoc
       });
     }
 
@@ -3101,18 +3271,32 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       af && (af.id === job.id || (af.flightNumber && af.flightNumber.replace(/\s+/g, '').toLowerCase() === (job.flightNumber || '').replace(/\s+/g, '').toLowerCase()))
     );
     const resolvedCo = (job as any).co || matchingAdhoc?.co || '';
-    const resolvedOperatorName = (job as any).operatorName || matchingAdhoc?.operatorName || '';
+    const resolvedOperatorName = job.isAdhoc ? ((job as any).operatorName || matchingAdhoc?.operatorName || '') : '';
 
-    setActiveFlight({
+    const cleanFlightNo = (job.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+    const matchingExternal = (externalFlights || []).find(ef => 
+      (ef.flightNumber || '').replace(/\s+/g, '').toUpperCase() === cleanFlightNo
+    );
+    const matchingSchedule = (internationalSchedules || []).find(sch => 
+      (sch.flightNumber || '').replace(/\s+/g, '').toUpperCase() === cleanFlightNo
+    );
+
+    const resolvedStd = job.std || matchingJob?.std || matchingExternal?.std || matchingSchedule?.std || '';
+    const resolvedTobt = job.tobt || matchingJob?.tobt || (matchingExternal as any)?.tobt || '';
+    const resolvedFrtAirline = job.frtAirline || matchingJob?.frtAirline || '';
+    const resolvedFrtAocc = job.frtAocc || matchingJob?.frtAocc || '';
+    const resolvedFrtFor = job.frtFor || matchingJob?.frtFor || '';
+
+    const flightData = {
       id: targetJobId,
       jobId: targetJobId,
       flightNumber: job.flightNumber,
-      aircraftReg: job.aircraftReg,
-      aircraftType: job.aircraftType,
-      stand: job.stand,
+      aircraftReg: job.aircraftReg || matchingJob?.aircraftReg || '8Q-TBA',
+      aircraftType: job.aircraftType || matchingJob?.aircraftType || (isDomFlight ? 'ATR72-600' : 'A320'),
+      stand: job.stand || matchingJob?.stand || '---',
       operatorId: effectiveAssignee,
       vehicleId: activeVehicleId,
-      status: 'PENDING',
+      status: 'IN_PROGRESS',
       meterOpen: initialMeter,
       volume: 0,
       panelCheck: false,
@@ -3121,19 +3305,23 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       waterCheck: false,
       remarks: cleanRemarks(job.remarks || ''),
       isAdhoc: job.isAdhoc,
-      route: job.route,
+      route: job.route || matchingJob?.route,
       isDomestic: isDomFlight,
-      officer: job.assignedOfficer || '',
-      operationalDate: job.date || selectedBriefingDate || new Date().toISOString().split('T')[0],
-      std: job.std,
-      tobt: job.tobt,
-      frtAirline: job.frtAirline,
-      frtAocc: job.frtAocc,
-      frtFor: job.frtFor,
+      officer: job.assignedOfficer || matchingJob?.assignedOfficer || '',
+      operationalDate: targetFlightDate || new Date().toISOString().split('T')[0],
+      std: resolvedStd,
+      tobt: resolvedTobt,
+      frtAirline: resolvedFrtAirline,
+      frtAocc: resolvedFrtAocc,
+      frtFor: resolvedFrtFor,
       timestampClearance: job.timestampClearance,
       co: resolvedCo,
       operatorName: resolvedOperatorName,
-    } as any);
+    };
+    setActiveFlight(flightData as any);
+    try {
+      localStorage.setItem(`fms_active_flight_${user?.id || ''}`, JSON.stringify(flightData));
+    } catch {}
     navigateToScreen('timestamps');
   };
 
@@ -3309,12 +3497,29 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     const state = window.history.state;
     const currentItpScreen = state?.itpScreen || 'dashboard';
     if (currentItpScreen !== screen) {
-      window.history.pushState({ fmsActive: true, itpScreen: screen }, '');
+      window.history.pushState({ fmsActive: true, fmsView: 'intoplane', itpScreen: screen }, '');
+    }
+  };
+
+  const handleBackToTimestamps = () => {
+    setCurrentScreen('timestamps');
+    if (window.history.state?.itpScreen) {
+      window.history.replaceState({ fmsActive: true, fmsView: 'intoplane', itpScreen: 'timestamps' }, '');
+    }
+  };
+
+  const handleBackToMetering = () => {
+    setCurrentScreen('metering');
+    if (window.history.state?.itpScreen) {
+      window.history.replaceState({ fmsActive: true, fmsView: 'intoplane', itpScreen: 'metering' }, '');
     }
   };
 
   const completeOrCancelJobAndExit = (successMessage?: string) => {
     isSubmittingOrCompletingRef.current = true;
+    try {
+      localStorage.removeItem(`fms_active_flight_${user?.id || ''}`);
+    } catch {}
     if (successMessage) {
       notify(successMessage, "success");
       activeJobRef.current = null;
@@ -3324,18 +3529,18 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       cancelActiveFlightJob();
     }
     
-    let stepsBack = 0;
-    if (currentScreen === 'timestamps') stepsBack = -1;
-    else if (currentScreen === 'metering') stepsBack = -2;
-    else if (currentScreen === 'qc') stepsBack = -3;
-
     setCurrentScreen('dashboard');
 
-    if (stepsBack < 0) {
-      try {
-        window.history.go(stepsBack);
-      } catch (e) {}
+    if (window.history.state?.itpScreen) {
+      window.history.replaceState({ fmsActive: true, fmsView: 'intoplane', itpScreen: 'dashboard' }, '');
     }
+
+    if (originViewRef.current && setActiveView) {
+      const prev = originViewRef.current;
+      originViewRef.current = null;
+      setActiveView(prev);
+    }
+
     setTimeout(() => {
       isSubmittingOrCompletingRef.current = false;
     }, 200);
@@ -3347,9 +3552,13 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     setCurrentScreen('dashboard');
 
     if (window.history.state?.itpScreen) {
-      try {
-        window.history.back();
-      } catch (e) {}
+      window.history.replaceState({ fmsActive: true, fmsView: 'intoplane', itpScreen: 'dashboard' }, '');
+    }
+
+    if (originViewRef.current && setActiveView) {
+      const prev = originViewRef.current;
+      originViewRef.current = null;
+      setActiveView(prev);
     }
 
     setTimeout(() => {
@@ -3373,7 +3582,8 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       } else {
         // Popped back to dashboard (or out of ITP sub-screens)
         if (currentScreen !== 'dashboard') {
-          handleBackToDashboard();
+          cancelActiveFlightJob();
+          setCurrentScreen('dashboard');
         }
       }
     };
@@ -3446,6 +3656,71 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         (activeFlight as any).flight_category?.toUpperCase() === 'SEA' || 
         activeFlight.logType === 'SEAPLANE';
 
+      const cleanFlightNo = (activeFlight.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+      const matchingJob = (flightJobs || []).find(job => 
+        (activeFlight.id && job.id === activeFlight.id) || 
+        ((job.flightNumber || '').replace(/\s+/g, '').toUpperCase() === cleanFlightNo && job.status !== 'COMPLETED')
+      );
+      const matchingExternal = (externalFlights || []).find(ef => 
+        (ef.flightNumber || '').replace(/\s+/g, '').toUpperCase() === cleanFlightNo
+      );
+      const matchingSchedule = (internationalSchedules || []).find(sch => 
+        (sch.flightNumber || '').replace(/\s+/g, '').toUpperCase() === cleanFlightNo
+      );
+
+      const resolvedStd = activeFlight.std || matchingJob?.std || matchingExternal?.std || matchingSchedule?.std || '';
+      const resolvedTobt = activeFlight.tobt || matchingJob?.tobt || (matchingExternal as any)?.tobt || '';
+      const resolvedFrtAirline = activeFlight.frtAirline || matchingJob?.frtAirline || '';
+      const resolvedFrtAocc = activeFlight.frtAocc || matchingJob?.frtAocc || '';
+      const resolvedFrtFor = activeFlight.frtFor || matchingJob?.frtFor || '';
+
+      // Operator Name is strictly for ad-hoc entries (not staff name)
+      const resolvedOperatorName = activeFlight.isAdhoc ? (activeFlight.operatorName || '') : '';
+
+      // Officer vs RF Operator resolution based on vehicle type and assignment
+      const isHd = selectedVehicleId?.toUpperCase().startsWith('HD') || activeFlight?.vehicleId?.toUpperCase().startsWith('HD');
+      const isRf = selectedVehicleId?.toUpperCase().startsWith('RF') || activeFlight?.vehicleId?.toUpperCase().startsWith('RF');
+
+      const opStaff = (staff || []).find(s => 
+        s.id === activeFlight.operatorId || 
+        s.id === matchingJob?.assignedTo || 
+        s.name.toLowerCase() === (activeFlight.operatorId || '').toLowerCase()
+      );
+      const assignedOpName = opStaff?.name || (activeFlight.operatorId && !activeFlight.operatorId.startsWith('st-') ? activeFlight.operatorId : user.name);
+
+      const officerRaw = activeFlight.officer || matchingJob?.assignedOfficer || '';
+      const officerStaff = (staff || []).find(s => 
+        s.id === officerRaw || 
+        s.name.toLowerCase() === (officerRaw || '').toLowerCase()
+      );
+      const assignedOfficerName = officerStaff?.name || (officerRaw && !officerRaw.startsWith('st-') && officerRaw !== 'ITP Officer' ? officerRaw : '');
+
+      let resolvedOfficer = '';
+      let resolvedTacticalOperator = '';
+
+      if (isHd) {
+        // If 2 distinct staff are assigned (officer AND operator)
+        if (assignedOfficerName && assignedOpName && assignedOfficerName.toLowerCase() !== assignedOpName.toLowerCase() && assignedOfficerName !== 'ITP Officer') {
+          resolvedOfficer = assignedOfficerName;
+          resolvedTacticalOperator = assignedOpName;
+        } else {
+          // Exactly 1 staff assigned on HD:
+          // Enter the staff name to Officer field only and leave RF Operator field blank!
+          resolvedOfficer = (assignedOfficerName && assignedOfficerName !== 'ITP Officer') ? assignedOfficerName : (assignedOpName || user.name);
+          resolvedTacticalOperator = '';
+        }
+      } else if (isRf) {
+        // Refueller:
+        resolvedTacticalOperator = assignedOpName || user.name;
+        resolvedOfficer = (assignedOfficerName && assignedOfficerName.toLowerCase() !== assignedOpName.toLowerCase() && assignedOfficerName !== 'ITP Officer')
+          ? assignedOfficerName
+          : '';
+      } else {
+        // Seaplane / other:
+        resolvedOfficer = (assignedOfficerName && assignedOfficerName !== 'ITP Officer') ? assignedOfficerName : (assignedOpName || user.name);
+        resolvedTacticalOperator = isSeaplaneFlight ? '' : (assignedOpName || user.name);
+      }
+
       const logToSave: Omit<FlightLog, 'id'> = {
         flightNumber: activeFlight.flightNumber || '',
         aircraftReg: activeFlight.aircraftReg || '',
@@ -3462,11 +3737,11 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         timestampFinalStart: activeFlight.timestampFinalStart,
         timestampFinalEnd: activeFlight.timestampFinalEnd,
         timestampClearance: activeFlight.timestampClearance || new Date().toISOString(),
-        std: activeFlight.std,
-        tobt: activeFlight.tobt,
-        frtAirline: activeFlight.frtAirline,
-        frtAocc: activeFlight.frtAocc,
-        frtFor: activeFlight.frtFor,
+        std: resolvedStd,
+        tobt: resolvedTobt,
+        frtAirline: resolvedFrtAirline,
+        frtAocc: resolvedFrtAocc,
+        frtFor: resolvedFrtFor,
         meterOpen: activeFlight.meterOpen,
         volume: activeFlight.volume || 0,
         panelCheck: activeFlight.panelCheck || false,
@@ -3486,15 +3761,23 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         operationalDate: activeFlight.operationalDate || new Date().toISOString().split('T')[0],
         psi: activeFlight.psi,
         lpm: activeFlight.lpm,
-        officer: activeFlight.officer || (user.role === UserRole.ITP_OPERATOR ? 'ITP Officer' : user.name),
-        operatorName: activeFlight.operatorName || (staff && staff.find(s => s.id === activeFlight.operatorId)?.name) || user.name,
-        tacticalOperator: (staff && staff.find(s => s.id === activeFlight.operatorId)?.name) || user.name,
+        officer: resolvedOfficer,
+        operatorName: resolvedOperatorName,
+        tacticalOperator: resolvedTacticalOperator,
         destination: activeFlight.destination,
         paymentType: paymentType || activeFlight.paymentType || 'CREDIT',
       };
 
-      await supabaseService.createFlightLog(logToSave);
-      
+      // Optimistically push into in-memory state so user sees it right away in Log History
+      if (addFlightLogEntry) {
+        addFlightLogEntry({ ...logToSave, id: `op-${Date.now()}` } as FlightLog);
+      }
+
+      // Collect auxiliary promises to run concurrently with BigQuery save
+      const auxPromises: Promise<any>[] = [];
+
+      const logPromise = supabaseService.createFlightLog(logToSave);
+
       // Update Refueller Payload/Inventory if applicable
       if (selectedVehicleId.startsWith('RF')) {
         const vehicle = equipment.find(eq => eq.id === selectedVehicleId);
@@ -3503,21 +3786,21 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
           const capacity = vehicle.maxCapacity || 20000;
           const isLow = newVolume < 2000 || newVolume < capacity * 0.1;
           
-          await updateEquipment(selectedVehicleId, { 
+          auxPromises.push(updateEquipment(selectedVehicleId, { 
             currentVolume: newVolume,
             status: isLow ? EquipmentStatus.REFUELLING : EquipmentStatus.AVAILABLE 
-          });
+          }));
 
           if (isLow) {
             // Trigger automatic replenishment request for Depot Operator
             try {
-              await createAlert({
+              createAlert({
                 severity: 'medium',
                 message: `Replenishment requested for unit ${selectedVehicleId} (Low fuel: ${newVolume.toLocaleString()}L)`,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
                 acknowledged: false,
                 targetRole: UserRole.DEPOT_OPERATOR
-              });
+              }).catch(err => console.error("Auto alert trigger failed:", err));
               notify(`Refueller ${selectedVehicleId} fuel level is low (${newVolume.toLocaleString()}L). Replenishment request triggered automatically.`, 'warning');
             } catch (err) {
               console.error("Auto alert trigger failed:", err);
@@ -3531,22 +3814,25 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         const targetTank = (tanks || []).find(t => t.id === serviceTankId) || (tanks || []).find(t => t.id === 'tk101');
         if (targetTank && activeFlight.volume) {
           const newLevel = Math.max(0, targetTank.currentLevel - (activeFlight.volume || 0));
-          await updateTankLevel(targetTank.id, newLevel);
+          auxPromises.push(updateTankLevel(targetTank.id, newLevel));
         }
         // Release hydrant/service equipment
         updateEquipmentStatus(selectedVehicleId, EquipmentStatus.AVAILABLE);
       }
 
       // Find matching flight job and mark it as COMPLETED in the database
-      const matchingJob = (flightJobs || []).find(job => (activeFlight.id && job.id === activeFlight.id) || (job.flightNumber === activeFlight.flightNumber && job.status !== 'COMPLETED'));
       if (matchingJob) {
-        await updateFlightJob(matchingJob.id, { 
+        auxPromises.push(updateFlightJob(matchingJob.id, { 
           status: 'COMPLETED',
           timestampClearance: logToSave.timestampClearance
-        });
+        }));
       }
 
-      await refreshData();
+      // Concurrently wait for BigQuery and Supabase writes
+      await Promise.all([logPromise, ...auxPromises]);
+
+      // Refresh in background so user doesn't wait
+      refreshData().catch(e => console.warn('[IntoPlane] Background refresh failed:', e));
       completeOrCancelJobAndExit("Job Completed & Synced to Database!");
     } catch (error) {
       console.error('Error saving flight log:', error);
@@ -3899,6 +4185,8 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 setSelectedVehicleId={changeSelectedVehicleId}
                 flightLogs={flightLogs}
                 activeFlight={activeFlight}
+                onResumeActiveFlight={() => navigateToScreen('timestamps')}
+                onCancelActiveFlight={cancelActiveFlightJob}
               />
             )}
             {currentScreen === 'timestamps' && (
@@ -3919,7 +4207,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 onTimestamp={handleTimestamp} 
                 onInputChange={handleInputChange}
                 onNext={() => navigateToScreen('qc')}
-                onBack={() => window.history.back()}
+                onBack={handleBackToTimestamps}
                 showTopUp={showTopUp}
                 setShowTopUp={setShowTopUp}
                 user={user}
@@ -3935,7 +4223,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 setManualTime={setManualTime}
                 getLocalTimeValue={getLocalTimeValue}
                 onSubmit={() => setShowConfirmModal(true)}
-                onBack={() => window.history.back()}
+                onBack={handleBackToMetering}
                 onClose={() => completeOrCancelJobAndExit()}
                 loading={loading}
                 user={user}
@@ -4001,9 +4289,10 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                   })
                   .map(eq => {
                     const isRfJob = equipPickerJob?.equipmentUsage?.toUpperCase() === 'REFUELLER' || equipPickerJob?.isDomestic || isDomesticFlight(equipPickerJob);
-                    const activeJob = (flightJobs || []).find(fj => fj.status === 'IN_PROGRESS' && fj.vehicleId?.toUpperCase() === eq.id.toUpperCase());
+                    const isActuallyInUse = eq.status !== EquipmentStatus.AVAILABLE && eq.status === EquipmentStatus.IN_USE;
+                    const activeJob = isActuallyInUse ? (flightJobs || []).find(fj => fj.status === 'IN_PROGRESS' && fj.vehicleId?.toUpperCase() === eq.id.toUpperCase()) : null;
                     const isSelected = equipPickerSelected === eq.id;
-                    const isDisabled = !isRfJob && !!activeJob;
+                    const isDisabled = !isRfJob && (isActuallyInUse || eq.status === EquipmentStatus.MAINTENANCE || eq.status === EquipmentStatus.OUT_OF_SERVICE);
 
                     return (
                       <button
@@ -4038,8 +4327,8 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                           ) : (
                             <>
                               <p className="text-[10px] text-on-surface-dim font-bold opacity-60 uppercase tracking-widest">Status</p>
-                              <p className={`text-sm font-black font-mono ${activeJob ? 'text-error animate-pulse' : 'text-success'}`}>
-                                {activeJob ? `In Use: ${activeJob.flightNumber}` : 'Available'}
+                              <p className={`text-sm font-black font-mono ${isActuallyInUse ? 'text-error animate-pulse' : 'text-success'}`}>
+                                {isActuallyInUse ? (activeJob ? `In Use: ${activeJob.flightNumber}` : 'In Use') : 'Available'}
                               </p>
                             </>
                           )}
