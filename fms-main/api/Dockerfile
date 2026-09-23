@@ -12,5 +12,6 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
 COPY --from=build /app/dist ./dist
+ENV NODE_OPTIONS="--max-old-space-size=1536"
 EXPOSE 8080
 CMD ["node", "dist/index.js"]

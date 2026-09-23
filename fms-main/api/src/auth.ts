@@ -219,8 +219,8 @@ router.post('/forgot-pin', async (req, res) => {
       return res.status(500).json({ error: 'Failed to initiate reset' });
     }
 
-    // In real system, send email here. 
-    return res.json({ success: true, token: resetToken });
+    // In production, token should be sent via official email/SMS or provided by admin
+    return res.json({ success: true, message: 'Reset request initiated. Please contact your supervisor or administrator.' });
   } catch (err: any) {
     console.error('[Auth] forgot-pin error:', err);
     return res.status(500).json({ error: 'Internal server error' });

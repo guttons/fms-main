@@ -4,8 +4,29 @@ dist
 .git
 *.md
 *.log
+
+# Environment / secrets
 .env
 .env.*
+*.json.key
+*-service-account*.json
+macl-fms-*.json
+
+# Large data / migration files
 master_*.json
 cloud_run_*.json
+migration_*.log
 
+# Scratch, test and migration scripts
+check_*.cjs
+check_*.js
+test_*.cjs
+test_*.js
+analyze_*.cjs
+fetch_*.cjs
+find_*.cjs
+generate_*.cjs
+migrate_*.cjs
+run_*.cjs
+run_*.js
+extract_*.cjs

@@ -140,37 +140,6 @@ async function ensureSchema(): Promise<void> {
   if (!tableExists) {
     await dataset.createTable(TABLE_ID, { schema: OPERATIONS_LOG_SCHEMA });
     console.log(`[BigQuery] Created table: ${DATASET_ID}.${TABLE_ID}`);
-  } else {
-    try {
-      const columnsToAdd = [
-        'route STRING',
-        'co STRING',
-        'is_domestic BOOL',
-        'int_dom STRING',
-        'airline STRING',
-        'operational_date DATE',
-        'pit_number STRING',
-        'is_adhoc BOOL',
-        'timestamp_final_start TIMESTAMP',
-        'psi FLOAT64',
-        'lpm FLOAT64',
-        'officer STRING',
-        'operator_name STRING',
-        'destination STRING',
-        'payment_type STRING',
-        'std STRING',
-        'tobt STRING',
-        'frt_airline STRING',
-        'frt_aocc STRING',
-        'frt_for STRING',
-      ];
-      const addClauses = columnsToAdd.map(col => `ADD COLUMN IF NOT EXISTS ${col}`).join(', ');
-      const alterSql = `ALTER TABLE ${TABLE_REF} ${addClauses}`;
-      console.log(`[BigQuery] Schema migration: ${alterSql}`);
-      await bigquery.query({ query: alterSql, location: 'US' });
-    } catch (e: any) {
-      console.error('[BigQuery] Migration failed:', e.message);
-    }
   }
 
   // New Table: filling_station_log
@@ -329,9 +298,13 @@ const allowedOrigins = [
 ];
 
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, apikey');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS');
+  const origin = req.headers.origin;
+  if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development' || origin.includes('localhost')) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  }
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, apikey, Cache-Control');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   if (req.method === 'OPTIONS') {
     res.sendStatus(204);
     return;
@@ -340,9 +313,16 @@ app.use((req, res, next) => {
 });
 
 app.use(cors({
-  origin: '*',
-  allowedHeaders: ['Content-Type', 'Authorization', 'apikey'],
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development' || origin.includes('localhost')) {
+      callback(null, true);
+    } else {
+      callback(new Error(`Origin ${origin} not allowed by CORS policy`));
+    }
+  },
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization', 'apikey', 'Cache-Control'],
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
 }));
 
 app.use(express.json());
@@ -466,34 +446,23 @@ async function requireAuth(req: Request, res: Response, next: NextFunction): Pro
       if (expectedAnonKey && (idToken === expectedAnonKey || req.headers.apikey === expectedAnonKey)) {
         decodedUser = decodedToken.payload || { role: 'anon' };
       } else if (!jwtSecret) {
-        // If JWT secret is not set, accept tokens belonging to the Supabase project
-        if (decodedToken.payload && (
-          decodedToken.payload.ref === 'pzyrstehoesmhwkhtoxd' || 
-          decodedToken.payload.iss?.includes('supabase') || 
-          decodedToken.payload.role === 'anon' || 
-          decodedToken.payload.role === 'authenticated'
-        )) {
-          decodedUser = decodedToken.payload;
-        } else {
-          console.error('[Auth] SUPABASE_JWT_SECRET environment variable is not set!');
-          res.status(500).json({ error: 'Internal Server Error: Auth configuration missing.' });
-          return;
-        }
+        console.error('[Auth] SUPABASE_JWT_SECRET environment variable is not configured; rejecting token.');
+        res.status(500).json({ error: 'Internal Server Error: Auth configuration missing. Token signature cannot be verified.' });
+        return;
       } else {
-      
-      try {
-        const base64Secret = Buffer.from(jwtSecret, 'base64');
-        decodedUser = jwt.verify(idToken, base64Secret, { algorithms: ['HS256'] });
-      } catch (err) {
         try {
-          decodedUser = jwt.verify(idToken, jwtSecret, { algorithms: ['HS256'] });
-        } catch (err2) {
-          console.error('[Auth] HS256 Token verification failed with both base64 and raw secret:', err2);
-          throw err2;
+          const base64Secret = Buffer.from(jwtSecret, 'base64');
+          decodedUser = jwt.verify(idToken, base64Secret, { algorithms: ['HS256'] });
+        } catch (err) {
+          try {
+            decodedUser = jwt.verify(idToken, jwtSecret, { algorithms: ['HS256'] });
+          } catch (err2) {
+            console.error('[Auth] HS256 Token verification failed with both base64 and raw secret:', err2);
+            throw err2;
+          }
         }
       }
     }
-  }
 
     (req as any).user = decodedUser;
     next();
@@ -506,6 +475,17 @@ async function requireAuth(req: Request, res: Response, next: NextFunction): Pro
     });
   }
 }
+
+// ─── Authoritative Server Time Endpoint (for synchronized client operations) ─
+app.get('/server-time', (_req: Request, res: Response) => {
+  const now = new Date();
+  res.json({
+    serverTime: now.toISOString(),
+    epochMs: now.getTime(),
+    timezone: 'UTC',
+    serverTimestamp: now.toISOString()
+  });
+});
 
 // ─── Health check (no auth) ───────────────────────────────────────────────────
 app.get('/', (_req: Request, res: Response) => {
@@ -996,6 +976,45 @@ app.post('/operations-log', requireAuth, async (req: Request, res: Response) => 
   const row = logToRow(req.body, newId);
   console.log(`[BigQuery SQL] INSERT → id=${newId}, delivery_number=${row.delivery_number}`);
 
+  // Backend duplicate ticket check across all Jet A-1 operations (FLIGHT, SEAPLANE, MARINE)
+  if (row.delivery_number) {
+    const rawDelivery = String(row.delivery_number).trim();
+    const digitsOnly = rawDelivery.replace(/\D/g, '');
+    if (digitsOnly.length >= 4) {
+      try {
+        const checkSql = `
+          SELECT id, flight_number, delivery_number, log_type 
+          FROM ${TABLE_REF} 
+          WHERE is_deleted IS NOT TRUE 
+            AND (
+              delivery_number = @rawDelivery 
+              OR delivery_number = @mleFormatted
+              OR REGEXP_REPLACE(delivery_number, r'\\D', '') = @digitsOnly
+            )
+          LIMIT 1
+        `;
+        const [existing] = await bigquery.query({
+          query: checkSql,
+          params: {
+            rawDelivery,
+            mleFormatted: `MLE-${digitsOnly}`,
+            digitsOnly
+          },
+          location: 'US'
+        });
+        if (existing && existing.length > 0) {
+          const matched = existing[0];
+          return res.status(409).json({
+            error: `Delivery ticket number ${rawDelivery} is already used in ${matched.log_type || 'Operations'} (${matched.flight_number || matched.delivery_number}). Each ticket number must be unique.`,
+            duplicateLog: matched
+          });
+        }
+      } catch (checkErr: any) {
+        console.warn('[BigQuery] Duplicate ticket check skipped on error:', checkErr.message);
+      }
+    }
+  }
+
   // Build column list and parameter map from the row object, filtering out null/undefined values
   const activeEntries = Object.entries(row).filter(([_, val]) => val !== null && val !== undefined);
   const columns = activeEntries.map(([k]) => k);
@@ -1066,9 +1085,46 @@ const PARAM_TYPES: Record<string, string> = {
   frtFor: 'STRING',
 };
 
+// ─── Server-side PATCH debounce to prevent BigQuery DML rate limit errors ────
+// BigQuery has a per-table DML quota. If the client fires rapid consecutive
+// PATCHes for the same record (e.g. autosave on field change), we coalesce them
+// into a single UPDATE by holding the latest payload for 1.5 seconds.
+const patchDebounceMap = new Map<string, {
+  timer: ReturnType<typeof setTimeout>,
+  latestUpdates: Record<string, any>,
+  resolve: (value: any) => void,
+  reject: (reason?: any) => void,
+}>();
+
+function execDebouncedPatch(id: string, updates: Record<string, any>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const existing = patchDebounceMap.get(id);
+    if (existing) {
+      // Cancel previous timer and merge updates
+      clearTimeout(existing.timer);
+      existing.latestUpdates = { ...existing.latestUpdates, ...updates };
+      existing.resolve = resolve;
+      existing.reject = reject;
+    }
+    const entry = patchDebounceMap.get(id) || { latestUpdates: updates, resolve, reject } as any;
+    entry.timer = setTimeout(async () => {
+      patchDebounceMap.delete(id);
+      entry.resolve(entry.latestUpdates);
+    }, 1500);
+    if (!patchDebounceMap.has(id)) {
+      patchDebounceMap.set(id, entry);
+    }
+  });
+}
+
 app.patch('/operations-log/:id', requireAuth, async (req: Request, res: Response) => {
   const { id } = req.params;
-  const updates = req.body as Record<string, any>;
+  const body = req.body as Record<string, any>;
+  // existingDeliveryNumber: sent by client when editing a log without changing ticket.
+  // When present and matching the submitted deliveryNumber, skip duplicate SELECT.
+  const existingDeliveryNumber: string | undefined = body._existingDeliveryNumber;
+  const updates: Record<string, any> = { ...body };
+  delete updates._existingDeliveryNumber;
 
   // Map camelCase → snake_case columns
   const fieldMap: Record<string, string> = {
@@ -1116,6 +1172,52 @@ app.patch('/operations-log/:id', requireAuth, async (req: Request, res: Response
     frtAocc:             'frt_aocc',
     frtFor:              'frt_for',
   };
+
+  // Backend duplicate ticket check across all Jet A-1 operations (FLIGHT, SEAPLANE, MARINE) on update.
+  // Skip the expensive BigQuery SELECT when the client confirms the ticket hasn't changed
+  // (i.e. existingDeliveryNumber digits match the submitted deliveryNumber digits).
+  if (updates.deliveryNumber) {
+    const rawDelivery = String(updates.deliveryNumber).trim();
+    const digitsOnly = rawDelivery.replace(/\D/g, '');
+    const existingDigits = existingDeliveryNumber ? existingDeliveryNumber.replace(/\D/g, '') : null;
+    const ticketUnchanged = existingDigits && existingDigits === digitsOnly;
+
+    if (digitsOnly.length >= 4 && !ticketUnchanged) {
+      try {
+        const checkSql = `
+          SELECT id, flight_number, delivery_number, log_type 
+          FROM ${TABLE_REF} 
+          WHERE is_deleted IS NOT TRUE 
+            AND id != @record_id
+            AND (
+              delivery_number = @rawDelivery 
+              OR delivery_number = @mleFormatted
+              OR REGEXP_REPLACE(delivery_number, r'\\D', '') = @digitsOnly
+            )
+          LIMIT 1
+        `;
+        const [existing] = await bigquery.query({
+          query: checkSql,
+          params: {
+            record_id: id,
+            rawDelivery,
+            mleFormatted: `MLE-${digitsOnly}`,
+            digitsOnly
+          },
+          location: 'US'
+        });
+        if (existing && existing.length > 0) {
+          const matched = existing[0];
+          return res.status(409).json({
+            error: `Delivery ticket number ${rawDelivery} is already used in ${matched.log_type || 'Operations'} (${matched.flight_number || matched.delivery_number}). Each ticket number must be unique.`,
+            duplicateLog: matched
+          });
+        }
+      } catch (checkErr: any) {
+        console.warn('[BigQuery] Duplicate ticket check on PATCH skipped on error:', checkErr.message);
+      }
+    }
+  }
 
   const setClauses: string[] = ['updated_at = CURRENT_TIMESTAMP()'];
   const params: Record<string, any> = { record_id: id };
@@ -1304,7 +1406,7 @@ app.post('/migrate-legacy-data', requireAuth, async (req: Request, res: Response
 // ═══════════════════════════════════════════════════════════════════════════
 // GET /master-db-records — query distinct historical airlines, flight numbers, regs & types
 // ═══════════════════════════════════════════════════════════════════════════
-app.get('/master-db-records', async (req: Request, res: Response) => {
+app.get('/master-db-records', requireAuth, async (req: Request, res: Response) => {
   try {
     const query = `
       SELECT DISTINCT
@@ -1329,14 +1431,14 @@ app.get('/master-db-records', async (req: Request, res: Response) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // Web Push Notifications API
 // ═══════════════════════════════════════════════════════════════════════════
-app.get('/api/push/status', (req: Request, res: Response) => {
+app.get('/api/push/status', requireAuth, (req: Request, res: Response) => {
   res.json({
     initialized: pushService.isReady(),
     publicKey: VAPID_PUBLIC_KEY
   });
 });
 
-app.post('/api/push/config', (req: Request, res: Response) => {
+app.post('/api/push/config', requireAuth, (req: Request, res: Response) => {
   const { publicKey, privateKey, subject } = req.body;
   if (!publicKey || !privateKey) {
     return res.status(400).json({ error: 'publicKey and privateKey are required' });
@@ -1345,7 +1447,7 @@ app.post('/api/push/config', (req: Request, res: Response) => {
   res.json({ success: true, message: 'VAPID configuration updated' });
 });
 
-app.post('/api/push/send', async (req: Request, res: Response) => {
+app.post('/api/push/send', requireAuth, async (req: Request, res: Response) => {
   try {
     const { subscriptions, payload } = req.body;
     if (!subscriptions || !Array.isArray(subscriptions) || subscriptions.length === 0) {
