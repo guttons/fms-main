@@ -36,6 +36,7 @@ import { MOCK_USERS, EQUIPMENT } from '../constants';
 import { User, UserRole, EquipmentType, EquipmentStatus, isDomesticFlight } from '../types';
 import { useNotification } from '../context/NotificationContext';
 import { useOperationalData, BriefingShift } from '../context/OperationalDataContext';
+import { AddAdhocFlightModal, AdhocFlightData } from './AddAdhocFlightModal';
 
 const STAFF_STATUS_PRESETS = [
   { id: 'SL', label: 'SL', color: 'bg-amber-500/10 text-amber-500 border border-amber-500/30' },
@@ -362,16 +363,8 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
   const [isFleetCollapsed, setIsFleetCollapsed] = useState(false);
   const [isAttendanceCollapsed, setIsAttendanceCollapsed] = useState(false);
 
-  // Add Ad-Hoc Flight modal states
+  // Add Ad-Hoc Flight modal state
   const [isAddAdhocModalOpen, setIsAddAdhocModalOpen] = useState(false);
-  const [adhocFlightNumber, setAdhocFlightNumber] = useState('');
-  const [adhocStd, setAdhocStd] = useState('');
-  const [adhocStdError, setAdhocStdError] = useState<string | null>(null);
-  const [adhocDestination, setAdhocDestination] = useState('');
-  const [adhocReg, setAdhocReg] = useState('');
-  const [adhocType, setAdhocType] = useState('');
-  const [adhocCo, setAdhocCo] = useState('');
-  const [adhocOperatorName, setAdhocOperatorName] = useState('');
 
   const userRoleStr = (user?.role || '').toUpperCase();
   const isItpStaffRole = [
@@ -655,48 +648,21 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
     }
   };
 
-  const handleAddAdhocFlight = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAdhocStdError(null);
-
-    const flt = adhocFlightNumber.trim().toUpperCase();
-    const dest = adhocDestination.trim().toUpperCase();
-    const reg = adhocReg.trim().toUpperCase();
-    const type = adhocType.trim().toUpperCase();
-    const co = adhocCo.trim().toUpperCase();
-    const op = adhocOperatorName.trim().toUpperCase();
-    const stdInput = adhocStd.trim();
-
-    if (!flt || !dest || !reg || !type || !co || !op) {
-      notify('Please fill in all required fields (only DEP time is optional).', 'error');
-      return;
-    }
-
-    let formattedStd = '---';
-    if (stdInput) {
-      const match = stdInput.match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
-      if (!match) {
-        setAdhocStdError('Please enter a valid time (HH:MM from 00:00 to 23:59)');
-        notify('Invalid DEP / STD time format. Use HH:MM.', 'error');
-        return;
-      }
-      formattedStd = `${match[1].padStart(2, '0')}:${match[2]}`;
-    }
-
+  const handleAddAdhocFlight = async (flightData: AdhocFlightData) => {
     const newAdhoc = {
       id: `ah-custom-${Date.now()}`,
-      flightNumber: flt,
-      std: formattedStd,
+      flightNumber: flightData.flightNumber,
+      std: flightData.std,
       sta: '---',
-      route: dest,
-      destination: dest,
+      route: flightData.destination,
+      destination: flightData.destination,
       stand: '---',
       status: 'PENDING',
       isAdhoc: true,
-      aircraftReg: reg,
-      aircraftType: type,
-      co: co,
-      operatorName: op,
+      aircraftReg: flightData.aircraftReg,
+      aircraftType: flightData.aircraftType,
+      co: flightData.co,
+      operatorName: flightData.operatorName,
       date: selectedBriefingDate
     };
 
@@ -712,14 +678,6 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
       });
       notify('Ad-hoc flight added successfully!', 'success');
       setIsAddAdhocModalOpen(false);
-      setAdhocFlightNumber('');
-      setAdhocStd('');
-      setAdhocStdError(null);
-      setAdhocDestination('');
-      setAdhocReg('');
-      setAdhocType('');
-      setAdhocCo('');
-      setAdhocOperatorName('');
     } catch (err) {
       console.error('Failed to add ad-hoc flight:', err);
       notify('Failed to add ad-hoc flight.', 'error');
@@ -1341,16 +1299,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                 <div className="flex items-center space-x-2.5">
                   {canEdit && (
                     <button
-                      onClick={() => {
-                        setAdhocFlightNumber('');
-                        setAdhocStd('');
-                        setAdhocDestination('');
-                        setAdhocReg('');
-                        setAdhocType('');
-                        setAdhocCo('');
-                        setAdhocOperatorName('');
-                        setIsAddAdhocModalOpen(true);
-                      }}
+                      onClick={() => setIsAddAdhocModalOpen(true)}
                       className="transition-all p-1 flex items-center justify-center rounded-md px-2.5 badge-custom-warning hover:opacity-80 cursor-pointer shrink-0"
                       title="Add Ad-Hoc Flight"
                     >
@@ -1861,145 +1810,12 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
       )}
 
       {/* Add Ad-hoc Flight Modal */}
-      {isAddAdhocModalOpen && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-surface-lowest/70 backdrop-blur-md transition-opacity" 
-            onClick={() => setIsAddAdhocModalOpen(false)}
-          ></div>
-          <div className="card-premium p-6 sm:p-8 max-w-md w-full relative z-10 shadow-2xl border border-outline scale-in-center animate-in fade-in zoom-in duration-200 flex flex-col space-y-6">
-            <div className="flex justify-between items-start border-b border-outline pb-4 shrink-0">
-              <div>
-                <h2 className="text-base font-black uppercase tracking-widest text-on-surface">Add Ad-Hoc Flight</h2>
-                <p className="text-[10px] text-on-surface-dim uppercase tracking-wider mt-1.5">
-                  Input details for the ad-hoc flight
-                </p>
-              </div>
-              <button 
-                onClick={() => setIsAddAdhocModalOpen(false)}
-                className="p-2 hover:bg-surface-container rounded-lg text-on-surface-dim hover:text-on-surface transition-colors border border-outline/50"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddAdhocFlight} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Flight Number *</label>
-                <input 
-                  type="text"
-                  required
-                  style={{ textTransform: 'uppercase' }}
-                  value={adhocFlightNumber}
-                  onChange={(e) => setAdhocFlightNumber(e.target.value.toUpperCase())}
-                  className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning uppercase"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider">DEP / STD (Time)</label>
-                    <span className="text-[9px] text-on-surface-dim opacity-50 uppercase tracking-wider">Optional</span>
-                  </div>
-                  <input 
-                    type="text"
-                    placeholder="HH:MM"
-                    style={{ textTransform: 'uppercase' }}
-                    value={adhocStd}
-                    onChange={(e) => {
-                      setAdhocStd(e.target.value.toUpperCase());
-                      setAdhocStdError(null);
-                    }}
-                    className={`w-full text-xs font-mono font-bold p-3 border rounded-xl text-on-surface focus:outline-none uppercase ${adhocStdError ? 'border-error bg-error/5 focus:border-error' : 'border-outline bg-surface-dim focus:border-warning'}`}
-                  />
-                  {adhocStdError && (
-                    <p className="text-[9px] font-bold text-error mt-1 tracking-wide">{adhocStdError}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Destination *</label>
-                  <input 
-                    type="text"
-                    required
-                    style={{ textTransform: 'uppercase' }}
-                    value={adhocDestination}
-                    onChange={(e) => setAdhocDestination(e.target.value.toUpperCase())}
-                    className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning uppercase"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Reg *</label>
-                  <input 
-                    type="text"
-                    required
-                    style={{ textTransform: 'uppercase' }}
-                    value={adhocReg}
-                    onChange={(e) => setAdhocReg(e.target.value.toUpperCase())}
-                    className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning uppercase"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Type *</label>
-                  <input 
-                    type="text"
-                    required
-                    style={{ textTransform: 'uppercase' }}
-                    value={adhocType}
-                    onChange={(e) => setAdhocType(e.target.value.toUpperCase())}
-                    className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning uppercase"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">C/O (Customer Name) *</label>
-                <input 
-                  type="text"
-                  required
-                  style={{ textTransform: 'uppercase' }}
-                  value={adhocCo}
-                  onChange={(e) => setAdhocCo(e.target.value.toUpperCase())}
-                  className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning uppercase"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-2">Operator Name *</label>
-                <input 
-                  type="text"
-                  required
-                  style={{ textTransform: 'uppercase' }}
-                  value={adhocOperatorName}
-                  onChange={(e) => setAdhocOperatorName(e.target.value.toUpperCase())}
-                  className="w-full text-xs font-mono font-bold p-3 border border-outline bg-surface-dim rounded-xl text-on-surface focus:outline-none focus:border-warning uppercase"
-                />
-              </div>
-
-              <div className="flex justify-end items-center space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsAddAdhocModalOpen(false)}
-                  className="px-4 py-2.5 bg-surface-dim hover:bg-surface-container text-on-surface-dim hover:text-on-surface border border-outline rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="px-4 py-2.5 bg-warning text-slate-950 hover:bg-warning-hover rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-md shadow-warning/20 disabled:opacity-50 cursor-pointer"
-                >
-                  {isSaving ? 'Adding...' : 'Add Flight'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>,
-        document.body
-      )}
+      <AddAdhocFlightModal
+        isOpen={isAddAdhocModalOpen}
+        onClose={() => setIsAddAdhocModalOpen(false)}
+        onAdd={handleAddAdhocFlight}
+        notify={notify}
+      />
     </div>
   );
 };

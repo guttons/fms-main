@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { MOCK_USERS } from '../constants';
 import { FileText, Search, Download, Filter, X, Calendar, Plane, Anchor, Droplet, Fuel, Truck, Sailboat, AlertTriangle, Gauge } from 'lucide-react';
@@ -6,6 +6,8 @@ import { Logo } from './Logo';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { FlightLog, User, UserRole, EquipmentType, cleanRemarks } from '../types';
 import { supabaseService } from '../services/supabaseService';
+import { supabase } from '../supabase';
+import { checkDuplicateTicketAcrossJetA1 } from '../services/ticketValidation';
 
 const parseGroundLog = (log: FlightLog) => {
   const parts = (log.flightNumber || '').split('-');
@@ -44,13 +46,38 @@ interface LogHistoryProps {
   user?: User;
 }
 
+const formatOperationalDate = (rawDate?: string): string => {
+  if (!rawDate) return 'PENDING';
+  try {
+    const str = String(rawDate).trim();
+    const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (match) {
+      const y = match[1].slice(-2);
+      const m = parseInt(match[2], 10) - 1;
+      const d = parseInt(match[3], 10);
+      const mStr = months[m] || 'Jan';
+      return `${String(d).padStart(2, '0')}-${mStr}-${y}`;
+    }
+    const d = new Date(rawDate);
+    if (!isNaN(d.getTime())) {
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = months[d.getMonth()];
+      const year = String(d.getFullYear()).slice(-2);
+      return `${day}-${month}-${year}`;
+    }
+  } catch {}
+  return rawDate;
+};
+
 export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
-  const { staff, equipment, flightJobs, updateFlightJob } = useOperationalData();
+  const { staff, equipment, flightJobs, updateFlightJob, deleteFlightLogEntry, flightLogs, updateFlightLog, refreshData } = useOperationalData();
   const activeOperators = (staff || []).filter(s => [UserRole.DEPOT_OPERATOR, UserRole.ITP_OPERATOR, UserRole.ITP_SUPERVISOR].includes(s.role));
   const activeOfficers = (staff || []).filter(s => [UserRole.DEPOT_MANAGER, UserRole.ITP_MANAGER, UserRole.ADMIN].includes(s.role));
   const [logs, setLogs] = useState<FlightLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [editError, setEditError] = useState<string | null>(null);
   
   const [showFilters, setShowFilters] = useState(false);
   const [filterStartDate, setFilterStartDate] = useState('');
@@ -108,21 +135,10 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
   const getDisplayOperationalDate = (log: FlightLog): string => {
     if (log.operationalDate) {
-      try {
-        const d = new Date(log.operationalDate);
-        if (!isNaN(d.getTime())) {
-          return d.toLocaleDateString([], { dateStyle: 'short' });
-        }
-      } catch {}
-      return log.operationalDate;
+      return formatOperationalDate(log.operationalDate);
     }
     if (log.timestampStart) {
-      try {
-        const d = new Date(log.timestampStart);
-        if (!isNaN(d.getTime())) {
-          return d.toLocaleDateString([], { dateStyle: 'short' });
-        }
-      } catch {}
+      return formatOperationalDate(log.timestampStart);
     }
     return 'PENDING';
   };
@@ -384,6 +400,18 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
         }
       }
 
+      // Filter out any logs that were recently deleted in this session
+      try {
+        const rawDel = localStorage.getItem('fms_deleted_log_ids');
+        if (rawDel) {
+          const deletedIds: string[] = JSON.parse(rawDel);
+          if (Array.isArray(deletedIds) && deletedIds.length > 0) {
+            const delSet = new Set(deletedIds);
+            fetchedLogsList = fetchedLogsList.filter(l => !delSet.has(l.id) && (!l.deliveryNumber || !delSet.has(l.deliveryNumber)));
+          }
+        }
+      } catch {}
+
       setLogs(fetchedLogsList);
       setTotalCount(fetchedTotalCount);
       setTotalVolume(fetchedTotalVolume);
@@ -393,6 +421,32 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
       setLoading(false);
     }
   };
+
+  // Client-side memoized sorting so edited ticket numbers and dates sort immediately using new values
+  const sortedLogs = useMemo(() => {
+    if (!logs || logs.length === 0) return [];
+    const list = [...logs];
+    return list.sort((a, b) => {
+      if (archiveSortField === 'ticket') {
+        const aNum = parseInt((a.deliveryNumber || '').replace(/\D/g, ''), 10) || 0;
+        const bNum = parseInt((b.deliveryNumber || '').replace(/\D/g, ''), 10) || 0;
+        return archiveSortOrder === 'asc' ? aNum - bNum : bNum - aNum;
+      }
+      if (archiveSortField === 'date') {
+        const aDateStr = a.operationalDate || (a.timestampStart ? a.timestampStart.split('T')[0] : '');
+        const bDateStr = b.operationalDate || (b.timestampStart ? b.timestampStart.split('T')[0] : '');
+        const aTime = aDateStr ? new Date(aDateStr).getTime() : 0;
+        const bTime = bDateStr ? new Date(bDateStr).getTime() : 0;
+        if (aTime !== bTime) {
+          return archiveSortOrder === 'asc' ? aTime - bTime : bTime - aTime;
+        }
+        const aSec = a.timestampStart ? new Date(a.timestampStart).getTime() : 0;
+        const bSec = b.timestampStart ? new Date(b.timestampStart).getTime() : 0;
+        return archiveSortOrder === 'asc' ? aSec - bSec : bSec - aSec;
+      }
+      return 0;
+    });
+  }, [logs, archiveSortField, archiveSortOrder]);
 
   // Reset page to 1 when filters or tabs change
   useEffect(() => {
@@ -438,6 +492,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   ]);
 
   useEffect(() => {
+    setEditError(null);
     if (editingLog) {
       document.documentElement.classList.add('modal-open');
     } else {
@@ -456,12 +511,30 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     
     // Validate ticket number to exactly 6 digits (if not Bridging)
     const cleanTicket = editForm.deliveryNumber.replace(/\D/g, '');
-    if (type !== 'BRIDGING' && cleanTicket.length !== 6) return;
+    const currentTicketDigits = (editingLog.deliveryNumber || '').replace(/\D/g, '');
+    if (type !== 'BRIDGING') {
+      if (cleanTicket.length !== 6) {
+        setEditError('Delivery ticket number must be exactly 6 digits.');
+        return;
+      }
+      // If the ticket number has NOT changed, skip duplicate validation
+      if (cleanTicket !== currentTicketDigits) {
+        const allKnownLogs = [...(flightLogs || []), ...(logs || [])];
+        const dupCheck = await checkDuplicateTicketAcrossJetA1(editForm.deliveryNumber, editingLog.id, allKnownLogs, editingLog.deliveryNumber);
+        if (dupCheck.isDuplicate) {
+          setEditError(dupCheck.message || `Delivery ticket number MLE-${cleanTicket} is already in use in another operation.`);
+          return;
+        }
+      }
+    }
 
     setSaving(true);
+    setEditError(null);
     try {
+      let updatedPayload: Partial<FlightLog> = {};
+
       if (type === 'SEAPLANE') {
-        await supabaseService.updateFlightLog(editingLog.id, {
+        updatedPayload = {
           flightNumber: `SEAPLANE-${editForm.seaplaneOperator.toUpperCase()}`,
           aircraftReg: `PUMP-${editForm.seaplanePumpId.toUpperCase()}`,
           vehicleId: editForm.seaplanePumpId.toUpperCase(),
@@ -469,14 +542,16 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           volume: Number(editForm.volume),
           meterOpen: 0,
           meterClose: Number(editForm.volume),
+          operationalDate: editForm.date || editingLog.operationalDate,
           timestampStart: combineDateAndTime(editForm.date, editForm.timeStart),
           timestampFinalEnd: combineDateAndTime(editForm.date, editForm.timeEnd),
           co: editForm.seaplaneCo,
           remarks: editForm.remarks || `Seaplane Volume logged for ${editForm.seaplaneOperator}`
-        } as any);
+        };
+        await supabaseService.updateFlightLog(editingLog.id, updatedPayload as any, editingLog.deliveryNumber || undefined);
       } else if (type === 'MARINE') {
         const remarksStr = `Marine Loading for ${editForm.marineVesselName} (Supervised by ${editForm.marineSupervisor})`;
-        await supabaseService.updateFlightLog(editingLog.id, {
+        updatedPayload = {
           flightNumber: `VESSEL-${editForm.marineVesselName.toUpperCase()}`,
           aircraftReg: `VESSEL-${editForm.marineVesselName.toUpperCase()}`,
           vehicleId: editForm.marineRefuellerId.toUpperCase(),
@@ -487,10 +562,12 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           meterClose: Number(editForm.meterClose),
           appearanceCheck: editForm.marineVisualCheck,
           waterCheck: editForm.marineWaterCheck,
+          operationalDate: editForm.date || editingLog.operationalDate,
           timestampStart: combineDateAndTime(editForm.date, editForm.timeStart),
           timestampFinalEnd: combineDateAndTime(editForm.date, editForm.timeEnd),
           remarks: remarksStr
-        } as any);
+        };
+        await supabaseService.updateFlightLog(editingLog.id, updatedPayload as any, editingLog.deliveryNumber || undefined);
       } else if (type === 'FILLING_STATION') {
         const remarksStr = `Ground support refuel: ${editForm.fillingVehicleReg} loaded with ${editForm.volume}L ${editForm.fillingFuelType} (On account of: ${editForm.fillingDriverName}, Payment: ${editForm.fillingPaymentMode}, Received by: ${editForm.fillingReceivedBy}, Equipment: ${editForm.fillingEquipmentName})`;
         await supabaseService.updateFillingStationLog(editingLog.id, {
@@ -506,6 +583,12 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           equipmentName: editForm.fillingEquipmentName,
           remarks: remarksStr
         });
+        updatedPayload = {
+          deliveryNumber: cleanTicket,
+          volume: Number(editForm.volume),
+          operationalDate: editForm.date,
+          remarks: remarksStr
+        };
       } else if (type === 'BRIDGING') {
         await supabaseService.updateBridgingLog(editingLog.id, {
           sourceTankId: editForm.bridgingSourceTankId,
@@ -521,8 +604,12 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           operatorId: editForm.bridgingOperatorId,
           co: editForm.bridgingSupervisor
         });
+        updatedPayload = {
+          volume: Number(editForm.volume),
+          operationalDate: editForm.date
+        };
       } else {
-        await supabaseService.updateFlightLog(editingLog.id, {
+        updatedPayload = {
           flightNumber: editForm.flightNumber,
           aircraftReg: editForm.aircraftReg,
           aircraftType: editForm.aircraftType,
@@ -537,6 +624,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           frtAirline: editForm.frtAirline || undefined,
           frtAocc: editForm.frtAocc || undefined,
           frtFor: editForm.frtFor || undefined,
+          operationalDate: editForm.date || editingLog.operationalDate,
           timestampArrived: combineDateAndTime(editForm.date, editForm.timeArrived),
           timestampPosition: combineDateAndTime(editForm.date, editForm.timePosition),
           timestampStart: combineDateAndTime(editForm.date, editForm.timeStart),
@@ -546,12 +634,21 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           timestampClearance: combineDateAndTime(editForm.date, editForm.timeClearance),
           isDomestic: editForm.isDomestic,
           intDom: editForm.intDom
-        });
+        };
+        await supabaseService.updateFlightLog(editingLog.id, updatedPayload, editingLog.deliveryNumber || undefined);
       }
+
+      // Immediately update local logs state and context
+      setLogs(prev => prev.map(l => l.id === editingLog.id ? { ...l, ...updatedPayload } : l));
+      if (updateFlightLog) {
+        updateFlightLog(editingLog.id, updatedPayload);
+      }
+
       setEditingLog(null);
       await fetchLogs();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating log:', error);
+      setEditError(error?.message || 'Failed to update log.');
     } finally {
       setSaving(false);
     }
@@ -562,24 +659,99 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
     setSaving(true);
     try {
-      // Find matching flight job and reset its status back to PENDING in Supabase
-      const matchingJob = (flightJobs || []).find(
-        job => job.flightNumber === editingLog.flightNumber && job.status === 'COMPLETED'
+      // 0. Store deleted log ID and deliveryNumber in localStorage blacklist so fast refreshData won't resurrect it
+      try {
+        const rawDel = localStorage.getItem('fms_deleted_log_ids');
+        const deletedIds: string[] = rawDel ? JSON.parse(rawDel) : [];
+        if (editingLog.id && !deletedIds.includes(editingLog.id)) deletedIds.push(editingLog.id);
+        if (editingLog.deliveryNumber && !deletedIds.includes(editingLog.deliveryNumber)) deletedIds.push(editingLog.deliveryNumber);
+        localStorage.setItem('fms_deleted_log_ids', JSON.stringify(deletedIds.slice(-500)));
+      } catch {}
+
+      // 1. Find matching flight job and completely reset its status back to PENDING and clear clearance & vehicle in Supabase
+      const cleanFn = (editingLog.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      const cleanFnCompact = cleanFn.replace(/([A-Z]+)0+([0-9]+)/, '$1$2');
+      const targetDate = editingLog.operationalDate ? editingLog.operationalDate.split('T')[0] : '';
+      const matchingJobs = (flightJobs || []).filter(
+        job => {
+          if (!job) return false;
+          const jobFn = (job.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+          const matchFn = cleanFn && (jobFn === cleanFn || jobFn.replace(/([A-Z]+)0+([0-9]+)/, '$1$2') === cleanFnCompact);
+          const matchDeliv = editingLog.deliveryNumber && job.deliveryNumber === editingLog.deliveryNumber;
+          return matchFn || matchDeliv;
+        }
       );
-      if (matchingJob) {
-        await updateFlightJob(matchingJob.id, { status: 'PENDING', vehicleId: undefined });
+      for (const matchingJob of matchingJobs) {
+        await updateFlightJob(matchingJob.id, { 
+          flightNumber: matchingJob.flightNumber || editingLog.flightNumber,
+          status: 'PENDING', 
+          vehicleId: undefined,
+          deliveryNumber: undefined,
+          timestampClearance: undefined 
+        });
       }
 
+      // Also directly reset in Supabase flight_jobs table
+      try {
+        if (cleanFn) {
+          await supabase.from('flight_jobs').update({
+            status: 'PENDING',
+            vehicle_id: null,
+            delivery_number: null,
+            timestamp_clearance: null
+          }).or(`flight_number.ilike.%${cleanFn}%,flight_number.eq.${editingLog.flightNumber}`);
+        }
+        if (editingLog.deliveryNumber) {
+          await supabase.from('flight_jobs').update({
+            status: 'PENDING',
+            vehicle_id: null,
+            delivery_number: null,
+            timestamp_clearance: null
+          }).eq('delivery_number', editingLog.deliveryNumber);
+        }
+      } catch (sbErr) {
+        console.warn('[LogHistory] Direct Supabase flight_jobs reset skipped:', sbErr);
+      }
+
+      // 2. Immediately remove from local operational state & cache
+      if (deleteFlightLogEntry) {
+        deleteFlightLogEntry(editingLog.id, editingLog.flightNumber, editingLog.deliveryNumber);
+      }
+
+      // 3. Delete from backend database & cache
       if (editingLog.logType === 'BRIDGING' || resolveLogType(editingLog) === 'BRIDGING') {
         await supabaseService.deleteBridgingLog(editingLog.id);
       } else if (editingLog.logType === 'FILLING_STATION' || resolveLogType(editingLog) === 'FILLING_STATION') {
         await supabaseService.deleteFillingStationLog(editingLog.id);
       } else {
-        await supabaseService.deleteFlightLog(editingLog.id);
+        await supabaseService.deleteFlightLog(editingLog.id, editingLog.flightNumber, editingLog.deliveryNumber);
       }
+
+      // Also clean up any lingering local session cache for this flight
+      try {
+        Object.keys(localStorage).forEach(k => {
+          if (k.startsWith('fms_active_flight_')) {
+            const raw = localStorage.getItem(k);
+            if (raw) {
+              const af = JSON.parse(raw);
+              const afNo = (af?.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+              if (afNo === cleanFn || (editingLog.deliveryNumber && af?.deliveryNumber === editingLog.deliveryNumber)) {
+                localStorage.removeItem(k);
+              }
+            }
+          }
+        });
+      } catch {}
+
+      // Immediately filter local state in LogHistory
+      setLogs(prev => prev.filter(l => l.id !== editingLog.id && (!editingLog.deliveryNumber || l.deliveryNumber !== editingLog.deliveryNumber)));
+
       setEditingLog(null);
       setShowConfirmDelete(false);
       await fetchLogs();
+      if (refreshData) {
+        refreshData().catch(e => console.warn('[LogHistory] Background refreshData error:', e));
+      }
     } catch (error) {
       console.error('Error deleting log:', error);
     } finally {
@@ -954,12 +1126,12 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline">
-                {logs.length === 0 ? (
+                {sortedLogs.length === 0 ? (
                   <tr>
                     <td colSpan={selectedLogType === 'TOTALIZER_READINGS' ? 8 : (selectedLogType === 'FLIGHT' ? 9 : (selectedLogType === 'MARINE' ? 8 : (selectedLogType === 'FILLING_STATION' ? 7 : 6)))} className="px-10 py-20 text-center text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40 italic">Zero matches in historical database</td>
                   </tr>
                 ) : (
-                  logs.map((log) => {
+                  sortedLogs.map((log) => {
                       const operatorName = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => 
                          u.id === log.operatorId || 
                          u.id.toLowerCase() === (log.tacticalOperator || '').toLowerCase() ||
@@ -1626,6 +1798,12 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
             {/* Content: Scrollable */}
             <div className="p-5 sm:p-8 pt-4 overflow-y-auto space-y-6 flex-1">
+              {editError && (
+                <div className="p-4 bg-error/10 border border-error/30 rounded-2xl flex items-center gap-3 text-error text-xs font-bold animate-in fade-in">
+                  <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                  <span>{editError}</span>
+                </div>
+              )}
               {resolveLogType(editingLog) === 'FLIGHT' && (
                 <>
                   {/* Flight Info Grid */}

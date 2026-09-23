@@ -11,6 +11,11 @@ import { useNotification } from '../context/NotificationContext';
 
 import { useOperationalData } from '../context/OperationalDataContext';
 import { EditStandModal } from './Schedule';
+import { EditFuelRequestModal } from './EditFuelRequestModal';
+import { EditAircraftModal } from './EditAircraftModal';
+import { cleanAircraftTypeName } from '../services/aircraftLookupService';
+import { checkDuplicateTicketAcrossJetA1 } from '../services/ticketValidation';
+import { serverTimeService } from '../services/serverTimeService';
 
 interface IntoPlaneProps {
     user: User;
@@ -72,7 +77,11 @@ const formatTimeSafe = (val?: any): string => {
   return '';
 };
 
-const isOperator = (role: UserRole) => role === UserRole.ITP_OPERATOR || role === UserRole.ITP_SUPERVISOR;
+const isReadOnly = (role?: UserRole) => 
+  role === UserRole.EXECUTIVE || 
+  role === UserRole.COMMERCIAL || 
+  role === UserRole.FINANCE || 
+  role === UserRole.CUSTOMER;
 
 const getFuelColorClass = (volume: number | undefined, maxCapacity: number): string => {
   if (volume === undefined) return 'text-primary';
@@ -102,131 +111,7 @@ const getFuelColorClass = (volume: number | undefined, maxCapacity: number): str
   return 'text-primary';
 };
 
-const COMMON_AIRCRAFT_TYPES = [
-  'A320',
-  'A321',
-  'A330',
-  'A319',
-  'A340',
-  'A350',
-  'B777',
-  'B737',
-  'B787',
-  'B767',
-  'B757',
-  'DASH8',
-  'ATR'
-];
 
-const EditAircraftModal: React.FC<{
-  flightNumber: string;
-  initialType?: string;
-  initialReg?: string;
-  onClose: () => void;
-  onSave: (aircraftType: string, aircraftReg: string) => Promise<void> | void;
-}> = ({ flightNumber, initialType, initialReg, onClose, onSave }) => {
-  const [acType, setAcType] = useState(initialType || '');
-  const [acReg, setAcReg] = useState(initialReg || '');
-  const [saving, setSaving] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!acType.trim() || !acReg.trim()) return;
-    setSaving(true);
-    try {
-      await onSave(acType.trim().toUpperCase(), acReg.trim().toUpperCase());
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-surface border border-outline rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-premium text-on-surface animate-in zoom-in-95 duration-200 relative">
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-              <Plane className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base sm:text-lg font-black tracking-tight uppercase">Edit Aircraft Details</h3>
-              <p className="text-[10px] font-black text-primary uppercase tracking-widest">{flightNumber}</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-on-surface-dim hover:text-on-surface hover:bg-surface-dim transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">
-              Aircraft Type
-            </label>
-            <input
-              type="text"
-              required
-              value={acType}
-              onChange={(e) => setAcType(e.target.value.toUpperCase())}
-              className="w-full px-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black uppercase tracking-wider focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all"
-            />
-            <div className="flex flex-wrap gap-1.5 mt-2.5">
-              {COMMON_AIRCRAFT_TYPES.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setAcType(t)}
-                  className={`px-2.5 py-1 text-[9px] font-black uppercase rounded-lg border transition-all cursor-pointer ${
-                    acType.toUpperCase() === t
-                      ? 'bg-primary text-white border-primary shadow-sm'
-                      : 'bg-surface-dim border-outline text-on-surface-dim hover:border-primary/50'
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">
-              Aircraft Registration
-            </label>
-            <input
-              type="text"
-              required
-              value={acReg}
-              onChange={(e) => setAcReg(e.target.value.toUpperCase())}
-              className="w-full px-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black uppercase tracking-wider focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all text-primary"
-            />
-          </div>
-
-          <div className="flex gap-3 pt-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3.5 bg-surface-dim border border-outline text-on-surface-dim hover:text-on-surface rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving || !acType.trim() || !acReg.trim()}
-              className="flex-1 py-3.5 kinetic-gradient text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-premium disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              {saving ? 'Saving...' : 'Save Details'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body
-  );
-};
 
 const MobileHeader: React.FC<{ 
     user: User, 
@@ -351,9 +236,13 @@ const MobileHeader: React.FC<{
                               </button>
                           )}
                           {activeFlight.aircraftType && <span className="mx-1.5 opacity-50">•</span>}
-                          {activeFlight.aircraftType && <span className="text-on-surface">{activeFlight.aircraftType}</span>}
-                          {activeFlight.aircraftReg && <span className="mx-1.5 opacity-50">•</span>}
-                          {activeFlight.aircraftReg && <span className="text-primary">{activeFlight.aircraftReg}</span>}
+                          {activeFlight.aircraftType && <span className="text-on-surface">{cleanAircraftTypeName(activeFlight.aircraftType)}</span>}
+                          {activeFlight.aircraftReg && activeFlight.aircraftReg !== '8Q-TBA' && !activeFlight.aircraftReg.startsWith('8Q-DOM') && (
+                              <>
+                                  <span className="mx-1.5 opacity-50">•</span>
+                                  <span className="text-primary">{activeFlight.aircraftReg}</span>
+                              </>
+                          )}
                       </span>
                       {onEditActiveAircraft && (
                           <button
@@ -575,8 +464,8 @@ const ScreenDashboard: React.FC<{
 
   const handleSendFuelAlert = useCallback(async (job: FlightJob, alertType: 'REQUEST_FUELING' | 'NO_FUEL') => {
     const cleanFlight = (job.flightNumber || '').replace(/\s+/g, '').toUpperCase();
-    const timeNow = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    const isoNow = new Date().toISOString();
+    const timeNow = serverTimeService.getServerTimeString();
+    const isoNow = serverTimeService.getServerIso();
 
     // Clear any prior alerts (including old cancellations or stale alerts) for this flight
     const staleAlerts = (alerts || []).filter(a => {
@@ -710,7 +599,7 @@ const ScreenDashboard: React.FC<{
       }
 
       // 2. Dispatch ALERT_CANCELLED alert so assigned staff gets cancellation notice
-      const cancelTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      const cancelTime = serverTimeService.getServerTimeString();
       const alertMeta = {
         aircraftReg: job.aircraftReg,
         stand: job.stand,
@@ -721,13 +610,14 @@ const ScreenDashboard: React.FC<{
       };
 
       let dispatchedCancel = false;
+      const cancelIso = serverTimeService.getServerIso();
       if (job.assignedTo) {
         await createAlert({
           severity: 'warning',
           alertType: 'ALERT_CANCELLED',
           flightNumber: job.flightNumber,
           message: `ALERT CANCELLED: Dispatch alert for Flight ${job.flightNumber} has been cancelled by Manager ${user.name}.`,
-          timestamp: new Date().toISOString(),
+          timestamp: cancelIso,
           acknowledged: false,
           targetRole: UserRole.ITP_OPERATOR,
           assignedStaffId: job.assignedTo,
@@ -743,7 +633,7 @@ const ScreenDashboard: React.FC<{
           alertType: 'ALERT_CANCELLED',
           flightNumber: job.flightNumber,
           message: `ALERT CANCELLED: Dispatch alert for Flight ${job.flightNumber} has been cancelled by Manager ${user.name}.`,
-          timestamp: new Date().toISOString(),
+          timestamp: cancelIso,
           acknowledged: false,
           targetRole: UserRole.ITP_OFFICER,
           assignedStaffId: job.assignedOfficer,
@@ -759,7 +649,7 @@ const ScreenDashboard: React.FC<{
           alertType: 'ALERT_CANCELLED',
           flightNumber: job.flightNumber,
           message: `ALERT CANCELLED: Dispatch alert for Flight ${job.flightNumber} (Stand ${job.stand || 'TBA'}) cancelled by Manager.`,
-          timestamp: new Date().toISOString(),
+          timestamp: cancelIso,
           acknowledged: false,
           targetRole: UserRole.ITP_OPERATOR,
           senderId: user.id,
@@ -810,12 +700,33 @@ const ScreenDashboard: React.FC<{
   });
 
   const getStatusForFlightDate = (cleanNo: string, flightDate: string, defaultStatus: string = 'PENDING') => {
+    const cleanNoUpper = (cleanNo || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    const cleanNoCompact = cleanNoUpper.replace(/([A-Z]+)0+([0-9]+)/, '$1$2');
+
+    const matchesNo = (otherFn?: string) => {
+      if (!cleanNoUpper || !otherFn) return false;
+      const norm = otherFn.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      return norm === cleanNoUpper || norm.replace(/([A-Z]+)0+([0-9]+)/, '$1$2') === cleanNoCompact;
+    };
+
+    // Retrieve locally blacklisted deleted log IDs so deleted logs never falsely mark flights as COMPLETED
+    let deletedSet = new Set<string>();
+    try {
+      const rawDel = typeof window !== 'undefined' ? localStorage.getItem('fms_deleted_log_ids') : null;
+      if (rawDel) {
+        const delIds = JSON.parse(rawDel);
+        if (Array.isArray(delIds)) deletedSet = new Set(delIds);
+      }
+    } catch {}
+
     const matchingLog = (flightLogs || []).find(log => {
       if (!log || !log.flightNumber) return false;
-      const logNo = (log.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-      if (logNo !== cleanNo) return false;
-      const logDate = log.operationalDate || (log.timestampFinalEnd ? log.timestampFinalEnd.split('T')[0] : (log.timestampStart ? log.timestampStart.split('T')[0] : ''));
-      return logDate ? logDate === flightDate : true;
+      if (deletedSet.has(log.id) || (log.deliveryNumber && deletedSet.has(log.deliveryNumber))) return false;
+      if (!matchesNo(log.flightNumber)) return false;
+      if (log.status !== 'COMPLETED' && log.status !== 'IN_PROGRESS') return false;
+      const logDate = log.operationalDate ? log.operationalDate.split('T')[0] : (log.timestampFinalEnd ? log.timestampFinalEnd.split('T')[0] : (log.timestampStart ? log.timestampStart.split('T')[0] : ''));
+      if (logDate && flightDate && logDate !== flightDate) return false;
+      return true;
     });
 
     if (matchingLog && matchingLog.status === 'COMPLETED') {
@@ -825,35 +736,38 @@ const ScreenDashboard: React.FC<{
       return 'IN_PROGRESS';
     }
 
-    if (activeFlight && (activeFlight.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo && activeFlight.status === 'IN_PROGRESS') {
+    if (activeFlight && matchesNo(activeFlight.flightNumber) && activeFlight.status === 'IN_PROGRESS') {
       return 'IN_PROGRESS';
     }
 
     const liveJob = (flightJobs || []).find(j => {
       if (!j || !j.flightNumber) return false;
-      const jobNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-      if (jobNo !== cleanNo) return false;
+      if (!matchesNo(j.flightNumber)) return false;
       const jDate = j.date ? j.date.split('T')[0] : '';
       return !jDate || !flightDate || jDate === flightDate;
     });
 
-    if (liveJob && (liveJob.status === 'IN_PROGRESS' || liveJob.status === 'COMPLETED')) {
-      return liveJob.status;
+    if (liveJob && liveJob.status === 'IN_PROGRESS') {
+      return 'IN_PROGRESS';
     }
 
     const dbJob = (rawFlightJobs || []).find(j => {
       if (!j || !j.flightNumber) return false;
-      const jobNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-      if (jobNo !== cleanNo) return false;
+      if (!matchesNo(j.flightNumber)) return false;
       const jDate = j.date ? j.date.split('T')[0] : '';
       return jDate ? jDate === flightDate : true;
     });
 
-    if (dbJob && (!dbJob.date || dbJob.date.split('T')[0] === flightDate) && dbJob.status) {
-      return dbJob.status;
+    if (dbJob && dbJob.status === 'IN_PROGRESS') {
+      return 'IN_PROGRESS';
     }
 
-    return liveJob?.status || defaultStatus;
+    // A job cannot be COMPLETED if there is no completed log in flightLogs!
+    if (!matchingLog || matchingLog.status !== 'COMPLETED') {
+      return 'PENDING';
+    }
+
+    return liveJob?.status || dbJob?.status || defaultStatus;
   };
 
   const intlJobsMap = new Map<string, any>();
@@ -888,6 +802,11 @@ const ScreenDashboard: React.FC<{
       id: liveJob?.id || dbJob?.id || f.id || existing?.id,
       status: computedStatus,
       fidsStatus: f.status,
+      std: liveJob?.std || dbJob?.std || existing?.std || f.std || ((f as any).type === 'departure' ? (f as any).scheduledTime : '') || (f as any).scheduledTime || '',
+      tobt: liveJob?.tobt || dbJob?.tobt || existing?.tobt || f.tobt || '',
+      frtAirline: liveJob?.frtAirline || dbJob?.frtAirline || existing?.frtAirline || f.frtAirline || '',
+      frtAocc: liveJob?.frtAocc || dbJob?.frtAocc || existing?.frtAocc || f.frtAocc || '',
+      frtFor: liveJob?.frtFor || dbJob?.frtFor || existing?.frtFor || f.frtFor || '',
       assignedTo: (liveJob && liveJob.assignedTo !== undefined && liveJob.assignedTo !== null)
         ? liveJob.assignedTo
         : (dbJob && dbJob.assignedTo !== undefined && dbJob.assignedTo !== null)
@@ -934,6 +853,11 @@ const ScreenDashboard: React.FC<{
         id: liveJob?.id || dbJob?.id || ff.id || existing?.id,
         status: computedStatus,
         fidsStatus: existing?.fidsStatus || ff.status,
+        std: liveJob?.std || dbJob?.std || existing?.std || ff.std || (ff.type === 'departure' ? ff.scheduledTime : '') || ff.scheduledTime || '',
+        tobt: liveJob?.tobt || dbJob?.tobt || existing?.tobt || ff.tobt || '',
+        frtAirline: liveJob?.frtAirline || dbJob?.frtAirline || existing?.frtAirline || ff.frtAirline || '',
+        frtAocc: liveJob?.frtAocc || dbJob?.frtAocc || existing?.frtAocc || ff.frtAocc || '',
+        frtFor: liveJob?.frtFor || dbJob?.frtFor || existing?.frtFor || ff.frtFor || '',
         assignedTo: (liveJob && liveJob.assignedTo !== undefined && liveJob.assignedTo !== null)
           ? liveJob.assignedTo
           : (dbJob && dbJob.assignedTo !== undefined && dbJob.assignedTo !== null)
@@ -960,10 +884,28 @@ const ScreenDashboard: React.FC<{
     const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
     const flightDate = f.date ? f.date.split('T')[0] : selectedBriefingDate;
     const computedStatus = getStatusForFlightDate(cleanNo, flightDate, f.status || 'PENDING');
+
+    const liveJob = (flightJobs || []).find(j => {
+      if (!j || !j.flightNumber) return false;
+      const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      if (jNo !== cleanNo) return false;
+      const jDate = j.date ? j.date.split('T')[0] : '';
+      return !jDate || !flightDate || jDate === flightDate;
+    });
+
+    const dbJob = (rawFlightJobs || []).find(j => {
+      if (!j || !j.flightNumber) return false;
+      const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      if (jNo !== cleanNo) return false;
+      const jDate = j.date ? j.date.split('T')[0] : '';
+      return !jDate || !flightDate || jDate === flightDate;
+    });
+
     domJobsMap.set(cleanNo, {
       ...f,
       status: computedStatus,
-      fidsStatus: f.status
+      fidsStatus: f.status,
+      std: liveJob?.std || dbJob?.std || f.std || (f.type === 'departure' ? f.scheduledTime : '') || f.scheduledTime || '',
     });
   });
 
@@ -973,11 +915,29 @@ const ScreenDashboard: React.FC<{
       const existing = domJobsMap.get(cleanNo);
       const flightDate = ff.date ? ff.date.split('T')[0] : selectedBriefingDate;
       const computedStatus = getStatusForFlightDate(cleanNo, flightDate, existing?.status || ff.status || 'PENDING');
+
+      const liveJob = (flightJobs || []).find(j => {
+        if (!j || !j.flightNumber) return false;
+        const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        if (jNo !== cleanNo) return false;
+        const jDate = j.date ? j.date.split('T')[0] : '';
+        return !jDate || !flightDate || jDate === flightDate;
+      });
+
+      const dbJob = (rawFlightJobs || []).find(j => {
+        if (!j || !j.flightNumber) return false;
+        const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        if (jNo !== cleanNo) return false;
+        const jDate = j.date ? j.date.split('T')[0] : '';
+        return !jDate || !flightDate || jDate === flightDate;
+      });
+
       domJobsMap.set(cleanNo, {
         ...(existing || {}),
         ...ff,
         status: computedStatus,
-        fidsStatus: existing?.fidsStatus || ff.status
+        fidsStatus: existing?.fidsStatus || ff.status,
+        std: liveJob?.std || dbJob?.std || existing?.std || ff.std || (ff.type === 'departure' ? ff.scheduledTime : '') || ff.scheduledTime || '',
       });
     });
   }
@@ -995,7 +955,7 @@ const ScreenDashboard: React.FC<{
           stand: df.stand,
           sta: df.sta,
           eta: df.eta,
-          std: df.std,
+          std: df.std || (df.type === 'departure' ? df.scheduledTime : '') || df.scheduledTime || '',
           assignedTo: assignment?.op1 || '',
           assignedOfficer: assignment?.op2 || '',
           status: df.status as any,
@@ -1020,6 +980,7 @@ const ScreenDashboard: React.FC<{
       return !jDate || !flightDate || jDate === flightDate;
     });
     const merged = matchJob ? { ...f, ...matchJob } : f;
+    const computedStatus = getStatusForFlightDate(cleanNo, flightDate, merged.status || 'PENDING');
     return {
       ...merged,
       id: merged.id,
@@ -1032,8 +993,8 @@ const ScreenDashboard: React.FC<{
       std: merged.std,
       assignedTo: merged.assignedTo || '',
       assignedOfficer: merged.assignedOfficer || '',
-      status: merged.status as any,
-      fidsStatus: merged.status,
+      status: computedStatus as any,
+      fidsStatus: computedStatus,
       route: merged.route,
       isAdhoc: true,
       vehicleId: merged.vehicleId,
@@ -1285,7 +1246,7 @@ const ScreenDashboard: React.FC<{
       const inboundFlightNumber = isIntl ? flightRadarService.resolveInboundFlightNumber(job, externalFlights, internationalSchedules) : job.flightNumber;
 
       return (
-          <div key={job.id} className={`bg-surface-container-lowest p-4 sm:p-5 rounded-2xl relative transition-all shrink-0 border ${isAssignedToMe ? 'border-primary border-l-[6px] shadow-sm' : isDomesticOrAdhoc ? 'border-outline/70 shadow-sm' : 'border-outline opacity-80'} ${activeMenuJobId === job.id || activeDetailsJobId === job.id ? 'z-40' : 'z-10'}`}>
+          <div key={job.id} className={`bg-surface-container-lowest p-4 sm:p-5 rounded-2xl relative transition-all shrink-0 border ${isAssignedToMe ? 'border-primary border-l-[6px] shadow-sm' : isDomesticOrAdhoc ? 'border-outline-variant hover:border-outline shadow-sm' : 'border-outline opacity-80'} ${activeMenuJobId === job.id || activeDetailsJobId === job.id ? 'z-40' : 'z-10'}`}>
               <div className="relative z-10">
                   {/* Job Card Header */}
                   <div className={isDomesticOrAdhoc ? "w-full relative" : "mb-2.5 sm:mb-3 w-full relative"}>
@@ -1798,17 +1759,21 @@ const ScreenDashboard: React.FC<{
                                      >
                                          {job.status === 'COMPLETED' ? <ChevronRight className="w-5 h-5 sm:w-7 sm:h-7 stroke-[3]" /> : <Play className="w-[18px] h-[18px] sm:w-[24px] sm:h-[24px] flex-shrink-0 ml-0.5" fill="white" color="white" strokeWidth={2.5} />}
                                      </button>
-                                 )}
+                                  )}
                             </div>
-                        </div>
+                          </div>
 
                       {/* Row 2 on Mobile: */}
                       {isDomesticOrAdhoc ? (
                           /* For Domestic / Ad-hoc: Reg + Type + Destination + STD (ALL ON ONE ROW) */
                           <div className="flex items-center gap-2 mt-2 text-on-surface-dim text-[11px] font-bold md:hidden overflow-x-auto no-scrollbar whitespace-nowrap">
-                              <span className="font-black text-on-surface tracking-tight whitespace-nowrap">{job.aircraftReg}</span>
-                              <span className="opacity-20 shrink-0">|</span>
-                              <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] font-black text-on-surface-dim border-transparent uppercase tracking-wider whitespace-nowrap">{job.aircraftType}</span>
+                              {job.aircraftReg && job.aircraftReg !== '8Q-TBA' && !job.aircraftReg.startsWith('8Q-DOM') && (
+                                  <>
+                                      <span className="font-black text-on-surface tracking-tight whitespace-nowrap">{job.aircraftReg}</span>
+                                      <span className="opacity-20 shrink-0">|</span>
+                                  </>
+                              )}
+                              <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] font-black text-on-surface-dim border-transparent uppercase tracking-wider whitespace-nowrap">{cleanAircraftTypeName(job.aircraftType)}</span>
                               {canEditAircraft && (
                                   <button
                                       type="button"
@@ -1851,10 +1816,14 @@ const ScreenDashboard: React.FC<{
                                       {airlineName}
                                   </span>
                               )}
+                              {job.aircraftReg && job.aircraftReg !== '8Q-TBA' && !job.aircraftReg.startsWith('8Q-DOM') && (
+                                  <>
+                                      <span className="opacity-20 shrink-0">|</span>
+                                      <span className="font-black text-on-surface tracking-tight whitespace-nowrap">{job.aircraftReg}</span>
+                                  </>
+                              )}
                               <span className="opacity-20 shrink-0">|</span>
-                              <span className="font-black text-on-surface tracking-tight whitespace-nowrap">{job.aircraftReg}</span>
-                              <span className="opacity-20 shrink-0">|</span>
-                              <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] font-black text-on-surface-dim border-transparent uppercase tracking-wider whitespace-nowrap">{job.aircraftType}</span>
+                              <span className="bg-surface-container-low px-2 py-0.5 rounded-md text-[9px] font-black text-on-surface-dim border-transparent uppercase tracking-wider whitespace-nowrap">{cleanAircraftTypeName(job.aircraftType)}</span>
                               {canEditAircraft && (
                                   <button
                                       type="button"
@@ -2012,7 +1981,7 @@ const ScreenDashboard: React.FC<{
             {onCancelActiveFlight && (
               <button
                 type="button"
-                onClick={() => onCancelActiveFlight?.(activeFlight || undefined)}
+                onClick={() => onCancelActiveFlight?.(activeFlight as any)}
                 className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider bg-surface-container hover:bg-surface-container-high text-on-surface-dim hover:text-error border border-outline transition-all cursor-pointer"
               >
                 Cancel Session
@@ -2147,8 +2116,9 @@ const ScreenTimestamps: React.FC<{
   onBack: () => void,
   user: User,
   getLocalTimeValue: (isoString?: string) => string,
-  setManualTime: (field: keyof FlightLog, timeVal: string) => void
-}> = ({ activeFlight, onTimestamp, onInputChange, onNext, onBack, user, getLocalTimeValue, setManualTime }) => {
+  setManualTime: (field: keyof FlightLog, timeVal: string) => void,
+  onEditFrt?: () => void
+}> = ({ activeFlight, onTimestamp, onInputChange, onNext, onBack, user, getLocalTimeValue, setManualTime, onEditFrt }) => {
   const { selectedBriefingDate } = useOperationalData();
   return (
   <div className="p-5 flex flex-col h-full min-h-[calc(100vh-140px)] pb-32">
@@ -2217,7 +2187,7 @@ const ScreenTimestamps: React.FC<{
                   <input 
                       type="text" 
                       maxLength={6}
-                      disabled={isOperator(user.role)}
+                      disabled={isReadOnly(user.role)}
                       inputMode="numeric"
                       pattern="[0-9]*"
                       className="flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-error placeholder:text-error/20"
@@ -2239,7 +2209,7 @@ const ScreenTimestamps: React.FC<{
                           <span className="text-2xl sm:text-3xl font-mono font-black text-on-surface-dim opacity-30 shrink-0">C/O-</span>
                           <input 
                               type="text" 
-                              disabled={isOperator(user.role)}
+                              disabled={isReadOnly(user.role)}
                               className="flex-1 min-w-0 text-3xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-primary placeholder:text-primary/10 uppercase tracking-widest"
                               placeholder="ENTER ACCOUNT"
                               value={activeFlight.co?.replace(/^C\/O-/i, '') || ''}
@@ -2255,7 +2225,7 @@ const ScreenTimestamps: React.FC<{
                       <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Operator Name</label>
                       <input 
                           type="text" 
-                          disabled={isOperator(user.role)}
+                          disabled={isReadOnly(user.role)}
                           className="w-full text-2xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-on-surface placeholder:text-on-surface/20 uppercase tracking-widest"
                           placeholder="ENTER OPERATOR NAME"
                           value={activeFlight.operatorName || ''}
@@ -2275,7 +2245,7 @@ const ScreenTimestamps: React.FC<{
                         <span className="text-2xl sm:text-3xl font-mono font-black text-primary opacity-30 shrink-0">J</span>
                         <input 
                             type="text" 
-                            disabled={isOperator(user.role)}
+                            disabled={isReadOnly(user.role)}
                             className="flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-primary placeholder:text-primary/10 uppercase"
                             placeholder="000-0"
                             value={activeFlight?.pitNumber?.startsWith('J') ? activeFlight.pitNumber.substring(1) : (activeFlight?.pitNumber || '')}
@@ -2291,7 +2261,7 @@ const ScreenTimestamps: React.FC<{
                             ))}
                         </datalist>
                     </div>
-                    {activeFlight.stand && !isOperator(user.role) && (
+                    {activeFlight.stand && !isReadOnly(user.role) && (
                         <div className="flex flex-wrap gap-2 pt-2">
                             {PIT_MAPPING.filter(m => m.stand === activeFlight.stand).map((m, idx) => (
                                 <button 
@@ -2308,22 +2278,31 @@ const ScreenTimestamps: React.FC<{
             </div>
           )}
           {/* Flight Departure & Fuel Request Information Banner */}
-          {(activeFlight?.std || activeFlight?.tobt || activeFlight?.frtAirline || activeFlight?.frtAocc || activeFlight?.frtFor) && (
+          {activeFlight && (
             <div className="card-premium p-4 sm:p-5 border-outline bg-surface-container-lowest/90 rounded-2xl flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                   <Clock className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="block text-[8px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-50">
-                    Departure Timings
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="block text-[8px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-50">
+                      Departure Timings
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onEditFrt && onEditFrt()}
+                      className="px-1.5 py-0.5 rounded-md bg-primary/10 hover:bg-primary/20 text-primary font-black text-[9px] uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer"
+                      title="Edit Departure & Fuel Request Timings"
+                    >
+                      <Pencil className="w-2.5 h-2.5" />
+                      <span>Edit</span>
+                    </button>
+                  </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    {activeFlight.std && (
-                      <span className="font-mono text-warning font-black text-xs">
-                        STD: {activeFlight.std}
-                      </span>
-                    )}
+                    <span className="font-mono text-warning font-black text-xs">
+                      STD: {activeFlight.std || '--:--'}
+                    </span>
                     {activeFlight.tobt && (
                       <span className="font-mono text-amber-400 font-black text-xs bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
                         TOBT: {activeFlight.tobt}
@@ -2333,28 +2312,35 @@ const ScreenTimestamps: React.FC<{
                 </div>
               </div>
 
-              {(activeFlight.frtAirline || activeFlight.frtAocc || activeFlight.frtFor) && (
-                <div className="flex flex-wrap items-center gap-2">
-                  {activeFlight.frtAirline && (
-                    <span className="px-2.5 py-1 bg-surface-dim rounded-lg border border-outline text-[10px] font-mono">
-                      <strong className="text-on-surface-dim font-bold opacity-60">FRT Airline: </strong>
-                      <span className="text-on-surface font-black">{activeFlight.frtAirline}</span>
-                    </span>
-                  )}
-                  {activeFlight.frtAocc && (
-                    <span className="px-2.5 py-1 bg-surface-dim rounded-lg border border-outline text-[10px] font-mono">
-                      <strong className="text-on-surface-dim font-bold opacity-60">FRT AOCC: </strong>
-                      <span className="text-on-surface font-black">{activeFlight.frtAocc}</span>
-                    </span>
-                  )}
-                  {activeFlight.frtFor && (
-                    <span className="px-2.5 py-1 bg-primary/10 text-primary rounded-lg border border-primary/20 text-[10px] font-mono font-black">
-                      <strong className="opacity-70">FRT For: </strong>
-                      <span>{activeFlight.frtFor}</span>
-                    </span>
-                  )}
-                </div>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {activeFlight.frtAirline && (
+                  <span className="px-2.5 py-1 bg-surface-dim rounded-lg border border-outline text-[10px] font-mono">
+                    <strong className="text-on-surface-dim font-bold opacity-60">FRT Airline: </strong>
+                    <span className="text-on-surface font-black">{activeFlight.frtAirline}</span>
+                  </span>
+                )}
+                {activeFlight.frtAocc && (
+                  <span className="px-2.5 py-1 bg-surface-dim rounded-lg border border-outline text-[10px] font-mono">
+                    <strong className="text-on-surface-dim font-bold opacity-60">FRT AOCC: </strong>
+                    <span className="text-on-surface font-black">{activeFlight.frtAocc}</span>
+                  </span>
+                )}
+                {activeFlight.frtFor && (
+                  <span className="px-2.5 py-1 bg-primary/10 text-primary rounded-lg border border-primary/20 text-[10px] font-mono font-black">
+                    <strong className="opacity-70">FRT For: </strong>
+                    <span>{activeFlight.frtFor}</span>
+                  </span>
+                )}
+                {!activeFlight.frtAirline && !activeFlight.frtAocc && !activeFlight.frtFor && (
+                  <button
+                    type="button"
+                    onClick={() => onEditFrt && onEditFrt()}
+                    className="px-2.5 py-1 bg-surface-dim hover:bg-surface-container rounded-lg border border-outline text-[10px] text-on-surface-dim hover:text-on-surface font-bold transition-colors cursor-pointer"
+                  >
+                    + Add FRT
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -2362,11 +2348,11 @@ const ScreenTimestamps: React.FC<{
           <div className="flex gap-4 items-stretch w-full">
               <button 
                   onClick={() => onTimestamp('timestampArrived')}
-                  disabled={isOperator(user.role)}
+                  disabled={isReadOnly(user.role)}
                   className={`flex-1 p-6 sm:p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                       ${activeFlight?.timestampArrived 
                           ? 'bg-success/5 border-success text-on-surface' 
-                          : isOperator(user.role)
+                          : isReadOnly(user.role)
                               ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
                               : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
                   `}
@@ -2379,7 +2365,7 @@ const ScreenTimestamps: React.FC<{
                       {activeFlight?.timestampArrived && (
                           <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
                                <Clock className="w-4 h-4 mr-2 opacity-60"/>
-                               {new Date(activeFlight.timestampArrived).toLocaleTimeString([], { hour12: false })}
+                                {new Date(activeFlight.timestampArrived).toLocaleTimeString([], { hour12: false })}
                           </span>
                       )}
                   </div>
@@ -2391,7 +2377,7 @@ const ScreenTimestamps: React.FC<{
                   <div className="relative w-full">
                       <input 
                           type="time"
-                          disabled={isOperator(user.role)}
+                          disabled={isReadOnly(user.role)}
                           value={activeFlight?.timestampArrived ? getLocalTimeValue(activeFlight.timestampArrived) : ''}
                           onChange={(e) => setManualTime('timestampArrived', e.target.value)}
                           className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
@@ -2404,11 +2390,11 @@ const ScreenTimestamps: React.FC<{
           <div className="flex gap-4 items-stretch w-full">
               <button 
                   onClick={() => onTimestamp('timestampPosition')}
-                  disabled={!activeFlight?.timestampArrived || isOperator(user.role)}
+                  disabled={!activeFlight?.timestampArrived || isReadOnly(user.role)}
                   className={`flex-1 p-6 sm:p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                       ${activeFlight?.timestampPosition 
                           ? 'bg-success/5 border-success text-on-surface' 
-                          : (!activeFlight?.timestampArrived || isOperator(user.role))
+                          : (!activeFlight?.timestampArrived || isReadOnly(user.role))
                               ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
                               : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
                   `}
@@ -2421,7 +2407,7 @@ const ScreenTimestamps: React.FC<{
                       {activeFlight?.timestampPosition && (
                           <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
                                <Clock className="w-4 h-4 mr-2 opacity-60"/>
-                               {new Date(activeFlight.timestampPosition).toLocaleTimeString([], { hour12: false })}
+                                {new Date(activeFlight.timestampPosition).toLocaleTimeString([], { hour12: false })}
                           </span>
                       )}
                   </div>
@@ -2433,7 +2419,7 @@ const ScreenTimestamps: React.FC<{
                   <div className="relative w-full">
                       <input 
                           type="time"
-                          disabled={!activeFlight?.timestampArrived || isOperator(user.role)}
+                          disabled={!activeFlight?.timestampArrived || isReadOnly(user.role)}
                           value={activeFlight?.timestampPosition ? getLocalTimeValue(activeFlight.timestampPosition) : ''}
                           onChange={(e) => setManualTime('timestampPosition', e.target.value)}
                           className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
@@ -2446,11 +2432,11 @@ const ScreenTimestamps: React.FC<{
           <div className="flex gap-4 items-stretch w-full">
               <button 
                   onClick={() => onTimestamp('timestampStart')}
-                  disabled={!activeFlight?.timestampPosition || !!activeFlight?.timestampStart || isOperator(user.role)}
+                  disabled={!activeFlight?.timestampPosition || !!activeFlight?.timestampStart || isReadOnly(user.role)}
                   className={`flex-1 p-6 sm:p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                       ${activeFlight?.timestampStart 
                           ? 'bg-success/5 border-success text-on-surface' 
-                          : (!activeFlight?.timestampPosition || !!activeFlight?.timestampStart || isOperator(user.role))
+                          : (!activeFlight?.timestampPosition || !!activeFlight?.timestampStart || isReadOnly(user.role))
                               ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
                               : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
                   `}
@@ -2475,7 +2461,7 @@ const ScreenTimestamps: React.FC<{
                   <div className="relative w-full">
                       <input 
                           type="time"
-                          disabled={!activeFlight?.timestampPosition || !!activeFlight?.timestampStart || isOperator(user.role)}
+                          disabled={!activeFlight?.timestampPosition || !!activeFlight?.timestampStart || isReadOnly(user.role)}
                           value={activeFlight?.timestampStart ? getLocalTimeValue(activeFlight.timestampStart) : ''}
                           onChange={(e) => setManualTime('timestampStart', e.target.value)}
                           className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
@@ -2487,7 +2473,7 @@ const ScreenTimestamps: React.FC<{
 
       <button 
           onClick={onNext}
-          disabled={!isOperator(user.role) && (!activeFlight?.timestampStart || activeFlight?.deliveryNumber?.replace('MLE-', '').length !== 6)}
+          disabled={!isReadOnly(user.role) && (!activeFlight?.timestampStart || activeFlight?.deliveryNumber?.replace('MLE-', '').length !== 6)}
           className="mt-8 w-full kinetic-gradient text-white p-4 lg:p-6 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-40 disabled:grayscale active:scale-95 transition-all shadow-premium"
       >
           Proceed to Metering <ChevronRight className="ml-3 w-5 h-5" />
@@ -2515,13 +2501,13 @@ const ScreenMetering: React.FC<{
        <h2 className="text-on-surface text-xl sm:text-2xl font-black mb-8 tracking-tighter uppercase">Metering <span className="text-primary italic">& Volume</span></h2>
 
        <div className="space-y-8">
-          <div className="p-6 border border-outline rounded-3xl">
+           <div className="p-6 border border-outline rounded-3xl">
               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Opening Totalizer</label>
               <input 
                   type="text" 
                   inputMode="numeric"
                   pattern="[0-9,]*"
-                  disabled={isOperator(user.role)}
+                  disabled={isReadOnly(user.role)}
                   className="w-full text-4xl sm:text-6xl font-mono font-black py-4 bg-transparent outline-none border-b-4 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-10 disabled:opacity-50"
                   placeholder="000,000"
                   value={activeFlight?.meterOpen !== undefined ? activeFlight.meterOpen.toLocaleString() : ''}
@@ -2538,11 +2524,11 @@ const ScreenMetering: React.FC<{
           <div className="flex gap-4 items-stretch w-full">
               <button 
                   onClick={() => onTimestamp('timestampInitialEnd')}
-                  disabled={activeFlight?.meterOpen === undefined || isOperator(user.role)}
+                  disabled={activeFlight?.meterOpen === undefined || isReadOnly(user.role)}
                   className={`flex-1 p-6 sm:p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                       ${activeFlight?.timestampInitialEnd 
                           ? 'bg-success/5 border-success text-on-surface' 
-                          : (activeFlight?.meterOpen === undefined || isOperator(user.role))
+                          : (activeFlight?.meterOpen === undefined || isReadOnly(user.role))
                               ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
                               : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
                   `}
@@ -2567,7 +2553,7 @@ const ScreenMetering: React.FC<{
                   <div className="relative w-full">
                       <input 
                           type="time"
-                          disabled={activeFlight?.meterOpen === undefined || isOperator(user.role)}
+                          disabled={activeFlight?.meterOpen === undefined || isReadOnly(user.role)}
                           value={activeFlight?.timestampInitialEnd ? getLocalTimeValue(activeFlight.timestampInitialEnd) : ''}
                           onChange={(e) => setManualTime('timestampInitialEnd', e.target.value)}
                           className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
@@ -2583,7 +2569,7 @@ const ScreenMetering: React.FC<{
                        type="text" 
                        inputMode="numeric"
                        pattern="[0-9,]*"
-                       disabled={isOperator(user.role)}
+                       disabled={isReadOnly(user.role)}
                        className="w-full px-6 lg:px-10 py-4 lg:py-6 bg-surface-lowest border border-outline/50 rounded-[24px] lg:rounded-[32px] text-4xl sm:text-6xl font-[900] text-primary tracking-tighter text-center outline-none focus:border-primary transition-all font-mono disabled:opacity-50"
                        placeholder="0,000"
                        value={activeFlight?.volume ? activeFlight.volume.toLocaleString() : ''}
@@ -2612,7 +2598,7 @@ const ScreenMetering: React.FC<{
                   <input
                       type="text"
                       inputMode="numeric"
-                      disabled={isOperator(user.role)}
+                      disabled={isReadOnly(user.role)}
                       className="w-full text-2xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-20"
                       placeholder="0"
                       value={activeFlight?.psi !== undefined && activeFlight?.psi !== null ? activeFlight.psi : ''}
@@ -2629,7 +2615,7 @@ const ScreenMetering: React.FC<{
                   <input
                       type="text"
                       inputMode="numeric"
-                      disabled={isOperator(user.role)}
+                      disabled={isReadOnly(user.role)}
                       className="w-full text-2xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-on-surface placeholder:opacity-20"
                       placeholder="0"
                       value={activeFlight?.lpm !== undefined && activeFlight?.lpm !== null ? activeFlight.lpm : ''}
@@ -2646,8 +2632,8 @@ const ScreenMetering: React.FC<{
 
           <div className="border-t border-outline pt-6">
                <button 
-                   onClick={() => { if (!isOperator(user.role)) setShowTopUp(!showTopUp); }} 
-                   disabled={isOperator(user.role)}
+                   onClick={() => { if (!isReadOnly(user.role)) setShowTopUp(!showTopUp); }} 
+                   disabled={isReadOnly(user.role)}
                    className="text-primary font-black text-[11px] uppercase tracking-widest flex items-center hover:scale-105 transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
                >
                    {showTopUp ? '- Strike Top-Up Data' : '+ Register Top-Up Event'}
@@ -2657,12 +2643,12 @@ const ScreenMetering: React.FC<{
                         {/* Final Start */}
                         <div className="flex gap-4 items-stretch w-full">
                             <button 
-                                onClick={() => { if (!isOperator(user.role)) onTimestamp('timestampFinalStart'); }} 
-                                disabled={isOperator(user.role)}
+                                onClick={() => { if (!isReadOnly(user.role)) onTimestamp('timestampFinalStart'); }} 
+                                disabled={isReadOnly(user.role)}
                                 className={`flex-1 p-6 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                                     ${activeFlight?.timestampFinalStart 
                                         ? 'bg-success/5 border-success text-on-surface' 
-                                        : isOperator(user.role)
+                                        : isReadOnly(user.role)
                                             ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
                                             : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
                                 `}
@@ -2687,7 +2673,7 @@ const ScreenMetering: React.FC<{
                                 <div className="relative w-full">
                                     <input 
                                         type="time"
-                                        disabled={isOperator(user.role)}
+                                        disabled={isReadOnly(user.role)}
                                         value={activeFlight?.timestampFinalStart ? getLocalTimeValue(activeFlight.timestampFinalStart) : ''}
                                         onChange={(e) => setManualTime('timestampFinalStart', e.target.value)}
                                         className="w-full text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
@@ -2699,12 +2685,12 @@ const ScreenMetering: React.FC<{
                         {/* Final End */}
                         <div className="flex gap-4 items-stretch w-full">
                             <button 
-                                onClick={() => { if (!isOperator(user.role)) onTimestamp('timestampFinalEnd'); }} 
-                                disabled={isOperator(user.role)}
+                                onClick={() => { if (!isReadOnly(user.role)) onTimestamp('timestampFinalEnd'); }} 
+                                disabled={isReadOnly(user.role)}
                                 className={`flex-1 p-6 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                                     ${activeFlight?.timestampFinalEnd 
                                         ? 'bg-success/5 border-success text-on-surface' 
-                                        : isOperator(user.role)
+                                        : isReadOnly(user.role)
                                             ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
                                             : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
                                 `}
@@ -2729,7 +2715,7 @@ const ScreenMetering: React.FC<{
                                 <div className="relative w-full">
                                     <input 
                                         type="time"
-                                        disabled={isOperator(user.role)}
+                                        disabled={isReadOnly(user.role)}
                                         value={activeFlight?.timestampFinalEnd ? getLocalTimeValue(activeFlight.timestampFinalEnd) : ''}
                                         onChange={(e) => setManualTime('timestampFinalEnd', e.target.value)}
                                         className="w-full text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
@@ -2744,7 +2730,7 @@ const ScreenMetering: React.FC<{
        <div className="mt-auto pt-10">
            <button 
               onClick={onNext}
-              disabled={!isOperator(user.role) && (!activeFlight?.volume || activeFlight.volume <= 0)}
+              disabled={!isReadOnly(user.role) && (!activeFlight?.volume || activeFlight.volume <= 0)}
               className="w-full kinetic-gradient p-4 lg:p-6 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-40 disabled:grayscale shadow-premium active:scale-95 transition-all text-white"
            >
               Final Compliance <ChevronRight className="ml-3 w-5 h-5" />
@@ -2794,7 +2780,7 @@ const ScreenQC: React.FC<{
         <div className="space-y-4 card-premium p-8 border-outline shadow-inner">
            {['panelCheck', 'walkAroundCheck', 'appearanceCheck', 'waterCheck'].map((check) => {
                const isChecked = !!activeFlight?.[check as keyof FlightLog];
-               const isDisabled = isOperator(user.role);
+               const isDisabled = isReadOnly(user.role);
                const details = qcCheckDetails[check];
 
                return (
@@ -2838,11 +2824,11 @@ const ScreenQC: React.FC<{
                   <button 
                       type="button"
                       onClick={() => onTimestamp ? onTimestamp('timestampClearance') : undefined}
-                      disabled={isOperator(user.role)}
+                      disabled={isReadOnly(user.role)}
                       className={`flex-1 p-5 sm:p-6 rounded-2xl border-2 text-left transition-all relative overflow-hidden group
                           ${activeFlight?.timestampClearance 
                               ? 'bg-success/5 border-success text-on-surface' 
-                              : isOperator(user.role)
+                              : isReadOnly(user.role)
                                   ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
                                   : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
                       `}
@@ -2867,7 +2853,7 @@ const ScreenQC: React.FC<{
                       <div className="relative w-full">
                           <input 
                               type="time"
-                              disabled={isOperator(user.role)}
+                              disabled={isReadOnly(user.role)}
                               value={activeFlight?.timestampClearance && getLocalTimeValue ? getLocalTimeValue(activeFlight.timestampClearance) : ''}
                               onChange={(e) => setManualTime ? setManualTime('timestampClearance', e.target.value) : undefined}
                               className="w-full text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
@@ -2884,10 +2870,10 @@ const ScreenQC: React.FC<{
                </label>
                <textarea 
                  className="w-full bg-surface-dim border border-outline rounded-2xl p-4 text-xs font-bold text-on-surface outline-none focus:border-primary transition-all min-h-[90px] placeholder:opacity-30 disabled:opacity-50"
-                 placeholder={isOperator(user.role) ? 'No remarks' : 'Enter any operational remarks, delays, or equipment notes...'}
+                 placeholder={isReadOnly(user.role) ? 'No remarks' : 'Enter any operational remarks, delays, or equipment notes...'}
                  value={cleanRemarks(activeFlight?.remarks)}
                  onChange={(e) => onInputChange('remarks', e.target.value)}
-                 disabled={isOperator(user.role)}
+                 disabled={isReadOnly(user.role)}
                />
             </div>
         </div>
@@ -2898,7 +2884,7 @@ const ScreenQC: React.FC<{
                 <p className="text-[11px] font-bold text-on-surface opacity-60 leading-relaxed uppercase tracking-widest">Digital certification required. By committing, you verify JIG compliance and manual safety checks are complete.</p>
             </div>
             
-            {isOperator(user.role) ? (
+            {isReadOnly(user.role) ? (
                <button 
                   onClick={onClose}
                   className="w-full bg-surface-lowest text-on-surface-dim border border-outline font-[900] text-[14px] lg:text-[15px] uppercase tracking-[0.3em] flex items-center justify-center p-5 lg:p-7 rounded-3xl shadow-premium hover:bg-surface-container hover:text-primary transition-all active:scale-95"
@@ -2926,7 +2912,7 @@ const ScreenQC: React.FC<{
 
 export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob, initialVehicleId, onClearInitialVehicleId, setActiveView }) => {
   const { notify } = useNotification();
-  const { equipment, flightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, externalFlights, staff, refreshData, selectedBriefingDate, tanks, updateTankLevel, serviceTankId, briefingInfo, internationalSchedules, addFlightLogEntry } = useOperationalData();
+  const { equipment, flightJobs, rawFlightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, updateFlightLog, externalFlights, staff, refreshData, selectedBriefingDate, tanks, updateTankLevel, serviceTankId, briefingInfo, internationalSchedules, addFlightLogEntry } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(() => {
     try {
@@ -2946,6 +2932,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showEditActiveAircraft, setShowEditActiveAircraft] = useState(false);
   const [showEditActiveStand, setShowEditActiveStand] = useState(false);
+  const [showEditActiveFrt, setShowEditActiveFrt] = useState(false);
 
   // Auto-show void modal when VOID selected
   useEffect(() => {
@@ -2968,9 +2955,9 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     if (voidForm.deliveryNumber.length !== 6) return;
     
     const fullDeliveryNumber = `MLE-${voidForm.deliveryNumber}`;
-    const isDuplicate = (flightLogs || []).some(log => log && log.deliveryNumber === fullDeliveryNumber);
-    if (isDuplicate) {
-      notify(`Delivery ticket number ${fullDeliveryNumber} is already used. Void aborted.`, 'error');
+    const ticketVal = await checkDuplicateTicketAcrossJetA1(fullDeliveryNumber, undefined, flightLogs);
+    if (ticketVal.isDuplicate) {
+      notify(ticketVal.message || `Delivery ticket number ${fullDeliveryNumber} is already used. Void aborted.`, 'error');
       return;
     }
 
@@ -3211,13 +3198,43 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
     // Update flight job status to IN_PROGRESS so Operator Oversight reflects active tasks
     const targetFlightDate = job.date ? job.date.split('T')[0] : selectedBriefingDate;
-    const normJobNo = (job.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+    const normJobNo = (job.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
     const matchingJob = (flightJobs || []).find(j => 
       (job.id && j.id === job.id) ||
-      ((j.flightNumber || '').replace(/\s+/g, '').toUpperCase() === normJobNo && (!j.date || j.date.split('T')[0] === targetFlightDate) && j.status !== 'COMPLETED')
+      ((j.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase() === normJobNo && (!j.date || j.date.split('T')[0] === targetFlightDate))
     );
-    const targetJobId = matchingJob?.id || job.id || (normJobNo ? `fj-${normJobNo}` : `fj-${Date.now()}`);
-    const effectiveAssignee = matchingJob?.assignedTo || job.assignedTo || (user.role === UserRole.ITP_OPERATOR || user.role === UserRole.ITP_HD_OPERATOR ? user.id : '');
+    const matchingRawJob = (rawFlightJobs || []).find(j => 
+      (job.id && j.id === job.id) ||
+      ((j.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase() === normJobNo && (!j.date || j.date.split('T')[0] === targetFlightDate))
+    );
+    const targetJobId = matchingJob?.id || matchingRawJob?.id || job.id || (normJobNo ? `fj-${normJobNo}` : `fj-${Date.now()}`);
+    const effectiveAssignee = matchingJob?.assignedTo || matchingRawJob?.assignedTo || job.assignedTo || (user.role === UserRole.ITP_OPERATOR || user.role === UserRole.ITP_HD_OPERATOR ? user.id : '');
+
+    const cleanFlightNo = normJobNo;
+    const matchingExternal = (externalFlights || []).find(ef => 
+      (ef.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase() === cleanFlightNo && (ef.type === 'departure' || !ef.type)
+    ) || (externalFlights || []).find(ef => 
+      (ef.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase() === cleanFlightNo
+    );
+    const matchingSchedule = (internationalSchedules || []).find(sch => 
+      (sch.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase() === cleanFlightNo
+    );
+
+    const matchingFrozen = [
+      ...((briefingInfo as any)?.staffAssignments?.frozenFlights?.intl || []),
+      ...((briefingInfo as any)?.staffAssignments?.frozenFlights?.domestic || []),
+      ...((briefingInfo as any)?.staffAssignments?.frozenFlights?.adhoc || [])
+    ].find((f: any) => f && (
+      (job.id && f.id === job.id) ||
+      ((f.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase() === normJobNo && (!f.date || f.date.split('T')[0] === targetFlightDate))
+    ));
+
+    const externalStd = matchingExternal?.std || (matchingExternal?.type === 'departure' ? matchingExternal?.scheduledTime : '') || matchingExternal?.scheduledTime || '';
+    const resolvedStd = job.std || (job as any).scheduledTime || matchingJob?.std || (matchingJob as any)?.scheduledTime || matchingRawJob?.std || (matchingRawJob as any)?.scheduledTime || matchingFrozen?.std || (matchingFrozen as any)?.scheduledTime || externalStd || matchingSchedule?.std || '';
+    const resolvedTobt = job.tobt || matchingJob?.tobt || matchingRawJob?.tobt || matchingFrozen?.tobt || (matchingExternal as any)?.tobt || '';
+    const resolvedFrtAirline = job.frtAirline || matchingJob?.frtAirline || matchingRawJob?.frtAirline || matchingFrozen?.frtAirline || '';
+    const resolvedFrtAocc = job.frtAocc || matchingJob?.frtAocc || matchingRawJob?.frtAocc || matchingFrozen?.frtAocc || '';
+    const resolvedFrtFor = job.frtFor || matchingJob?.frtFor || matchingRawJob?.frtFor || matchingFrozen?.frtFor || '';
 
     if (targetJobId) {
       updateFlightJob(targetJobId, { 
@@ -3225,14 +3242,18 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         vehicleId: activeVehicleId, 
         assignedTo: effectiveAssignee,
         flightNumber: job.flightNumber,
-        aircraftReg: job.aircraftReg || matchingJob?.aircraftReg,
-        aircraftType: job.aircraftType || matchingJob?.aircraftType,
-        stand: job.stand || matchingJob?.stand,
-        sta: job.sta || matchingJob?.sta,
-        eta: job.eta || matchingJob?.eta,
-        std: job.std || matchingJob?.std,
+        aircraftReg: job.aircraftReg || matchingJob?.aircraftReg || matchingRawJob?.aircraftReg,
+        aircraftType: job.aircraftType || matchingJob?.aircraftType || matchingRawJob?.aircraftType,
+        stand: job.stand || matchingJob?.stand || matchingRawJob?.stand,
+        sta: job.sta || matchingJob?.sta || matchingRawJob?.sta,
+        eta: job.eta || matchingJob?.eta || matchingRawJob?.eta,
+        std: resolvedStd,
+        tobt: resolvedTobt,
+        frtAirline: resolvedFrtAirline,
+        frtAocc: resolvedFrtAocc,
+        frtFor: resolvedFrtFor,
         date: targetFlightDate,
-        route: job.route || matchingJob?.route,
+        route: job.route || matchingJob?.route || matchingRawJob?.route,
         isDomestic: isDomFlight,
         isAdhoc: job.isAdhoc
       });
@@ -3273,26 +3294,12 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     const resolvedCo = (job as any).co || matchingAdhoc?.co || '';
     const resolvedOperatorName = job.isAdhoc ? ((job as any).operatorName || matchingAdhoc?.operatorName || '') : '';
 
-    const cleanFlightNo = (job.flightNumber || '').replace(/\s+/g, '').toUpperCase();
-    const matchingExternal = (externalFlights || []).find(ef => 
-      (ef.flightNumber || '').replace(/\s+/g, '').toUpperCase() === cleanFlightNo
-    );
-    const matchingSchedule = (internationalSchedules || []).find(sch => 
-      (sch.flightNumber || '').replace(/\s+/g, '').toUpperCase() === cleanFlightNo
-    );
-
-    const resolvedStd = job.std || matchingJob?.std || matchingExternal?.std || matchingSchedule?.std || '';
-    const resolvedTobt = job.tobt || matchingJob?.tobt || (matchingExternal as any)?.tobt || '';
-    const resolvedFrtAirline = job.frtAirline || matchingJob?.frtAirline || '';
-    const resolvedFrtAocc = job.frtAocc || matchingJob?.frtAocc || '';
-    const resolvedFrtFor = job.frtFor || matchingJob?.frtFor || '';
-
     const flightData = {
       id: targetJobId,
       jobId: targetJobId,
       flightNumber: job.flightNumber,
-      aircraftReg: job.aircraftReg || matchingJob?.aircraftReg || '8Q-TBA',
-      aircraftType: job.aircraftType || matchingJob?.aircraftType || (isDomFlight ? 'ATR72-600' : 'A320'),
+      aircraftReg: (job.aircraftReg && job.aircraftReg !== '8Q-TBA' && !job.aircraftReg.startsWith('8Q-DOM')) ? job.aircraftReg : ((matchingJob?.aircraftReg && matchingJob.aircraftReg !== '8Q-TBA' && !matchingJob.aircraftReg.startsWith('8Q-DOM')) ? matchingJob.aircraftReg : ''),
+      aircraftType: cleanAircraftTypeName(job.aircraftType || matchingJob?.aircraftType || (isDomFlight ? 'ATR' : 'A320')),
       stand: job.stand || matchingJob?.stand || '---',
       operatorId: effectiveAssignee,
       vehicleId: activeVehicleId,
@@ -3382,7 +3389,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
     setActiveFlight(prev => {
       if (!prev) return prev;
-      const nextVal = prev[field] ? undefined : new Date().toISOString();
+      const nextVal = prev[field] ? undefined : serverTimeService.getServerIso();
       if (field === 'timestampClearance') {
         const targetId = prev.id || (prev as any).jobId;
         if (targetId) {
@@ -3623,21 +3630,10 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     }
     
     if (activeFlight.deliveryNumber) {
-      try {
-        // Fetch fresh logs directly from BigQuery to perform a live uniqueness check
-        const latestLogs = await supabaseService.getFlightLogs();
-        const isDuplicate = (latestLogs?.logs || []).some(log => log && log.deliveryNumber === activeFlight.deliveryNumber);
-        if (isDuplicate) {
-          notify(`Delivery ticket number ${activeFlight.deliveryNumber} is already used. Please enter a unique ticket number.`, 'error');
-          return;
-        }
-      } catch (err) {
-        console.warn('Failed to verify ticket uniqueness live, falling back to local check:', err);
-        const isDuplicate = (flightLogs || []).some(log => log && log.deliveryNumber === activeFlight.deliveryNumber);
-        if (isDuplicate) {
-          notify(`Delivery ticket number ${activeFlight.deliveryNumber} is already used. Please enter a unique ticket number.`, 'error');
-          return;
-        }
+      const ticketVal = await checkDuplicateTicketAcrossJetA1(activeFlight.deliveryNumber, undefined, flightLogs);
+      if (ticketVal.isDuplicate) {
+        notify(ticketVal.message || `Delivery ticket number ${activeFlight.deliveryNumber} is already used. Please enter a unique ticket number.`, 'error');
+        return;
       }
     }
     
@@ -3656,23 +3652,38 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         (activeFlight as any).flight_category?.toUpperCase() === 'SEA' || 
         activeFlight.logType === 'SEAPLANE';
 
-      const cleanFlightNo = (activeFlight.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+      const cleanFlightNo = (activeFlight.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
       const matchingJob = (flightJobs || []).find(job => 
         (activeFlight.id && job.id === activeFlight.id) || 
-        ((job.flightNumber || '').replace(/\s+/g, '').toUpperCase() === cleanFlightNo && job.status !== 'COMPLETED')
+        ((job.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase() === cleanFlightNo)
+      );
+      const matchingRawJob = (rawFlightJobs || []).find(job => 
+        (activeFlight.id && job.id === activeFlight.id) || 
+        ((job.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase() === cleanFlightNo)
       );
       const matchingExternal = (externalFlights || []).find(ef => 
-        (ef.flightNumber || '').replace(/\s+/g, '').toUpperCase() === cleanFlightNo
+        (ef.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase() === cleanFlightNo && (ef.type === 'departure' || !ef.type)
+      ) || (externalFlights || []).find(ef => 
+        (ef.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase() === cleanFlightNo
       );
+      const matchingFrozen = [
+        ...((briefingInfo as any)?.staffAssignments?.frozenFlights?.intl || []),
+        ...((briefingInfo as any)?.staffAssignments?.frozenFlights?.domestic || []),
+        ...((briefingInfo as any)?.staffAssignments?.frozenFlights?.adhoc || [])
+      ].find((f: any) => f && (
+        (activeFlight.id && f.id === activeFlight.id) ||
+        ((f.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase() === cleanFlightNo)
+      ));
       const matchingSchedule = (internationalSchedules || []).find(sch => 
-        (sch.flightNumber || '').replace(/\s+/g, '').toUpperCase() === cleanFlightNo
+        (sch.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase() === cleanFlightNo
       );
 
-      const resolvedStd = activeFlight.std || matchingJob?.std || matchingExternal?.std || matchingSchedule?.std || '';
-      const resolvedTobt = activeFlight.tobt || matchingJob?.tobt || (matchingExternal as any)?.tobt || '';
-      const resolvedFrtAirline = activeFlight.frtAirline || matchingJob?.frtAirline || '';
-      const resolvedFrtAocc = activeFlight.frtAocc || matchingJob?.frtAocc || '';
-      const resolvedFrtFor = activeFlight.frtFor || matchingJob?.frtFor || '';
+      const externalStd = matchingExternal?.std || (matchingExternal?.type === 'departure' ? matchingExternal?.scheduledTime : '') || matchingExternal?.scheduledTime || '';
+      const resolvedStd = activeFlight.std || (activeFlight as any).scheduledTime || matchingJob?.std || (matchingJob as any)?.scheduledTime || matchingRawJob?.std || (matchingRawJob as any)?.scheduledTime || matchingFrozen?.std || (matchingFrozen as any)?.scheduledTime || externalStd || matchingSchedule?.std || '';
+      const resolvedTobt = activeFlight.tobt || matchingJob?.tobt || matchingRawJob?.tobt || matchingFrozen?.tobt || (matchingExternal as any)?.tobt || '';
+      const resolvedFrtAirline = activeFlight.frtAirline || matchingJob?.frtAirline || matchingRawJob?.frtAirline || matchingFrozen?.frtAirline || '';
+      const resolvedFrtAocc = activeFlight.frtAocc || matchingJob?.frtAocc || matchingRawJob?.frtAocc || matchingFrozen?.frtAocc || '';
+      const resolvedFrtFor = activeFlight.frtFor || matchingJob?.frtFor || matchingRawJob?.frtFor || matchingFrozen?.frtFor || '';
 
       // Operator Name is strictly for ad-hoc entries (not staff name)
       const resolvedOperatorName = activeFlight.isAdhoc ? (activeFlight.operatorName || '') : '';
@@ -3721,7 +3732,10 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         resolvedTacticalOperator = isSeaplaneFlight ? '' : (assignedOpName || user.name);
       }
 
-      const logToSave: Omit<FlightLog, 'id'> = {
+      const newLogId = `op-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+      const logToSave: FlightLog = {
+        id: newLogId,
         flightNumber: activeFlight.flightNumber || '',
         aircraftReg: activeFlight.aircraftReg || '',
         aircraftType: activeFlight.aircraftType || '',
@@ -3759,6 +3773,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         intDom: isSeaplaneFlight ? 'SEA' : (activeFlight.isDomestic ? 'DOM' : 'INT'),
         airline: getAirlineName(activeFlight.flightNumber || '', externalFlights),
         operationalDate: activeFlight.operationalDate || new Date().toISOString().split('T')[0],
+        created_at: new Date().toISOString(),
         psi: activeFlight.psi,
         lpm: activeFlight.lpm,
         officer: resolvedOfficer,
@@ -3770,7 +3785,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
       // Optimistically push into in-memory state so user sees it right away in Log History
       if (addFlightLogEntry) {
-        addFlightLogEntry({ ...logToSave, id: `op-${Date.now()}` } as FlightLog);
+        addFlightLogEntry({ ...logToSave });
       }
 
       // Collect auxiliary promises to run concurrently with BigQuery save
@@ -3821,10 +3836,18 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       }
 
       // Find matching flight job and mark it as COMPLETED in the database
-      if (matchingJob) {
-        auxPromises.push(updateFlightJob(matchingJob.id, { 
+      const completedJobId = matchingJob?.id || matchingRawJob?.id || activeFlight.id;
+      if (completedJobId) {
+        auxPromises.push(updateFlightJob(completedJobId, { 
           status: 'COMPLETED',
-          timestampClearance: logToSave.timestampClearance
+          timestampClearance: logToSave.timestampClearance,
+          vehicleId: selectedVehicleId,
+          deliveryNumber: activeFlight.deliveryNumber,
+          std: resolvedStd || activeFlight.std || undefined,
+          tobt: resolvedTobt || activeFlight.tobt || undefined,
+          frtAirline: resolvedFrtAirline || activeFlight.frtAirline || undefined,
+          frtAocc: resolvedFrtAocc || activeFlight.frtAocc || undefined,
+          frtFor: resolvedFrtFor || activeFlight.frtFor || undefined
         }));
       }
 
@@ -3890,6 +3913,62 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 await updateFlightJob(matching.id, { stand: newStand });
               }
               notify(`Flight ${activeFlight.flightNumber} stand updated to ${newStand}`, 'success');
+            }}
+          />
+        )}
+
+        {showEditActiveFrt && activeFlight && (
+          <EditFuelRequestModal
+            flight={{
+              id: activeFlight.id || (activeFlight as any).jobId || '',
+              flightNumber: activeFlight.flightNumber || '',
+              stand: activeFlight.stand || '',
+              aircraftReg: activeFlight.aircraftReg || '',
+              aircraftType: activeFlight.aircraftType || '',
+              std: activeFlight.std || '',
+              tobt: activeFlight.tobt || '',
+              frtAirline: activeFlight.frtAirline || '',
+              frtAocc: activeFlight.frtAocc || '',
+              frtFor: activeFlight.frtFor || '',
+              status: activeFlight.status || 'IN_PROGRESS',
+              date: activeFlight.operationalDate || '',
+            } as any}
+            onClose={() => setShowEditActiveFrt(false)}
+            onSave={async (updates) => {
+              // 1. Update activeFlight local state
+              setActiveFlight(prev => prev ? ({ ...prev, ...updates }) : null);
+              try {
+                const raw = localStorage.getItem(`fms_active_flight_${user?.id || ''}`);
+                if (raw) {
+                  const parsed = JSON.parse(raw);
+                  localStorage.setItem(`fms_active_flight_${user?.id || ''}`, JSON.stringify({ ...parsed, ...updates }));
+                }
+              } catch {}
+
+              // 2. Update flight_jobs table
+              const cleanFn = (activeFlight.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+              const matchingJob = (flightJobs || []).find(j => 
+                (activeFlight.id && j.id === activeFlight.id) ||
+                ((j.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase() === cleanFn)
+              );
+              const targetJobId = matchingJob?.id || activeFlight.id || (activeFlight as any).jobId;
+              if (targetJobId) {
+                await updateFlightJob(targetJobId, updates);
+              }
+
+              // 3. Retrospectively sync with saved flight log if any exists
+              const matchingLogs = (flightLogs || []).filter(l => 
+                l && l.flightNumber && l.flightNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase() === cleanFn
+              );
+              for (const ml of matchingLogs) {
+                if (ml.id && updateFlightLog) {
+                  try {
+                    await updateFlightLog(ml.id, updates);
+                  } catch (e) {}
+                }
+              }
+
+              notify(`Timings updated for ${activeFlight.flightNumber}`, 'success');
             }}
           />
         )}
@@ -4199,6 +4278,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 user={user}
                 getLocalTimeValue={getLocalTimeValue}
                 setManualTime={setManualTime}
+                onEditFrt={() => setShowEditActiveFrt(true)}
               />
             )}
             {currentScreen === 'metering' && (

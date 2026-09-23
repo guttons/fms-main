@@ -38,8 +38,10 @@ import { Wifi, WifiOff, PanelLeft, X, Loader2, Search, Bell, User as UserIcon, A
 import { updatePWAManifestAndTheme, requestNotificationPermission, sendNativeNotification, subscribeToWebPush, unsubscribeFromWebPush, getPushSubscription } from './utils/pwa';
 import { haptic, isHapticEnabled, setHapticEnabled, isReducedMotion, setReducedMotion } from './utils/haptics';
 import { syncEngine } from './services/syncEngine';
+import { serverTimeService } from './services/serverTimeService';
 import { useStaffActivityTracker } from './hooks/useStaffActivityTracker';
 import { PredictiveBackWrapper } from './components/PredictiveBackWrapper';
+import { UnauthorizedPage } from './components/UnauthorizedPage';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -90,6 +92,39 @@ const App: React.FC = () => {
   const scrollRef = React.useRef<HTMLElement>(null);
   const [pendingJob, setPendingJob] = useState<FlightJob | null>(null);
   const [pendingVehicleId, setPendingVehicleId] = useState<string | null>(null);
+  const [unauthorizedSessionRc, setUnauthorizedSessionRc] = useState<string | null>(null);
+
+  // Authoritative Server Time Synchronization
+  useEffect(() => {
+    serverTimeService.init();
+  }, []);
+
+  // RBAC Session Validation: Verify stored session against authoritative staff registry
+  useEffect(() => {
+    if (!currentUser) return;
+    supabaseService.getStaff().then(staffList => {
+      if (!staffList || staffList.length === 0) return;
+      const match = staffList.find(s => 
+        s.id === currentUser.id || 
+        (s.employeeId && s.employeeId.toLowerCase() === currentUser.id.toLowerCase())
+      );
+      if (!match) {
+        console.warn('[RBAC Security] Active session not found in authorized staff directory:', currentUser);
+        localStorage.removeItem('fms_logged_in_user');
+        localStorage.removeItem('fms_active_view');
+        setCurrentUser(null);
+        setUnauthorizedSessionRc(currentUser.name || currentUser.id || 'Unknown RC');
+      } else if (match.status === 'inactive') {
+        console.warn('[RBAC Security] Logged in staff account is deactivated:', match.employeeId);
+        localStorage.removeItem('fms_logged_in_user');
+        localStorage.removeItem('fms_active_view');
+        setCurrentUser(null);
+        setUnauthorizedSessionRc(match.employeeId || currentUser.name);
+      }
+    }).catch(err => {
+      console.warn('[RBAC Security] Could not verify staff status:', err);
+    });
+  }, [currentUser]);
 
   // Sync activeView to localStorage
   useEffect(() => {
@@ -237,6 +272,18 @@ const App: React.FC = () => {
     setActiveView(defaultView);
   };
 
+  if (unauthorizedSessionRc) {
+    return (
+      <UnauthorizedPage 
+        attemptedRc={unauthorizedSessionRc}
+        reason="invalid_session"
+        onRetry={() => {
+          setUnauthorizedSessionRc(null);
+        }}
+      />
+    );
+  }
+
   // Wrap everything in ONE NotificationProvider so both Login and App can use toasts
   return (
     <NotificationProvider>
@@ -285,7 +332,7 @@ const LoginWrapper: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) 
   const handleLogin = (user: User) => {
     onLogin(user);
     // Fire welcome toast
-    notify(`Welcome back, ${user.name.split(' ')[0]}!`, 'success');
+    notify(`Welcome back, ${user.name}!`, 'success');
 
     // Check for any persisted unread alerts
     try {

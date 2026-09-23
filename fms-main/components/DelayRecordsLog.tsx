@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { User, DelayLog, DelaySource, FlightLog, FlightJob, isDomesticFlight } from '../types';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { haptic } from '../utils/haptics';
+import { serverTimeService } from '../services/serverTimeService';
 import { 
   Clock, 
   Search, 
@@ -73,7 +74,7 @@ export const DelayRecordsLog: React.FC<DelayRecordsLogProps> = ({ user, onInspec
 
   // New / Edit Form State
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: serverTimeService.getServerDate(),
     delayFrom: 'INTERNATIONAL (AOCC/AIRLINE)' as DelaySource,
     operator: '',
     flightNumber: '',
@@ -89,7 +90,7 @@ export const DelayRecordsLog: React.FC<DelayRecordsLogProps> = ({ user, onInspec
 
   const resetForm = () => {
     setFormData({
-      date: new Date().toISOString().split('T')[0],
+      date: serverTimeService.getServerDate(),
       delayFrom: 'INTERNATIONAL (AOCC/AIRLINE)',
       operator: '',
       flightNumber: '',

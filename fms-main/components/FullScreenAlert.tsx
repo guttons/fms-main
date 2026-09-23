@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Alert } from '../types';
-import { Bell, BellRing, Fuel, Ban, Clock, AlertTriangle, ChevronRight, PlaneLanding } from 'lucide-react';
+import { Bell, BellRing, Fuel, Ban, Clock, AlertTriangle, ChevronRight, Check, PlaneLanding } from 'lucide-react';
 import { Logo } from './Logo';
 import { alertSoundEngine } from '../utils/alertSounds';
+import { serverTimeService } from '../services/serverTimeService';
 
 interface FullScreenAlertProps {
   alert: Alert;
@@ -11,9 +12,26 @@ interface FullScreenAlertProps {
 
 export const FullScreenAlert: React.FC<FullScreenAlertProps> = ({ alert, onAcknowledge }) => {
   const trackRef = useRef<HTMLDivElement>(null);
-  const [sliderPos, setSliderPos] = useState(0);
+  const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [isAcknowledged, setIsAcknowledged] = useState(false);
   const [etaRemaining, setEtaRemaining] = useState<string>('');
+
+  const startXRef = useRef(0);
+  const maxSlideRef = useRef(240);
+  const isAcknowledgingRef = useRef(false);
+  const currentDragXRef = useRef(0);
+
+  useEffect(() => {
+    const updateMaxSlide = () => {
+      if (trackRef.current) {
+        maxSlideRef.current = Math.max(100, trackRef.current.clientWidth - 56 - 8);
+      }
+    };
+    updateMaxSlide();
+    window.addEventListener('resize', updateMaxSlide);
+    return () => window.removeEventListener('resize', updateMaxSlide);
+  }, []);
 
   useEffect(() => {
     let vibrationInterval: ReturnType<typeof setInterval>;
@@ -58,8 +76,8 @@ export const FullScreenAlert: React.FC<FullScreenAlertProps> = ({ alert, onAckno
     
     if ((alert.alertType === 'ETA_15MIN' || alert.alertType === 'ETA_5MIN') && alert.metadata?.eta) {
       const updateTimer = () => {
-        const now = new Date();
-        const etaDate = new Date();
+        const now = serverTimeService.getServerTime();
+        const etaDate = serverTimeService.getServerTime();
         const [hours, minutes] = alert.metadata.eta.split(':');
         etaDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
         
@@ -82,34 +100,101 @@ export const FullScreenAlert: React.FC<FullScreenAlertProps> = ({ alert, onAckno
     };
   }, [alert.metadata?.eta, alert.alertType]);
 
-  const handleAcknowledge = () => {
+  const handleAcknowledge = useCallback(() => {
+    if (isAcknowledgingRef.current) return;
+    isAcknowledgingRef.current = true;
+    setIsAcknowledged(true);
+    setIsDragging(false);
+    currentDragXRef.current = maxSlideRef.current;
+    setDragX(maxSlideRef.current);
+    if (navigator.vibrate) {
+      try { navigator.vibrate(100); } catch {}
+    }
     onAcknowledge(alert.id);
-  };
+  }, [alert.id, onAcknowledge]);
 
-  const handlePointerDown = (e: React.PointerEvent) => {
-    setIsDragging(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
+  const updatePosition = useCallback((clientX: number) => {
+    if (isAcknowledgingRef.current) return;
+    const deltaX = clientX - startXRef.current;
+    const max = maxSlideRef.current;
+    const clampedX = Math.max(0, Math.min(max, deltaX));
+    currentDragXRef.current = clampedX;
+    setDragX(clampedX);
 
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging || !trackRef.current) return;
-    const rect = trackRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
-    setSliderPos(percentage);
-
-    if (percentage > 80) {
-      setIsDragging(false);
+    // Auto-trigger if slid >= 75% of the total distance
+    if (max > 0 && clampedX >= max * 0.75) {
       handleAcknowledge();
     }
+  }, [handleAcknowledge]);
+
+  const endDrag = useCallback(() => {
+    if (isAcknowledgingRef.current) return;
+    setIsDragging(false);
+    const max = maxSlideRef.current;
+    const currentX = currentDragXRef.current;
+    // If released past 60%, acknowledge
+    if (max > 0 && currentX >= max * 0.6) {
+      handleAcknowledge();
+    } else {
+      currentDragXRef.current = 0;
+      setDragX(0);
+    }
+  }, [handleAcknowledge]);
+
+  const handleStart = useCallback((clientX: number) => {
+    if (isAcknowledgingRef.current) return;
+    setIsDragging(true);
+    startXRef.current = clientX;
+    if (trackRef.current) {
+      const trackWidth = trackRef.current.clientWidth;
+      maxSlideRef.current = Math.max(100, trackWidth - 56 - 8);
+    }
+  }, []);
+
+  // Global window listeners while dragging to guarantee smooth tracking even if finger outpaces handle
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const onPointerMove = (e: PointerEvent) => {
+      updatePosition(e.clientX);
+    };
+    const onPointerUp = () => {
+      endDrag();
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches && e.touches[0]) {
+        updatePosition(e.touches[0].clientX);
+      }
+    };
+    const onTouchEnd = () => {
+      endDrag();
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
+
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [isDragging, updatePosition, endDrag]);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    handleStart(e.clientX);
   };
 
-  const handlePointerUp = (e: React.PointerEvent) => {
-    setIsDragging(false);
-    if (sliderPos <= 80) {
-      setSliderPos(0);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches && e.touches[0]) {
+      handleStart(e.touches[0].clientX);
     }
-    e.currentTarget.releasePointerCapture(e.pointerId);
   };
 
   let themeColorClass = 'text-warning';
@@ -218,27 +303,63 @@ export const FullScreenAlert: React.FC<FullScreenAlertProps> = ({ alert, onAckno
           </div>
         )}
 
-        <div className="w-full relative h-16 bg-surface-lowest rounded-2xl border border-outline/50 overflow-hidden flex items-center justify-center select-none shadow-sm z-10" ref={trackRef}>
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div 
+          className="w-full relative h-16 bg-surface-lowest rounded-2xl border border-outline/50 overflow-hidden flex items-center justify-center select-none shadow-sm z-10 touch-none" 
+          ref={trackRef}
+          style={{ touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
+        >
+          {/* Progress fill */}
+          <div 
+            className={`absolute top-1 left-1 bottom-1 rounded-xl transition-all duration-75 pointer-events-none ${
+              isAcknowledged ? 'bg-emerald-500/25 border border-emerald-500/40' : `${themeBgClass} border ${themeBorderClass}`
+            }`}
+            style={{ 
+              width: `calc(${dragX}px + 3.5rem)`,
+              maxWidth: 'calc(100% - 0.5rem)'
+            }}
+          />
+
+          {/* Text Guide */}
+          <div 
+            className="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-150"
+            style={{ opacity: Math.max(0, 1 - (maxSlideRef.current > 0 ? (dragX / maxSlideRef.current) * 1.6 : 0)) }}
+          >
             <span className="text-xs sm:text-sm font-black uppercase tracking-widest text-on-surface-dim">
               Slide to Acknowledge &gt;&gt;&gt;
             </span>
           </div>
           
+          {/* Handle */}
           <div 
-            className={`absolute top-1 left-1 bottom-1 w-14 rounded-xl flex items-center justify-center cursor-grab active:cursor-grabbing bg-surface border border-outline text-on-surface shadow-md z-10`}
+            className={`absolute top-1 left-1 bottom-1 w-14 rounded-xl flex items-center justify-center cursor-grab active:cursor-grabbing bg-surface border ${
+              isAcknowledged ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10' : 'border-outline text-on-surface'
+            } shadow-md z-10 touch-none`}
             style={{ 
-              transform: `translateX(calc(${(trackRef.current?.offsetWidth || 300) * sliderPos / 100}px - ${sliderPos > 0 ? (sliderPos/100)*60 : 0}px))`,
-              transition: isDragging ? 'none' : 'transform 0.3s ease-out'
+              transform: `translateX(${dragX}px)`,
+              transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)',
+              touchAction: 'none',
+              userSelect: 'none',
+              WebkitUserSelect: 'none'
             }}
             onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
+            onTouchStart={handleTouchStart}
           >
-            <ChevronRight className="w-6 h-6" />
+            {isAcknowledged ? (
+              <Check className="w-6 h-6 text-emerald-400" />
+            ) : (
+              <ChevronRight className="w-6 h-6" />
+            )}
           </div>
         </div>
+
+        {/* Fallback Tap to Acknowledge button */}
+        <button
+          type="button"
+          onClick={handleAcknowledge}
+          className="mt-3 text-[11px] font-black tracking-wider uppercase text-on-surface-dim hover:text-on-surface py-1.5 px-3 rounded-lg hover:bg-surface-dim active:scale-95 transition-all opacity-60 hover:opacity-100 z-10 cursor-pointer"
+        >
+          Tap to Acknowledge
+        </button>
 
       </div>
     </div>

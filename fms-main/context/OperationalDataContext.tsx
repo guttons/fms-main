@@ -6,6 +6,7 @@ import { supabaseService } from '../services/supabaseService';
 import { scheduleImportService } from '../services/scheduleImportService';
 import { supabase } from '../supabase';
 import { sendNativeNotification } from '../utils/pwa';
+import { cleanAircraftTypeName } from '../services/aircraftLookupService';
 
 import { INITIAL_STAFF_LIST } from '../constants/staffList';
 
@@ -31,6 +32,8 @@ interface ShiftBriefingInfo {
     staffStatuses?: Record<string, string>;
   };
 }
+
+export type BriefingInfo = ShiftBriefingInfo;
 
 export type BriefingShift = 'Morning' | 'Evening' | 'Night';
 
@@ -70,6 +73,7 @@ interface OperationalDataContextType {
   deleteFlightJob: (id: string) => Promise<void>;
   updateFlightLog: (id: string, updates: Partial<FlightLog>) => Promise<void>;
   addFlightLogEntry: (log: FlightLog) => void;
+  deleteFlightLogEntry: (id: string, fallbackFlightNumber?: string, fallbackDeliveryNumber?: string) => void;
   createAlert: (alert: Omit<Alert, 'id'>) => Promise<boolean>;
   acknowledgeAlert: (id: string, staffName?: string) => Promise<void>;
   acknowledgeAllAlerts: (ids: string[]) => Promise<void>;
@@ -494,8 +498,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         }
       );
 
-      let staVal = lf.type === 'arrival' ? lf.scheduledTime : '';
-      let stdVal = lf.type === 'departure' ? lf.scheduledTime : '';
+      let staVal = lf.type === 'arrival' ? (lf.scheduledTime || lf.sta || '') : '';
+      let stdVal = (lf.type === 'departure' ? lf.scheduledTime : '') || lf.std || (lf.type !== 'arrival' ? lf.scheduledTime : '') || '';
       let etaVal = lf.type === 'arrival' ? (lf.estimatedTime || lf.scheduledTime) : '';
       let standVal = lf.gate || '';
       
@@ -554,7 +558,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         merged[existingJobIdx] = {
           ...merged[existingJobIdx],
           aircraftType: (merged[existingJobIdx].aircraftType && !['A320', 'Widebody Heavy', 'Widebody'].includes(merged[existingJobIdx].aircraftType)) ? scheduleImportService.normalizeAircraftType(merged[existingJobIdx].aircraftType) : matchedAcType,
-          aircraftReg: (merged[existingJobIdx].aircraftReg && merged[existingJobIdx].aircraftReg !== '8Q-TBA') ? merged[existingJobIdx].aircraftReg : (lf.aircraftReg || '8Q-TBA'),
+          aircraftReg: (merged[existingJobIdx].aircraftReg && merged[existingJobIdx].aircraftReg !== '8Q-TBA' && !merged[existingJobIdx].aircraftReg.startsWith('8Q-DOM')) ? merged[existingJobIdx].aircraftReg : ((lf.aircraftReg && lf.aircraftReg !== '8Q-TBA' && !lf.aircraftReg.startsWith('8Q-DOM')) ? lf.aircraftReg : ''),
           sta: staVal || merged[existingJobIdx].sta,
           eta: etaVal || merged[existingJobIdx].eta,
           std: stdVal || merged[existingJobIdx].std,
@@ -570,7 +574,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         merged.push({
           id: lf.id || `fj-live-${lf.flightNumber}-${lf.scheduledTime}`,
           flightNumber: lf.flightNumber,
-          aircraftReg: '8Q-TBA',
+          aircraftReg: (lf.aircraftReg && lf.aircraftReg !== '8Q-TBA' && !lf.aircraftReg.startsWith('8Q-DOM')) ? lf.aircraftReg : '',
           aircraftType: matchedAcType,
           stand: standVal || '---',
           sta: staVal,
@@ -660,11 +664,15 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         status = resolvedFids.toUpperCase();
       }
 
+      const cleanMatchReg = (matchingJob?.aircraftReg && matchingJob.aircraftReg !== '8Q-TBA' && !matchingJob.aircraftReg.startsWith('8Q-DOM')) ? matchingJob.aircraftReg : '';
+      const cleanFReg = (f.aircraftReg && f.aircraftReg !== '8Q-TBA' && !f.aircraftReg.startsWith('8Q-DOM')) ? f.aircraftReg : '';
+      const rawAcType = matchingJob?.aircraftType || schMatch?.aircraftType || f.aircraftType || 'ATR';
+
       return {
         id: f.id || `dom-${f.flightNumber}-${f.scheduledTime}-${idx}`,
         flightNumber: f.flightNumber,
-        aircraftReg: matchingJob?.aircraftReg || f.aircraftReg || `8Q-DOM${idx}`,
-        aircraftType: matchingJob?.aircraftType || schMatch?.aircraftType || f.aircraftType || 'ATR72-600',
+        aircraftReg: cleanMatchReg || cleanFReg || '',
+        aircraftType: cleanAircraftTypeName(rawAcType),
         stand: matchingJob?.stand || f.gate || 'D01',
         assignedTeam: `Team ${(idx % 3) + 1}`,
         status,
@@ -988,7 +996,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         supabaseService.getShiftBriefingInfo(selectedBriefingDate, selectedBriefingShift),
         supabaseService.getAlerts(),
         supabaseService.getEquipment(),
-        supabaseService.getFlightLogs({ limit: 10000 }),
+        supabaseService.getFlightLogs({ limit: 500 }),
         supabaseService.getStaff(),
         supabaseService.getDomesticAssignments(selectedBriefingDate),
         supabaseService.getDelayLogs()
@@ -1067,6 +1075,18 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         } catch (e) {
           console.warn('[OperationalData] Error merging cached flight logs:', e);
         }
+
+        // Filter out any locally blacklisted deleted log IDs so stale server responses don't resurrect them
+        try {
+          const rawDel = localStorage.getItem('fms_deleted_log_ids');
+          if (rawDel) {
+            const delIds: string[] = JSON.parse(rawDel);
+            if (Array.isArray(delIds) && delIds.length > 0) {
+              const delSet = new Set(delIds);
+              logsList = logsList.filter(l => !delSet.has(l.id) && (!l.deliveryNumber || !delSet.has(l.deliveryNumber)));
+            }
+          }
+        } catch (e) {}
 
         setFlightLogs(logsList);
       }
@@ -1379,13 +1399,13 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     const targetDate = updatesDate || selectedBriefingDate;
 
     const existingJob = flightJobs.find(j => {
+      if (j.id === id) return true;
       const jDate = j.date ? j.date.split('T')[0] : '';
       if (jDate && targetDate && jDate !== targetDate) return false;
-      if (j.id === id) return !jDate || !targetDate || jDate === targetDate;
       if (!cleanUpdatesFlight) return false;
       const jFlight = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
       if (jFlight !== cleanUpdatesFlight) return false;
-      return !jDate || !targetDate || jDate === targetDate;
+      return true;
     });
 
     if (existingJob) {
@@ -1396,9 +1416,9 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     if (!isDbJob) {
       const matchByFlightOrId = (j: any) => {
         if (!j) return false;
+        if (j.id === id) return true;
         const jDate = j.date ? j.date.split('T')[0] : '';
         if (jDate && targetDate && jDate !== targetDate) return false;
-        if (j.id === id) return true;
         if (cleanUpdatesFlight && (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanUpdatesFlight) {
           return true;
         }
@@ -1429,12 +1449,12 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         ...updates,
         id: safeJobId,
         flightNumber: finalFlightNum,
-        aircraftReg: updates.aircraftReg || virtualJob?.aircraftReg || '8Q-TBA',
-        aircraftType: updates.aircraftType || virtualJob?.aircraftType || 'A320',
+        aircraftReg: updates.aircraftReg !== undefined ? updates.aircraftReg : ((virtualJob?.aircraftReg && virtualJob.aircraftReg !== '8Q-TBA' && !virtualJob.aircraftReg.startsWith('8Q-DOM')) ? virtualJob.aircraftReg : ''),
+        aircraftType: cleanAircraftTypeName(updates.aircraftType || virtualJob?.aircraftType || (isDom ? 'ATR' : 'A320')),
         stand: updates.stand || virtualJob?.stand || '---',
-        sta: updates.sta || virtualJob?.sta || '',
+        sta: updates.sta || virtualJob?.sta || (virtualJob?.type === 'arrival' ? (virtualJob as any)?.scheduledTime : '') || '',
         eta: updates.eta || virtualJob?.eta || '',
-        std: updates.std || virtualJob?.std || '',
+        std: updates.std || virtualJob?.std || (virtualJob?.type === 'departure' ? (virtualJob as any)?.scheduledTime : '') || (virtualJob as any)?.scheduledTime || '',
         status: updates.status || virtualJob?.status || 'PENDING',
         equipmentUsage: updates.equipmentUsage || virtualJob?.equipmentUsage || (isDom ? 'REFUELLER' : 'HYDRANT'),
         isDomestic: isDom,
@@ -1468,11 +1488,14 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     } else {
       const cleanTarget = (targetFlightNo || '').replace(/\s+/g, '').toLowerCase();
       setFlightJobs(prev => prev.map(job => {
+        const matchesId = job.id === id || (existingJob && job.id === existingJob.id);
+        if (matchesId) {
+          return { ...job, ...updates };
+        }
         const jDate = job.date ? job.date.split('T')[0] : '';
         if (jDate && targetDate && jDate !== targetDate) return job;
-        const matchesId = job.id === id || (existingJob && job.id === existingJob.id);
         const matchesFlightNo = cleanTarget && (job.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanTarget;
-        if (matchesId || matchesFlightNo) {
+        if (matchesFlightNo) {
           return { ...job, ...updates };
         }
         return job;
@@ -1523,6 +1546,31 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
               domestic: updatedDomestic,
               adhoc: updatedAdhoc
             }
+          }
+        };
+        setBriefingInfo(newBriefingInfo);
+      }
+    }
+
+    if (briefingInfo?.staffAssignments?.adhocFlights) {
+      const normTarget = (targetFlightNo || '').replace(/\s+/g, '').toLowerCase();
+      const matchFlight = (f: any) => {
+        if (f.id === id) return true;
+        if (!normTarget) return false;
+        const fNorm = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        if (fNorm !== normTarget) return false;
+        const fDate = f.date ? f.date.split('T')[0] : '';
+        return !fDate || !targetDate || fDate === targetDate;
+      };
+
+      if (briefingInfo.staffAssignments.adhocFlights.some(matchFlight)) {
+        const updatedAdhocList = briefingInfo.staffAssignments.adhocFlights.map((f: any) => matchFlight(f) ? { ...f, ...updates } : f);
+        updatedBriefing = true;
+        newBriefingInfo = {
+          ...(newBriefingInfo || briefingInfo),
+          staffAssignments: {
+            ...(newBriefingInfo?.staffAssignments || briefingInfo.staffAssignments),
+            adhocFlights: updatedAdhocList
           }
         };
         setBriefingInfo(newBriefingInfo);
@@ -1600,7 +1648,142 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     } catch (e) {}
   }, []);
 
-  // Real-time listener for newly created flight logs across components
+  const deleteFlightLogEntry = useCallback((id: string, fallbackFlightNumber?: string, fallbackDeliveryNumber?: string) => {
+    let fn = fallbackFlightNumber || '';
+    let dn = fallbackDeliveryNumber || '';
+    if (!fn || !dn) {
+      const found = flightLogs.find(l => l.id === id);
+      if (found) {
+        if (!fn) fn = found.flightNumber || '';
+        if (!dn) dn = found.deliveryNumber || '';
+      }
+    }
+    const cleanTargetNo = fn ? fn.replace(/[^A-Z0-9]/gi, '').toUpperCase() : '';
+    const cleanTargetCompact = cleanTargetNo.replace(/([A-Z]+)0+([0-9]+)/, '$1$2');
+
+    const matchesTargetFlight = (testFn?: string) => {
+      if (!cleanTargetNo || !testFn) return false;
+      const norm = testFn.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      if (!norm) return false;
+      if (norm === cleanTargetNo || norm.replace(/([A-Z]+)0+([0-9]+)/, '$1$2') === cleanTargetCompact) return true;
+      return false;
+    };
+
+    // 0. Blacklist in fms_deleted_log_ids
+    try {
+      const rawDel = localStorage.getItem('fms_deleted_log_ids');
+      const delIds: string[] = rawDel ? JSON.parse(rawDel) : [];
+      if (id && !delIds.includes(id)) delIds.push(id);
+      if (dn && !delIds.includes(dn)) delIds.push(dn);
+      localStorage.setItem('fms_deleted_log_ids', JSON.stringify(delIds.slice(-500)));
+    } catch {}
+
+    // 1. Remove deleted log from flightLogs state
+    setFlightLogs(prev => prev.filter(l => {
+      if (l.id === id) return false;
+      if (dn && l.deliveryNumber && l.deliveryNumber === dn) return false;
+      if (cleanTargetNo && matchesTargetFlight(l.flightNumber)) return false;
+      return true;
+    }));
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('fms:flight-log-deleted', {
+        detail: { id, flightNumber: fn, deliveryNumber: dn }
+      }));
+    }
+
+    // 2. Reset flightJobs in state and update Supabase flight_jobs table
+    if (cleanTargetNo || dn) {
+      setFlightJobs(fjPrev => fjPrev.map(j => {
+        const matchFn = matchesTargetFlight(j.flightNumber);
+        const matchDeliv = dn && j.deliveryNumber === dn;
+        if (matchFn || matchDeliv) {
+          if (j.id) {
+            supabaseService.updateFlightJob(j.id, {
+              status: 'PENDING',
+              vehicleId: undefined,
+              deliveryNumber: undefined,
+              timestampClearance: undefined
+            }).catch(e => console.warn('[deleteFlightLogEntry] Error resetting flight job in Supabase:', e));
+          }
+          return {
+            ...j,
+            status: 'PENDING',
+            vehicleId: undefined,
+            deliveryNumber: undefined,
+            timestampClearance: undefined
+          };
+        }
+        return j;
+      }));
+
+      // 3. Reset in briefingInfo state AND briefingInfo.staffAssignments.adhocFlights AND sync to Supabase
+      setBriefingInfo(biPrev => {
+        if (!biPrev?.staffAssignments) return biPrev;
+        const frozen = biPrev.staffAssignments.frozenFlights;
+        const adhoc = biPrev.staffAssignments.adhocFlights;
+        const matchF = (f: any) => matchesTargetFlight(f.flightNumber) || (dn && f.deliveryNumber === dn);
+        const resetFlight = (f: any) => matchF(f) ? { ...f, status: 'PENDING', vehicleId: undefined, deliveryNumber: undefined, timestampClearance: undefined } : f;
+
+        const updatedFrozen = frozen ? {
+          ...frozen,
+          intl: (frozen.intl || []).map(resetFlight),
+          domestic: (frozen.domestic || []).map(resetFlight),
+          adhoc: (frozen.adhoc || []).map(resetFlight)
+        } : undefined;
+
+        const updatedAdhoc = (adhoc || []).map(resetFlight);
+
+        const newBriefing: BriefingInfo = {
+          ...biPrev,
+          staffAssignments: {
+            ...biPrev.staffAssignments,
+            ...(updatedFrozen ? { frozenFlights: updatedFrozen } : {}),
+            adhocFlights: updatedAdhoc
+          }
+        };
+
+        // Persist synchronously to localStorage so reloads keep it reset
+        try {
+          localStorage.setItem(`fms_briefing_info_${selectedBriefingDate}_${selectedBriefingShift}`, JSON.stringify(newBriefing));
+        } catch (e) {}
+
+        // Persist to Supabase shift_briefing_info
+        supabaseService.upsertShiftBriefingInfo(
+          selectedBriefingDate,
+          selectedBriefingShift,
+          newBriefing.info,
+          newBriefing.dieselNeeds,
+          newBriefing.staffAssignments
+        ).catch(e => console.warn('[deleteFlightLogEntry] Error updating briefing in Supabase:', e));
+
+        return newBriefing;
+      });
+    }
+
+    // 4. Remove from fms_recent_flight_logs in localStorage
+    try {
+      const raw = localStorage.getItem('fms_recent_flight_logs');
+      if (raw) {
+        const recent: FlightLog[] = JSON.parse(raw);
+        const cleanFallback = cleanTargetNo;
+        const filtered = recent.filter(l => {
+          if (l.id === id) return false;
+          if (dn && l.deliveryNumber && l.deliveryNumber === dn) return false;
+          if (cleanFallback && l.flightNumber) {
+            const lNo = (l.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+            if (lNo === cleanFallback || lNo.replace(/([A-Z]+)0+([0-9]+)/, '$1$2') === cleanTargetCompact) {
+              return false;
+            }
+          }
+          return true;
+        });
+        localStorage.setItem('fms_recent_flight_logs', JSON.stringify(filtered));
+      }
+    } catch (e) {}
+  }, [flightLogs, selectedBriefingDate, selectedBriefingShift]);
+
+  // Real-time listener for newly created, updated & deleted flight logs across components
   useEffect(() => {
     const handleNewLog = (e: Event) => {
       const customEvent = e as CustomEvent<FlightLog>;
@@ -1608,9 +1791,27 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         addFlightLogEntry(customEvent.detail);
       }
     };
+    const handleUpdatedLog = (e: Event) => {
+      const customEvent = e as CustomEvent<{ id: string; updates: Partial<FlightLog> }>;
+      if (customEvent && customEvent.detail?.id) {
+        updateFlightLog(customEvent.detail.id, customEvent.detail.updates);
+      }
+    };
+    const handleDeletedLog = (e: Event) => {
+      const customEvent = e as CustomEvent<{ id: string; flightNumber?: string; deliveryNumber?: string }>;
+      if (customEvent && customEvent.detail?.id) {
+        deleteFlightLogEntry(customEvent.detail.id, customEvent.detail.flightNumber, customEvent.detail.deliveryNumber);
+      }
+    };
     window.addEventListener('fms:flight-log-created', handleNewLog);
-    return () => window.removeEventListener('fms:flight-log-created', handleNewLog);
-  }, [addFlightLogEntry]);
+    window.addEventListener('fms:flight-log-updated', handleUpdatedLog);
+    window.addEventListener('fms:flight-log-deleted', handleDeletedLog);
+    return () => {
+      window.removeEventListener('fms:flight-log-created', handleNewLog);
+      window.removeEventListener('fms:flight-log-updated', handleUpdatedLog);
+      window.removeEventListener('fms:flight-log-deleted', handleDeletedLog);
+    };
+  }, [addFlightLogEntry, updateFlightLog, deleteFlightLogEntry]);
 
   const deleteFlightJob = async (id: string) => {
     const jobToDelete = flightJobs.find(j => j.id === id);
@@ -2130,6 +2331,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       deleteFlightJob,
       updateFlightLog,
       addFlightLogEntry,
+      deleteFlightLogEntry,
       createAlert,
       acknowledgeAlert,
       acknowledgeAllAlerts,

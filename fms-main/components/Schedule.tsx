@@ -2,11 +2,15 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { MOCK_USERS, EQUIPMENT } from '../constants';
 import { UserRole, EquipmentType, FlightJob, isDomesticFlight } from '../types';
-import { Calendar, Zap, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home, Radio, RefreshCw, PlaneLanding, PlaneTakeoff, Check, XCircle, ArrowRightCircle, AlertTriangle, Lock, Ban, Play, CheckCircle, Globe, X, Pencil } from 'lucide-react';
+import { Calendar, Zap, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home, Radio, RefreshCw, PlaneLanding, PlaneTakeoff, Check, XCircle, ArrowRightCircle, AlertTriangle, Lock, Ban, Play, CheckCircle, Globe, X, Pencil, Plus } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { BriefingShift } from '../context/OperationalDataContext';
 import { useNotification } from '../context/NotificationContext';
+import { EditFuelRequestModal } from './EditFuelRequestModal';
+import { EditAircraftModal } from './EditAircraftModal';
+import { AddAdhocFlightModal, AdhocFlightData } from './AddAdhocFlightModal';
+import { cleanAircraftTypeName } from '../services/aircraftLookupService';
 
 export const COMMON_MLE_STANDS = [
   'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9',
@@ -124,166 +128,7 @@ export const EditStandModal: React.FC<{
   );
 };
 
-export const EditFuelRequestModal: React.FC<{
-  flight: FlightJob;
-  onClose: () => void;
-  onSave: (updates: {
-    std?: string;
-    tobt?: string;
-    frtAirline?: string;
-    frtAocc?: string;
-    frtFor?: string;
-  }) => Promise<void> | void;
-}> = ({ flight, onClose, onSave }) => {
-  const [std, setStd] = useState(flight.std || '');
-  const [tobt, setTobt] = useState(flight.tobt || '');
-  const [frtAirline, setFrtAirline] = useState(flight.frtAirline || '');
-  const [frtAocc, setFrtAocc] = useState(flight.frtAocc || '');
-  const [frtFor, setFrtFor] = useState(flight.frtFor || '');
-  const [saving, setSaving] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await onSave({
-        std: std.trim() || undefined,
-        tobt: tobt.trim() || undefined,
-        frtAirline: frtAirline.trim() || undefined,
-        frtAocc: frtAocc.trim() || undefined,
-        frtFor: frtFor.trim() || undefined
-      });
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-surface border border-outline rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-premium text-on-surface animate-in zoom-in-95 duration-200 relative">
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-              <Clock className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base sm:text-lg font-black tracking-tight uppercase">Departure & Fuel Request Timings</h3>
-              <p className="text-[10px] font-black text-primary uppercase tracking-widest">
-                {flight.flightNumber} • STAND {flight.stand} • {flight.aircraftReg || flight.aircraftType || ''}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-on-surface-dim hover:text-on-surface hover:bg-surface-dim transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-1.5 opacity-60">
-                Scheduled Dep (STD)
-              </label>
-              <input
-                type="text"
-                placeholder="HH:MM"
-                value={std}
-                onChange={(e) => setStd(e.target.value)}
-                className="w-full px-4 py-2.5 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black tracking-wider focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all font-mono text-on-surface"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-1.5 font-bold">
-                TOBT (DEP STD Change)
-              </label>
-              <input
-                type="text"
-                placeholder="HH:MM"
-                value={tobt}
-                onChange={(e) => setTobt(e.target.value)}
-                className="w-full px-4 py-2.5 bg-surface-dim border border-amber-500/40 rounded-2xl text-[13px] font-black tracking-wider focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 outline-none transition-all font-mono text-amber-400"
-              />
-              <span className="text-[8px] text-on-surface-dim opacity-50 block mt-0.5">Target Off-Block Time</span>
-            </div>
-          </div>
-
-          <div className="p-4 bg-surface-dim/50 border border-outline/60 rounded-2xl space-y-3">
-            <span className="block text-[9px] font-black text-primary uppercase tracking-widest">
-              Fuel Request Times (FRT)
-            </span>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-wider mb-1 opacity-70">
-                  FRT Airline
-                </label>
-                <input
-                  type="text"
-                  placeholder="HH:MM"
-                  value={frtAirline}
-                  onChange={(e) => setFrtAirline(e.target.value)}
-                  className="w-full px-3 py-2 bg-surface border border-outline rounded-xl text-xs font-black tracking-wider focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-mono text-on-surface"
-                />
-                <span className="text-[8px] text-on-surface-dim opacity-50 block mt-0.5">Airline Request</span>
-              </div>
-
-              <div>
-                <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-wider mb-1 opacity-70">
-                  FRT AOCC
-                </label>
-                <input
-                  type="text"
-                  placeholder="HH:MM"
-                  value={frtAocc}
-                  onChange={(e) => setFrtAocc(e.target.value)}
-                  className="w-full px-3 py-2 bg-surface border border-outline rounded-xl text-xs font-black tracking-wider focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-mono text-on-surface"
-                />
-                <span className="text-[8px] text-on-surface-dim opacity-50 block mt-0.5">AOCC Request</span>
-              </div>
-
-              <div>
-                <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-wider mb-1 opacity-70">
-                  FRT For
-                </label>
-                <input
-                  type="text"
-                  placeholder="HH:MM"
-                  value={frtFor}
-                  onChange={(e) => setFrtFor(e.target.value)}
-                  className="w-full px-3 py-2 bg-surface border border-outline rounded-xl text-xs font-black tracking-wider focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-mono text-on-surface"
-                />
-                <span className="text-[8px] text-on-surface-dim opacity-50 block mt-0.5">Requested For</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3 bg-surface-dim border border-outline text-on-surface-dim hover:text-on-surface rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 py-3 kinetic-gradient text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-premium disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              {saving ? 'Saving...' : 'Save Timings'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body
-  );
-};
 
 interface ScheduleProps {
   user?: any;
@@ -294,12 +139,26 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
   const { notify } = useNotification();
   const [editingStandFlight, setEditingStandFlight] = useState<any | null>(null);
   const [editingFrtFlight, setEditingFrtFlight] = useState<FlightJob | null>(null);
+  const [editingAircraftFlight, setEditingAircraftFlight] = useState<any | null>(null);
+  const [isAddAdhocModalOpen, setIsAddAdhocModalOpen] = useState(false);
   const isItpManagerOrAdmin = user?.role === UserRole.ITP_MANAGER || user?.role === UserRole.ADMIN;
+
+  const cleanDisplayReg = (reg?: string) => {
+    if (!reg || reg === '8Q-TBA' || reg === 'TBA' || reg.startsWith('8Q-DOM')) return '';
+    return reg.trim().toUpperCase();
+  };
+
+  const cleanDisplayType = (type?: string) => {
+    if (!type) return '';
+    return cleanAircraftTypeName(type);
+  };
+
   const {
     equipment,
     flightJobs,
     rawFlightJobs,
     briefingInfo,
+    updateBriefingInfo,
     updateFlightJob,
     addFlightJob,
     deleteFlightJob,
@@ -1003,18 +862,119 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
     updateFlightJob(flightId, { 
       [field]: value,
       flightNumber: resolvedFlightNumber,
-      date: resolvedDate || todayDate
+      date: resolvedDate || todayDate,
+      std: meta?.std || undefined,
+      sta: meta?.sta || undefined,
+      eta: meta?.eta || undefined,
+      stand: meta?.stand || undefined,
+      aircraftReg: meta?.aircraftReg || undefined,
+      aircraftType: meta?.aircraftType || undefined,
+      route: meta?.route || undefined,
+      tobt: meta?.tobt || undefined,
+      frtAirline: meta?.frtAirline || undefined,
+      frtAocc: meta?.frtAocc || undefined,
+      frtFor: meta?.frtFor || undefined,
+      isDomestic: meta?.isDomestic !== undefined ? meta.isDomestic : undefined,
+      isAdhoc: meta?.isAdhoc !== undefined ? meta.isAdhoc : undefined,
     });
   };
 
   const handleSaveStand = async (newStand: string) => {
     if (!editingStandFlight) return;
     try {
-      await updateFlightJob(editingStandFlight.id, { stand: newStand });
+      await updateFlightJob(editingStandFlight.id, { 
+        stand: newStand,
+        std: editingStandFlight.std || undefined,
+        flightNumber: editingStandFlight.flightNumber || undefined
+      });
       notify(`Flight ${editingStandFlight.flightNumber} stand changed to ${newStand}`, 'success');
     } catch (err) {
       console.error('Failed to update stand:', err);
       notify('Failed to update flight stand. Please try again.', 'error');
+    }
+  };
+
+  const handleSaveAircraft = async (newType: string, newReg: string) => {
+    if (!editingAircraftFlight) return;
+    try {
+      const flightNum = editingAircraftFlight.flightNumber;
+      await updateFlightJob(editingAircraftFlight.id, {
+        aircraftType: newType,
+        aircraftReg: newReg,
+        flightNumber: flightNum || undefined,
+        std: editingAircraftFlight.std || undefined,
+        date: editingAircraftFlight.date ? editingAircraftFlight.date.split('T')[0] : selectedBriefingDate
+      });
+
+      // If adhoc flight, ensure briefingInfo adhoc flights are also synced
+      if (editingAircraftFlight.isAdhoc || (typeof editingAircraftFlight.id === 'string' && editingAircraftFlight.id.startsWith('ah-'))) {
+        const adhocList = briefingInfo?.staffAssignments?.adhocFlights || [];
+        const normTarget = (flightNum || '').replace(/\s+/g, '').toLowerCase();
+        const matchIdx = adhocList.findIndex((f: any) => 
+          (f.id && f.id === editingAircraftFlight.id) || 
+          (f.flightNumber && (f.flightNumber || '').replace(/\s+/g, '').toLowerCase() === normTarget)
+        );
+        if (matchIdx !== -1) {
+          const updatedAdhoc = [...adhocList];
+          updatedAdhoc[matchIdx] = {
+            ...updatedAdhoc[matchIdx],
+            aircraftType: newType,
+            aircraftReg: newReg
+          };
+          await updateBriefingInfo(
+            briefingInfo?.info || [],
+            briefingInfo?.dieselNeeds || [],
+            {
+              ...(briefingInfo?.staffAssignments || {}),
+              adhocFlights: updatedAdhoc
+            }
+          );
+        }
+      }
+
+      notify(`Flight ${flightNum} aircraft updated to ${newType}${newReg ? ` (${newReg})` : ''}`, 'success');
+      setEditingAircraftFlight(null);
+    } catch (err) {
+      console.error('Failed to update aircraft:', err);
+      notify('Failed to update aircraft details. Please try again.', 'error');
+    }
+  };
+
+  const handleAddAdhocFlight = async (flightData: AdhocFlightData) => {
+    const newAdhoc = {
+      id: `ah-custom-${Date.now()}`,
+      flightNumber: flightData.flightNumber,
+      std: flightData.std,
+      sta: '---',
+      route: flightData.destination,
+      destination: flightData.destination,
+      stand: '---',
+      status: 'PENDING',
+      isAdhoc: true,
+      aircraftReg: flightData.aircraftReg,
+      aircraftType: flightData.aircraftType,
+      co: flightData.co,
+      operatorName: flightData.operatorName,
+      date: selectedBriefingDate
+    };
+
+    const currentAdhocList = briefingInfo?.staffAssignments?.adhocFlights || [];
+    const updatedAdhoc = [...currentAdhocList, newAdhoc];
+
+    try {
+      await updateBriefingInfo(
+        briefingInfo?.info || [],
+        briefingInfo?.dieselNeeds || [],
+        {
+          ...(briefingInfo?.staffAssignments || {}),
+          adhocFlights: updatedAdhoc
+        }
+      );
+      notify('Ad-hoc flight added successfully!', 'success');
+      setIsAddAdhocModalOpen(false);
+    } catch (err) {
+      console.error('Failed to add ad-hoc flight:', err);
+      notify('Failed to add ad-hoc flight.', 'error');
     }
   };
 
@@ -1030,32 +990,66 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
       await updateFlightJob(editingFrtFlight.id, updates);
 
       // Retrospectively sync with saved flight log in BigQuery/state if flight was already completed/logged
-      const cleanEditingFlight = (editingFrtFlight.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+      const rawEditingFlight = editingFrtFlight.flightNumber || '';
+      const cleanEditingFlight = rawEditingFlight.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      const compactEditingFlight = cleanEditingFlight.replace(/([A-Z]+)0+([0-9]+)/, '$1$2');
       const flightDate = editingFrtFlight.date ? editingFrtFlight.date.split('T')[0] : todayDate;
+
+      const matchesFlightNumber = (fn?: string) => {
+        if (!fn) return false;
+        const c = fn.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+        return c === cleanEditingFlight || c.replace(/([A-Z]+)0+([0-9]+)/, '$1$2') === compactEditingFlight;
+      };
+
+      const matchesDate = (log: any) => {
+        const logDate = log.operationalDate ? log.operationalDate.split('T')[0] : (log.timestampStart ? log.timestampStart.split('T')[0] : '');
+        if (!logDate || !flightDate) return true;
+        if (logDate === flightDate || logDate === todayDate) return true;
+        const diffDays = Math.abs(new Date(logDate).getTime() - new Date(flightDate).getTime()) / (1000 * 60 * 60 * 24);
+        return diffDays <= 1;
+      };
 
       const matchingLogs = (flightLogs || []).filter(log => {
         if (!log || !log.flightNumber) return false;
-        const logFlight = log.flightNumber.replace(/\s+/g, '').toUpperCase();
-        if (logFlight !== cleanEditingFlight) return false;
-        const logDate = log.operationalDate ? log.operationalDate.split('T')[0] : '';
-        if (logDate && flightDate && logDate !== flightDate) return false;
-        return true;
+        return matchesFlightNumber(log.flightNumber) && matchesDate(log);
       });
 
       for (const log of matchingLogs) {
         if (log.id && updateFlightLog) {
           try {
             await updateFlightLog(log.id, {
-              std: updates.std,
-              tobt: updates.tobt,
-              frtAirline: updates.frtAirline,
-              frtAocc: updates.frtAocc,
-              frtFor: updates.frtFor,
+              std: updates.std !== undefined ? updates.std : log.std,
+              tobt: updates.tobt !== undefined ? updates.tobt : log.tobt,
+              frtAirline: updates.frtAirline !== undefined ? updates.frtAirline : log.frtAirline,
+              frtAocc: updates.frtAocc !== undefined ? updates.frtAocc : log.frtAocc,
+              frtFor: updates.frtFor !== undefined ? updates.frtFor : log.frtFor,
             });
           } catch (logErr) {
             console.warn(`[Schedule] Could not update saved flight log ${log.id} with FRT:`, logErr);
           }
         }
+      }
+
+      // Check live BigQuery as well to catch any logs that might not yet be in local memory
+      try {
+        const liveBq = await supabaseService.getFlightLogs({ searchTerm: rawEditingFlight || cleanEditingFlight, limit: 20 });
+        const bqMatches = (liveBq?.logs || []).filter(l => {
+          if (!l || !l.flightNumber) return false;
+          return matchesFlightNumber(l.flightNumber) && matchesDate(l);
+        });
+        for (const bqLog of bqMatches) {
+          if (bqLog.id && !matchingLogs.some(m => m.id === bqLog.id)) {
+            await supabaseService.updateFlightLog(bqLog.id, {
+              std: updates.std !== undefined ? updates.std : bqLog.std,
+              tobt: updates.tobt !== undefined ? updates.tobt : bqLog.tobt,
+              frtAirline: updates.frtAirline !== undefined ? updates.frtAirline : bqLog.frtAirline,
+              frtAocc: updates.frtAocc !== undefined ? updates.frtAocc : bqLog.frtAocc,
+              frtFor: updates.frtFor !== undefined ? updates.frtFor : bqLog.frtFor,
+            } as any);
+          }
+        }
+      } catch (bqErr) {
+        console.warn('[Schedule] Live BQ update fallback skipped:', bqErr);
       }
 
       notify(`Timings & FRT updated for Flight ${editingFrtFlight.flightNumber}`, 'success');
@@ -1426,9 +1420,18 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                           </td>
                           <td className="px-4 py-6 whitespace-nowrap">
                             <div className="flex items-center gap-6">
-                              <div>
-                                <div className="text-sm font-black tracking-tight">{item.aircraftReg}</div>
-                                <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">{item.aircraftType}</div>
+                              <div
+                                onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingAircraftFlight(item); } : undefined}
+                                className={`group/ac flex flex-col rounded-lg px-2 py-1 -mx-2 -my-1 transition-all ${
+                                  isItpManagerOrAdmin ? 'cursor-pointer hover:bg-surface-dim/70 hover:border-primary/40 border border-transparent' : ''
+                                }`}
+                                title={isItpManagerOrAdmin ? "Click to edit aircraft reg and type" : undefined}
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-sm font-black tracking-tight">{cleanDisplayReg(item.aircraftReg) || '---'}</span>
+                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/ac:opacity-60 text-primary transition-opacity" />}
+                                </div>
+                                <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">{cleanDisplayType(item.aircraftType) || '---'}</div>
                               </div>
                               <div className="h-6 w-[1px] bg-outline/30" />
                               <div>
@@ -1552,8 +1555,17 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                                   </div>
                                 )}
                               </div>
-                              <div className="flex items-center gap-1.5 text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-0.5">
-                                <span>{item.aircraftReg} • {item.aircraftType}</span>
+                              <div className="flex items-center gap-1.5 text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-0.5 flex-wrap">
+                                <div
+                                  onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingAircraftFlight(item); } : undefined}
+                                  className={`inline-flex items-center gap-1 ${
+                                    isItpManagerOrAdmin ? 'cursor-pointer hover:text-primary active:scale-95 transition-all' : ''
+                                  }`}
+                                  title={isItpManagerOrAdmin ? "Click to edit aircraft reg and type" : undefined}
+                                >
+                                  <span>{cleanDisplayReg(item.aircraftReg) ? `${cleanDisplayReg(item.aircraftReg)} • ${cleanDisplayType(item.aircraftType)}` : cleanDisplayType(item.aircraftType)}</span>
+                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 text-primary opacity-60" />}
+                                </div>
                                 {item.route && (
                                   <>
                                     <span>•</span>
@@ -1715,15 +1727,26 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                               </div>
                             </td>
                             <td className="px-4 py-6 whitespace-nowrap">
-                              <div className="text-sm font-black tracking-tight">{flight.aircraftType}</div>
-                              <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1 flex items-center gap-1.5">
-                                <span>{flight.aircraftReg}</span>
-                                {flight.route && (
-                                  <>
-                                    <span>•</span>
-                                    {renderRoute(flight.route, "text-[10px]", true)}
-                                  </>
-                                )}
+                              <div
+                                onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingAircraftFlight(flight); } : undefined}
+                                className={`group/ac flex flex-col rounded-lg px-2 py-1 -mx-2 -my-1 transition-all ${
+                                  isItpManagerOrAdmin ? 'cursor-pointer hover:bg-surface-dim/70 hover:border-primary/40 border border-transparent' : ''
+                                }`}
+                                title={isItpManagerOrAdmin ? "Click to edit aircraft reg and type" : undefined}
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-sm font-black tracking-tight">{cleanDisplayType(flight.aircraftType) || 'ATR'}</span>
+                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/ac:opacity-60 text-primary transition-opacity" />}
+                                </div>
+                                <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1 flex items-center gap-1.5">
+                                  <span>{cleanDisplayReg(flight.aircraftReg) || '---'}</span>
+                                  {flight.route && (
+                                    <>
+                                      <span>•</span>
+                                      {renderRoute(flight.route, "text-[10px]", true)}
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             </td>
                             <td className="px-4 py-6 whitespace-nowrap">
@@ -1782,9 +1805,22 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                                 )}
                               </div>
                               <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest flex items-center gap-1.5 flex-wrap">
-                                <span>{flight.aircraftReg}</span>
-                                <span>•</span>
-                                <span>{flight.aircraftType}</span>
+                                <div
+                                  onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingAircraftFlight(flight); } : undefined}
+                                  className={`inline-flex items-center gap-1 ${
+                                    isItpManagerOrAdmin ? 'cursor-pointer hover:text-primary active:scale-95 transition-all' : ''
+                                  }`}
+                                  title={isItpManagerOrAdmin ? "Click to edit aircraft reg and type" : undefined}
+                                >
+                                  {cleanDisplayReg(flight.aircraftReg) && (
+                                    <>
+                                      <span>{cleanDisplayReg(flight.aircraftReg)}</span>
+                                      <span>•</span>
+                                    </>
+                                  )}
+                                  <span>{cleanDisplayType(flight.aircraftType) || 'ATR'}</span>
+                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 text-primary opacity-60" />}
+                                </div>
                                 {flight.route && (
                                   <>
                                     <span>•</span>
@@ -1820,6 +1856,17 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
           {/* Ad-Hoc Assignments */}
           {activeTab === 'adhoc' && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-4 md:space-y-6 md:p-8 lg:p-10">
+              {isItpManagerOrAdmin && (
+                <div className="flex justify-end items-center mb-1">
+                  <button
+                    onClick={() => setIsAddAdhocModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-warning text-slate-950 hover:bg-warning-hover rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md shadow-warning/20 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                    <span>Add Ad-Hoc Flight</span>
+                  </button>
+                </div>
+              )}
               {/* Desktop View */}
               <div className="hidden md:block bg-surface-lowest border border-outline rounded-[32px] overflow-hidden shadow-inner">
                 <div className="overflow-x-auto">
@@ -1877,15 +1924,26 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                               </div>
                             </td>
                             <td className="px-4 py-6 whitespace-nowrap">
-                              <div className="text-sm font-black tracking-tight text-on-surface">{flight.aircraftReg}</div>
-                              <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1 flex items-center gap-1.5">
-                                <span>{flight.aircraftType}</span>
-                                {flight.route && (
-                                  <>
-                                    <span>•</span>
-                                    {renderRoute(flight.route, "text-[10px]", true)}
-                                  </>
-                                )}
+                              <div
+                                onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingAircraftFlight(flight); } : undefined}
+                                className={`group/ac flex flex-col rounded-lg px-2 py-1 -mx-2 -my-1 transition-all ${
+                                  isItpManagerOrAdmin ? 'cursor-pointer hover:bg-surface-dim/70 hover:border-primary/40 border border-transparent' : ''
+                                }`}
+                                title={isItpManagerOrAdmin ? "Click to edit aircraft reg and type" : undefined}
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-sm font-black tracking-tight text-on-surface">{cleanDisplayReg(flight.aircraftReg) || '---'}</span>
+                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/ac:opacity-60 text-primary transition-opacity" />}
+                                </div>
+                                <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1 flex items-center gap-1.5">
+                                  <span>{cleanDisplayType(flight.aircraftType)}</span>
+                                  {flight.route && (
+                                    <>
+                                      <span>•</span>
+                                      {renderRoute(flight.route, "text-[10px]", true)}
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             </td>
                             <td className="px-4 py-6 whitespace-nowrap">
@@ -1951,9 +2009,18 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                                 </span>
                               </div>
                               <div className="text-[10px] font-black uppercase tracking-widest mt-1 flex items-center gap-1.5 flex-wrap">
-                                <span className="text-on-surface font-black">{flight.aircraftReg}</span>
-                                <span className="text-on-surface-dim opacity-40">•</span>
-                                <span className="text-on-surface-dim opacity-40 font-bold">{flight.aircraftType}</span>
+                                <div
+                                  onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingAircraftFlight(flight); } : undefined}
+                                  className={`inline-flex items-center gap-1 ${
+                                    isItpManagerOrAdmin ? 'cursor-pointer hover:text-primary active:scale-95 transition-all' : ''
+                                  }`}
+                                  title={isItpManagerOrAdmin ? "Click to edit aircraft reg and type" : undefined}
+                                >
+                                  <span className="text-on-surface font-black">{cleanDisplayReg(flight.aircraftReg) || '---'}</span>
+                                  <span className="text-on-surface-dim opacity-40">•</span>
+                                  <span className="text-on-surface-dim opacity-40 font-bold">{cleanDisplayType(flight.aircraftType)}</span>
+                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 text-primary opacity-60" />}
+                                </div>
                                 {flight.route && (
                                   <>
                                     <span className="text-on-surface-dim opacity-40">•</span>
@@ -2637,6 +2704,23 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
           onSave={handleSaveFrt}
         />
       )}
+
+      {editingAircraftFlight && (
+        <EditAircraftModal
+          flightNumber={editingAircraftFlight.flightNumber}
+          initialType={cleanDisplayType(editingAircraftFlight.aircraftType)}
+          initialReg={cleanDisplayReg(editingAircraftFlight.aircraftReg)}
+          onClose={() => setEditingAircraftFlight(null)}
+          onSave={handleSaveAircraft}
+        />
+      )}
+
+      <AddAdhocFlightModal
+        isOpen={isAddAdhocModalOpen}
+        onClose={() => setIsAddAdhocModalOpen(false)}
+        onAdd={handleAddAdhocFlight}
+        notify={notify}
+      />
 
       {isModalOpen && (
         <style>{`

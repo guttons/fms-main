@@ -576,8 +576,7 @@ export const supabaseService = {
   async _bqAuthHeaders(): Promise<Record<string, string>> {
     const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6eXJzdGVob2VzbWh3a2h0b3hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMzc3NzUsImV4cCI6MjA5NDkxMzc3NX0.itHESCbXktM7ZVUuB4BhI_UB7qH8IGVM1ZYnml8pxBk';
     const headers: Record<string, string> = { 
-      'Content-Type': 'application/json',
-      'apikey': anonKey
+      'Content-Type': 'application/json'
     };
 
     try {
@@ -629,8 +628,22 @@ export const supabaseService = {
       const res = await fetch(url, { headers, cache: 'no-store' });
       if (!res.ok) throw new Error(`BigQuery GET failed: ${res.status}`);
       const data = await res.json();
+      let logs = (data.logs || []) as FlightLog[];
+
+      // Filter out any locally blacklisted deleted log IDs
+      try {
+        const rawDel = typeof window !== 'undefined' ? localStorage.getItem('fms_deleted_log_ids') : null;
+        if (rawDel) {
+          const delIds: string[] = JSON.parse(rawDel);
+          if (Array.isArray(delIds) && delIds.length > 0) {
+            const delSet = new Set(delIds);
+            logs = logs.filter(l => !delSet.has(l.id) && (!l.deliveryNumber || !delSet.has(l.deliveryNumber)));
+          }
+        }
+      } catch {}
+
       return {
-        logs: (data.logs || []) as FlightLog[],
+        logs,
         totalCount: data.totalCount || 0,
         totalVolume: data.totalVolume || 0
       };
@@ -680,23 +693,54 @@ export const supabaseService = {
     }
   },
 
-  async updateFlightLog(id: string, updates: Partial<FlightLog>): Promise<void> {
+  async updateFlightLog(id: string, updates: Partial<FlightLog>, existingDeliveryNumber?: string): Promise<void> {
     console.log(`[BigQuery API] PATCH /operations-log/${id}`);
+
+    // Instantly update localStorage cache so changes persist and don't get reverted on refresh
+    try {
+      const raw = localStorage.getItem('fms_recent_flight_logs');
+      if (raw) {
+        const recent: FlightLog[] = JSON.parse(raw);
+        const idx = recent.findIndex(l => l.id === id);
+        if (idx > -1) {
+          recent[idx] = { ...recent[idx], ...updates };
+          localStorage.setItem('fms_recent_flight_logs', JSON.stringify(recent));
+        }
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('fms:flight-log-updated', { detail: { id, updates } }));
+      }
+    } catch (e) {}
+
     try {
       const headers = await this._bqAuthHeaders();
+      // Include _existingDeliveryNumber so the API can skip the duplicate-check
+      // SELECT query when the ticket number hasn't changed (prevents BQ DML rate limits).
+      const body: Record<string, any> = { ...updates };
+      if (existingDeliveryNumber !== undefined) {
+        body._existingDeliveryNumber = existingDeliveryNumber;
+      }
       const res = await fetch(`${this._bqBase()}/operations-log/${id}`, {
         method: 'PATCH',
         headers,
-        body: JSON.stringify(updates),
+        body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error(`BigQuery PATCH failed: ${res.status} ${await res.text()}`);
+      if (!res.ok) {
+        const errText = await res.text();
+        let errMsg = errText;
+        try {
+          const parsed = JSON.parse(errText);
+          if (parsed.error) errMsg = parsed.error;
+        } catch {}
+        throw new Error(errMsg);
+      }
     } catch (error) {
       console.error('[BigQuery] updateFlightLog error:', error);
       throw error;
     }
   },
 
-  async deleteFlightLog(id: string): Promise<void> {
+  async deleteFlightLog(id: string, fallbackFlightNumber?: string, fallbackDeliveryNumber?: string): Promise<void> {
     console.log(`[BigQuery API] DELETE /operations-log/${id}`);
     
     // Check if it's a local/mock bridging log first
@@ -705,6 +749,42 @@ export const supabaseService = {
       localBridgingLogs.splice(localIdx, 1);
       console.log(`[Local] Deleted local bridging log: ${id}`);
       return;
+    }
+
+    // Immediately remove from localStorage cache so it doesn't resurrect on refresh
+    try {
+      // 1. Blacklist in fms_deleted_log_ids
+      const rawDel = localStorage.getItem('fms_deleted_log_ids');
+      const delIds: string[] = rawDel ? JSON.parse(rawDel) : [];
+      if (id && !delIds.includes(id)) delIds.push(id);
+      if (fallbackDeliveryNumber && !delIds.includes(fallbackDeliveryNumber)) delIds.push(fallbackDeliveryNumber);
+      localStorage.setItem('fms_deleted_log_ids', JSON.stringify(delIds.slice(-500)));
+
+      // 2. Remove from recent cache
+      const raw = localStorage.getItem('fms_recent_flight_logs');
+      if (raw) {
+        const recent: FlightLog[] = JSON.parse(raw);
+        const cleanFn = fallbackFlightNumber ? fallbackFlightNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase() : '';
+        const filtered = recent.filter(l => {
+          if (l.id === id) return false;
+          if (fallbackDeliveryNumber && l.deliveryNumber && l.deliveryNumber === fallbackDeliveryNumber) return false;
+          if (cleanFn) {
+            const lNo = (l.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+            if (lNo === cleanFn || lNo.replace(/([A-Z]+)0+([0-9]+)/, '$1$2') === cleanFn.replace(/([A-Z]+)0+([0-9]+)/, '$1$2')) {
+              return false;
+            }
+          }
+          return true;
+        });
+        localStorage.setItem('fms_recent_flight_logs', JSON.stringify(filtered));
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('fms:flight-log-deleted', { 
+          detail: { id, flightNumber: fallbackFlightNumber, deliveryNumber: fallbackDeliveryNumber } 
+        }));
+      }
+    } catch (e) {
+      console.warn('[Storage] Failed to remove deleted flight log from cache:', e);
     }
 
     try {

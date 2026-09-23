@@ -301,7 +301,7 @@ Air India,AI263,14:10,15:25,DEL,MLE,A320,0204060,2026-01-01,2026-10-31`;
     if (u.includes('B788') || u.includes('B789') || u.includes('B78X') || u.includes('B787') || u.includes('788') || u.includes('789') || u.includes('787')) return 'B787';
 
     // ATR variations (AT76, AT7, ATR, ATR72, ATR-72)
-    if (u.includes('AT7') || u.includes('ATR')) return 'ATR72';
+    if (u.includes('AT7') || u.includes('ATR')) return 'ATR';
 
     // Dash 8 variations (DH8, DH8D, DASH8, DASH)
     if (u.includes('DH8') || u.includes('DASH')) return 'Dash 8';
@@ -326,7 +326,7 @@ Air India,AI263,14:10,15:25,DEL,MLE,A320,0204060,2026-01-01,2026-10-31`;
     if (code === '6E') return 'A320'; // IndiGo A320neo / A321neo
     if (code === 'G9' || code === 'FZ' || code === 'BS') return 'B737'; // Air Arabia / Flydubai / US-Bangla B737
     if (code === '8D' || code === 'C6') return 'A320'; // Fits Air / Centrum Air A320
-    if (code === 'Q2' || code === 'NR' || code === 'VP') return 'ATR72'; // Domestic Maldivian / Manta / Flyme
+    if (code === 'Q2' || code === 'NR' || code === 'VP') return 'ATR'; // Domestic Maldivian / Manta / Flyme
     if (code === 'BA' || code === 'EK') return 'B777'; // British Airways / Emirates B777
     if (code === 'SQ' || code === 'EY') return 'B787'; // Singapore Airlines / Etihad B787
     if (code === 'SU') return 'B777'; // Aeroflot B777-300ER
@@ -597,7 +597,7 @@ Air India,AI263,14:10,15:25,DEL,MLE,A320,0204060,2026-01-01,2026-10-31`;
         const daysRaw = getCol('days');
         const daysOfWeek = this.parseDaysOfOps(daysRaw);
 
-        const acTypeRaw = getCol('aircraft') || (isDomSheet ? 'ATR72' : 'B777');
+        const acTypeRaw = getCol('aircraft') || (isDomSheet ? 'ATR' : 'B777');
         const acType = this.normalizeAircraftType(acTypeRaw);
         const rawRouteStr = getCol('route') || (isDomSheet ? 'MLE-DOM' : 'INT-MLE');
 

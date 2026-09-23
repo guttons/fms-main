@@ -4,6 +4,7 @@ import { Sailboat, MapPin, Droplet, Save, CheckCircle, AlertTriangle, Calendar, 
 import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { UserRole } from '../types';
+import { checkDuplicateTicketAcrossJetA1 } from '../services/ticketValidation';
 
 interface SeaplaneProps {
     user?: any;
@@ -36,16 +37,16 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
         e.preventDefault();
         setDuplicateError(null);
 
-        // ── Duplicate delivery number check ──
-        const fullDeliveryNumber = `MLE-${formData.deliveryNumber}`;
-        const isDuplicate = flightLogs.some(
-            (log) => log.deliveryNumber === fullDeliveryNumber
-        );
-        if (isDuplicate) {
-            setDuplicateError(
-                `Delivery ticket ${fullDeliveryNumber} already exists in the operations log. Each ticket number must be unique.`
-            );
-            return;
+        // ── Duplicate delivery number check across all Jet A-1 operations ──
+        const fullDeliveryNumber = formData.deliveryNumber ? (formData.deliveryNumber.startsWith('MLE-') ? formData.deliveryNumber : `MLE-${formData.deliveryNumber}`) : '';
+        if (fullDeliveryNumber) {
+            const ticketVal = await checkDuplicateTicketAcrossJetA1(fullDeliveryNumber, undefined, flightLogs);
+            if (ticketVal.isDuplicate) {
+                setDuplicateError(
+                    ticketVal.message || `Delivery ticket ${fullDeliveryNumber} already exists in the operations log. Each ticket number must be unique.`
+                );
+                return;
+            }
         }
 
         setLoading(true);

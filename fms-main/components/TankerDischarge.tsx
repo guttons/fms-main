@@ -673,13 +673,43 @@ export const TankerDischarge: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [logs, setLogs] = useState<DischargeLog[]>([]);
+  const [logs, setLogs] = useState<DischargeLog[]>(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('fms_marine_discharge_logs') : null;
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [
+      {
+        id: 'sh-jet-18',
+        vessel: 'MT ALIMAS',
+        bol: 'NS/SHIP-JET A-1/2026/18',
+        product: FuelType.JET_A1,
+        quantity: 17001.051,
+        date: '2026-05-26',
+        status: 'COMPLETED',
+        tankName: 'TK-101 / TK-103',
+        isDetailedReport: true,
+        reportType: 'JETA1',
+        summary: {
+          totalObservedVolume: 21915.641,
+          totalVolume15: 21653.935,
+          metricTonsAir: 16994.066,
+          usBarrels: 136267,
+          longTons: 16725.661
+        }
+      }
+    ];
+  });
   const [receiptLog, setReceiptLog] = useState<ReceiptData | null>(null);
 
-  // Seed default logs on mount
+  // Sync logs to localStorage
   useEffect(() => {
-    setLogs([]);
-  }, []);
+    try {
+      if (logs.length > 0) {
+        localStorage.setItem('fms_marine_discharge_logs', JSON.stringify(logs));
+      }
+    } catch {}
+  }, [logs]);
 
   // Filter storage tanks dynamically by tab
   const getAvailableTanks = () => {

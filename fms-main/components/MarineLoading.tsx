@@ -4,6 +4,7 @@ import { useOperationalData } from '../context/OperationalDataContext';
 import { EquipmentType, UserRole, FuelType, EquipmentStatus, User } from '../types';
 import { useNotification } from '../context/NotificationContext';
 import { supabaseService } from '../services/supabaseService';
+import { checkDuplicateTicketAcrossJetA1 } from '../services/ticketValidation';
 
 interface MarineLoadingLog {
     id: string;
@@ -192,21 +193,16 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
     e.preventDefault();
     setDuplicateError(null);
 
-    // ── Duplicate delivery number check ──
-    const fullDeliveryNumber = `MLE-${formData.deliveryNumber}`;
-    const isDuplicateGlobal = (flightLogs || []).some(
-        (log) => log && log.deliveryNumber === fullDeliveryNumber
-    );
-    const isDuplicateLocal = (logs || []).some(
-        (log) => log && log.deliveryNumber === fullDeliveryNumber
-    );
-
-    if (isDuplicateGlobal || isDuplicateLocal) {
-        setDuplicateError(
-            `Delivery ticket ${fullDeliveryNumber} already exists in the operations log. Each ticket number must be unique.`
-        );
-        notify(`Delivery ticket number ${fullDeliveryNumber} is already used. Please enter a unique ticket number.`, 'error');
+    // ── Duplicate delivery number check across all Jet A-1 operations ──
+    const fullDeliveryNumber = formData.deliveryNumber ? (formData.deliveryNumber.startsWith('MLE-') ? formData.deliveryNumber : `MLE-${formData.deliveryNumber}`) : '';
+    if (fullDeliveryNumber) {
+      const ticketVal = await checkDuplicateTicketAcrossJetA1(fullDeliveryNumber, undefined, flightLogs);
+      if (ticketVal.isDuplicate) {
+        const errorMsg = ticketVal.message || `Delivery ticket ${fullDeliveryNumber} already exists in the operations log. Each ticket number must be unique.`;
+        setDuplicateError(errorMsg);
+        notify(errorMsg, 'error');
         return;
+      }
     }
 
     const parsedVolume = parseInt(formData.volume.toString().replace(/,/g, '')) || 0;

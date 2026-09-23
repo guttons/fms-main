@@ -14,6 +14,8 @@ import { useNotification } from '../context/NotificationContext';
 import { equipmentBadgeClass, equipmentDotClass, equipmentBadgeSoftClass } from '../utils/equipmentColors';
 import { TankStatusGrid } from './TankStatusGrid';
 import { StockIcon } from './StockIcon';
+import { serverTimeService } from '../services/serverTimeService';
+import { cleanAircraftTypeName } from '../services/aircraftLookupService';
 
 const fmtVol = (n: number) => {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}ML`;
@@ -114,6 +116,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
   const [viewMode, setViewMode] = useState<'ITP' | 'DEPOT'>(isDepotRole ? 'DEPOT' : 'ITP');
   const [pendingRequests, setPendingRequests] = useState<Set<string>>(new Set());
   const [isAssetsCollapsed, setIsAssetsCollapsed] = useState(false);
+  const [currentServerTime, setCurrentServerTime] = useState<Date>(() => serverTimeService.getServerTime());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentServerTime(serverTimeService.getServerTime());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const userAlerts = (alerts || []).filter(a => {
     if (!user) return false;
@@ -285,13 +295,37 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
     return !isDomesticFlight(f) && !isAdhocFlight(f) && isDep && isFlightInShift(f.std) && (!f.date || f.date.split('T')[0] === selectedBriefingDate);
   });
 
+  const [logRevision, setLogRevision] = useState(0);
+
+  useEffect(() => {
+    const handleLogChanged = () => setLogRevision(prev => prev + 1);
+    window.addEventListener('fms:flight-log-deleted', handleLogChanged);
+    window.addEventListener('fms:flight-log-created', handleLogChanged);
+    window.addEventListener('fms:flight-log-updated', handleLogChanged);
+    return () => {
+      window.removeEventListener('fms:flight-log-deleted', handleLogChanged);
+      window.removeEventListener('fms:flight-log-created', handleLogChanged);
+      window.removeEventListener('fms:flight-log-updated', handleLogChanged);
+    };
+  }, []);
+
   const getStatusForFlightDate = (cleanNo: string, flightDate: string, defaultStatus: string = 'PENDING') => {
+    const cleanNoUpper = (cleanNo || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    const cleanNoCompact = cleanNoUpper.replace(/([A-Z]+)0+([0-9]+)/, '$1$2');
+
+    const matchesNo = (otherFn?: string) => {
+      if (!cleanNoUpper || !otherFn) return false;
+      const norm = otherFn.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      return norm === cleanNoUpper || norm.replace(/([A-Z]+)0+([0-9]+)/, '$1$2') === cleanNoCompact;
+    };
+
     const matchingLog = (flightLogs || []).find(log => {
       if (!log || !log.flightNumber) return false;
-      const logNo = (log.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-      if (logNo !== cleanNo) return false;
-      const logDate = log.operationalDate || (log.timestampFinalEnd ? log.timestampFinalEnd.split('T')[0] : (log.timestampStart ? log.timestampStart.split('T')[0] : ''));
-      return logDate ? logDate === flightDate : true;
+      if (!matchesNo(log.flightNumber)) return false;
+      if (log.status !== 'COMPLETED' && log.status !== 'IN_PROGRESS') return false;
+      const logDate = log.operationalDate ? log.operationalDate.split('T')[0] : (log.timestampFinalEnd ? log.timestampFinalEnd.split('T')[0] : (log.timestampStart ? log.timestampStart.split('T')[0] : ''));
+      if (logDate && flightDate && logDate !== flightDate) return false;
+      return true;
     });
 
     if (matchingLog && matchingLog.status === 'COMPLETED') {
@@ -303,29 +337,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
     const liveJob = (flightJobs || []).find(j => {
       if (!j || !j.flightNumber) return false;
-      const jobNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-      if (jobNo !== cleanNo) return false;
+      if (!matchesNo(j.flightNumber)) return false;
       const jDate = j.date ? j.date.split('T')[0] : '';
       return !jDate || !flightDate || jDate === flightDate;
     });
 
-    if (liveJob && (liveJob.status === 'IN_PROGRESS' || liveJob.status === 'COMPLETED')) {
-      return liveJob.status;
+    if (liveJob && liveJob.status === 'IN_PROGRESS') {
+      return 'IN_PROGRESS';
     }
 
     const dbJob = (rawFlightJobs || []).find(j => {
       if (!j || !j.flightNumber) return false;
-      const jobNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-      if (jobNo !== cleanNo) return false;
+      if (!matchesNo(j.flightNumber)) return false;
       const jDate = j.date ? j.date.split('T')[0] : '';
       return jDate ? jDate === flightDate : true;
     });
 
-    if (dbJob && (!dbJob.date || dbJob.date.split('T')[0] === flightDate) && dbJob.status) {
-      return dbJob.status;
+    if (dbJob && dbJob.status === 'IN_PROGRESS') {
+      return 'IN_PROGRESS';
     }
 
-    return liveJob?.status || defaultStatus;
+    // A job cannot be COMPLETED if there is no completed log in flightLogs!
+    if (!matchingLog || matchingLog.status !== 'COMPLETED') {
+      return 'PENDING';
+    }
+
+    return liveJob?.status || dbJob?.status || defaultStatus;
   };
 
   const intlJobsMap = new Map<string, any>();
@@ -360,6 +397,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
       id: liveJob?.id || dbJob?.id || f.id || existing?.id,
       status: computedStatus,
       fidsStatus: f.status,
+      std: liveJob?.std || dbJob?.std || existing?.std || f.std || ((f as any).type === 'departure' ? (f as any).scheduledTime : '') || (f as any).scheduledTime || '',
+      tobt: liveJob?.tobt || dbJob?.tobt || existing?.tobt || f.tobt || '',
+      frtAirline: liveJob?.frtAirline || dbJob?.frtAirline || existing?.frtAirline || f.frtAirline || '',
+      frtAocc: liveJob?.frtAocc || dbJob?.frtAocc || existing?.frtAocc || f.frtAocc || '',
+      frtFor: liveJob?.frtFor || dbJob?.frtFor || existing?.frtFor || f.frtFor || '',
       assignedTo: (liveJob && liveJob.assignedTo !== undefined && liveJob.assignedTo !== null && liveJob.assignedTo !== '')
         ? liveJob.assignedTo
         : (dbJob && dbJob.assignedTo !== undefined && dbJob.assignedTo !== null && dbJob.assignedTo !== '')
@@ -406,6 +448,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
         id: liveJob?.id || dbJob?.id || ff.id || existing?.id,
         status: computedStatus,
         fidsStatus: existing?.fidsStatus || ff.status,
+        std: liveJob?.std || dbJob?.std || existing?.std || ff.std || (ff.type === 'departure' ? ff.scheduledTime : '') || ff.scheduledTime || '',
+        tobt: liveJob?.tobt || dbJob?.tobt || existing?.tobt || ff.tobt || '',
+        frtAirline: liveJob?.frtAirline || dbJob?.frtAirline || existing?.frtAirline || ff.frtAirline || '',
+        frtAocc: liveJob?.frtAocc || dbJob?.frtAocc || existing?.frtAocc || ff.frtAocc || '',
+        frtFor: liveJob?.frtFor || dbJob?.frtFor || existing?.frtFor || ff.frtFor || '',
         assignedTo: (liveJob && liveJob.assignedTo !== undefined && liveJob.assignedTo !== null && liveJob.assignedTo !== '')
           ? liveJob.assignedTo
           : (dbJob && dbJob.assignedTo !== undefined && dbJob.assignedTo !== null && dbJob.assignedTo !== '')
@@ -448,10 +495,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
     const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
     const flightDate = f.date ? f.date.split('T')[0] : selectedBriefingDate;
     const computedStatus = getStatusForFlightDate(cleanNo, flightDate, f.status || 'PENDING');
+
+    const liveJob = (flightJobs || []).find(j => {
+      if (!j || !j.flightNumber) return false;
+      const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      if (jNo !== cleanNo) return false;
+      const jDate = j.date ? j.date.split('T')[0] : '';
+      return !jDate || !flightDate || jDate === flightDate;
+    });
+
+    const dbJob = (rawFlightJobs || []).find(j => {
+      if (!j || !j.flightNumber) return false;
+      const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      if (jNo !== cleanNo) return false;
+      const jDate = j.date ? j.date.split('T')[0] : '';
+      return !jDate || !flightDate || jDate === flightDate;
+    });
+
     domJobsMap.set(cleanNo, {
       ...f,
       status: computedStatus,
-      fidsStatus: f.status
+      fidsStatus: f.status,
+      std: liveJob?.std || dbJob?.std || f.std || (f.type === 'departure' ? f.scheduledTime : '') || f.scheduledTime || '',
     });
   });
 
@@ -461,11 +526,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
       const existing = domJobsMap.get(cleanNo);
       const flightDate = ff.date ? ff.date.split('T')[0] : selectedBriefingDate;
       const computedStatus = getStatusForFlightDate(cleanNo, flightDate, existing?.status || ff.status || 'PENDING');
+
+      const liveJob = (flightJobs || []).find(j => {
+        if (!j || !j.flightNumber) return false;
+        const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        if (jNo !== cleanNo) return false;
+        const jDate = j.date ? j.date.split('T')[0] : '';
+        return !jDate || !flightDate || jDate === flightDate;
+      });
+
+      const dbJob = (rawFlightJobs || []).find(j => {
+        if (!j || !j.flightNumber) return false;
+        const jNo = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        if (jNo !== cleanNo) return false;
+        const jDate = j.date ? j.date.split('T')[0] : '';
+        return !jDate || !flightDate || jDate === flightDate;
+      });
+
       domJobsMap.set(cleanNo, {
         ...(existing || {}),
         ...ff,
         status: computedStatus,
-        fidsStatus: existing?.fidsStatus || ff.status
+        fidsStatus: existing?.fidsStatus || ff.status,
+        std: liveJob?.std || dbJob?.std || existing?.std || ff.std || (ff.type === 'departure' ? ff.scheduledTime : '') || ff.scheduledTime || '',
       });
     });
   }
@@ -525,6 +608,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
       return !jDate || !flightDate || jDate === flightDate;
     });
     const merged = matchJob ? { ...f, ...matchJob } : f;
+    const computedStatus = getStatusForFlightDate(cleanNo, flightDate, merged.status || 'PENDING');
     return {
       ...merged,
       id: merged.id,
@@ -537,8 +621,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
       std: merged.std,
       assignedTo: merged.assignedTo || '',
       assignedOfficer: merged.assignedOfficer || '',
-      status: merged.status as any,
-      fidsStatus: merged.status,
+      status: computedStatus as any,
+      fidsStatus: computedStatus,
       route: merged.route,
       isAdhoc: true,
       vehicleId: merged.vehicleId,
@@ -567,16 +651,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
       if (s.id.toLowerCase() === (user.id || '').toLowerCase() || s.name.toLowerCase() === (user.name || '').toLowerCase() || (s.employeeId && (user as any).employeeId && s.employeeId.toLowerCase() === (user as any).employeeId.toLowerCase())) {
         userTokens.add(s.id.toLowerCase());
         userTokens.add(s.name.toLowerCase());
-        if (s.employeeId) userTokens.add(s.employeeId.toLowerCase());
+        if ((s as any).employeeId) userTokens.add((s as any).employeeId.toLowerCase());
       }
     });
     const assignedToVal = (job.assignedTo || '').toLowerCase();
     const assignedOfficerVal = (job.assignedOfficer || '').toLowerCase();
     if (!assignedToVal && !assignedOfficerVal) return false;
     if (userTokens.has(assignedToVal) || userTokens.has(assignedOfficerVal)) return true;
-    const targetAssignee = staffList.find(s => s.id.toLowerCase() === assignedToVal || s.name.toLowerCase() === assignedToVal || (s.employeeId && s.employeeId.toLowerCase() === assignedToVal));
+    const targetAssignee = staffList.find(s => s.id.toLowerCase() === assignedToVal || s.name.toLowerCase() === assignedToVal || ((s as any).employeeId && (s as any).employeeId.toLowerCase() === assignedToVal));
     if (targetAssignee && (userTokens.has(targetAssignee.id.toLowerCase()) || userTokens.has(targetAssignee.name.toLowerCase()))) return true;
-    const targetOfficer = staffList.find(s => s.id.toLowerCase() === assignedOfficerVal || s.name.toLowerCase() === assignedOfficerVal || (s.employeeId && s.employeeId.toLowerCase() === assignedOfficerVal));
+    const targetOfficer = staffList.find(s => s.id.toLowerCase() === assignedOfficerVal || s.name.toLowerCase() === assignedOfficerVal || ((s as any).employeeId && (s as any).employeeId.toLowerCase() === assignedOfficerVal));
     if (targetOfficer && (userTokens.has(targetOfficer.id.toLowerCase()) || userTokens.has(targetOfficer.name.toLowerCase()))) return true;
     return false;
   };
@@ -606,12 +690,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                    <h2 className="title-lg text-on-surface">Operations Hub</h2>
                    <p className="text-on-surface-dim font-bold italic tracking-tight">Welcome back, <span className="text-primary">{user.name}</span></p>
                </div>
-               <div className="bg-primary/10 text-primary px-4 py-2 rounded-xl font-black border border-primary/20 flex items-center text-[10px] uppercase tracking-widest gap-2">
+               <div className="bg-primary/10 text-primary px-4 py-2 rounded-xl font-black border border-primary/20 flex items-center text-[10px] uppercase tracking-widest gap-2" title="Synchronized with MACL FMS Master Server Time">
                    <Calendar className="w-3.5 h-3.5" />
-                   <span>{new Date().toLocaleDateString([], { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                   <span>{currentServerTime.toLocaleDateString([], { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</span>
                    <span className="opacity-40">|</span>
                    <Clock className="w-3.5 h-3.5" />
-                   <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+                   <span>{currentServerTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>
                </div>
            </div>
         </div>
@@ -675,8 +759,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
         {/* Available Equipment Section - categorized RF / HD */}
         {equipment && equipment.length > 0 && (() => {
           const available = equipment.filter(eq => eq.status === EqStatus.AVAILABLE && (eq.id.startsWith('RF') || eq.id.startsWith('HD')));
-          const rfUnits = available.filter(eq => eq.id.startsWith('RF'));
-          const hdUnits = available.filter(eq => eq.id.startsWith('HD'));
+          const rfUnits = available.filter(eq => eq.id.startsWith('RF')).sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
+          const hdUnits = available.filter(eq => eq.id.startsWith('HD')).sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
 
           return (
             <div className="space-y-5">
@@ -695,70 +779,88 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                 <span className="text-[10px] font-black text-success uppercase tracking-widest">{available.length} Standby</span>
               </div>
 
-              {/* Refuellers */}
-              {!isAssetsCollapsed && rfUnits.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.25em] opacity-50 px-1 flex items-center">
-                    <span className="w-4 h-[1px] bg-primary/40 mr-2"></span>
-                    Refuellers (RF) — {rfUnits.length} units
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {rfUnits.map((eq) => {
-                      const isEmpty = (eq.currentVolume || 0) <= 0;
-                      return (
-                        <div 
-                          key={eq.id} 
-                          onClick={isEmpty ? undefined : () => onSelectEquipment?.(eq.id)} 
-                          className={`border p-4 lg:p-5 rounded-2xl flex items-center justify-between group transition-all shadow-premium ${
-                            isEmpty 
-                              ? 'opacity-40 cursor-not-allowed border-outline bg-surface-dim/40' 
-                              : 'bg-surface-dim border-white/10 hover:border-primary/50 cursor-pointer hover:shadow-glow'
-                          }`}
-                        >
-                          <div className="flex items-center space-x-3 min-w-0 flex-1">
-                            <div className={`p-2 rounded-lg flex-shrink-0 transition-transform ${isEmpty ? 'bg-outline/20 text-on-surface-dim opacity-50' : 'bg-primary/10 group-hover:scale-110 text-primary'}`}>
-                              <Truck className="w-4 h-4 text-current" />
+              {!isAssetsCollapsed && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Refuellers */}
+                  {rfUnits.length > 0 && (
+                    <div className="space-y-3">
+                      <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.25em] opacity-50 px-1 flex items-center">
+                        <span className="w-4 h-[1px] bg-primary/40 mr-2"></span>
+                        Refuellers (RF) — {rfUnits.length} units
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {rfUnits.map((eq) => {
+                          const isEmpty = (eq.currentVolume || 0) <= 0;
+                          const badgeColorClass = getFuelBadgeColorClass(eq.currentVolume, eq.maxCapacity);
+                          return (
+                            <div 
+                              key={eq.id} 
+                              onClick={isEmpty ? undefined : () => onSelectEquipment?.(eq.id)} 
+                              className={`border p-3 sm:p-4 rounded-2xl flex items-center justify-between group transition-all shadow-premium ${
+                                isEmpty 
+                                  ? 'opacity-40 cursor-not-allowed border-outline bg-surface-dim/40' 
+                                  : 'bg-surface-dim/40 border-outline hover:border-primary/50 cursor-pointer hover:shadow-glow'
+                              }`}
+                            >
+                              <div className="flex items-center space-x-2.5 flex-1 min-w-0">
+                                <div className={`flex flex-col items-center rounded-lg pt-1.5 pb-1 px-1.5 transition-transform group-hover:scale-110 min-w-[32px] shrink-0 ${
+                                  isEmpty ? 'bg-outline/20 text-on-surface-dim opacity-50' : badgeColorClass
+                                }`}>
+                                  <Truck className="w-3.5 h-3.5 mb-0.5 text-current" />
+                                  <span className="text-[7.5px] font-black font-mono leading-none text-current">
+                                    {Math.round(eq.maxCapacity / 1000)}K
+                                  </span>
+                                </div>
+                                {/* Text Info */}
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[11px] font-[900] text-on-surface tracking-tighter truncate">{eq.name}</p>
+                                  <div className="flex flex-col mt-0.5">
+                                    <span className={`text-[8px] font-black uppercase tracking-widest ${isEmpty ? 'text-on-surface-dim opacity-55' : 'text-success opacity-80'}`}>
+                                      {isEmpty ? 'Empty' : 'Available'}
+                                    </span>
+                                    {eq.currentVolume !== undefined && (
+                                      <span className={`text-[13px] font-black font-mono mt-0.5 ${isEmpty ? 'text-error' : getFuelColorClass(eq.currentVolume, eq.maxCapacity)}`}>
+                                        {eq.currentVolume.toLocaleString()} L
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Hydrant Dispensers */}
+                  {hdUnits.length > 0 && (
+                    <div className="space-y-3">
+                      <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.25em] opacity-50 px-1 flex items-center">
+                        <span className="w-4 h-[1px] bg-warning/40 mr-2"></span>
+                        Hydrant Dispensers (HD) — {hdUnits.length} units
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {hdUnits.map((eq) => (
+                          <div 
+                            key={eq.id} 
+                            onClick={() => onSelectEquipment?.(eq.id)} 
+                            className="bg-surface-dim/40 border border-outline p-3 sm:p-4 rounded-2xl flex items-center space-x-3 group hover:border-warning/50 transition-all cursor-pointer shadow-premium hover:shadow-glow-warning"
+                          >
+                            <div className="p-2 bg-warning/10 rounded-lg group-hover:scale-110 transition-transform shrink-0">
+                              <Droplet className="w-4 h-4 text-warning" />
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className="text-[11px] font-[900] text-on-surface tracking-tighter truncate">{eq.name}</p>
-                              <p className={`text-[8px] font-black uppercase tracking-widest ${isEmpty ? 'text-on-surface-dim opacity-55' : 'text-success opacity-60'}`}>
-                                {isEmpty ? 'Empty' : 'Available'}
-                              </p>
+                              <span className="text-[8px] font-black text-success opacity-80 uppercase tracking-widest mt-0.5 block">
+                                Available
+                              </span>
                             </div>
                           </div>
-                          <div className="text-right flex-shrink-0 ml-3">
-                            <span className={`text-[11px] font-black font-mono ${isEmpty ? 'text-error' : getFuelColorClass(eq.currentVolume, eq.maxCapacity)}`}>
-                              {(eq.currentVolume || 0).toLocaleString()} L
-                            </span>
-                            <p className="text-[7px] font-black text-on-surface-dim uppercase tracking-wider opacity-40">Volume</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Hydrant Dispensers */}
-              {!isAssetsCollapsed && hdUnits.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-[0.25em] opacity-50 px-1 flex items-center">
-                    <span className="w-4 h-[1px] bg-warning/40 mr-2"></span>
-                    Hydrant Dispensers (HD) — {hdUnits.length} units
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {hdUnits.map((eq) => (
-                      <div key={eq.id} onClick={() => onSelectEquipment?.(eq.id)} className="bg-surface-dim border border-white/10 p-4 lg:p-5 rounded-2xl flex items-center space-x-3 group hover:border-warning/50 transition-all cursor-pointer shadow-premium hover:shadow-glow-warning">
-                        <div className="p-2 bg-warning/10 rounded-lg group-hover:scale-110 transition-transform">
-                          <Droplet className="w-4 h-4 text-warning" />
-                        </div>
-                        <div>
-                          <p className="text-[11px] font-[900] text-on-surface tracking-tighter">{eq.name}</p>
-                          <p className="text-[8px] font-black text-success opacity-60 uppercase tracking-widest">Available</p>
-                        </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -794,12 +896,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                                 <span>{job.stand || 'TBA'}</span>
                                             </div>
                                             <span className="text-2xl sm:text-3xl font-[900] text-on-surface tracking-tighter leading-none">{job.flightNumber}</span>
-                                            <span className="bg-surface-dim text-on-surface-dim px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black border border-outline uppercase tracking-wider">
-                                                {job.aircraftReg}
-                                            </span>
-                                            <span className="bg-surface-dim text-on-surface-dim px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black border border-outline uppercase tracking-wider">
-                                                {job.aircraftType}
-                                            </span>
+                                            {job.aircraftReg && job.aircraftReg !== '8Q-TBA' && !job.aircraftReg.startsWith('8Q-DOM') && (
+                                                <span className="bg-surface-dim text-on-surface-dim px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black border border-outline uppercase tracking-wider">
+                                                    {job.aircraftReg}
+                                                </span>
+                                            )}
+                                            {job.aircraftType && (
+                                                <span className="bg-surface-dim text-on-surface-dim px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black border border-outline uppercase tracking-wider">
+                                                    {cleanAircraftTypeName(job.aircraftType)}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                     
@@ -1069,9 +1175,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                     <div className="flex justify-between items-start mb-2">
                                         <div className="flex items-center space-x-3">
                                             <span className="text-2xl font-black text-on-surface">{flight.flightNumber}</span>
-                                            <span className="bg-surface-dim text-on-surface-dim px-2.5 py-1 rounded-lg text-[10px] font-black border border-outline uppercase tracking-wider">
-                                                {flight.aircraftReg}
-                                            </span>
+                                            {flight.aircraftReg && flight.aircraftReg !== '8Q-TBA' && !flight.aircraftReg.startsWith('8Q-DOM') && (
+                                                <span className="bg-surface-dim text-on-surface-dim px-2.5 py-1 rounded-lg text-[10px] font-black border border-outline uppercase tracking-wider">
+                                                    {flight.aircraftReg}
+                                                </span>
+                                            )}
                                             {flight.vehicleId && flight.status !== 'PENDING' && (
                                                 <div className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest ${equipmentBadgeClass(flight.vehicleId)}`}>
                                                     <Truck className="w-3 h-3" />
@@ -1116,7 +1224,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                                const saved = localStorage.getItem(`fms_last_selected_vehicle_${user.id}`);
                                                const defaultSelected = (saved && rfEquip.some(e => e.id === saved)) ? saved : (rfEquip[0]?.id || '');
                                                setEquipPickerSelected(defaultSelected);
-                                               setEquipPickerJob({ ...flight, equipmentUsage: flight.equipmentUsage || 'REFUELLER', isDomestic: true });
+                                               setEquipPickerJob({ ...flight, equipmentUsage: (flight as any).equipmentUsage || 'REFUELLER', isDomestic: true });
                                              }
                                            }}
                                            className="btn-command w-full text-[10px] py-3 lg:py-4 flex items-center justify-center group"
@@ -1178,7 +1286,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-sm font-black text-on-surface tracking-tight">{job.flightNumber}</span>
-              <span className="bg-surface-container-low px-1.5 py-0.5 rounded text-[8px] font-black text-on-surface-dim uppercase tracking-wider">{job.aircraftReg}</span>
+              {job.aircraftReg && job.aircraftReg !== '8Q-TBA' && !job.aircraftReg.startsWith('8Q-DOM') && (
+                <span className="bg-surface-container-low px-1.5 py-0.5 rounded text-[8px] font-black text-on-surface-dim uppercase tracking-wider">{job.aircraftReg}</span>
+              )}
             </div>
             <div className="flex items-center gap-2 mt-1 text-[9px] font-bold text-on-surface-dim">
               <span className="flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5 text-primary opacity-60 shrink-0" /> {job.stand}</span>
@@ -1470,7 +1580,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                                 const success = await createAlert({
                                   severity: 'medium',
                                   message: `Replenishment requested for unit ${eq.id}`,
-                                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                                  timestamp: serverTimeService.getServerTimeString(),
                                   acknowledged: false,
                                   targetRole: UserRole.DEPOT_MANAGER
                                 });
@@ -1914,7 +2024,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
               <div>
                 <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] opacity-70 mb-1">Select Equipment</p>
                 <h3 className="text-lg font-black text-on-surface tracking-tight">{equipPickerJob.flightNumber}</h3>
-                <p className="text-[11px] text-on-surface-dim font-bold mt-0.5">{equipPickerJob.aircraftReg} • {equipPickerJob.stand}</p>
+                <p className="text-[11px] text-on-surface-dim font-bold mt-0.5">{equipPickerJob.aircraftReg && equipPickerJob.aircraftReg !== '8Q-TBA' && !equipPickerJob.aircraftReg.startsWith('8Q-DOM') ? `${equipPickerJob.aircraftReg} • ` : ''}{equipPickerJob.stand}</p>
               </div>
               <button
                 onClick={() => setEquipPickerJob(null)}

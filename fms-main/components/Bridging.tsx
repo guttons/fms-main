@@ -4,6 +4,7 @@ import { Droplet, Truck, CheckCircle, AlertTriangle, Save, Clock, ArrowRight, Hi
 import { supabaseService } from '../services/supabaseService';
 import { useNotification } from '../context/NotificationContext';
 import { useOperationalData } from '../context/OperationalDataContext';
+import { serverTimeService } from '../services/serverTimeService';
 
 interface BridgingProps {
   user?: User | null;
@@ -103,7 +104,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
       await createAlert({
         severity: 'low',
         message: `Replenishment Initiated: Refueller ${vehicleId} is being loaded at the depot`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+        timestamp: serverTimeService.getServerTimeString(),
         acknowledged: false,
         targetRole: UserRole.ITP_MANAGER
       });
@@ -261,6 +262,12 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
         };
 
         await supabaseService.createBridgingLog(logToSave);
+        try {
+          const raw = localStorage.getItem('fms_bridging_logs');
+          const list = raw ? JSON.parse(raw) : [];
+          list.unshift({ ...logToSave, id: `bl-${Date.now()}` });
+          localStorage.setItem('fms_bridging_logs', JSON.stringify(list.slice(0, 500)));
+        } catch {}
         
         // Acknowledge the alert
         await handleBridgingComplete(formData.vehicleId);
@@ -269,7 +276,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
         await createAlert({
           severity: 'low',
           message: `Replenishment Complete: Refueller ${formData.vehicleId} loaded with ${Number(formData.volume).toLocaleString()}L by ${formData.operatorName || user?.name || 'Operator'}`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+          timestamp: serverTimeService.getServerTimeString(),
           acknowledged: false,
           targetRole: UserRole.ITP_MANAGER
         });

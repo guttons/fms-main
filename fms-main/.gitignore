@@ -26,6 +26,8 @@ dist-ssr
 # Google Cloud Service Account Credentials
 *key.json
 *credentials.json
+**/*key*.json
+**/macl-fms-*.json
 macl-fms-496808-5809d185855e.json
 
 # Large migrated data files

@@ -1,20 +1,23 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Lock, User as UserIcon, ShieldCheck, AlertCircle, Search, Mail, IdCard, ArrowRight, CheckCircle, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { supabase } from '../supabase';
 import { User, UserRole, StaffMember } from '../types';
 import { supabaseService } from '../services/supabaseService';
 import { staffAuthService } from '../services/staffAuthService';
 import { Logo } from './Logo';
+import { UnauthorizedPage } from './UnauthorizedPage';
 import { haptic } from '../utils/haptics';
 
 interface LoginProps {
   onLogin: (user: User) => void;
 }
 
-type LoginStep = 'identifier' | 'password-setup' | 'forgot-password';
+type LoginStep = 'identifier' | 'password-setup' | 'forgot-password' | 'unauthorized';
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [step, setStep] = useState<LoginStep>('identifier');
+  const [unauthorizedRc, setUnauthorizedRc] = useState<string>('');
+  const [unauthorizedReason, setUnauthorizedReason] = useState<'not_found' | 'inactive' | 'invalid_session'>('not_found');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [showDirectory, setShowDirectory] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,14 +94,18 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       const match = await supabaseService.findStaffByEmailOrRc(credentialInput);
       if (!match) {
         haptic('ERROR');
-        setError(`No staff record found for "${credentialInput}". Please check your Email or RC Number.`);
+        setUnauthorizedRc(credentialInput.trim());
+        setUnauthorizedReason('not_found');
+        setStep('unauthorized');
         setIsLoggingIn(false);
         return;
       }
 
       if (match.status === 'inactive') {
         haptic('ERROR');
-        setError(`Account "${match.name}" (${match.employeeId}) is currently INACTIVE. Contact your System Administrator.`);
+        setUnauthorizedRc(match.employeeId || credentialInput.trim());
+        setUnauthorizedReason('inactive');
+        setStep('unauthorized');
         setIsLoggingIn(false);
         return;
       }
@@ -218,6 +225,21 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       (s.role || '').toLowerCase().includes(lower)
     );
   });
+
+  if (step === 'unauthorized') {
+    return (
+      <UnauthorizedPage
+        attemptedRc={unauthorizedRc}
+        reason={unauthorizedReason}
+        onRetry={() => {
+          setStep('identifier');
+          setError(null);
+          setCredentialInput('');
+          setPasswordInput('');
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface p-4 relative overflow-hidden transition-colors duration-500">
@@ -409,15 +431,11 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   Sign in with Microsoft OAuth
                 </button>
 
-                {/* Testing Login: As it was earlier */}
-                <button
-                  type="button"
-                  onClick={() => setShowDirectory(true)}
-                  className="w-full flex justify-center items-center py-3 px-4 border border-transparent text-[10px] font-black rounded-2xl text-primary hover:bg-primary/5 transition-all duration-300 uppercase tracking-widest"
-                >
-                  <ShieldCheck className="h-4 w-4 mr-2" />
-                  Browse MACL Staff Directory ({staffList.length})
-                </button>
+                {/* RBAC Compliance Notice */}
+                <div className="w-full flex items-center justify-center py-2.5 px-3 border border-outline/50 rounded-2xl bg-surface-dim text-[10px] font-bold text-on-surface-dim text-center">
+                  <ShieldCheck className="h-4 w-4 text-primary mr-2 flex-shrink-0" />
+                  <span>MACL: Active Staff Authentication Required</span>
+                </div>
               </div>
             </div>
           ) : step === 'password-setup' ? (
@@ -526,13 +544,12 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 >
                   Back to Sign In
                 </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowDirectory(true); setStep('identifier'); setError(null); }}
-                  className="flex-1 bg-primary text-white rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-primary/90"
+                <a
+                  href="mailto:fuel.ops@macl.aero?subject=MACL%20FMS%20Password%20Reset%20Request"
+                  className="flex-1 flex items-center justify-center kinetic-gradient text-white rounded-xl text-[11px] font-black uppercase tracking-wider hover:scale-[1.01] active:scale-95 shadow-premium transition-all py-3"
                 >
-                  Open Staff Directory
-                </button>
+                  Contact Admin Desk
+                </a>
               </div>
             </div>
           )}

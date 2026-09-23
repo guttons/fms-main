@@ -164,7 +164,7 @@ export const getLogDate = (item: any): string => {
 };
 
 export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user }) => {
-  const { flightLogs, flightJobs, refreshData, isLoading, delayLogs } = useOperationalData();
+  const { flightLogs, flightJobs, refreshData, isLoading, delayLogs, selectedBriefingDate } = useOperationalData();
 
   // Active View Tab: Performance Matrix vs AOCC Delay Records Log
   const [activeTab, setActiveTab] = useState<PerformanceTab>('TURNAROUND_MATRIX');
@@ -188,6 +188,20 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
   const [customEndDate, setCustomEndDate] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hoveredCat, setHoveredCat] = useState<CategoryFilter | null>(null);
+  const [logRev, setLogRev] = useState(0);
+
+  // Real-time synchronization across active operations
+  useEffect(() => {
+    const handleLogEvent = () => setLogRev(prev => prev + 1);
+    window.addEventListener('fms:flight-log-created', handleLogEvent);
+    window.addEventListener('fms:flight-log-updated', handleLogEvent);
+    window.addEventListener('fms:flight-log-deleted', handleLogEvent);
+    return () => {
+      window.removeEventListener('fms:flight-log-created', handleLogEvent);
+      window.removeEventListener('fms:flight-log-updated', handleLogEvent);
+      window.removeEventListener('fms:flight-log-deleted', handleLogEvent);
+    };
+  }, []);
 
   // Quick refresh handler
   const handleRefresh = async () => {
@@ -249,9 +263,25 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
   }, [updateSliders]);
 
   // Merge flightLogs with corresponding flightJobs to resolve STD, TOBT, FRT, Clearance, and Category (O(N) indexed)
-  // Merge flightLogs with corresponding flightJobs to resolve STD, TOBT, FRT, Clearance, and Category (O(N) indexed)
   const enrichedLogs = useMemo(() => {
-    const rawLogs = (flightLogs || []).filter(l => !l.logType || l.logType === 'FLIGHT');
+    let allLogs = [...(flightLogs || [])];
+    try {
+      const rawCache = localStorage.getItem('fms_recent_flight_logs');
+      if (rawCache) {
+        const cachedLogs: FlightLog[] = JSON.parse(rawCache);
+        if (Array.isArray(cachedLogs) && cachedLogs.length > 0) {
+          const existingIds = new Set(allLogs.map(l => l.id));
+          const existingDelivs = new Set(allLogs.filter(l => l.deliveryNumber).map(l => l.deliveryNumber));
+          cachedLogs.forEach(cl => {
+            if (!existingIds.has(cl.id) && (!cl.deliveryNumber || !existingDelivs.has(cl.deliveryNumber))) {
+              allLogs.unshift(cl);
+            }
+          });
+        }
+      }
+    } catch {}
+
+    const rawLogs = allLogs.filter(l => !l.logType || l.logType.toUpperCase() === 'FLIGHT');
 
     // Index flightJobs into O(1) lookup Maps to eliminate redundant lookups
     const jobsByFlightAndDate = new Map<string, FlightJob>();
@@ -270,62 +300,7 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
       }
     });
 
-    // Track existing flight log signatures (by delivery number and flightNumber + date)
-    const existingDelivs = new Set<string>();
-    const existingFnDates = new Set<string>();
-    rawLogs.forEach(l => {
-      if (l.deliveryNumber) existingDelivs.add(l.deliveryNumber.trim().toUpperCase());
-      const fn = (l.flightNumber || '').replace(/\s+/g, '').toUpperCase();
-      const d = (l.operationalDate || (l as any).date || '').split('T')[0];
-      if (fn && d) existingFnDates.add(`${fn}__${d}`);
-    });
-
-    // Synthesize entries for any COMPLETED or clearance-stamped flight jobs not yet in rawLogs
-    // This guarantees real-time visibility (<100ms) for newly completed flights without waiting for BigQuery commit latency
-    const syntheticLogs: FlightLog[] = [];
-    (flightJobs || []).forEach(j => {
-      if ((j.status === 'COMPLETED' || j.timestampClearance) && j.flightNumber) {
-        const fn = j.flightNumber.replace(/\s+/g, '').toUpperCase();
-        const d = (j.date || j.id.match(/\d{4}-\d{2}-\d{2}/)?.[0] || getLocalDateString()).split('T')[0];
-        const hasDeliv = j.deliveryNumber && existingDelivs.has(j.deliveryNumber.trim().toUpperCase());
-        const hasFnDate = fn && d && existingFnDates.has(`${fn}__${d}`);
-        if (!hasDeliv && !hasFnDate) {
-          syntheticLogs.push({
-            id: `job-${j.id}`,
-            flightNumber: j.flightNumber,
-            aircraftReg: j.aircraftReg || 'N/A',
-            aircraftType: j.aircraftType || 'N/A',
-            stand: j.stand || '---',
-            operatorId: j.assignedTo || '',
-            vehicleId: j.vehicleId || '',
-            status: 'COMPLETED',
-            logType: 'FLIGHT',
-            deliveryNumber: j.deliveryNumber,
-            operationalDate: d,
-            std: j.std,
-            tobt: j.tobt,
-            frtAirline: j.frtAirline,
-            frtAocc: j.frtAocc,
-            frtFor: j.frtFor,
-            timestampClearance: j.timestampClearance,
-            volume: 0,
-            panelCheck: true,
-            walkAroundCheck: true,
-            appearanceCheck: true,
-            waterCheck: true,
-            remarks: j.remarks || '',
-            isAdhoc: j.isAdhoc,
-            isDomestic: j.isDomestic,
-            airline: (j as any).operatorName || (j as any).co || '',
-            created_at: j.timestampClearance || new Date().toISOString()
-          });
-        }
-      }
-    });
-
-    const allFlightLogs = [...syntheticLogs, ...rawLogs];
-
-    return allFlightLogs.map(log => {
+    return rawLogs.map(log => {
       const fnUpper = (log.flightNumber || '').replace(/\s+/g, '').toUpperCase();
       const opDate = (log.operationalDate || (log as any).date || '').split('T')[0];
       const matchingJob = (opDate ? jobsByFlightAndDate.get(`${fnUpper}__${opDate}`) : undefined) || jobsByFlight.get(fnUpper);
@@ -361,7 +336,7 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
         remarks: cleanedRemarks,
       };
     });
-  }, [flightLogs, flightJobs]);
+  }, [flightLogs, flightJobs, logRev]);
 
   // Dynamic Date string anchors based on client's local date
   const todayStr = useMemo(() => getLocalDateString(new Date()), []);
@@ -384,21 +359,34 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
   const dateFilteredLogs = useMemo(() => {
     return enrichedLogs.filter(item => {
       const logDate = getLogDate(item);
+      const createdDate = item.created_at ? String(item.created_at).split('T')[0] : '';
+      const rawTs = item.timestampClearance || item.timestampFinalEnd || item.timestampStart || item.timestampArrived;
+      const timestampDate = rawTs ? getLocalDateString(new Date(rawTs)) : '';
+
       if (datePreset === 'TODAY') {
-        if (logDate && logDate !== todayStr) return false;
+        const matchesToday = 
+          (logDate && (
+            logDate === todayStr || 
+            (selectedBriefingDate && logDate === selectedBriefingDate)
+          )) ||
+          (createdDate && (createdDate === todayStr || (selectedBriefingDate && createdDate === selectedBriefingDate))) ||
+          (timestampDate && (timestampDate === todayStr || (selectedBriefingDate && timestampDate === selectedBriefingDate)));
+        if (!matchesToday) return false;
       } else if (datePreset === 'YESTERDAY') {
         if (logDate && logDate !== yesterdayStr) return false;
       } else if (datePreset === 'LAST_7_DAYS') {
         if (logDate && (logDate < sevenDaysAgoStr || logDate > todayStr)) return false;
       } else if (datePreset === 'THIS_MONTH') {
         if (logDate && (logDate < monthStartStr || logDate > todayStr)) return false;
+      } else if (datePreset === 'ALL') {
+        return true;
       } else if (datePreset === 'CUSTOM') {
         if (customStartDate && logDate && logDate < customStartDate) return false;
         if (customEndDate && logDate && logDate > customEndDate) return false;
       }
       return true;
     });
-  }, [enrichedLogs, datePreset, todayStr, yesterdayStr, sevenDaysAgoStr, monthStartStr, customStartDate, customEndDate]);
+  }, [enrichedLogs, datePreset, todayStr, yesterdayStr, sevenDaysAgoStr, monthStartStr, customStartDate, customEndDate, selectedBriefingDate]);
 
   // Step 2: Category counts based on the active date filter!
   // When TODAY is selected, ALL / INT / DOM / AD-HOC will count TODAY's flights!
@@ -1049,7 +1037,7 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
                           setSelectedCategory('ALL');
                           setDatePreset('ALL');
                         }}
-                        className="px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-primary hover:text-white transition-all"
+                        className="px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-[10px] font-black uppercase tracking-wider hover-kinetic-gradient active:scale-95 transition-all"
                       >
                         Reset All Filters
                       </button>
