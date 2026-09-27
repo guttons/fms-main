@@ -2289,15 +2289,17 @@ const ScreenTimestamps: React.FC<{
                     <span className="block text-[8px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-50">
                       Departure Timings
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => onEditFrt && onEditFrt()}
-                      className="px-1.5 py-0.5 rounded-md bg-primary/10 hover:bg-primary/20 text-primary font-black text-[9px] uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer"
-                      title="Edit Departure & Fuel Request Timings"
-                    >
-                      <Pencil className="w-2.5 h-2.5" />
-                      <span>Edit</span>
-                    </button>
+                    {(user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN) && onEditFrt && (
+                      <button
+                        type="button"
+                        onClick={() => onEditFrt && onEditFrt()}
+                        className="px-1.5 py-0.5 rounded-md bg-primary/10 hover:bg-primary/20 text-primary font-black text-[9px] uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer"
+                        title="Edit Departure & Fuel Request Timings"
+                      >
+                        <Pencil className="w-2.5 h-2.5" />
+                        <span>Edit</span>
+                      </button>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="font-mono text-warning font-black text-xs">
@@ -2332,13 +2334,19 @@ const ScreenTimestamps: React.FC<{
                   </span>
                 )}
                 {!activeFlight.frtAirline && !activeFlight.frtAocc && !activeFlight.frtFor && (
-                  <button
-                    type="button"
-                    onClick={() => onEditFrt && onEditFrt()}
-                    className="px-2.5 py-1 bg-surface-dim hover:bg-surface-container rounded-lg border border-outline text-[10px] text-on-surface-dim hover:text-on-surface font-bold transition-colors cursor-pointer"
-                  >
-                    + Add FRT
-                  </button>
+                  (user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN) && onEditFrt ? (
+                    <button
+                      type="button"
+                      onClick={() => onEditFrt && onEditFrt()}
+                      className="px-2.5 py-1 bg-surface-dim hover:bg-surface-container rounded-lg border border-outline text-[10px] text-on-surface-dim hover:text-on-surface font-bold transition-colors cursor-pointer"
+                    >
+                      + Add FRT
+                    </button>
+                  ) : (
+                    <span className="text-[10px] font-mono text-on-surface-dim opacity-40 italic">
+                      No FRT recorded
+                    </span>
+                  )
                 )}
               </div>
             </div>
@@ -3917,7 +3925,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
           />
         )}
 
-        {showEditActiveFrt && activeFlight && (
+        {showEditActiveFrt && activeFlight && (user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN) && (
           <EditFuelRequestModal
             flight={{
               id: activeFlight.id || (activeFlight as any).jobId || '',
@@ -4278,7 +4286,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 user={user}
                 getLocalTimeValue={getLocalTimeValue}
                 setManualTime={setManualTime}
-                onEditFrt={() => setShowEditActiveFrt(true)}
+                onEditFrt={(user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN) ? () => setShowEditActiveFrt(true) : undefined}
               />
             )}
             {currentScreen === 'metering' && (

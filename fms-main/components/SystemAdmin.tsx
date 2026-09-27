@@ -4,7 +4,7 @@ import {
   Users, Activity,
   Plus, Pencil, Trash2, X, Check, AlertTriangle,
   Truck, Fuel, ChevronDown, Phone, Mail, IdCard, UserCheck, UserX,
-  RefreshCw, Anchor, Plane, Globe
+  RefreshCw, Anchor, Plane, Globe, ShieldCheck
 } from 'lucide-react';
 import { UserRole, EquipmentType, EquipmentStatus, FuelType } from '../types';
 import type { StaffMember, Equipment, Tank, Vessel } from '../types';
@@ -13,11 +13,13 @@ import { Logo } from './Logo';
 import { useNotification, NotificationType } from '../context/NotificationContext';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { supabaseService } from '../services/supabaseService';
+import { activityLogService, LogModule, LogAction } from '../services/activityLogService';
 import { FlightMasterTab } from './FlightMasterTab';
 import { InternationalScheduleTab } from './InternationalScheduleTab';
+import { ActivityLogTab } from './ActivityLogTab';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Tab = 'staff' | 'equipment' | 'tanks' | 'vessels' | 'flight-master' | 'intl-schedule';
+type Tab = 'staff' | 'equipment' | 'tanks' | 'vessels' | 'flight-master' | 'intl-schedule' | 'activity-log';
 
 interface ConfirmState { open: boolean; message: string; onConfirm: () => void; }
 
@@ -197,6 +199,11 @@ const StaffTab: React.FC<{
     try {
       await supabaseService.syncStaffWithCode();
       await refreshData();
+      activityLogService.logAction(currentUser, {
+        module: LogModule.STAFF,
+        action: LogAction.SYNC,
+        description: 'Synchronized staff roles and definitions with codebase registry'
+      });
       push('Staff list & roles successfully synchronized with latest system definitions!', 'success');
     } catch (e) {
       push('Failed to sync staff roles.', 'error');
@@ -261,9 +268,30 @@ const StaffTab: React.FC<{
       };
       if (editing) {
         await updateStaff(editing.id, finalForm);
+        const isRoleChanged = editing.role !== finalForm.role;
+        activityLogService.logAction(currentUser, {
+          module: LogModule.STAFF,
+          action: isRoleChanged ? LogAction.ROLE_CHANGE : LogAction.UPDATE,
+          entity_type: 'staff_member',
+          entity_id: editing.id,
+          entity_label: `${finalForm.name} (${finalForm.employeeId})`,
+          description: isRoleChanged
+            ? `Admin changed RBAC role for ${finalForm.name} (${finalForm.employeeId}) from ${editing.role} to ${finalForm.role}`
+            : `Updated staff profile for ${finalForm.name} (${finalForm.employeeId}): status=${finalForm.status}`,
+          before_state: editing,
+          after_state: finalForm
+        });
         push('Staff member updated successfully', 'success');
       } else {
         await addStaff(finalForm);
+        activityLogService.logAction(currentUser, {
+          module: LogModule.STAFF,
+          action: LogAction.CREATE,
+          entity_type: 'staff_member',
+          entity_label: `${finalForm.name} (${finalForm.employeeId})`,
+          description: `Admin registered new personnel ${finalForm.name} (${finalForm.employeeId}) with role ${finalForm.role}`,
+          after_state: finalForm
+        });
         push('Staff member added successfully', 'success');
       }
       setShowModal(false);
@@ -283,6 +311,15 @@ const StaffTab: React.FC<{
     confirm(`Remove ${s.name} (${s.employeeId}) from the system?`, async () => {
       try { 
         await deleteStaff(s.id); 
+        activityLogService.logAction(currentUser, {
+          module: LogModule.STAFF,
+          action: LogAction.DELETE,
+          entity_type: 'staff_member',
+          entity_id: s.id,
+          entity_label: `${s.name} (${s.employeeId})`,
+          description: `Admin deleted staff record for ${s.name} (${s.employeeId})`,
+          before_state: s
+        });
         push('Staff member removed', 'success'); 
       }
       catch (error: any) { 
@@ -297,7 +334,20 @@ const StaffTab: React.FC<{
 
   const handleToggleStatus = async (s: StaffMember) => {
     const newStatus = s.status === 'active' ? 'inactive' : 'active';
-    try { await updateStaff(s.id, { status: newStatus }); push(`${s.name} marked as ${newStatus}`, 'success'); }
+    try { 
+      await updateStaff(s.id, { status: newStatus }); 
+      activityLogService.logAction(currentUser, {
+        module: LogModule.STAFF,
+        action: LogAction.STATUS_CHANGE,
+        entity_type: 'staff_member',
+        entity_id: s.id,
+        entity_label: `${s.name} (${s.employeeId})`,
+        description: `Admin changed account status for ${s.name} (${s.employeeId}) from ${s.status} to ${newStatus}`,
+        before_state: { status: s.status },
+        after_state: { status: newStatus }
+      });
+      push(`${s.name} marked as ${newStatus}`, 'success'); 
+    }
     catch { push('Failed to update status', 'error'); }
   };
 
@@ -499,7 +549,7 @@ const StaffTab: React.FC<{
 };
 
 // ─── EQUIPMENT TAB ─────────────────────────────────────────────────────────────
-const EquipmentTab: React.FC<{ push: (msg: string, type?: NotificationType) => void; confirm: (msg: string, cb: () => void) => void }> = ({ push, confirm }) => {
+const EquipmentTab: React.FC<{ push: (msg: string, type?: NotificationType) => void; confirm: (msg: string, cb: () => void) => void; currentUser?: any }> = ({ push, confirm, currentUser }) => {
   const { equipment, addEquipment, updateEquipment, deleteEquipment, isLoading } = useOperationalData();
   const loading = isLoading;
   const [showModal, setShowModal] = useState(false);
@@ -576,9 +626,27 @@ const EquipmentTab: React.FC<{ push: (msg: string, type?: NotificationType) => v
 
       if (editing) {
         await updateEquipment(editing.id, finalForm);
+        activityLogService.logAction(currentUser, {
+          module: LogModule.EQUIPMENT,
+          action: LogAction.UPDATE,
+          entity_type: 'equipment',
+          entity_id: editing.id,
+          entity_label: finalForm.name,
+          description: `Admin updated equipment ${finalForm.name} (${finalForm.type}): status=${finalForm.status}, volume=${finalForm.currentVolume}L`,
+          before_state: editing,
+          after_state: finalForm
+        });
         push('Equipment updated successfully', 'success');
       } else {
         await addEquipment(finalForm);
+        activityLogService.logAction(currentUser, {
+          module: LogModule.EQUIPMENT,
+          action: LogAction.CREATE,
+          entity_type: 'equipment',
+          entity_label: finalForm.name,
+          description: `Admin registered new equipment ${finalForm.name} (${finalForm.type}) with capacity ${finalForm.maxCapacity}L`,
+          after_state: finalForm
+        });
         push('Equipment added successfully', 'success');
       }
       setShowModal(false);
@@ -591,7 +659,19 @@ const EquipmentTab: React.FC<{ push: (msg: string, type?: NotificationType) => v
 
   const handleDelete = (eq: Equipment) => {
     confirm(`Remove ${eq.name} from the fleet registry?`, async () => {
-      try { await deleteEquipment(eq.id); push('Equipment removed', 'success'); }
+      try { 
+        await deleteEquipment(eq.id); 
+        activityLogService.logAction(currentUser, {
+          module: LogModule.EQUIPMENT,
+          action: LogAction.DELETE,
+          entity_type: 'equipment',
+          entity_id: eq.id,
+          entity_label: eq.name,
+          description: `Admin removed equipment ${eq.name} (${eq.type}) from registry`,
+          before_state: eq
+        });
+        push('Equipment removed', 'success'); 
+      }
       catch (e: any) { 
         const msg = e?.message?.includes('permission') ? 'Permission Denied: Unauthorized to delete records.' : 'Failed to remove equipment.';
         push(msg, 'error'); 
@@ -726,7 +806,7 @@ const EquipmentTab: React.FC<{ push: (msg: string, type?: NotificationType) => v
 };
 
 // ─── TANKS TAB ─────────────────────────────────────────────────────────────────
-const TanksTab: React.FC<{ push: (msg: string, type?: NotificationType) => void; confirm: (msg: string, cb: () => void) => void }> = ({ push, confirm }) => {
+const TanksTab: React.FC<{ push: (msg: string, type?: NotificationType) => void; confirm: (msg: string, cb: () => void) => void; currentUser?: any }> = ({ push, confirm, currentUser }) => {
   const { tanks, addTank, updateTank, deleteTank, isLoading } = useOperationalData();
   const loading = isLoading;
   const [showModal, setShowModal] = useState(false);
@@ -772,9 +852,27 @@ const TanksTab: React.FC<{ push: (msg: string, type?: NotificationType) => void;
       };
       if (editing) {
         await updateTank(editing.id, finalForm);
+        activityLogService.logAction(currentUser, {
+          module: LogModule.TANKS,
+          action: LogAction.UPDATE,
+          entity_type: 'tank',
+          entity_id: editing.id,
+          entity_label: finalForm.name,
+          description: `Admin updated tank ${finalForm.name} (${finalForm.type}): level=${finalForm.currentLevel}L, capacity=${finalForm.capacity}L`,
+          before_state: editing,
+          after_state: finalForm
+        });
         push('Tank updated successfully', 'success');
       } else {
         await addTank(finalForm);
+        activityLogService.logAction(currentUser, {
+          module: LogModule.TANKS,
+          action: LogAction.CREATE,
+          entity_type: 'tank',
+          entity_label: finalForm.name,
+          description: `Admin registered new storage tank ${finalForm.name} (${finalForm.type}) with capacity ${finalForm.capacity}L`,
+          after_state: finalForm
+        });
         push('Tank added successfully', 'success');
       }
       setShowModal(false);
@@ -787,7 +885,19 @@ const TanksTab: React.FC<{ push: (msg: string, type?: NotificationType) => void;
 
   const handleDelete = (t: Tank) => {
     confirm(`Remove tank "${t.name}" from the inventory?`, async () => {
-      try { await deleteTank(t.id); push('Tank removed', 'success'); }
+      try { 
+        await deleteTank(t.id); 
+        activityLogService.logAction(currentUser, {
+          module: LogModule.TANKS,
+          action: LogAction.DELETE,
+          entity_type: 'tank',
+          entity_id: t.id,
+          entity_label: t.name,
+          description: `Admin removed tank ${t.name} from inventory`,
+          before_state: t
+        });
+        push('Tank removed', 'success'); 
+      }
       catch (e: any) { 
         const msg = e?.message?.includes('permission') ? 'Permission Denied: Unauthorized to delete records.' : 'Failed to remove tank.';
         push(msg, 'error'); 
@@ -929,7 +1039,7 @@ const TanksTab: React.FC<{ push: (msg: string, type?: NotificationType) => void;
 };
 
 // ─── VESSELS TAB ───────────────────────────────────────────────────────────────
-const VesselsTab: React.FC<{ push: (msg: string, type?: NotificationType) => void; confirm: (msg: string, cb: () => void) => void }> = ({ push, confirm }) => {
+const VesselsTab: React.FC<{ push: (msg: string, type?: NotificationType) => void; confirm: (msg: string, cb: () => void) => void; currentUser?: any }> = ({ push, confirm, currentUser }) => {
   const { vessels, addVessel, updateVessel, deleteVessel, isLoading } = useOperationalData();
   const loading = isLoading;
   const [showModal, setShowModal] = useState(false);
@@ -976,9 +1086,27 @@ const VesselsTab: React.FC<{ push: (msg: string, type?: NotificationType) => voi
       };
       if (editing) {
         await updateVessel(editing.id, finalForm);
+        activityLogService.logAction(currentUser, {
+          module: LogModule.VESSELS,
+          action: LogAction.UPDATE,
+          entity_type: 'vessel',
+          entity_id: editing.id,
+          entity_label: finalForm.name,
+          description: `Admin updated vessel ${finalForm.name} (IMO: ${finalForm.imo || 'N/A'}, status: ${finalForm.status})`,
+          before_state: editing,
+          after_state: finalForm
+        });
         push('Vessel updated successfully', 'success');
       } else {
         await addVessel(finalForm as Omit<Vessel, 'id' | 'created_at'>);
+        activityLogService.logAction(currentUser, {
+          module: LogModule.VESSELS,
+          action: LogAction.CREATE,
+          entity_type: 'vessel',
+          entity_label: finalForm.name,
+          description: `Admin registered new vessel ${finalForm.name} (IMO: ${finalForm.imo || 'N/A'})`,
+          after_state: finalForm
+        });
         push('Vessel added successfully', 'success');
       }
       setShowModal(false);
@@ -991,7 +1119,19 @@ const VesselsTab: React.FC<{ push: (msg: string, type?: NotificationType) => voi
 
   const handleDelete = (v: Vessel) => {
     confirm(`Remove vessel "${v.name}" from the registry?`, async () => {
-      try { await deleteVessel(v.id); push('Vessel removed', 'success'); }
+      try { 
+        await deleteVessel(v.id); 
+        activityLogService.logAction(currentUser, {
+          module: LogModule.VESSELS,
+          action: LogAction.DELETE,
+          entity_type: 'vessel',
+          entity_id: v.id,
+          entity_label: v.name,
+          description: `Admin removed vessel ${v.name} from registry`,
+          before_state: v
+        });
+        push('Vessel removed', 'success'); 
+      }
       catch (e: any) {
         const msg = e?.message?.includes('permission') ? 'Permission Denied: Unauthorized to delete records.' : 'Failed to remove vessel.';
         push(msg, 'error');
@@ -1164,6 +1304,7 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
     { key: 'vessels', label: 'Vessel Registry', icon: <Anchor className="w-4 h-4" /> },
     { key: 'flight-master', label: 'Airline & Aircraft Master', icon: <Plane className="w-4 h-4" /> },
     { key: 'intl-schedule', label: 'Flight Schedule', icon: <Globe className="w-4 h-4" /> },
+    { key: 'activity-log', label: 'Activity Tracker', icon: <ShieldCheck className="w-4 h-4" /> },
   ];
 
   return (
@@ -1194,12 +1335,15 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
       {/* Tab Navigation */}
       <div className="bg-surface-container-lowest rounded-3xl border-transparent overflow-visible shadow-sm">
         <div className="border-b border-outline p-2 sm:p-4 bg-surface-container-low/30 flex justify-center">
-          <div className="bg-surface-container-low p-1.5 rounded-2xl border-transparent relative grid grid-cols-6 w-full max-w-[1100px] shadow-inner">
+          <div 
+            className="bg-surface-container-low p-1.5 rounded-2xl border-transparent relative grid w-full max-w-[1200px] shadow-inner"
+            style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+          >
             <div 
               className="absolute top-1.5 bottom-1.5 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform"
               style={{
-                left: `calc(6px + ${tabs.findIndex(t => t.key === activeTab)} * (100% - 12px) / 6)`,
-                width: 'calc((100% - 12px) / 6)'
+                left: `calc(6px + ${tabs.findIndex(t => t.key === activeTab)} * (100% - 12px) / ${tabs.length})`,
+                width: `calc((100% - 12px) / ${tabs.length})`
               }}
             />
             {tabs.map(tab => (
@@ -1209,7 +1353,7 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
                   setActiveTab(tab.key);
                   triggerTooltip(tab.key);
                 }}
-                className={`flex items-center justify-center gap-1.5 sm:gap-2.5 px-1 sm:px-4 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest sm:tracking-[0.2em] transition-all relative z-10 overflow-visible text-center w-full rounded-xl
+                className={`flex items-center justify-center gap-1.5 sm:gap-2 px-1 sm:px-3 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest sm:tracking-[0.15em] transition-all relative z-10 overflow-visible text-center w-full rounded-xl
                   ${activeTab === tab.key ? 'text-white' : 'text-on-surface-dim opacity-50 hover:opacity-100'}`}
               >
                 {activeTooltip === tab.key && (
@@ -1235,17 +1379,17 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
           )}
           {activeTab === 'equipment' && (
             <div key="equipment" className="animate-in fade-in slide-in-from-right-4 duration-500">
-              <EquipmentTab push={notify} confirm={confirmAction} />
+              <EquipmentTab push={notify} confirm={confirmAction} currentUser={currentUser} />
             </div>
           )}
           {activeTab === 'tanks' && (
             <div key="tanks" className="animate-in fade-in slide-in-from-right-4 duration-500">
-              <TanksTab push={notify} confirm={confirmAction} />
+              <TanksTab push={notify} confirm={confirmAction} currentUser={currentUser} />
             </div>
           )}
           {activeTab === 'vessels' && (
             <div key="vessels" className="animate-in fade-in slide-in-from-right-4 duration-500">
-              <VesselsTab push={notify} confirm={confirmAction} />
+              <VesselsTab push={notify} confirm={confirmAction} currentUser={currentUser} />
             </div>
           )}
           {activeTab === 'flight-master' && (
@@ -1256,6 +1400,11 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
           {activeTab === 'intl-schedule' && (
             <div key="intl-schedule" className="animate-in fade-in slide-in-from-right-4 duration-500">
               <InternationalScheduleTab push={notify} confirm={confirmAction} currentUser={currentUser} />
+            </div>
+          )}
+          {activeTab === 'activity-log' && (
+            <div key="activity-log" className="animate-in fade-in slide-in-from-right-4 duration-500">
+              <ActivityLogTab currentUser={currentUser} pushNotification={notify} />
             </div>
           )}
         </div>

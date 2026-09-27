@@ -399,3 +399,24 @@ export interface DelayLog {
   updatedAt?: string;
 }
 
+export interface SystemActivityLog {
+  id: string;
+  user_id: string;
+  user_name: string;
+  user_role: string;
+  employee_id?: string | null;
+  module: string;
+  action: string;
+  entity_type?: string | null;
+  entity_id?: string | null;
+  entity_label?: string | null;
+  description: string;
+  before_state?: Record<string, any> | null;
+  after_state?: Record<string, any> | null;
+  metadata?: Record<string, any> | null;
+  session_id?: string | null;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  created_at: string;
+}
+

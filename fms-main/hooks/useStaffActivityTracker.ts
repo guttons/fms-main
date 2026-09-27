@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { supabase } from '../supabase';
 import { User } from '../types';
+import { activityLogService, LogModule, LogAction } from '../services/activityLogService';
 
 interface UseStaffActivityTrackerParams {
   user: User | null;
@@ -66,6 +67,21 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
   const logActivity = useCallback(async (type: string, data: any = {}) => {
     if (!user) return;
     try {
+      // 1. Audit to system_activity_log for rigid security
+      activityLogService.logAction(user, {
+        module: LogModule.AUTH,
+        action: type === 'LOGIN' ? LogAction.LOGIN : type === 'LOGOUT' ? LogAction.LOGOUT : type,
+        entity_type: 'staff_session',
+        entity_id: user.id,
+        entity_label: user.name,
+        description: type === 'LOGIN'
+          ? `Personnel ${user.name} authenticated into FMS session`
+          : type === 'LOGOUT'
+          ? `Personnel ${user.name} logged out of FMS session`
+          : `Personnel activity recorded: ${type}`,
+        metadata: data
+      });
+
       // Always store locally for timeline and audit
       const localLogsKey = `fms_staff_activity_${user.id}`;
       const existing = JSON.parse(localStorage.getItem(localLogsKey) || '[]');
@@ -100,6 +116,17 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
     if (!user) return;
     statusRef.current = status;
     try {
+      // Audit status change
+      activityLogService.logAction(user, {
+        module: LogModule.STAFF,
+        action: LogAction.STATUS_CHANGE,
+        entity_type: 'staff_status',
+        entity_id: user.id,
+        entity_label: user.name,
+        description: `Personnel status changed to ${status}${jobId ? ` (Job: ${jobId})` : ''}${vehicleId ? ` (Vehicle: ${vehicleId})` : ''}`,
+        after_state: { status, jobId, vehicleId }
+      });
+
       // Always persist current status to localStorage for instant local access
       localStorage.setItem(`fms_staff_status_${user.id}`, status);
 

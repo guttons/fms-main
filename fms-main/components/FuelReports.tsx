@@ -1470,11 +1470,11 @@ const emptyGroundData = {
         // 2) From flight logs categorized as refueller loading / bridging
         const dayFlightBridgingVol = (flightLogs || [])
           .filter(l => {
-            const isBridging = l.logType === 'BRIDGING' || 
+            const isBridging = (l.logType as any) === 'BRIDGING' || 
                                (l.flightNumber || '').toUpperCase().startsWith('LOAD-') ||
                                (l.aircraftType || '').toUpperCase().includes('REFUELLER LOADING') ||
                                (l.aircraftType || '').toUpperCase().includes('BRIDGING') ||
-                               ((l.vehicleId || '').toUpperCase().startsWith('RF') && (l.logType === 'BRIDGING' || (l.flightNumber || '').toUpperCase().includes('LOAD')));
+                               ((l.vehicleId || '').toUpperCase().startsWith('RF') && ((l.logType as any) === 'BRIDGING' || (l.flightNumber || '').toUpperCase().includes('LOAD')));
             if (!isBridging) return false;
             const lDate = normalizeToYMD(l.operationalDate || l.timestampStart || l.timestampFinalEnd);
             return lDate === dStr;

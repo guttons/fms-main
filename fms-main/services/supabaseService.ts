@@ -7,6 +7,7 @@ import { fmsDb } from './db';
 import { syncEngine } from './syncEngine';
 import masterDbData from './masterDbData.json';
 import { INITIAL_MOCK_SCHEDULES, scheduleImportService } from './scheduleImportService';
+import { activityLogService, LogModule, LogAction } from './activityLogService';
 
 const localBridgingLogs: BridgingLog[] = [
   {
@@ -422,6 +423,15 @@ export const supabaseService = {
         console.warn('[Supabase] direct upsert flight_jobs error, enqueuing outbox:', error);
         throw error;
       }
+      activityLogService.logAction(null, {
+        module: LogModule.FLIGHT_JOBS,
+        action: LogAction.CREATE,
+        entity_type: 'flight_job',
+        entity_id: job.id,
+        entity_label: job.flightNumber,
+        description: `Created flight turnaround job for ${job.flightNumber} (${job.aircraftReg || job.aircraftType || 'A/C'}) at Stand ${job.stand}`,
+        after_state: row
+      });
     } catch (e) {
       await fmsDb.enqueueOutbox({
         action: 'INSERT',
@@ -497,6 +507,21 @@ export const supabaseService = {
         const { error: upsertErr } = await supabase.from('flight_jobs').upsert([fullPayload]);
         if (upsertErr) throw upsertErr;
       }
+
+      activityLogService.logAction(null, {
+        module: LogModule.FLIGHT_JOBS,
+        action: updates.assignedTo ? LogAction.ASSIGN : updates.status ? LogAction.STATUS_CHANGE : LogAction.UPDATE,
+        entity_type: 'flight_job',
+        entity_id: id,
+        entity_label: existing?.flightNumber || id,
+        description: updates.status
+          ? `Flight job ${existing?.flightNumber || id} status changed to ${updates.status}`
+          : updates.assignedTo
+          ? `Assigned personnel ${updates.assignedTo} to flight ${existing?.flightNumber || id}`
+          : `Updated flight turnaround job ${existing?.flightNumber || id}`,
+        before_state: existing ? { status: existing.status, assignedTo: existing.assignedTo, vehicleId: existing.vehicleId } : null,
+        after_state: updates
+      });
     } catch (e) {
       console.warn('[Supabase] direct update flight_jobs error, enqueuing outbox:', e);
       await fmsDb.enqueueOutbox({
@@ -512,6 +537,14 @@ export const supabaseService = {
 
   async deleteFlightJob(id: string): Promise<void> {
     await fmsDb.delete('flight_jobs', id);
+    activityLogService.logAction(null, {
+      module: LogModule.FLIGHT_JOBS,
+      action: LogAction.DELETE,
+      entity_type: 'flight_job',
+      entity_id: id,
+      entity_label: id,
+      description: `Deleted flight job record ${id}`
+    });
     await fmsDb.enqueueOutbox({
       action: 'DELETE',
       entityType: 'flight_job',
@@ -528,6 +561,12 @@ export const supabaseService = {
       console.error('[Supabase] clearAllFlightJobs failed:', error);
       throw error;
     }
+    activityLogService.logAction(null, {
+      module: LogModule.FLIGHT_JOBS,
+      action: LogAction.DELETE,
+      entity_type: 'flight_job',
+      description: 'Cleared all active flight jobs from system'
+    });
   },
 
   async clearAllBriefingInfo(): Promise<void> {
@@ -685,6 +724,15 @@ export const supabaseService = {
       if (data && data.id && data.id !== fullLog.id) {
         fullLog.id = data.id;
       }
+      activityLogService.logAction(null, {
+        module: LogModule.FLIGHT_LOG,
+        action: LogAction.CREATE,
+        entity_type: 'operations_log',
+        entity_id: fullLog.id,
+        entity_label: `${fullLog.flightNumber || 'FLIGHT'} (TKT: ${fullLog.deliveryNumber || 'N/A'})`,
+        description: `Logged refueling operation: flight ${fullLog.flightNumber}, volume ${fullLog.volume}L by ${fullLog.operatorName || 'Operator'}`,
+        after_state: fullLog
+      });
       return fullLog;
     } catch (error) {
       console.error('[BigQuery] createFlightLog error:', error);
@@ -734,6 +782,15 @@ export const supabaseService = {
         } catch {}
         throw new Error(errMsg);
       }
+      activityLogService.logAction(null, {
+        module: LogModule.FLIGHT_LOG,
+        action: LogAction.UPDATE,
+        entity_type: 'operations_log',
+        entity_id: id,
+        entity_label: updates.flightNumber || id,
+        description: `Updated refueling log record ${id} (volume: ${updates.volume !== undefined ? updates.volume + 'L' : 'unchanged'})`,
+        after_state: updates
+      });
     } catch (error) {
       console.error('[BigQuery] updateFlightLog error:', error);
       throw error;
@@ -794,6 +851,14 @@ export const supabaseService = {
         headers,
       });
       if (!res.ok) throw new Error(`BigQuery DELETE failed: ${res.status} ${await res.text()}`);
+      activityLogService.logAction(null, {
+        module: LogModule.FLIGHT_LOG,
+        action: LogAction.DELETE,
+        entity_type: 'operations_log',
+        entity_id: id,
+        entity_label: fallbackFlightNumber || id,
+        description: `Deleted fueling operations record ${id}${fallbackDeliveryNumber ? ` (Ticket: ${fallbackDeliveryNumber})` : ''}`
+      });
     } catch (error) {
       console.error('[BigQuery] deleteFlightLog error:', error);
       throw error;
