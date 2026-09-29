@@ -138,6 +138,7 @@ export interface FlightLog {
   pitNumber?: string;
   operationalDate?: string;
   logType?: 'FLIGHT' | 'SEAPLANE' | 'FILLING_STATION' | 'MARINE' | 'BRIDGING';
+  equipmentUsage?: 'HYDRANT' | 'REFUELLER';
   
   // Timing & Planning Milestones
   std?: string;                   // Scheduled Time of Departure
@@ -224,6 +225,8 @@ export interface Alert {
   targetRole?: UserRole;
   alertType?: string;
   flightNumber?: string;
+  /** Operational date (YYYY-MM-DD) the alert belongs to — used to filter out previous-day alerts */
+  flightDate?: string;
   assignedStaffId?: string;
   metadata?: any;
   senderId?: string;

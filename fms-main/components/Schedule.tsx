@@ -986,8 +986,16 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
     frtFor?: string;
   }) => {
     if (!editingFrtFlight) return;
+    const cleanUpdates = {
+      std: updates.std !== undefined ? updates.std.trim() : undefined,
+      tobt: updates.tobt !== undefined ? updates.tobt.trim() : undefined,
+      frtAirline: updates.frtAirline !== undefined ? updates.frtAirline.trim() : undefined,
+      frtAocc: updates.frtAocc !== undefined ? updates.frtAocc.trim() : undefined,
+      frtFor: updates.frtFor !== undefined ? updates.frtFor.trim() : undefined,
+    };
+
     try {
-      await updateFlightJob(editingFrtFlight.id, updates);
+      await updateFlightJob(editingFrtFlight.id, cleanUpdates);
 
       // Retrospectively sync with saved flight log in BigQuery/state if flight was already completed/logged
       const rawEditingFlight = editingFrtFlight.flightNumber || '';
@@ -1017,40 +1025,33 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
       for (const log of matchingLogs) {
         if (log.id && updateFlightLog) {
           try {
-            await updateFlightLog(log.id, {
-              std: updates.std !== undefined ? updates.std : log.std,
-              tobt: updates.tobt !== undefined ? updates.tobt : log.tobt,
-              frtAirline: updates.frtAirline !== undefined ? updates.frtAirline : log.frtAirline,
-              frtAocc: updates.frtAocc !== undefined ? updates.frtAocc : log.frtAocc,
-              frtFor: updates.frtFor !== undefined ? updates.frtFor : log.frtFor,
-            });
+            await updateFlightLog(log.id, cleanUpdates);
           } catch (logErr) {
             console.warn(`[Schedule] Could not update saved flight log ${log.id} with FRT:`, logErr);
           }
         }
       }
 
-      // Check live BigQuery as well to catch any logs that might not yet be in local memory
-      try {
-        const liveBq = await supabaseService.getFlightLogs({ searchTerm: rawEditingFlight || cleanEditingFlight, limit: 20 });
-        const bqMatches = (liveBq?.logs || []).filter(l => {
-          if (!l || !l.flightNumber) return false;
-          return matchesFlightNumber(l.flightNumber) && matchesDate(l);
-        });
-        for (const bqLog of bqMatches) {
-          if (bqLog.id && !matchingLogs.some(m => m.id === bqLog.id)) {
-            await supabaseService.updateFlightLog(bqLog.id, {
-              std: updates.std !== undefined ? updates.std : bqLog.std,
-              tobt: updates.tobt !== undefined ? updates.tobt : bqLog.tobt,
-              frtAirline: updates.frtAirline !== undefined ? updates.frtAirline : bqLog.frtAirline,
-              frtAocc: updates.frtAocc !== undefined ? updates.frtAocc : bqLog.frtAocc,
-              frtFor: updates.frtFor !== undefined ? updates.frtFor : bqLog.frtFor,
-            } as any);
+      // Check live BigQuery in background as well to catch any logs that might not yet be in local memory
+      (async () => {
+        try {
+          const liveBq = await Promise.race([
+            supabaseService.getFlightLogs({ searchTerm: cleanEditingFlight, limit: 10 }),
+            new Promise<any>((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+          ]);
+          const bqMatches = (liveBq?.logs || []).filter((l: any) => {
+            if (!l || !l.flightNumber) return false;
+            return matchesFlightNumber(l.flightNumber) && matchesDate(l);
+          });
+          for (const bqLog of bqMatches) {
+            if (bqLog.id && !matchingLogs.some(m => m.id === bqLog.id)) {
+              await supabaseService.updateFlightLog(bqLog.id, cleanUpdates as any);
+            }
           }
+        } catch (bqErr) {
+          console.warn('[Schedule] Background BQ log sync note:', bqErr);
         }
-      } catch (bqErr) {
-        console.warn('[Schedule] Live BQ update fallback skipped:', bqErr);
-      }
+      })();
 
       notify(`Timings & FRT updated for Flight ${editingFrtFlight.flightNumber}`, 'success');
     } catch (err) {

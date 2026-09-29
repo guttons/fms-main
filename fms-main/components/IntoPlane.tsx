@@ -305,12 +305,77 @@ const ScreenDashboard: React.FC<{
     domesticAssignments,
     externalFlights,
     internationalSchedules,
-    updateFlightJob
+    updateFlightJob,
+    updateFlightLog
   } = useOperationalData();
   const [viewMode, setViewMode] = useState<'INT' | 'DOM' | 'ADHOC'>('INT');
   const [filterMyTasks, setFilterMyTasks] = useState(false);
   const [editingAircraftJob, setEditingAircraftJob] = useState<FlightJob | null>(null);
   const [editingStandJob, setEditingStandJob] = useState<FlightJob | null>(null);
+  const [editingFrtJob, setEditingFrtJob] = useState<FlightJob | null>(null);
+
+  const handleSaveCardFrt = async (jobToEdit: FlightJob, updates: {
+    std?: string;
+    tobt?: string;
+    frtAirline?: string;
+    frtAocc?: string;
+    frtFor?: string;
+  }) => {
+    try {
+      const cleanUpdates: Partial<FlightJob> = {
+        std: updates.std !== undefined ? updates.std.trim() : undefined,
+        tobt: updates.tobt !== undefined ? updates.tobt.trim() : undefined,
+        frtAirline: updates.frtAirline !== undefined ? updates.frtAirline.trim() : undefined,
+        frtAocc: updates.frtAocc !== undefined ? updates.frtAocc.trim() : undefined,
+        frtFor: updates.frtFor !== undefined ? updates.frtFor.trim() : undefined,
+      };
+
+      const targetJobId = jobToEdit.id || (flightJobs || []).find(j => j.flightNumber === jobToEdit.flightNumber)?.id;
+      if (targetJobId) {
+        await updateFlightJob(targetJobId, cleanUpdates);
+      }
+
+      // If matches activeFlight, update activeFlight state & local storage
+      if (activeFlight && (activeFlight.id === jobToEdit.id || activeFlight.flightNumber === jobToEdit.flightNumber)) {
+        Object.assign(activeFlight, cleanUpdates);
+        try {
+          const raw = localStorage.getItem(`fms_active_flight_${user?.id || ''}`);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            localStorage.setItem(`fms_active_flight_${user?.id || ''}`, JSON.stringify({ ...parsed, ...cleanUpdates }));
+          }
+        } catch {}
+      }
+
+      // Retrospectively sync with saved flight logs if already logged
+      const rawFlight = jobToEdit.flightNumber || '';
+      const cleanFn = rawFlight.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      const compactFn = cleanFn.replace(/([A-Z]+)0+([0-9]+)/, '$1$2');
+
+      const matchesFn = (fn?: string) => {
+        if (!fn) return false;
+        const c = fn.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+        return c === cleanFn || c.replace(/([A-Z]+)0+([0-9]+)/, '$1$2') === compactFn;
+      };
+
+      const matchingLogs = (flightLogs || []).filter(l => l && matchesFn(l.flightNumber));
+      for (const ml of matchingLogs) {
+        if (ml.id && updateFlightLog) {
+          try {
+            await updateFlightLog(ml.id, cleanUpdates as any);
+          } catch (e) {
+            console.warn(`[IntoPlane] Could not update saved flight log ${ml.id}:`, e);
+          }
+        }
+      }
+
+      notify(`Timings updated for ${jobToEdit.flightNumber}`, 'success');
+    } catch (err) {
+      console.error('[IntoPlane] Failed to update card timings:', err);
+      notify('Failed to update timings.', 'error');
+    }
+  };
+
   const [watchedIds, setWatchedIds] = useState<Set<string>>(() => getWatchedFlightIds(user.id));
   const [localDomesticAssignments, setLocalDomesticAssignments] = useState<any[]>(() => {
     try {
@@ -408,6 +473,7 @@ const ScreenDashboard: React.FC<{
     status: 'REQUEST_FUELING' | 'NO_FUEL';
     requestedTime: string;
     requestedAt?: string;
+    flightDate?: string;
     acknowledged?: boolean;
     acknowledgedTime?: string;
     acknowledgedAt?: string;
@@ -418,15 +484,22 @@ const ScreenDashboard: React.FC<{
       if (!saved) return {};
       const parsed = JSON.parse(saved);
       const migrated: Record<string, any> = {};
+      const todayDate = new Date().toISOString().split('T')[0];
+
       for (const [k, v] of Object.entries(parsed)) {
         if (typeof v === 'string') {
           migrated[k] = {
             status: v,
+            flightDate: todayDate,
             requestedTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
             acknowledged: false
           };
         } else if (v && typeof v === 'object') {
-          migrated[k] = v;
+          const recDate = (v as any).flightDate || ((v as any).requestedAt && (v as any).requestedAt.length > 10 ? (v as any).requestedAt.split('T')[0] : null);
+          // Purge records from previous days so IntoPlane is completely fresh on a new day
+          if (!recDate || recDate >= todayDate) {
+            migrated[k] = v;
+          }
         }
       }
       return migrated;
@@ -441,6 +514,7 @@ const ScreenDashboard: React.FC<{
       status: 'REQUEST_FUELING' | 'NO_FUEL';
       requestedTime: string;
       requestedAt?: string;
+      flightDate?: string;
       acknowledged?: boolean;
       acknowledgedTime?: string;
       acknowledgedAt?: string;
@@ -467,6 +541,8 @@ const ScreenDashboard: React.FC<{
     const cleanFlight = (job.flightNumber || '').replace(/\s+/g, '').toUpperCase();
     const timeNow = serverTimeService.getServerTimeString();
     const isoNow = serverTimeService.getServerIso();
+    // Operational date for this flight — critical for daily scoping of alerts
+    const flightOperationalDate = job.date ? job.date.split('T')[0] : selectedBriefingDate;
 
     // Clear any prior alerts (including old cancellations or stale alerts) for this flight
     const staleAlerts = (alerts || []).filter(a => {
@@ -486,11 +562,12 @@ const ScreenDashboard: React.FC<{
       }
     }
 
-    // Set cache with requested timestamp
+    // Set cache with requested timestamp and operational flight date
     updateDispatchCache(cleanFlight, {
       status: alertType,
       requestedTime: timeNow,
       requestedAt: isoNow,
+      flightDate: flightOperationalDate,
       acknowledged: false
     });
 
@@ -521,6 +598,7 @@ const ScreenDashboard: React.FC<{
           severity: alertSeverity,
           alertType,
           flightNumber: job.flightNumber,
+          flightDate: flightOperationalDate,
           message: `Into-Plane: ${label} for Flight ${job.flightNumber}${assigneeName ? ` (Operator: ${assigneeName})` : ''}.`,
           timestamp: isoNow,
           acknowledged: false,
@@ -538,6 +616,7 @@ const ScreenDashboard: React.FC<{
           severity: alertSeverity,
           alertType,
           flightNumber: job.flightNumber,
+          flightDate: flightOperationalDate,
           message: `Into-Plane: ${label} for Flight ${job.flightNumber}${officerName ? ` (Officer: ${officerName})` : ''}.`,
           timestamp: isoNow,
           acknowledged: false,
@@ -555,6 +634,7 @@ const ScreenDashboard: React.FC<{
           severity: alertSeverity,
           alertType,
           flightNumber: job.flightNumber,
+          flightDate: flightOperationalDate,
           message: `Into-Plane: ${label} for Flight ${job.flightNumber} (Stand ${job.stand || 'TBA'}).`,
           timestamp: isoNow,
           acknowledged: false,
@@ -575,10 +655,11 @@ const ScreenDashboard: React.FC<{
       console.error('Failed to send fuel alert:', err);
       notify('Failed to dispatch alert.', 'error');
     }
-  }, [alerts, createAlert, deleteAlerts, notify, staff, updateDispatchCache, user.id, user.name]);
+  }, [alerts, createAlert, deleteAlerts, notify, selectedBriefingDate, staff, updateDispatchCache, user.id, user.name]);
 
   const handleCancelAlert = useCallback(async (job: FlightJob) => {
     const cleanFlight = (job.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+    const flightOperationalDate = job.date ? job.date.split('T')[0] : selectedBriefingDate;
     updateDispatchCache(cleanFlight, null);
 
     try {
@@ -617,6 +698,7 @@ const ScreenDashboard: React.FC<{
           severity: 'warning',
           alertType: 'ALERT_CANCELLED',
           flightNumber: job.flightNumber,
+          flightDate: flightOperationalDate,
           message: `ALERT CANCELLED: Dispatch alert for Flight ${job.flightNumber} has been cancelled by Manager ${user.name}.`,
           timestamp: cancelIso,
           acknowledged: false,
@@ -633,6 +715,7 @@ const ScreenDashboard: React.FC<{
           severity: 'warning',
           alertType: 'ALERT_CANCELLED',
           flightNumber: job.flightNumber,
+          flightDate: flightOperationalDate,
           message: `ALERT CANCELLED: Dispatch alert for Flight ${job.flightNumber} has been cancelled by Manager ${user.name}.`,
           timestamp: cancelIso,
           acknowledged: false,
@@ -649,6 +732,7 @@ const ScreenDashboard: React.FC<{
           severity: 'warning',
           alertType: 'ALERT_CANCELLED',
           flightNumber: job.flightNumber,
+          flightDate: flightOperationalDate,
           message: `ALERT CANCELLED: Dispatch alert for Flight ${job.flightNumber} (Stand ${job.stand || 'TBA'}) cancelled by Manager.`,
           timestamp: cancelIso,
           acknowledged: false,
@@ -664,7 +748,7 @@ const ScreenDashboard: React.FC<{
       console.error('Failed to cancel alert:', err);
       notify('Failed to cancel alert request.', 'error');
     }
-  }, [alerts, createAlert, deleteAlerts, notify, updateDispatchCache, user.id, user.name]);
+  }, [alerts, createAlert, deleteAlerts, notify, selectedBriefingDate, updateDispatchCache, user.id, user.name]);
   
   const shiftRanges: Record<string, { start: string; end: string; crossesMidnight: boolean }> = {
     'Morning': { start: '07:30', end: '16:00', crossesMidnight: false },
@@ -1174,11 +1258,24 @@ const ScreenDashboard: React.FC<{
       const cleanFlight = (job.flightNumber || '').replace(/\s+/g, '').toUpperCase();
       
       // Find related dispatch alerts (unacknowledged or acknowledged), sorted newest first
+      // Only include alerts whose operational date matches this flight's date (prevents yesterday's alerts bleeding through)
+      const flightOperationalDate = job.date ? job.date.split('T')[0] : selectedBriefingDate;
+
       const relatedAlerts = (alerts || []).filter(a => {
           const aType = a.alertType || '';
           const isDispatchType = aType === 'REQUEST_FUELING' || aType === 'NO_FUEL' ||
               (a.message && (a.message.toLowerCase().includes('requested') || a.message.toLowerCase().includes('no fuel')));
           if (!isDispatchType) return false;
+
+          // Date guard: skip alerts from a different operational date
+          // Alerts with flightDate take priority; fall back to the ISO timestamp date
+          const alertDate = a.flightDate ||
+            (a.timestamp && a.timestamp.length > 10
+              ? new Date(a.timestamp).toISOString().split('T')[0]
+              : null);
+          if (alertDate && flightOperationalDate && alertDate !== flightOperationalDate) {
+            return false; // Previous-day or future-date alert — exclude
+          }
 
           const aFlt = (a.flightNumber || a.metadata?.flightNumber || '').replace(/\s+/g, '').toUpperCase();
           if (aFlt && aFlt === cleanFlight) return true;
@@ -1188,7 +1285,12 @@ const ScreenDashboard: React.FC<{
 
       const latestAlert = relatedAlerts[0];
       const unackAlert = relatedAlerts.find(a => !a.acknowledged);
-      const cached = cleanFlight ? dispatchCache[cleanFlight] : undefined;
+      const cachedRaw = cleanFlight ? dispatchCache[cleanFlight] : undefined;
+      const cachedRecordDate = cachedRaw?.flightDate || (cachedRaw?.requestedAt && cachedRaw.requestedAt.length > 10 ? cachedRaw.requestedAt.split('T')[0] : null);
+      // Only accept cached dispatch if it matches this flight's operational date (prevents stale dispatch badge from yesterday)
+      const cached = (cachedRaw && (!cachedRecordDate || cachedRecordDate === flightOperationalDate))
+          ? cachedRaw
+          : undefined;
 
       let dispatchStatus: 'REQUEST_FUELING' | 'NO_FUEL' | null = null;
       let isDispatchAcknowledged = false;
@@ -1400,12 +1502,29 @@ const ScreenDashboard: React.FC<{
 
                           {/* Desktop Center-Aligned Timings (lg+ only) */}
                           {isDomesticOrAdhoc ? (
-                              <div className="hidden lg:flex items-center gap-2 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/30 px-3.5 py-1.5 rounded-xl border border-outline absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm pointer-events-none">
+                              <div 
+                                  onClick={isManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFrtJob(job); } : undefined}
+                                  className={`hidden lg:flex items-center gap-2 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/30 px-3.5 py-1.5 rounded-xl border border-outline absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm ${
+                                      isManagerOrAdmin ? 'cursor-pointer hover:border-primary/60 hover:bg-surface-dim/70 active:scale-[0.98] transition-all pointer-events-auto' : 'pointer-events-none'
+                                  }`}
+                                  title={isManagerOrAdmin ? "Click to record / edit DEP STD, TOBT, and FRT" : undefined}
+                              >
                                   <span className="text-warning opacity-60 text-[10px]">STD</span>
                                   <span className="text-warning text-[14px] font-black tracking-tight">{job.std || '--:--'}</span>
+                                  {job.tobt && (
+                                      <span className="font-mono text-amber-400 font-black text-xs bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">
+                                          TOBT {job.tobt}
+                                      </span>
+                                  )}
                               </div>
                           ) : (
-                              <div className="hidden lg:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/30 px-4 py-2 rounded-xl border border-outline absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm pointer-events-none">
+                              <div 
+                                  onClick={isManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFrtJob(job); } : undefined}
+                                  className={`hidden lg:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest bg-surface-container-low/30 px-4 py-2 rounded-xl border border-outline absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 shadow-sm ${
+                                      isManagerOrAdmin ? 'cursor-pointer hover:border-primary/60 hover:bg-surface-dim/70 active:scale-[0.98] transition-all pointer-events-auto' : 'pointer-events-none'
+                                  }`}
+                                  title={isManagerOrAdmin ? "Click to record / edit DEP STD, TOBT, and FRT" : undefined}
+                              >
                                   <div className="flex items-center gap-2">
                                       <span className="opacity-40 text-[10px]">STA</span>
                                       <span className="text-on-surface text-[14px] font-black tracking-tight">{job.sta || '--:--'}</span>
@@ -1418,6 +1537,12 @@ const ScreenDashboard: React.FC<{
                                       <span className="text-warning opacity-60 text-[10px]">STD</span>
                                       <span className="text-warning text-[14px] font-black tracking-tight">{job.std || '--:--'}</span>
                                   </div>
+                                  {job.tobt && (
+                                      <div className="flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                                          <span className="text-amber-500 text-[10px]">TOBT</span>
+                                          <span className="text-amber-400 text-[13px] font-black">{job.tobt}</span>
+                                      </div>
+                                  )}
                               </div>
                           )}
 
@@ -1794,7 +1919,13 @@ const ScreenDashboard: React.FC<{
                               {isAdhocFlightJob && (
                                   <>
                                       <span className="opacity-20 shrink-0">|</span>
-                                      <span className="text-warning font-black text-[10px] tracking-wider whitespace-nowrap">STD {job.std || '--:--'}</span>
+                                      <span 
+                                          onClick={isManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFrtJob(job); } : undefined}
+                                          className={`text-warning font-black text-[10px] tracking-wider whitespace-nowrap ${isManagerOrAdmin ? 'cursor-pointer hover:underline' : ''}`}
+                                          title={isManagerOrAdmin ? "Click to record / edit DEP STD, TOBT, and FRT" : undefined}
+                                      >
+                                          STD {job.std || '--:--'}
+                                      </span>
                                   </>
                               )}
                           </div>
@@ -1857,9 +1988,18 @@ const ScreenDashboard: React.FC<{
                                       ) : null
                                   ) : (
                                       <>
-                                          <div className="flex items-center gap-1.5 shrink-0">
+                                          <div 
+                                              onClick={isManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFrtJob(job); } : undefined}
+                                              className={`flex items-center gap-1.5 shrink-0 ${isManagerOrAdmin ? 'cursor-pointer hover:opacity-80 p-0.5 rounded' : ''}`}
+                                              title={isManagerOrAdmin ? "Click to record / edit DEP STD, TOBT, and FRT" : undefined}
+                                          >
                                               <span className="text-[9px] font-black text-warning/70 uppercase tracking-widest">STD</span>
                                               <span className="text-[13px] sm:text-sm font-[900] text-warning tracking-tight">{job.std || '--:--'}</span>
+                                              {job.tobt && (
+                                                  <span className="font-mono text-amber-400 font-black text-[10px] bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">
+                                                      TOBT {job.tobt}
+                                                  </span>
+                                              )}
                                           </div>
                                           {activeEqId && (
                                               <div className={`flex items-center space-x-1 px-2 py-0.5 rounded-md border shadow-sm shrink-0 ${equipmentBadgeClass(activeEqId)}`}>
@@ -1898,7 +2038,13 @@ const ScreenDashboard: React.FC<{
                   {!isDomesticOrAdhoc && (
                     <div className="mt-2.5 pt-2.5 border-t border-outline/40 space-y-2.5">
                       {/* Timings displayed on mobile + tablet view */}
-                      <div className="grid grid-cols-3 gap-2 p-2.5 bg-surface-dim rounded-xl border border-outline lg:hidden">
+                      <div 
+                          onClick={isManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFrtJob(job); } : undefined}
+                          className={`grid ${job.tobt ? 'grid-cols-4' : 'grid-cols-3'} gap-2 p-2.5 bg-surface-dim rounded-xl border border-outline lg:hidden ${
+                              isManagerOrAdmin ? 'cursor-pointer hover:border-primary/50 transition-colors pointer-events-auto' : ''
+                          }`}
+                          title={isManagerOrAdmin ? "Click to record / edit DEP STD, TOBT, and FRT" : undefined}
+                      >
                           <div className="text-center border-r border-outline/30">
                               <p className="text-[8px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mb-0.5">STA</p>
                               <p className="text-[11px] font-[900] text-on-surface">{job.sta || '--:--'}</p>
@@ -1907,10 +2053,16 @@ const ScreenDashboard: React.FC<{
                               <p className={`text-[8px] font-black uppercase tracking-widest mb-0.5 ${delayed ? 'text-error opacity-60' : 'text-primary opacity-60'}`}>ETA</p>
                               <p className={`text-[11px] font-[900] ${delayed ? 'text-error' : 'text-primary'}`}>{job.eta || '--:--'}</p>
                           </div>
-                          <div className="text-center">
+                          <div className={`text-center ${job.tobt ? 'border-r border-outline/30' : ''}`}>
                               <p className="text-[8px] font-black text-warning opacity-60 uppercase tracking-widest mb-0.5">STD</p>
                               <p className="text-[11px] font-[900] text-warning">{job.std || '--:--'}</p>
                           </div>
+                          {job.tobt && (
+                              <div className="text-center">
+                                  <p className="text-[8px] font-black text-amber-500 uppercase tracking-widest mb-0.5">TOBT</p>
+                                  <p className="text-[11px] font-[900] text-amber-400">{job.tobt}</p>
+                              </div>
+                          )}
                       </div>
 
                       {/* Row 2: Operator/Team/EQ (Left) & Status Badge (Right) */}
@@ -2102,6 +2254,16 @@ const ScreenDashboard: React.FC<{
               console.error(err);
               notify('Failed to update flight stand', 'error');
             }
+          }}
+        />
+      )}
+
+      {editingFrtJob && (user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN) && (
+        <EditFuelRequestModal
+          flight={editingFrtJob}
+          onClose={() => setEditingFrtJob(null)}
+          onSave={async (updates) => {
+            await handleSaveCardFrt(editingFrtJob, updates);
           }}
         />
       )}
@@ -3386,7 +3548,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       (normFlightNo && (j.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase() === normFlightNo && j.status !== 'COMPLETED')
     );
 
-    const targetFlightDate = jobToCancel?.date ? jobToCancel.date.split('T')[0] : (currentActive?.operationalDate || selectedBriefingDate);
+    const targetFlightDate = (jobToCancel as any)?.date ? (jobToCancel as any).date.split('T')[0] : (currentActive?.operationalDate || selectedBriefingDate);
     const finalJobId = matching?.id || knownJobId || (normFlightNo ? `fj-${normFlightNo}` : undefined);
     if (finalJobId || normFlightNo) {
       updateFlightJobRef.current(finalJobId || normFlightNo, { 
@@ -4244,36 +4406,55 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
             } as any}
             onClose={() => setShowEditActiveFrt(false)}
             onSave={async (updates) => {
+              const cleanUpdates = {
+                std: updates.std !== undefined ? updates.std.trim() : undefined,
+                tobt: updates.tobt !== undefined ? updates.tobt.trim() : undefined,
+                frtAirline: updates.frtAirline !== undefined ? updates.frtAirline.trim() : undefined,
+                frtAocc: updates.frtAocc !== undefined ? updates.frtAocc.trim() : undefined,
+                frtFor: updates.frtFor !== undefined ? updates.frtFor.trim() : undefined,
+              };
+
               // 1. Update activeFlight local state
-              setActiveFlight(prev => prev ? ({ ...prev, ...updates }) : null);
+              setActiveFlight(prev => prev ? ({ ...prev, ...cleanUpdates }) : null);
               try {
                 const raw = localStorage.getItem(`fms_active_flight_${user?.id || ''}`);
                 if (raw) {
                   const parsed = JSON.parse(raw);
-                  localStorage.setItem(`fms_active_flight_${user?.id || ''}`, JSON.stringify({ ...parsed, ...updates }));
+                  localStorage.setItem(`fms_active_flight_${user?.id || ''}`, JSON.stringify({ ...parsed, ...cleanUpdates }));
                 }
               } catch {}
 
               // 2. Update flight_jobs table
-              const cleanFn = (activeFlight.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+              const rawFlight = activeFlight.flightNumber || '';
+              const cleanFn = rawFlight.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+              const compactFn = cleanFn.replace(/([A-Z]+)0+([0-9]+)/, '$1$2');
+
+              const matchesFn = (fn?: string) => {
+                if (!fn) return false;
+                const c = fn.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+                return c === cleanFn || c.replace(/([A-Z]+)0+([0-9]+)/, '$1$2') === compactFn;
+              };
+
               const matchingJob = (flightJobs || []).find(j => 
                 (activeFlight.id && j.id === activeFlight.id) ||
-                ((j.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase() === cleanFn)
+                matchesFn(j.flightNumber)
               );
               const targetJobId = matchingJob?.id || activeFlight.id || (activeFlight as any).jobId;
               if (targetJobId) {
-                await updateFlightJob(targetJobId, updates);
+                await updateFlightJob(targetJobId, cleanUpdates);
               }
 
               // 3. Retrospectively sync with saved flight log if any exists
               const matchingLogs = (flightLogs || []).filter(l => 
-                l && l.flightNumber && l.flightNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase() === cleanFn
+                l && matchesFn(l.flightNumber)
               );
               for (const ml of matchingLogs) {
                 if (ml.id && updateFlightLog) {
                   try {
-                    await updateFlightLog(ml.id, updates);
-                  } catch (e) {}
+                    await updateFlightLog(ml.id, cleanUpdates as any);
+                  } catch (e) {
+                    console.warn(`[IntoPlane] Could not update saved flight log ${ml.id}:`, e);
+                  }
                 }
               }
 

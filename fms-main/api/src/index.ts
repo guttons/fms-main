@@ -1316,7 +1316,7 @@ app.patch('/operations-log/:id', requireAuth, async (req: Request, res: Response
   for (const [js, bq] of Object.entries(fieldMap)) {
     if (js in updates) {
       setClauses.push(`${bq} = @${js}`);
-      params[js] = updates[js] ?? null;
+      params[js] = (updates[js] === '' || updates[js] === undefined) ? null : updates[js];
     }
   }
 

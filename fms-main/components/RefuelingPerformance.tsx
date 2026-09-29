@@ -287,27 +287,52 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
     const jobsByFlightAndDate = new Map<string, FlightJob>();
     const jobsByFlight = new Map<string, FlightJob>();
 
+    const cleanCompact = (fn?: string) => (fn || '').replace(/[^A-Z0-9]/gi, '').toUpperCase().replace(/([A-Z]+)0+([0-9]+)/, '$1$2');
+
     (flightJobs || []).forEach(j => {
       if (j.flightNumber) {
         const fnUpper = j.flightNumber.replace(/\s+/g, '').toUpperCase();
+        const compact = cleanCompact(j.flightNumber);
         const d = (j.date || j.id.match(/\d{4}-\d{2}-\d{2}/)?.[0] || '').split('T')[0];
         if (d) {
           jobsByFlightAndDate.set(`${fnUpper}__${d}`, j);
+          jobsByFlightAndDate.set(`${compact}__${d}`, j);
         }
         if (!jobsByFlight.has(fnUpper)) {
           jobsByFlight.set(fnUpper, j);
+        }
+        if (!jobsByFlight.has(compact)) {
+          jobsByFlight.set(compact, j);
         }
       }
     });
 
     return rawLogs.map(log => {
       const fnUpper = (log.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+      const compact = cleanCompact(log.flightNumber);
       const opDate = (log.operationalDate || (log as any).date || '').split('T')[0];
-      const matchingJob = (opDate ? jobsByFlightAndDate.get(`${fnUpper}__${opDate}`) : undefined) || jobsByFlight.get(fnUpper);
+      const matchingJob = 
+        (opDate ? jobsByFlightAndDate.get(`${fnUpper}__${opDate}`) : undefined) ||
+        (opDate ? jobsByFlightAndDate.get(`${compact}__${opDate}`) : undefined) ||
+        jobsByFlight.get(fnUpper) ||
+        jobsByFlight.get(compact);
 
       const computedFuelEnd = log.timestampFinalEnd || log.timestampInitialEnd;
-      const stdVal = log.std || matchingJob?.std || '';
-      const tobtVal = log.tobt || matchingJob?.tobt || '';
+      const stdVal = (matchingJob && matchingJob.std !== undefined && matchingJob.std !== '') 
+        ? matchingJob.std 
+        : (log.std || matchingJob?.std || '');
+      const tobtVal = (matchingJob && matchingJob.tobt !== undefined)
+        ? (matchingJob.tobt || '')
+        : (log.tobt || '');
+      const frtAirlineVal = (matchingJob && matchingJob.frtAirline !== undefined)
+        ? (matchingJob.frtAirline || '')
+        : (log.frtAirline || '');
+      const frtAoccVal = (matchingJob && matchingJob.frtAocc !== undefined)
+        ? (matchingJob.frtAocc || '')
+        : (log.frtAocc || '');
+      const frtForVal = (matchingJob && matchingJob.frtFor !== undefined)
+        ? (matchingJob.frtFor || '')
+        : (log.frtFor || '');
       const clearanceVal = log.timestampClearance || matchingJob?.timestampClearance || '';
 
       // Determine Category: Ad-Hoc, Domestic, or International
@@ -326,9 +351,9 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
         category,
         std: stdVal,
         tobt: tobtVal,
-        frtAirline: log.frtAirline || matchingJob?.frtAirline || '',
-        frtAocc: log.frtAocc || matchingJob?.frtAocc || '',
-        frtFor: log.frtFor || matchingJob?.frtFor || '',
+        frtAirline: frtAirlineVal,
+        frtAocc: frtAoccVal,
+        frtFor: frtForVal,
         fuelEnd: computedFuelEnd,
         timestampClearance: clearanceVal,
         targetDeparture,

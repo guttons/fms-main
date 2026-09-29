@@ -427,12 +427,20 @@ const AppContextContent: React.FC<any> = ({
   // --- Native Web Push Subscription State ---
   const [isPushSubscribed, setIsPushSubscribed] = useState(false);
   const [isPushLoading, setIsPushLoading] = useState(false);
+  const [showPushBanner, setShowPushBanner] = useState(false);
 
   useEffect(() => {
     getPushSubscription().then(sub => {
       setIsPushSubscribed(!!sub);
+      if (!sub && typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window) {
+        const dismissed = sessionStorage.getItem('fms_push_banner_dismissed');
+        if (!dismissed && typeof Notification !== 'undefined' && Notification.permission !== 'denied' && currentUser) {
+          // Show prompt banner after brief delay
+          setTimeout(() => setShowPushBanner(true), 2000);
+        }
+      }
     });
-  }, []);
+  }, [currentUser]);
 
   const handleTogglePushNotifications = async () => {
     if (!currentUser) return;
@@ -458,6 +466,7 @@ const AppContextContent: React.FC<any> = ({
             navigator.userAgent
           );
           setIsPushSubscribed(true);
+          setShowPushBanner(false);
           notify('Native push notifications enabled successfully!', 'success');
           sendNativeNotification('FMS Notifications', 'Push alerts are now enabled on this device.');
         } else {
@@ -470,6 +479,11 @@ const AppContextContent: React.FC<any> = ({
     } finally {
       setIsPushLoading(false);
     }
+  };
+
+  const handleEnablePushFromBanner = async () => {
+    setShowPushBanner(false);
+    await handleTogglePushNotifications();
   };
 
   const alertsRef = React.useRef<HTMLDivElement>(null);
@@ -1793,6 +1807,43 @@ const AppContextContent: React.FC<any> = ({
               </div>
             </header>
             </div>
+
+            {/* Push Notification Opt-in Prompt Banner */}
+            {showPushBanner && !isPushSubscribed && currentUser && (
+              <div className="mx-4 sm:mx-6 mt-3 p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-primary/15 via-surface-container to-amber-500/10 border border-primary/30 flex items-center justify-between gap-3 shadow-lg animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-primary/20 text-primary flex items-center justify-center shrink-0">
+                    <BellRing className="w-4 h-4 animate-pulse" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-black uppercase tracking-tight text-on-surface">Enable Flight & Fuel Alerts</div>
+                    <div className="text-[10px] text-on-surface-dim truncate">Receive fuel requests and flight alerts on your lock screen even when app is closed.</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleEnablePushFromBanner}
+                    disabled={isPushLoading}
+                    className="px-3 py-1.5 rounded-xl bg-primary text-primary-content text-[10px] font-black uppercase tracking-wider shadow-sm hover:opacity-95 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isPushLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+                    <span>Enable</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPushBanner(false);
+                      sessionStorage.setItem('fms_push_banner_dismissed', 'true');
+                    }}
+                    className="p-1 rounded-lg text-on-surface-dim hover:text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer"
+                    title="Dismiss"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             <PredictiveBackWrapper
               activeView={activeView}

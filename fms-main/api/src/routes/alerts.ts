@@ -16,6 +16,7 @@ function mapRowToAlert(row: any) {
     targetRole: row.target_role || null,
     alertType: row.alert_type || null,
     flightNumber: row.flight_number || null,
+    flightDate: row.flight_date || null,
     assignedStaffId: row.assigned_staff_id || null,
     metadata: row.metadata ? (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata) : null,
     senderId: row.sender_id || null,
@@ -23,11 +24,25 @@ function mapRowToAlert(row: any) {
   };
 }
 
-// GET /alerts
+// GET /alerts — returns last 2 days worth of alerts (handles night-shift midnight overlap)
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
-    const { limit = '100', unacknowledgedOnly } = req.query;
-    let query = supabase.from('alerts').select('*').order('timestamp', { ascending: false }).limit(Number(limit));
+    const { limit = '200', unacknowledgedOnly } = req.query;
+
+    // Rolling 2-day window: today + yesterday to handle overnight/night-shift
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0];
+
+    let query = supabase
+      .from('alerts')
+      .select('*')
+      .order('timestamp', { ascending: false })
+      .limit(Number(limit));
+
+    // Prefer date-column filtering when flight_date is present; fall back gracefully
+    // (rows inserted before the migration have flight_date = NULL; those come through unfiltered)
+    query = query.or(`flight_date.gte.${twoDaysAgo},flight_date.is.null`);
 
     if (unacknowledgedOnly === 'true') {
       query = query.eq('acknowledged', false);
@@ -54,6 +69,11 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
+    // Determine operational date: prefer explicit flightDate, fall back to today
+    const flightDate = alert.flightDate
+      || (alert.timestamp ? new Date(alert.timestamp).toISOString().split('T')[0] : null)
+      || new Date().toISOString().split('T')[0];
+
     const row: Record<string, any> = {
       severity: alert.severity || 'low',
       message: alert.message,
@@ -62,6 +82,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
       target_role: alert.targetRole || null,
       alert_type: alert.alertType || null,
       flight_number: alert.flightNumber || null,
+      flight_date: flightDate,
       assigned_staff_id: alert.assignedStaffId || null,
       metadata: alert.metadata ? JSON.stringify(alert.metadata) : null,
       sender_id: alert.senderId || null,
@@ -70,20 +91,26 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
 
     const { data, error } = await supabase.from('alerts').insert([row]).select().maybeSingle();
     if (error) {
-      // If extended columns are not supported in schema, fallback to minimal columns
-      if (error.code === 'PGRST204' || error.message?.includes('column')) {
-        const fallbackRow = {
-          severity: alert.severity || 'low',
-          message: alert.message,
-          timestamp: new Date().toISOString(),
-          acknowledged: false,
-          target_role: alert.targetRole || null
-        };
-        const fallbackRes = await supabase.from('alerts').insert([fallbackRow]).select().maybeSingle();
+      // If flight_date column doesn't exist yet (pre-migration), strip it and retry
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('flight_date')) {
+        const { flight_date: _fd, ...rowWithoutDate } = row;
+        const fallbackRes = await supabase.from('alerts').insert([rowWithoutDate]).select().maybeSingle();
         if (fallbackRes.error) {
-          return res.status(500).json({ error: fallbackRes.error.message });
+          // Last-resort: minimal columns only
+          const minimalRow = {
+            severity: alert.severity || 'low',
+            message: alert.message,
+            timestamp: new Date().toISOString(),
+            acknowledged: false,
+            target_role: alert.targetRole || null
+          };
+          const minimalRes = await supabase.from('alerts').insert([minimalRow]).select().maybeSingle();
+          if (minimalRes.error) {
+            return res.status(500).json({ error: minimalRes.error.message });
+          }
+          return res.status(201).json({ alert: mapRowToAlert(minimalRes.data || minimalRow) });
         }
-        return res.status(201).json({ alert: mapRowToAlert(fallbackRes.data || fallbackRow) });
+        return res.status(201).json({ alert: mapRowToAlert(fallbackRes.data || rowWithoutDate) });
       }
       return res.status(500).json({ error: error.message });
     }

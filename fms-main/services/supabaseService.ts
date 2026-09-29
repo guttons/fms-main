@@ -497,7 +497,7 @@ export const supabaseService = {
     if ('stand' in updates) row.stand = updates.stand;
     if ('sta' in updates) row.sta = updates.sta === undefined ? null : updates.sta;
     if ('eta' in updates) row.eta = updates.eta === undefined ? null : updates.eta;
-    if ('std' in updates) row.std = updates.std === undefined ? null : updates.std;
+    if ('std' in updates) row.std = updates.std ? updates.std : null;
     if ('assignedTo' in updates) row.assigned_to = updates.assignedTo ? updates.assignedTo : null;
     if ('assignedOfficer' in updates) row.assigned_officer = updates.assignedOfficer ? updates.assignedOfficer : null;
     if ('equipmentUsage' in updates) row.equipment_usage = updates.equipmentUsage;
@@ -506,10 +506,10 @@ export const supabaseService = {
     if ('landed_alert_sent' in updates) row.landed_alert_sent = updates.landed_alert_sent;
     if ('eta_alert_15_sent' in updates) row.eta_alert_15_sent = updates.eta_alert_15_sent;
     if ('eta_alert_5_sent' in updates) row.eta_alert_5_sent = updates.eta_alert_5_sent;
-    if ('tobt' in updates) row.tobt = updates.tobt === undefined ? null : updates.tobt;
-    if ('frtAirline' in updates) row.frt_airline = updates.frtAirline === undefined ? null : updates.frtAirline;
-    if ('frtAocc' in updates) row.frt_aocc = updates.frtAocc === undefined ? null : updates.frtAocc;
-    if ('frtFor' in updates) row.frt_for = updates.frtFor === undefined ? null : updates.frtFor;
+    if ('tobt' in updates) row.tobt = updates.tobt ? updates.tobt : null;
+    if ('frtAirline' in updates) row.frt_airline = updates.frtAirline ? updates.frtAirline : null;
+    if ('frtAocc' in updates) row.frt_aocc = updates.frtAocc ? updates.frtAocc : null;
+    if ('frtFor' in updates) row.frt_for = updates.frtFor ? updates.frtFor : null;
     if ('timestampClearance' in updates) row.timestamp_clearance = updates.timestampClearance === undefined ? null : updates.timestampClearance;
 
     if ('remarks' in updates || 'date' in updates || 'route' in updates || 'isDomestic' in updates || 'isAdhoc' in updates || 'type' in updates || 'tobt' in updates || 'frtAirline' in updates || 'frtAocc' in updates || 'frtFor' in updates || 'timestampClearance' in updates) {
@@ -854,19 +854,32 @@ export const supabaseService = {
       if (existingDeliveryNumber !== undefined) {
         body._existingDeliveryNumber = existingDeliveryNumber;
       }
-      const res = await fetch(`${this._bqBase()}/operations-log/${id}`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        let errMsg = errText;
-        try {
-          const parsed = JSON.parse(errText);
-          if (parsed.error) errMsg = parsed.error;
-        } catch {}
-        throw new Error(errMsg);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      try {
+        const res = await fetch(`${this._bqBase()}/operations-log/${id}`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify(body),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (!res.ok) {
+          const errText = await res.text();
+          let errMsg = errText;
+          try {
+            const parsed = JSON.parse(errText);
+            if (parsed.error) errMsg = parsed.error;
+          } catch {}
+          throw new Error(errMsg);
+        }
+      } catch (fetchErr: any) {
+        clearTimeout(timeoutId);
+        if (fetchErr.name === 'AbortError') {
+          console.warn('[BigQuery] updateFlightLog network call timed out after 8s; changes are already saved locally.');
+        } else {
+          throw fetchErr;
+        }
       }
       activityLogService.logAction(null, {
         module: LogModule.FLIGHT_LOG,
@@ -1175,7 +1188,8 @@ export const supabaseService = {
           ...row,
           timestamp: row.timestamp && !row.timestamp.includes(':') 
             ? new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
-            : row.timestamp
+            : row.timestamp,
+          flightDate: row.flightDate || null
         }));
       }
     } catch (apiErr) {
@@ -1205,6 +1219,7 @@ export const supabaseService = {
         targetRole: row.target_role,
         alertType: row.alert_type || row.alertType || null,
         flightNumber: row.flight_number || row.flightNumber || null,
+        flightDate: row.flight_date || row.flightDate || null,
         assignedStaffId: row.assigned_staff_id || row.assignedStaffId || null,
         metadata: row.metadata ? (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata) : null,
         senderId: row.sender_id || row.senderId || null,
@@ -1302,11 +1317,17 @@ export const supabaseService = {
         target_role: alert.targetRole || null
       };
 
+      // Determine operational date
+      const flightDate = alert.flightDate
+        || (alert.timestamp ? new Date(alert.timestamp).toISOString().split('T')[0] : null)
+        || new Date().toISOString().split('T')[0];
+
       if (alertsExtendedSupported) {
         const extendedRow = {
           ...baseRow,
           alert_type: alert.alertType || null,
           flight_number: alert.flightNumber || null,
+          flight_date: flightDate,
           assigned_staff_id: alert.assignedStaffId || null,
           metadata: alert.metadata ? JSON.stringify(alert.metadata) : null,
           sender_id: alert.senderId || null,
@@ -1315,7 +1336,7 @@ export const supabaseService = {
 
         const { error } = await supabase.from('alerts').insert([extendedRow]);
         if (error) {
-          if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('alert_type')) {
+          if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('alert_type') || error.message?.includes('flight_date')) {
             alertsExtendedSupported = false;
             await supabase.from('alerts').insert([baseRow]);
           }
@@ -1439,22 +1460,13 @@ export const supabaseService = {
         }
       }
 
-      if (targetUserIds.length === 0) {
-        return;
-      }
-
-      const subscriptions = await supabaseService.getPushSubscriptionsForStaff(targetUserIds);
-      if (!subscriptions || subscriptions.length === 0) {
-        console.log('[Push] No active push subscriptions found for staff:', targetUserIds);
-        return;
-      }
-
       const apiBase = supabaseService._bqBase();
       const headers = await supabaseService._bqAuthHeaders();
 
       let title = 'FMS Operational Alert';
       if (alert.alertType === 'REQUEST_FUELING') title = '⛽ HIGH ALERT: Request Fueling';
       else if (alert.alertType === 'NO_FUEL') title = '🚫 NOTICE: No Fuel Required';
+      else if (alert.alertType === 'ALERT_CANCELLED') title = '✅ Alert Cancelled';
       else if (alert.alertType === 'ETA_15MIN') title = '⏰ ETA WARNING: ~15 Minutes';
       else if (alert.alertType === 'ETA_5MIN') title = '🚨 ETA CRITICAL: ~5 Minutes';
       else if (alert.alertType === 'LANDED') title = '✈️ FLIGHT LANDED';
@@ -1469,22 +1481,57 @@ export const supabaseService = {
         url: '/'
       };
 
-      const response = await fetch(`${apiBase}/api/push/send`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          subscriptions,
-          payload: pushPayload
-        })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log(`[Push] Push dispatch complete. Sent: ${result.sent}, Failed: ${result.failed}`);
-        if (result.invalidEndpoints && result.invalidEndpoints.length > 0) {
-          for (const ep of result.invalidEndpoints) {
-            await supabaseService.deletePushSubscription(ep);
+      // Fetch subscriptions for specific assigned staff first
+      if (targetUserIds.length > 0) {
+        const subscriptions = await supabaseService.getPushSubscriptionsForStaff(targetUserIds);
+        if (subscriptions && subscriptions.length > 0) {
+          const response = await fetch(`${apiBase}/api/push/send`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ subscriptions, payload: pushPayload })
+          });
+          if (response.ok) {
+            const result = await response.json();
+            console.log(`[Push] Push dispatch complete. Sent: ${result.sent}, Failed: ${result.failed}`);
+            if (result.invalidEndpoints && result.invalidEndpoints.length > 0) {
+              for (const ep of result.invalidEndpoints) {
+                await supabaseService.deletePushSubscription(ep);
+              }
+            }
           }
+          return; // Specific-staff push done — no need for role broadcast
+        }
+      }
+
+      // Fallback: broadcast to all subscribed devices matching the targetRole
+      // This covers unassigned flights where the ITP Manager sends to a role group
+      if (alert.targetRole) {
+        try {
+          const { data: roleSubscriptions } = await supabase
+            .from('push_subscriptions')
+            .select('*')
+            .eq('user_role', alert.targetRole);
+
+          if (roleSubscriptions && roleSubscriptions.length > 0) {
+            const response = await fetch(`${apiBase}/api/push/send`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ subscriptions: roleSubscriptions, payload: pushPayload })
+            });
+            if (response.ok) {
+              const result = await response.json();
+              console.log(`[Push] Role-broadcast to ${alert.targetRole}: Sent: ${result.sent}, Failed: ${result.failed}`);
+              if (result.invalidEndpoints && result.invalidEndpoints.length > 0) {
+                for (const ep of result.invalidEndpoints) {
+                  await supabaseService.deletePushSubscription(ep);
+                }
+              }
+            }
+          } else {
+            console.log('[Push] No push subscriptions found for role:', alert.targetRole);
+          }
+        } catch (roleErr) {
+          console.warn('[Push] Error during role-based push:', roleErr);
         }
       }
     } catch (pushErr) {

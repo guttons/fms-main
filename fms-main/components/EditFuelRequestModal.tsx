@@ -29,13 +29,19 @@ export const EditFuelRequestModal: React.FC<{
     e.preventDefault();
     setSaving(true);
     try {
-      await onSave({
-        std: std.trim() || undefined,
-        tobt: tobt.trim() || undefined,
-        frtAirline: frtAirline.trim() || undefined,
-        frtAocc: frtAocc.trim() || undefined,
-        frtFor: frtFor.trim() || undefined
-      });
+      await Promise.race([
+        Promise.resolve(onSave({
+          std: std.trim(),
+          tobt: tobt.trim(),
+          frtAirline: frtAirline.trim(),
+          frtAocc: frtAocc.trim(),
+          frtFor: frtFor.trim()
+        })),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Save timeout')), 10000))
+      ]);
+      onClose();
+    } catch (err: any) {
+      console.warn('[EditFuelRequestModal] Error or timeout during save:', err);
       onClose();
     } finally {
       setSaving(false);

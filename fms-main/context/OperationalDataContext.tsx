@@ -5,7 +5,7 @@ import { EQUIPMENT, TANKS, MOCK_ALERTS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
 import { scheduleImportService } from '../services/scheduleImportService';
 import { supabase } from '../supabase';
-import { sendNativeNotification } from '../utils/pwa';
+import { sendNativeNotification, subscribeToWebPush } from '../utils/pwa';
 import { cleanAircraftTypeName } from '../services/aircraftLookupService';
 import { ticketGeneratorService, DEFAULT_TICKET_SEQUENCES } from '../services/ticketGeneratorService';
 
@@ -216,14 +216,15 @@ export const deduplicateAlerts = (rawAlerts: Alert[]): { uniqueAlerts: Alert[]; 
     const target = alert.assignedStaffId || alert.targetRole || 'ALL';
     // Distinguish acknowledged from unacknowledged so historical alerts NEVER purge an active alert!
     const ackState = alert.acknowledged ? 'ACK' : 'UNACK';
+    const alertDate = alert.flightDate || (alert.timestamp && alert.timestamp.length > 10 ? alert.timestamp.split('T')[0] : 'NODATE');
 
     let dedupeKey: string;
     if (['LANDED', 'ETA_15MIN', 'ETA_5MIN', 'REQUEST_FUELING', 'NO_FUEL', 'ALERT_CANCELLED'].includes(type) && cleanFlight) {
-      // For tactical alerts on a flight, deduplicate by type, flight number, target, and ackState
-      dedupeKey = `${type}:${cleanFlight}:${target}:${ackState}`;
+      // For tactical alerts on a flight, deduplicate by type, flight number, date, target, and ackState
+      dedupeKey = `${type}:${cleanFlight}:${alertDate}:${target}:${ackState}`;
     } else {
-      // For general alerts, deduplicate by message, target, and ackState
-      dedupeKey = `${type}:${target}:${(alert.message || '').trim()}:${ackState}`;
+      // For general alerts, deduplicate by message, date, target, and ackState
+      dedupeKey = `${type}:${target}:${alertDate}:${(alert.message || '').trim()}:${ackState}`;
     }
 
     if (seen.has(dedupeKey)) {
@@ -1142,6 +1143,41 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
   }, [appUser, selectedBriefingShift, selectedBriefingDate, refreshData]);
 
+  // Auto-subscribe logged-in staff device to Web Push notifications if permission is granted
+  useEffect(() => {
+    if (!appUser) return;
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+    let isMounted = true;
+
+    const syncPushSubscription = async () => {
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          const vapidKey = await supabaseService.getVapidPublicKey();
+          const sub = await subscribeToWebPush(vapidKey);
+          if (sub && isMounted) {
+            await supabaseService.savePushSubscription(
+              appUser.id,
+              appUser.name,
+              appUser.role,
+              sub,
+              navigator.userAgent
+            );
+            console.log('[PWA] Auto-synced Web Push subscription for:', appUser.name);
+          }
+        }
+      } catch (err) {
+        console.warn('[PWA] Push auto-subscription sync skipped:', err);
+      }
+    };
+
+    syncPushSubscription();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [appUser?.id]);
+
   // Listen to Supabase auth changes to trigger a refresh of external flights when session is loaded
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -1406,14 +1442,6 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     const targetDate = updatesDate || selectedBriefingDate;
 
     const existingJob = flightJobs.find(j => {
-      if (j.id === id) return true;
-      const jDate = j.date ? j.date.split('T')[0] : '';
-      if (jDate && targetDate && jDate !== targetDate) return false;
-      if (!cleanUpdatesFlight) return false;
-      const jFlight = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
-      if (jFlight !== cleanUpdatesFlight) return false;
-      return true;
-    }) || (rawFlightJobs || []).find(j => {
       if (j.id === id) return true;
       const jDate = j.date ? j.date.split('T')[0] : '';
       if (jDate && targetDate && jDate !== targetDate) return false;
@@ -1918,11 +1946,17 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
 
     // TACTICAL FLIGHT ALERTS DUPLICATE GUARD
+    const targetAlertDate = alertData.flightDate || (alertData.timestamp && alertData.timestamp.length > 10 ? alertData.timestamp.split('T')[0] : null) || new Date().toISOString().split('T')[0];
+
     if (alertData.alertType && ['LANDED', 'ETA_15MIN', 'ETA_5MIN', 'REQUEST_FUELING', 'NO_FUEL'].includes(alertData.alertType)) {
       const cleanFlt = (alertData.flightNumber || '').replace(/\s+/g, '').toUpperCase();
       const duplicateExists = (alerts || []).some(a => {
         if (a.acknowledged) return false; // Acknowledged or past alerts must NEVER block new requests!
         if (a.alertType !== alertData.alertType) return false;
+        // Date check: previous days' unacknowledged alerts must NEVER block today's requests!
+        const aDate = a.flightDate || (a.timestamp && a.timestamp.length > 10 ? a.timestamp.split('T')[0] : null);
+        if (aDate && targetAlertDate && aDate !== targetAlertDate) return false;
+
         const aFlt = (a.flightNumber || a.metadata?.flightNumber || '').replace(/\s+/g, '').toUpperCase();
         if (cleanFlt && aFlt && cleanFlt !== aFlt) return false;
         if (cleanFlt && !aFlt) return false;
@@ -1938,11 +1972,14 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
 
     // GENERAL DUPLICATE GUARD: Check current state + pending Ref
-    const isDuplicate = (alerts || []).some(a => 
-      !a.acknowledged && 
-      a.message === alertData.message && 
-      a.targetRole === alertData.targetRole
-    ) || pendingAlertHashes.current.has(alertHash);
+    const isDuplicate = (alerts || []).some(a => {
+      if (a.acknowledged) return false;
+      // Date check: previous days' alerts must never block current day alerts
+      const aDate = a.flightDate || (a.timestamp && a.timestamp.length > 10 ? a.timestamp.split('T')[0] : null);
+      if (aDate && targetAlertDate && aDate !== targetAlertDate) return false;
+
+      return a.message === alertData.message && a.targetRole === alertData.targetRole;
+    }) || pendingAlertHashes.current.has(alertHash);
 
     if (isDuplicate) {
       console.warn('Duplicate alert blocked in context:', alertData.message);
@@ -2088,11 +2125,15 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         acknowledgedBy: staffName || appUser?.name || 'Staff'
       };
 
-      // Batch acknowledge all matching tactical alerts for this flight
+      // Batch acknowledge all matching tactical alerts for this flight on the same operational date
+      const targetDate = targetAlert?.flightDate || (targetAlert?.timestamp && targetAlert.timestamp.length > 10 ? targetAlert.timestamp.split('T')[0] : null);
+
       const matchingIds = (alerts || [])
         .filter(a => {
           if (a.id === id) return true;
           if (targetAlert?.alertType && ['LANDED', 'ETA_15MIN', 'ETA_5MIN', 'REQUEST_FUELING', 'NO_FUEL', 'ALERT_CANCELLED'].includes(targetAlert.alertType)) {
+            const aDate = a.flightDate || (a.timestamp && a.timestamp.length > 10 ? a.timestamp.split('T')[0] : null);
+            if (aDate && targetDate && aDate !== targetDate) return false;
             const aFlt = (a.flightNumber || a.metadata?.flightNumber || '').replace(/\s+/g, '').toUpperCase();
             return a.alertType === targetAlert.alertType && (!cleanFlt || !aFlt || aFlt === cleanFlt);
           }
