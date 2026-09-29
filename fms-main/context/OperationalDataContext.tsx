@@ -1,12 +1,13 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightLog, StaffMember, UserRole, Vessel, ShipmentData, InternationalSchedule, ScheduleCrossCheckResult, PredictiveUpliftForecast, isDomesticFlight, DelayLog } from '../types';
+import { Equipment, Tank, FlightJob, EquipmentStatus as EqStatus, Alert, FlightLog, StaffMember, UserRole, Vessel, ShipmentData, InternationalSchedule, ScheduleCrossCheckResult, PredictiveUpliftForecast, isDomesticFlight, DelayLog, TicketCategory, TicketSequenceConfig } from '../types';
 import { EQUIPMENT, TANKS, MOCK_ALERTS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
 import { scheduleImportService } from '../services/scheduleImportService';
 import { supabase } from '../supabase';
 import { sendNativeNotification } from '../utils/pwa';
 import { cleanAircraftTypeName } from '../services/aircraftLookupService';
+import { ticketGeneratorService, DEFAULT_TICKET_SEQUENCES } from '../services/ticketGeneratorService';
 
 import { INITIAL_STAFF_LIST } from '../constants/staffList';
 
@@ -104,6 +105,12 @@ interface OperationalDataContextType {
   createDelayLog: (log: Omit<DelayLog, 'id'>) => Promise<DelayLog>;
   updateDelayLog: (id: string, updates: Partial<DelayLog>) => Promise<void>;
   deleteDelayLog: (id: string) => Promise<void>;
+  ticketSequences: Record<TicketCategory, TicketSequenceConfig>;
+  isTicketAutoEnabled: (category: TicketCategory) => boolean;
+  refreshTicketSequences: () => Promise<void>;
+  generateTicketNumber: (category: TicketCategory, operatorId?: string, forceAuto?: boolean) => Promise<{ success: boolean; ticketNumber?: string; isAutoEnabled: boolean; message?: string }>;
+  updateTicketSequence: (category: TicketCategory, updates: Partial<TicketSequenceConfig>, currentUser?: any) => Promise<void>;
+  previewNextTicketNumber: (category: TicketCategory) => string;
 }
 
 const OperationalDataContext = createContext<OperationalDataContextType | undefined>(undefined);
@@ -1406,6 +1413,14 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       const jFlight = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
       if (jFlight !== cleanUpdatesFlight) return false;
       return true;
+    }) || (rawFlightJobs || []).find(j => {
+      if (j.id === id) return true;
+      const jDate = j.date ? j.date.split('T')[0] : '';
+      if (jDate && targetDate && jDate !== targetDate) return false;
+      if (!cleanUpdatesFlight) return false;
+      const jFlight = (j.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      if (jFlight !== cleanUpdatesFlight) return false;
+      return true;
     });
 
     if (existingJob) {
@@ -1687,9 +1702,11 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }));
 
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('fms:flight-log-deleted', {
-        detail: { id, flightNumber: fn, deliveryNumber: dn }
-      }));
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('fms:flight-log-deleted', {
+          detail: { id, flightNumber: fn, deliveryNumber: dn }
+        }));
+      }, 0);
     }
 
     // 2. Reset flightJobs in state and update Supabase flight_jobs table
@@ -2307,6 +2324,45 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     setDelayLogs(prev => prev.filter(r => r.id !== id));
   };
 
+  // ── Ticket Delivery Number Generator State & Operations ──
+  const [ticketSequences, setTicketSequences] = useState<Record<TicketCategory, TicketSequenceConfig>>(
+    () => DEFAULT_TICKET_SEQUENCES
+  );
+
+  useEffect(() => {
+    ticketGeneratorService.getSequences().then(seqs => {
+      setTicketSequences(seqs);
+    });
+
+    const unsubscribe = ticketGeneratorService.subscribe(newSeqs => {
+      setTicketSequences(newSeqs);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const isTicketAutoEnabled = useCallback((category: TicketCategory) => {
+    return !!ticketSequences[category]?.isAutoEnabled;
+  }, [ticketSequences]);
+
+  const refreshTicketSequences = useCallback(async () => {
+    const updated = await ticketGeneratorService.getSequences(true);
+    setTicketSequences(updated);
+  }, []);
+
+  const generateTicketNumber = useCallback(async (category: TicketCategory, operatorId?: string, forceAuto?: boolean) => {
+    return await ticketGeneratorService.generateNextTicket(category, operatorId, forceAuto);
+  }, []);
+
+  const updateTicketSequence = useCallback(async (category: TicketCategory, updates: Partial<TicketSequenceConfig>, currentUser?: any) => {
+    const updated = await ticketGeneratorService.updateSequence(category, updates, currentUser);
+    setTicketSequences(prev => ({ ...prev, [category]: updated }));
+  }, []);
+
+  const previewNextTicketNumber = useCallback((category: TicketCategory) => {
+    return ticketGeneratorService.previewNextTicket(category);
+  }, []);
+
   return (
     <OperationalDataContext.Provider value={{
       equipment: equipment || [],
@@ -2374,7 +2430,13 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       delayLogs: delayLogs || [],
       createDelayLog,
       updateDelayLog,
-      deleteDelayLog
+      deleteDelayLog,
+      ticketSequences,
+      isTicketAutoEnabled,
+      refreshTicketSequences,
+      generateTicketNumber,
+      updateTicketSequence,
+      previewNextTicketNumber
     }}>
       {children}
     </OperationalDataContext.Provider>

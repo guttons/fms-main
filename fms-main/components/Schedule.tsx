@@ -536,11 +536,11 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
           return dateMatch && (c === cleanNo || j.id === ff.id || j.id === existing?.id);
         });
 
-        const effectiveStatus = (rawDbJob && (rawDbJob.status === 'IN_PROGRESS' || rawDbJob.status === 'COMPLETED'))
+        const effectiveStatus = (rawDbJob && (rawDbJob.status === 'IN_PROGRESS' || rawDbJob.status === 'COMPLETED' || rawDbJob.status === 'PENDING'))
           ? rawDbJob.status
-          : (liveJob && (liveJob.status === 'IN_PROGRESS' || liveJob.status === 'COMPLETED'))
+          : (liveJob && (liveJob.status === 'IN_PROGRESS' || liveJob.status === 'COMPLETED' || liveJob.status === 'PENDING'))
           ? liveJob.status
-          : (existing?.status || ff.status || rawDbJob?.status || liveJob?.status || 'PENDING');
+          : (existing?.status || ff.status || 'PENDING');
 
         flightMap.set(cleanNo, {
           ...(existing || {}),
@@ -595,11 +595,11 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
         if (jDate && flightDate && jDate !== flightDate) return false;
         return (c === cleanNo || j.id === f.id) && (!jDate || !flightDate || jDate === flightDate);
       });
-      const effectiveStatus = (rawDbJob && (rawDbJob.status === 'IN_PROGRESS' || rawDbJob.status === 'COMPLETED'))
+      const effectiveStatus = (rawDbJob && (rawDbJob.status === 'IN_PROGRESS' || rawDbJob.status === 'COMPLETED' || rawDbJob.status === 'PENDING'))
         ? rawDbJob.status
-        : (liveJob && (liveJob.status === 'IN_PROGRESS' || liveJob.status === 'COMPLETED'))
+        : (liveJob && (liveJob.status === 'IN_PROGRESS' || liveJob.status === 'COMPLETED' || liveJob.status === 'PENDING'))
         ? liveJob.status
-        : (f.status || rawDbJob?.status || liveJob?.status || 'PENDING');
+        : (f.status || 'PENDING');
 
       if (liveJob || rawDbJob) {
         return {
@@ -666,9 +666,9 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
           if (jDate && todayDate && jDate !== todayDate) return false;
           return (c === cleanNo || (fj.id && (fj.id === ff.id || fj.id === existing?.id))) && (!jDate || !todayDate || jDate === todayDate);
         });
-        const effectiveStatus = (rawDbJob && (rawDbJob.status === 'IN_PROGRESS' || rawDbJob.status === 'COMPLETED'))
+        const effectiveStatus = (rawDbJob && (rawDbJob.status === 'IN_PROGRESS' || rawDbJob.status === 'COMPLETED' || rawDbJob.status === 'PENDING'))
           ? rawDbJob.status
-          : (liveJob && (liveJob.status === 'IN_PROGRESS' || liveJob.status === 'COMPLETED'))
+          : (liveJob && (liveJob.status === 'IN_PROGRESS' || liveJob.status === 'COMPLETED' || liveJob.status === 'PENDING'))
           ? liveJob.status
           : (existing?.status || ff.status || 'PENDING');
 
@@ -699,9 +699,9 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
         if (jDate && flightDate && jDate !== flightDate) return false;
         return (c === cleanNo || (fj.id && fj.id === f.id)) && (!jDate || !flightDate || jDate === flightDate);
       });
-      const effectiveStatus = (rawDbJob && (rawDbJob.status === 'IN_PROGRESS' || rawDbJob.status === 'COMPLETED'))
+      const effectiveStatus = (rawDbJob && (rawDbJob.status === 'IN_PROGRESS' || rawDbJob.status === 'COMPLETED' || rawDbJob.status === 'PENDING'))
         ? rawDbJob.status
-        : (liveJob && (liveJob.status === 'IN_PROGRESS' || liveJob.status === 'COMPLETED'))
+        : (liveJob && (liveJob.status === 'IN_PROGRESS' || liveJob.status === 'COMPLETED' || liveJob.status === 'PENDING'))
         ? liveJob.status
         : (f.status || 'PENDING');
       return {

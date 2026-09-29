@@ -509,20 +509,30 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
     
     const type = resolveLogType(editingLog);
     
-    // Validate ticket number to exactly 6 digits (if not Bridging)
-    const cleanTicket = editForm.deliveryNumber.replace(/\D/g, '');
-    const currentTicketDigits = (editingLog.deliveryNumber || '').replace(/\D/g, '');
+    // Validate ticket number
+    const rawTicket = (editForm.deliveryNumber || '').trim().toUpperCase();
+    let finalCleanTicket = rawTicket;
+    if (rawTicket && !rawTicket.startsWith('MLE-')) {
+      finalCleanTicket = `MLE-${rawTicket}`;
+    }
+    const cleanDigits = rawTicket.replace(/\D/g, '');
+    const currentTicketCanonical = (editingLog.deliveryNumber || '').trim().toUpperCase();
+
     if (type !== 'BRIDGING') {
-      if (cleanTicket.length !== 6) {
-        setEditError('Delivery ticket number must be exactly 6 digits.');
+      const isCustomSeries = finalCleanTicket.includes('-D-') || finalCleanTicket.includes('-P-') || finalCleanTicket.includes('-MGO-');
+      if (!isCustomSeries && cleanDigits.length !== 6) {
+        setEditError('Delivery ticket number must be exactly 6 numeric digits.');
+        return;
+      } else if (isCustomSeries && finalCleanTicket.length < 6) {
+        setEditError('Delivery ticket number format is invalid.');
         return;
       }
       // If the ticket number has NOT changed, skip duplicate validation
-      if (cleanTicket !== currentTicketDigits) {
+      if (finalCleanTicket !== currentTicketCanonical) {
         const allKnownLogs = [...(flightLogs || []), ...(logs || [])];
-        const dupCheck = await checkDuplicateTicketAcrossJetA1(editForm.deliveryNumber, editingLog.id, allKnownLogs, editingLog.deliveryNumber);
+        const dupCheck = await checkDuplicateTicketAcrossJetA1(finalCleanTicket, editingLog.id, allKnownLogs, editingLog.deliveryNumber);
         if (dupCheck.isDuplicate) {
-          setEditError(dupCheck.message || `Delivery ticket number MLE-${cleanTicket} is already in use in another operation.`);
+          setEditError(dupCheck.message || `Delivery ticket number ${finalCleanTicket} is already in use in another operation.`);
           return;
         }
       }
@@ -538,7 +548,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           flightNumber: `SEAPLANE-${editForm.seaplaneOperator.toUpperCase()}`,
           aircraftReg: `PUMP-${editForm.seaplanePumpId.toUpperCase()}`,
           vehicleId: editForm.seaplanePumpId.toUpperCase(),
-          deliveryNumber: editForm.deliveryNumber ? `MLE-${cleanTicket}` : undefined,
+          deliveryNumber: finalCleanTicket || undefined,
           volume: Number(editForm.volume),
           meterOpen: 0,
           meterClose: Number(editForm.volume),
@@ -556,7 +566,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           aircraftReg: `VESSEL-${editForm.marineVesselName.toUpperCase()}`,
           vehicleId: editForm.marineRefuellerId.toUpperCase(),
           operatorId: editForm.marineOperatorId,
-          deliveryNumber: editForm.deliveryNumber ? `MLE-${cleanTicket}` : undefined,
+          deliveryNumber: finalCleanTicket || undefined,
           volume: Number(editForm.volume),
           meterOpen: Number(editForm.meterOpen),
           meterClose: Number(editForm.meterClose),
@@ -574,7 +584,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           station: editForm.fillingStation,
           fuelType: editForm.fillingFuelType,
           date: editForm.date,
-          invoiceNumber: cleanTicket,
+          invoiceNumber: finalCleanTicket ? finalCleanTicket.replace(/^MLE-/, '') : cleanDigits,
           vehicleReg: editForm.fillingVehicleReg.toUpperCase(),
           driverName: editForm.fillingDriverName,
           volume: Number(editForm.volume),
@@ -584,7 +594,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           remarks: remarksStr
         });
         updatedPayload = {
-          deliveryNumber: cleanTicket,
+          deliveryNumber: finalCleanTicket,
           volume: Number(editForm.volume),
           operationalDate: editForm.date,
           remarks: remarksStr
@@ -614,7 +624,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           aircraftReg: editForm.aircraftReg,
           aircraftType: editForm.aircraftType,
           stand: editForm.stand,
-          deliveryNumber: `MLE-${cleanTicket}`,
+          deliveryNumber: finalCleanTicket || undefined,
           volume: Number(editForm.volume),
           meterOpen: Number(editForm.meterOpen),
           meterClose: Number(editForm.meterClose),
@@ -762,7 +772,9 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
 
   const currentEditingLogType = editingLog ? resolveLogType(editingLog) : selectedLogType;
-  const isValidTicket = currentEditingLogType === 'BRIDGING' || editForm.deliveryNumber.replace(/\D/g, '').length === 6;
+  const isValidTicket = currentEditingLogType === 'BRIDGING' || 
+    editForm.deliveryNumber.replace(/\D/g, '').length === 6 ||
+    (editForm.deliveryNumber.toUpperCase().includes('P-') || editForm.deliveryNumber.toUpperCase().includes('D-') || editForm.deliveryNumber.toUpperCase().includes('MGO-'));
 
   return (
     <div className="p-6 lg:p-10 space-y-10">

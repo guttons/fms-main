@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { FlightLog, User, FlightJob, Equipment, EquipmentStatus, UserRole, isDomesticFlight, cleanRemarks } from '../types';
 import { MOCK_USERS, PIT_MAPPING } from '../constants';
-import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Users, Lock, Calendar, X, CreditCard, Ban, Eye, Zap, Bell, BellOff, BellRing, Megaphone, ExternalLink, Droplet, PlaneLanding, PlaneTakeoff, ArrowRightCircle, Check, CheckCheck, RotateCcw, Pencil, Plane, Fuel } from 'lucide-react';
+import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, AlertCircle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Users, Lock, Calendar, X, CreditCard, Ban, Eye, Zap, Bell, BellOff, BellRing, Megaphone, ExternalLink, Droplet, PlaneLanding, PlaneTakeoff, ArrowRightCircle, Check, CheckCheck, RotateCcw, Pencil, Plane, Fuel } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { flightRadarService } from '../services/flightRadarService';
 import { getWatchedFlightIds, saveWatchedFlightIds } from '../services/watchedFlightsService';
@@ -13,9 +13,10 @@ import { useOperationalData } from '../context/OperationalDataContext';
 import { EditStandModal } from './Schedule';
 import { EditFuelRequestModal } from './EditFuelRequestModal';
 import { EditAircraftModal } from './EditAircraftModal';
-import { cleanAircraftTypeName } from '../services/aircraftLookupService';
+import { cleanAircraftTypeName, normalizeRegistration } from '../services/aircraftLookupService';
 import { checkDuplicateTicketAcrossJetA1 } from '../services/ticketValidation';
 import { serverTimeService } from '../services/serverTimeService';
+import { SignatureAcknowledgment } from './SignatureAcknowledgment';
 
 interface IntoPlaneProps {
     user: User;
@@ -2119,7 +2120,85 @@ const ScreenTimestamps: React.FC<{
   setManualTime: (field: keyof FlightLog, timeVal: string) => void,
   onEditFrt?: () => void
 }> = ({ activeFlight, onTimestamp, onInputChange, onNext, onBack, user, getLocalTimeValue, setManualTime, onEditFrt }) => {
-  const { selectedBriefingDate } = useOperationalData();
+  const { notify } = useNotification();
+  const { selectedBriefingDate, isTicketAutoEnabled, previewNextTicketNumber } = useOperationalData();
+  const isAutoJetA1 = isTicketAutoEnabled('JET_A1');
+  const isAutoPaper = isTicketAutoEnabled('PAPER_OFFLINE');
+  const [isPaperMode, setIsPaperMode] = useState<boolean>(() => {
+    return !!(activeFlight?.deliveryNumber && activeFlight.deliveryNumber.startsWith('MLE-P-'));
+  });
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
+
+  const isHdVehicle = !!(activeFlight?.vehicleId?.startsWith('HD') || activeFlight?.equipmentUsage === 'HYDRANT');
+  const isTypeValid = !!(activeFlight?.aircraftType && activeFlight.aircraftType.trim().length >= 2);
+  const cleanReg = activeFlight?.aircraftReg?.trim();
+  const isRegValid = !!(cleanReg && cleanReg.length >= 3 && cleanReg !== '8Q-TBA' && !cleanReg.startsWith('8Q-DOM'));
+  const cleanPit = activeFlight?.pitNumber?.trim();
+  const isPitValid = !isHdVehicle || !!(cleanPit && cleanPit !== 'J' && cleanPit.length >= 3);
+  const isDeliveryValid = isAutoJetA1 || (!!activeFlight?.deliveryNumber && activeFlight.deliveryNumber.replace(/^MLE-(P-)?/i, '').length >= 4);
+  const isGammaValid = !!activeFlight?.timestampStart;
+
+  const isFormValid = isReadOnly(user.role) || (isTypeValid && isRegValid && isPitValid && isDeliveryValid && isGammaValid);
+
+  const handleProceed = () => {
+    if (isReadOnly(user.role)) {
+      onNext();
+      return;
+    }
+
+    setShowValidationErrors(true);
+
+    if (!isTypeValid) {
+      notify('Please enter a valid Aircraft Type (e.g. A320, B737) before proceeding.', 'warning');
+      return;
+    }
+
+    if (!isRegValid) {
+      notify('Please enter a valid Aircraft Registration (e.g. 8Q-IAI, A6-EEO) before proceeding.', 'warning');
+      return;
+    }
+
+    if (!isDeliveryValid) {
+      notify('Please enter a valid Delivery Ticket Number (minimum 4 digits) before proceeding.', 'warning');
+      return;
+    }
+
+    if (isHdVehicle && !isPitValid) {
+      notify('Please enter or select a Hydrant PIT Number (e.g. J120-1) for this Hydrant Dispenser.', 'warning');
+      return;
+    }
+
+    if (!isGammaValid) {
+      notify('Please log Operation Gamma (Commenced Pumping) before proceeding to metering.', 'warning');
+      return;
+    }
+
+    onNext();
+  };
+
+  useEffect(() => {
+    if (isAutoJetA1 && !activeFlight?.deliveryNumber) {
+      const initialTicket = previewNextTicketNumber('JET_A1');
+      onInputChange('deliveryNumber', initialTicket);
+    }
+  }, [isAutoJetA1, activeFlight?.deliveryNumber, previewNextTicketNumber, onInputChange]);
+
+  const handleTogglePaperMode = (enabled: boolean) => {
+    setIsPaperMode(enabled);
+    if (enabled) {
+      if (isAutoPaper) {
+        onInputChange('deliveryNumber', previewNextTicketNumber('PAPER_OFFLINE'));
+      } else {
+        onInputChange('deliveryNumber', 'MLE-P-');
+      }
+    } else {
+      if (isAutoJetA1) {
+        onInputChange('deliveryNumber', previewNextTicketNumber('JET_A1'));
+      } else {
+        onInputChange('deliveryNumber', '');
+      }
+    }
+  };
   return (
   <div className="p-5 flex flex-col h-full min-h-[calc(100vh-140px)] pb-32">
       <button onClick={onBack} className="flex items-center text-on-surface-dim hover:text-primary mb-6 font-black text-[11px] uppercase tracking-widest transition-colors">
@@ -2159,21 +2238,57 @@ const ScreenTimestamps: React.FC<{
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                          <span className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5 opacity-60">Aircraft Type</span>
+                          <div className="flex justify-between items-center mb-1.5">
+                              <span className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">
+                                  Aircraft Type <span className="text-error font-black">*</span>
+                              </span>
+                              {showValidationErrors && !isTypeValid && (
+                                  <span className="text-[9px] font-bold text-error flex items-center gap-1 animate-in fade-in">
+                                      <AlertCircle className="w-3 h-3" /> Required
+                                  </span>
+                              )}
+                          </div>
                           <input
                               type="text"
+                              required
+                              placeholder="e.g. B737, A320"
                               value={activeFlight?.aircraftType || ''}
                               onChange={(e) => onInputChange('aircraftType', e.target.value.toUpperCase())}
-                              className="w-full px-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[12px] font-black uppercase tracking-wider focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all"
+                              className={`w-full px-4 py-3 bg-surface-dim border rounded-2xl text-[12px] font-black uppercase tracking-wider focus:ring-4 outline-none transition-all ${
+                                  showValidationErrors && !isTypeValid 
+                                      ? 'border-error focus:ring-error/15 text-error placeholder:text-error/30 ring-1 ring-error/30' 
+                                      : 'border-outline focus:ring-primary/10 focus:border-primary text-on-surface'
+                              }`}
                           />
                       </div>
                       <div>
-                          <span className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-1.5 opacity-60">Aircraft Registration</span>
+                          <div className="flex justify-between items-center mb-1.5">
+                              <span className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60">
+                                  Aircraft Registration <span className="text-error font-black">*</span>
+                              </span>
+                              {showValidationErrors && !isRegValid && (
+                                  <span className="text-[9px] font-bold text-error flex items-center gap-1 animate-in fade-in">
+                                      <AlertCircle className="w-3 h-3" /> Required
+                                  </span>
+                              )}
+                          </div>
                           <input
                               type="text"
-                              value={activeFlight?.aircraftReg || ''}
+                              required
+                              placeholder="e.g. 8Q-IAI, A6-EEO"
+                              value={activeFlight?.aircraftReg && activeFlight.aircraftReg !== '8Q-TBA' && !activeFlight.aircraftReg.startsWith('8Q-DOM') ? activeFlight.aircraftReg : ''}
                               onChange={(e) => onInputChange('aircraftReg', e.target.value.toUpperCase())}
-                              className="w-full px-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[12px] font-black uppercase tracking-wider focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all text-primary"
+                              onBlur={(e) => {
+                                  const normalized = normalizeRegistration(e.target.value.toUpperCase());
+                                  if (normalized && normalized !== e.target.value) {
+                                      onInputChange('aircraftReg', normalized);
+                                  }
+                              }}
+                              className={`w-full px-4 py-3 bg-surface-dim border rounded-2xl text-[12px] font-black uppercase tracking-wider focus:ring-4 outline-none transition-all ${
+                                  showValidationErrors && !isRegValid 
+                                      ? 'border-error focus:ring-error/15 text-error placeholder:text-error/30 ring-1 ring-error/30' 
+                                      : 'border-outline focus:ring-primary/10 focus:border-primary text-primary'
+                              }`}
                           />
                       </div>
                   </div>
@@ -2181,24 +2296,77 @@ const ScreenTimestamps: React.FC<{
           </div>
 
           <div className="card-premium p-6 border-outline overflow-hidden">
-              <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Delivery Ticket Number</label>
-              <div className="flex items-center gap-2 max-w-full overflow-hidden">
-                  <span className="text-2xl sm:text-3xl font-mono font-black text-on-surface-dim opacity-30 shrink-0">MLE-</span>
-                  <input 
-                      type="text" 
-                      maxLength={6}
+              <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">
+                      Delivery Ticket Number
+                    </label>
+                    {isAutoJetA1 && (
+                      <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
+                        isPaperMode ? 'bg-success/10 text-success border border-success/20' : 'bg-primary/10 text-primary border border-primary/20'
+                      }`}>
+                        {isPaperMode ? 'AUTO: PAPER TICKET' : 'AUTO-GENERATED: JET A-1'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Option to toggle Paper / Offline Ticket */}
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-bold text-on-surface-dim hover:text-on-surface transition-colors select-none">
+                    <input 
+                      type="checkbox"
+                      checked={isPaperMode}
                       disabled={isReadOnly(user.role)}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      className="flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-error placeholder:text-error/20"
-                      placeholder="000000"
-                      value={activeFlight?.deliveryNumber?.replace('MLE-', '') || ''}
-                      onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, '').slice(0, 6);
-                          onInputChange('deliveryNumber', val ? `MLE-${val}` : '');
-                      }}
-                  />
+                      onChange={e => handleTogglePaperMode(e.target.checked)}
+                      className="rounded border-outline text-primary focus:ring-primary w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <span>Paper / Offline Ticket</span>
+                  </label>
               </div>
+
+              {isAutoJetA1 && !isPaperMode ? (
+                <div className="flex items-center justify-between gap-2 max-w-full overflow-hidden py-2">
+                  <div className="text-4xl sm:text-5xl font-mono font-black text-error">
+                    {activeFlight?.deliveryNumber || previewNextTicketNumber('JET_A1')}
+                  </div>
+                  <span className="text-[9px] font-black text-on-surface-dim opacity-50 uppercase tracking-widest bg-surface-container-low px-3 py-1.5 rounded-xl border border-outline shrink-0">
+                    System Assigned
+                  </span>
+                </div>
+              ) : isPaperMode && isAutoPaper ? (
+                <div className="flex items-center justify-between gap-2 max-w-full overflow-hidden py-2">
+                  <div className="text-4xl sm:text-5xl font-mono font-black text-success">
+                    {activeFlight?.deliveryNumber || previewNextTicketNumber('PAPER_OFFLINE')}
+                  </div>
+                  <span className="text-[9px] font-black text-success/80 uppercase tracking-widest bg-success/10 px-3 py-1.5 rounded-xl border border-success/20 shrink-0">
+                    Auto Paper Series
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 max-w-full overflow-hidden">
+                    <span className="text-2xl sm:text-3xl font-mono font-black text-on-surface-dim opacity-30 shrink-0">
+                      {isPaperMode ? 'MLE-P-' : 'MLE-'}
+                    </span>
+                    <input 
+                        type="text" 
+                        maxLength={isPaperMode ? 8 : 6}
+                        disabled={isReadOnly(user.role)}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        className="flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-error placeholder:text-error/20"
+                        placeholder="000000"
+                        value={
+                          isPaperMode
+                            ? (activeFlight?.deliveryNumber?.replace(/^MLE-P-/i, '') || '')
+                            : (activeFlight?.deliveryNumber?.replace(/^MLE-/i, '') || '')
+                        }
+                        onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                            const prefix = isPaperMode ? 'MLE-P-' : 'MLE-';
+                            onInputChange('deliveryNumber', val ? `${prefix}${val}` : '');
+                        }}
+                    />
+                </div>
+              )}
           </div>
 
           {activeFlight?.isAdhoc && (
@@ -2237,21 +2405,38 @@ const ScreenTimestamps: React.FC<{
               </>
           )}
 
-          {activeFlight?.vehicleId?.startsWith('HD') && (
-            <div className="card-premium p-6 border-outline overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
-                <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Hydrant PIT Number</label>
+          {isHdVehicle && (
+            <div className={`card-premium p-6 border-2 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500 ${
+                showValidationErrors && !isPitValid ? 'border-error/60 bg-error/5' : 'border-outline'
+            }`}>
+                <div className="flex justify-between items-center mb-4">
+                    <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">
+                        Hydrant PIT Number <span className="text-error font-black">*</span>
+                    </label>
+                    {showValidationErrors && !isPitValid && (
+                        <span className="text-[10px] font-bold text-error flex items-center gap-1 animate-in fade-in">
+                            <AlertCircle className="w-3.5 h-3.5" /> PIT Number is required
+                        </span>
+                    )}
+                </div>
                 <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-2 max-w-full overflow-hidden">
-                        <span className="text-2xl sm:text-3xl font-mono font-black text-primary opacity-30 shrink-0">J</span>
+                        <span className={`text-2xl sm:text-3xl font-mono font-black shrink-0 ${
+                            showValidationErrors && !isPitValid ? 'text-error opacity-60' : 'text-primary opacity-30'
+                        }`}>J</span>
                         <input 
                             type="text" 
                             disabled={isReadOnly(user.role)}
-                            className="flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 border-outline focus:border-primary transition-all text-primary placeholder:text-primary/10 uppercase"
+                            className={`flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 transition-all uppercase ${
+                                showValidationErrors && !isPitValid 
+                                    ? 'border-error text-error placeholder:text-error/20' 
+                                    : 'border-outline focus:border-primary text-primary placeholder:text-primary/10'
+                            }`}
                             placeholder="000-0"
                             value={activeFlight?.pitNumber?.startsWith('J') ? activeFlight.pitNumber.substring(1) : (activeFlight?.pitNumber || '')}
                             onChange={(e) => {
                                 const val = e.target.value.toUpperCase().replace(/^J/, '');
-                                  onInputChange('pitNumber', val ? `J${val}` : '');
+                                onInputChange('pitNumber', val ? `J${val}` : '');
                             }}
                             list="pit-suggestions"
                         />
@@ -2261,17 +2446,24 @@ const ScreenTimestamps: React.FC<{
                             ))}
                         </datalist>
                     </div>
-                    {activeFlight.stand && !isReadOnly(user.role) && (
+                    {activeFlight?.stand && !isReadOnly(user.role) && (
                         <div className="flex flex-wrap gap-2 pt-2">
-                            {PIT_MAPPING.filter(m => m.stand === activeFlight.stand).map((m, idx) => (
-                                <button 
-                                    key={idx}
-                                    onClick={() => onInputChange('pitNumber', m.pit)}
-                                    className="px-3 py-1.5 bg-surface-container-low rounded-lg text-[10px] font-black text-primary border border-primary/20 hover:bg-primary/10 transition-colors"
-                                >
-                                    {m.pit}
-                                </button>
-                            ))}
+                            {PIT_MAPPING.filter(m => m.stand === activeFlight.stand).map((m, idx) => {
+                                const isSelected = activeFlight?.pitNumber === m.pit;
+                                return (
+                                    <button 
+                                        key={idx}
+                                        onClick={() => onInputChange('pitNumber', m.pit)}
+                                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
+                                            isSelected 
+                                                ? 'bg-primary text-white border-primary shadow-sm' 
+                                                : 'bg-surface-container-low text-primary border-primary/20 hover:bg-primary/10'
+                                        }`}
+                                    >
+                                        {m.pit}
+                                    </button>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -2359,14 +2551,21 @@ const ScreenTimestamps: React.FC<{
                   disabled={isReadOnly(user.role)}
                   className={`flex-1 p-6 sm:p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                       ${activeFlight?.timestampArrived 
-                          ? 'bg-success/5 border-success text-on-surface' 
+                          ? 'bg-success/5 border-success text-on-surface hover:border-error/40' 
                           : isReadOnly(user.role)
                               ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
                               : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
                   `}
               >
                   <div className="relative z-10">
-                      <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Alpha</span>
+                      <div className="flex items-center justify-between">
+                          <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Alpha</span>
+                          {activeFlight?.timestampArrived && !isReadOnly(user.role) && (
+                              <span className="text-[9px] font-black uppercase tracking-wider text-error opacity-60 group-hover:opacity-100 transition-opacity">
+                                  Tap to undo
+                              </span>
+                          )}
+                      </div>
                       <span className={`block text-xl sm:text-2xl font-[900] tracking-tighter ${activeFlight?.timestampArrived ? 'text-success' : 'text-on-surface'}`}>
                           LOG ARRIVED
                       </span>
@@ -2401,14 +2600,21 @@ const ScreenTimestamps: React.FC<{
                   disabled={!activeFlight?.timestampArrived || isReadOnly(user.role)}
                   className={`flex-1 p-6 sm:p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                       ${activeFlight?.timestampPosition 
-                          ? 'bg-success/5 border-success text-on-surface' 
+                          ? 'bg-success/5 border-success text-on-surface hover:border-error/40' 
                           : (!activeFlight?.timestampArrived || isReadOnly(user.role))
                               ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
                               : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
                   `}
               >
                   <div className="relative z-10">
-                      <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Beta</span>
+                      <div className="flex items-center justify-between">
+                          <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Beta</span>
+                          {activeFlight?.timestampPosition && !isReadOnly(user.role) && (
+                              <span className="text-[9px] font-black uppercase tracking-wider text-error opacity-60 group-hover:opacity-100 transition-opacity">
+                                  Tap to undo
+                              </span>
+                          )}
+                      </div>
                       <span className={`block text-xl sm:text-2xl font-[900] tracking-tighter ${activeFlight?.timestampPosition ? 'text-success' : 'text-on-surface'}`}>
                           POSITION / CONNECTED
                       </span>
@@ -2440,17 +2646,24 @@ const ScreenTimestamps: React.FC<{
           <div className="flex gap-4 items-stretch w-full">
               <button 
                   onClick={() => onTimestamp('timestampStart')}
-                  disabled={!activeFlight?.timestampPosition || !!activeFlight?.timestampStart || isReadOnly(user.role)}
+                  disabled={!activeFlight?.timestampPosition || isReadOnly(user.role)}
                   className={`flex-1 p-6 sm:p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
                       ${activeFlight?.timestampStart 
-                          ? 'bg-success/5 border-success text-on-surface' 
-                          : (!activeFlight?.timestampPosition || !!activeFlight?.timestampStart || isReadOnly(user.role))
+                          ? 'bg-success/5 border-success text-on-surface hover:border-error/40' 
+                          : (!activeFlight?.timestampPosition || isReadOnly(user.role))
                               ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
                               : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
                   `}
               >
                   <div className="relative z-10">
-                      <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Gamma</span>
+                      <div className="flex items-center justify-between">
+                          <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Gamma</span>
+                          {activeFlight?.timestampStart && !isReadOnly(user.role) && (
+                              <span className="text-[9px] font-black uppercase tracking-wider text-error opacity-60 group-hover:opacity-100 transition-opacity">
+                                  Tap to undo
+                              </span>
+                          )}
+                      </div>
                       <span className={`block text-xl sm:text-2xl font-[900] tracking-tighter ${activeFlight?.timestampStart ? 'text-success' : 'text-on-surface'}`}>
                           COMMENCED PUMPING
                       </span>
@@ -2469,7 +2682,7 @@ const ScreenTimestamps: React.FC<{
                   <div className="relative w-full">
                       <input 
                           type="time"
-                          disabled={!activeFlight?.timestampPosition || !!activeFlight?.timestampStart || isReadOnly(user.role)}
+                          disabled={!activeFlight?.timestampPosition || isReadOnly(user.role)}
                           value={activeFlight?.timestampStart ? getLocalTimeValue(activeFlight.timestampStart) : ''}
                           onChange={(e) => setManualTime('timestampStart', e.target.value)}
                           className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
@@ -2479,10 +2692,29 @@ const ScreenTimestamps: React.FC<{
           </div>
       </div>
 
+      {showValidationErrors && !isFormValid && !isReadOnly(user.role) && (
+        <div className="mt-6 p-4 rounded-2xl bg-error/10 border border-error/30 flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2">
+          <AlertCircle className="w-5 h-5 text-error shrink-0 mt-0.5" />
+          <div className="text-xs space-y-1">
+            <span className="font-bold text-error uppercase tracking-wider block">Required Information Missing</span>
+            <ul className="list-disc list-inside text-on-surface-dim font-medium space-y-0.5 text-[11px]">
+              {!isTypeValid && <li>Aircraft Type is required (e.g. A320, B737)</li>}
+              {!isRegValid && <li>Aircraft Registration is required and cannot be TBA (e.g. 8Q-IAI)</li>}
+              {isHdVehicle && !isPitValid && <li>Hydrant PIT Number is required for Hydrant Dispensers (e.g. J120-1)</li>}
+              {!isDeliveryValid && <li>Delivery Ticket Number is required (min. 4 digits)</li>}
+              {!isGammaValid && <li>Operation Gamma (Commenced Pumping) must be logged</li>}
+            </ul>
+          </div>
+        </div>
+      )}
+
       <button 
-          onClick={onNext}
-          disabled={!isReadOnly(user.role) && (!activeFlight?.timestampStart || activeFlight?.deliveryNumber?.replace('MLE-', '').length !== 6)}
-          className="mt-8 w-full kinetic-gradient text-white p-4 lg:p-6 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-40 disabled:grayscale active:scale-95 transition-all shadow-premium"
+          onClick={handleProceed}
+          className={`mt-6 w-full text-white p-4 lg:p-6 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center active:scale-95 transition-all shadow-premium cursor-pointer ${
+            isFormValid 
+              ? 'kinetic-gradient hover:opacity-95' 
+              : 'bg-gradient-to-r from-slate-700 to-slate-800 opacity-90 hover:opacity-100 border border-white/10'
+          }`}
       >
           Proceed to Metering <ChevronRight className="ml-3 w-5 h-5" />
       </button>
@@ -2884,6 +3116,32 @@ const ScreenQC: React.FC<{
                  disabled={isReadOnly(user.role)}
                />
             </div>
+
+            {/* Customer / Flight Crew Signature & Declaration */}
+            <div className="pt-4 border-t border-outline/40">
+              <SignatureAcknowledgment
+                signerName={activeFlight?.signerName || ''}
+                onSignerNameChange={(val) => onInputChange('signerName', val)}
+                signerDesignation={activeFlight?.signerDesignation || ''}
+                onSignerDesignationChange={(val) => onInputChange('signerDesignation', val)}
+                signatureDataUrl={activeFlight?.signatureDataUrl || null}
+                onSignatureChange={(val) => {
+                  onInputChange('signatureDataUrl', val);
+                  onInputChange('signedAt', val ? new Date().toISOString() : undefined);
+                  onInputChange('declarationConfirmed', !!val);
+                }}
+                disabled={isReadOnly(user.role)}
+                designationPresets={[
+                  'Captain (PIC)',
+                  'First Officer',
+                  'Aircraft Maintenance Engineer',
+                  'Ground Handler Rep'
+                ]}
+                declarationText="I hereby acknowledge and certify receipt of the specified fuel volume into the aircraft. All quality control procedures, meter readings, and safety clearances have been verified and accepted."
+                title="Customer / Flight Crew Acknowledgment"
+                subtitle="Official Into-Plane Fueling Certification"
+              />
+            </div>
         </div>
 
         <div className="mt-auto pt-10 space-y-6">
@@ -2920,7 +3178,7 @@ const ScreenQC: React.FC<{
 
 export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob, initialVehicleId, onClearInitialVehicleId, setActiveView }) => {
   const { notify } = useNotification();
-  const { equipment, flightJobs, rawFlightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, updateFlightLog, externalFlights, staff, refreshData, selectedBriefingDate, tanks, updateTankLevel, serviceTankId, briefingInfo, internationalSchedules, addFlightLogEntry } = useOperationalData();
+  const { equipment, flightJobs, rawFlightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, updateFlightLog, externalFlights, staff, refreshData, selectedBriefingDate, tanks, updateTankLevel, serviceTankId, briefingInfo, internationalSchedules, addFlightLogEntry, isTicketAutoEnabled, generateTicketNumber } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(() => {
     try {
@@ -3016,11 +3274,12 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         lastProcessedJobKeyRef.current = jobKey;
         originViewRef.current = (initialJob as any).originView || 'schedule';
         const vehicleToUse = initialJob.vehicleId || initialVehicleId || selectedVehicleId;
-        startJob(initialJob, vehicleToUse);
-        setTimeout(() => {
+        const timer = setTimeout(() => {
+          startJob(initialJob, vehicleToUse);
           if (onClearInitialJob) onClearInitialJob();
           if (onClearInitialVehicleId) onClearInitialVehicleId();
-        }, 50);
+        }, 0);
+        return () => clearTimeout(timer);
       }
     } else {
       lastProcessedJobKeyRef.current = null;
@@ -3116,25 +3375,40 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
     // 2. Revert flight job back to PENDING so it can be re-started without active fueling
     const rawFlightNo = jobToCancel?.flightNumber || currentActive?.flightNumber || currentJobInfo?.flightNumber || '';
-    const normFlightNo = rawFlightNo.replace(/\s+/g, '').toUpperCase();
+    const normFlightNo = rawFlightNo.replace(/[^A-Z0-9]/gi, '').toUpperCase();
     const knownJobId = (jobToCancel as any)?.jobId || (jobToCancel as any)?.id || (currentActive as any)?.jobId || (currentActive as any)?.id || currentJobInfo?.jobId;
 
     const allJobs = flightJobsRef.current || flightJobs || [];
-    const matching = allJobs.find(j => 
+    const rawJobs = rawFlightJobs || [];
+    const pool = [...allJobs, ...rawJobs];
+    const matching = pool.find(j => 
       (knownJobId && j.id === knownJobId) ||
-      (normFlightNo && (j.flightNumber || '').replace(/\s+/g, '').toUpperCase() === normFlightNo && j.status !== 'COMPLETED')
+      (normFlightNo && (j.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase() === normFlightNo && j.status !== 'COMPLETED')
     );
 
+    const targetFlightDate = jobToCancel?.date ? jobToCancel.date.split('T')[0] : (currentActive?.operationalDate || selectedBriefingDate);
     const finalJobId = matching?.id || knownJobId || (normFlightNo ? `fj-${normFlightNo}` : undefined);
     if (finalJobId || normFlightNo) {
       updateFlightJobRef.current(finalJobId || normFlightNo, { 
         status: 'PENDING', 
         vehicleId: '',
-        flightNumber: rawFlightNo || matching?.flightNumber
+        flightNumber: rawFlightNo || matching?.flightNumber,
+        date: targetFlightDate
       });
     }
 
-    const currentActiveNo = (currentActive?.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+    // Direct Supabase update for immediate consistency across modules
+    const dbTargetId = matching?.id || knownJobId;
+    if (dbTargetId) {
+      supabaseService.updateFlightJob(dbTargetId, {
+        status: 'PENDING',
+        vehicleId: '',
+        flightNumber: rawFlightNo || matching?.flightNumber,
+        date: targetFlightDate
+      }).catch(err => console.warn('[IntoPlane] Direct revert to Supabase warning:', err));
+    }
+
+    const currentActiveNo = (currentActive?.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
     if (!validTargetJob || (currentActiveNo && (!normFlightNo || currentActiveNo === normFlightNo)) || !currentActiveNo) {
       try {
         localStorage.removeItem(`fms_active_flight_${user?.id || ''}`);
@@ -3637,10 +3911,20 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       }
     }
     
-    if (activeFlight.deliveryNumber) {
-      const ticketVal = await checkDuplicateTicketAcrossJetA1(activeFlight.deliveryNumber, undefined, flightLogs);
+    let finalDeliveryNumber = activeFlight.deliveryNumber;
+    if (isTicketAutoEnabled('JET_A1')) {
+      const isPaper = activeFlight.deliveryNumber?.startsWith('MLE-P-');
+      const cat = isPaper ? 'PAPER_OFFLINE' : 'JET_A1';
+      const genRes = await generateTicketNumber(cat, user.name || user.id);
+      if (genRes.success && genRes.ticketNumber) {
+        finalDeliveryNumber = genRes.ticketNumber;
+      }
+    }
+
+    if (finalDeliveryNumber) {
+      const ticketVal = await checkDuplicateTicketAcrossJetA1(finalDeliveryNumber, undefined, flightLogs);
       if (ticketVal.isDuplicate) {
-        notify(ticketVal.message || `Delivery ticket number ${activeFlight.deliveryNumber} is already used. Please enter a unique ticket number.`, 'error');
+        notify(ticketVal.message || `Delivery ticket number ${finalDeliveryNumber} is already used. Please enter a unique ticket number.`, 'error');
         return;
       }
     }
@@ -3772,7 +4056,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         waterCheck: activeFlight.waterCheck || false,
         remarks: activeFlight.remarks || '',
         meterClose: (activeFlight.meterOpen || 0) + (activeFlight.volume || 0),
-        deliveryNumber: activeFlight.deliveryNumber,
+        deliveryNumber: finalDeliveryNumber,
         pitNumber: activeFlight.pitNumber,
         co: activeFlight.co,
         isAdhoc: activeFlight.isAdhoc,
@@ -3789,6 +4073,11 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         tacticalOperator: resolvedTacticalOperator,
         destination: activeFlight.destination,
         paymentType: paymentType || activeFlight.paymentType || 'CREDIT',
+        signatureDataUrl: activeFlight.signatureDataUrl || undefined,
+        signerName: activeFlight.signerName || undefined,
+        signerDesignation: activeFlight.signerDesignation || undefined,
+        signedAt: activeFlight.signatureDataUrl ? (activeFlight.signedAt || new Date().toISOString()) : undefined,
+        declarationConfirmed: !!activeFlight.signatureDataUrl,
       };
 
       // Optimistically push into in-memory state so user sees it right away in Log History
@@ -3845,18 +4134,30 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
       // Find matching flight job and mark it as COMPLETED in the database
       const completedJobId = matchingJob?.id || matchingRawJob?.id || activeFlight.id;
+      const completionFlightDate = logToSave.operationalDate || activeFlight.operationalDate || selectedBriefingDate;
       if (completedJobId) {
         auxPromises.push(updateFlightJob(completedJobId, { 
           status: 'COMPLETED',
+          flightNumber: activeFlight.flightNumber,
+          date: completionFlightDate,
           timestampClearance: logToSave.timestampClearance,
           vehicleId: selectedVehicleId,
-          deliveryNumber: activeFlight.deliveryNumber,
+          deliveryNumber: finalDeliveryNumber,
           std: resolvedStd || activeFlight.std || undefined,
           tobt: resolvedTobt || activeFlight.tobt || undefined,
           frtAirline: resolvedFrtAirline || activeFlight.frtAirline || undefined,
           frtAocc: resolvedFrtAocc || activeFlight.frtAocc || undefined,
           frtFor: resolvedFrtFor || activeFlight.frtFor || undefined
         }));
+
+        // Direct update to Supabase for immediate cross-module sync
+        supabaseService.updateFlightJob(completedJobId, {
+          status: 'COMPLETED',
+          flightNumber: activeFlight.flightNumber,
+          date: completionFlightDate,
+          vehicleId: selectedVehicleId,
+          deliveryNumber: finalDeliveryNumber
+        }).catch(e => console.warn('[IntoPlane] Direct completion update to Supabase warning:', e));
       }
 
       // Concurrently wait for BigQuery and Supabase writes
@@ -4162,6 +4463,29 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                     <p className="text-[11px] font-medium text-on-surface italic">{activeFlight.remarks}</p>
                   </div>
                 )}
+
+                {/* Declaration of Acknowledgment & Signature */}
+                <SignatureAcknowledgment
+                  signerName={activeFlight.signerName || ''}
+                  onSignerNameChange={(val) => handleInputChange('signerName', val)}
+                  signerDesignation={activeFlight.signerDesignation || ''}
+                  onSignerDesignationChange={(val) => handleInputChange('signerDesignation', val)}
+                  signatureDataUrl={activeFlight.signatureDataUrl || null}
+                  onSignatureChange={(val) => {
+                    handleInputChange('signatureDataUrl', val);
+                    handleInputChange('signedAt', val ? new Date().toISOString() : undefined);
+                    handleInputChange('declarationConfirmed', !!val);
+                  }}
+                  designationPresets={[
+                    'Captain (PIC)',
+                    'First Officer',
+                    'Aircraft Maintenance Engineer',
+                    'Ground Handler Rep'
+                  ]}
+                  declarationText="I hereby acknowledge and certify receipt of the specified fuel volume into the aircraft. All quality control procedures, meter readings, and safety clearances have been verified and accepted."
+                  title="Customer / Flight Crew Acknowledgment"
+                  subtitle="Official Into-Plane Fueling Certification"
+                />
               </div>
 
               {/* Action Buttons */}

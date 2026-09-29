@@ -8,6 +8,7 @@ import { syncEngine } from './syncEngine';
 import masterDbData from './masterDbData.json';
 import { INITIAL_MOCK_SCHEDULES, scheduleImportService } from './scheduleImportService';
 import { activityLogService, LogModule, LogAction } from './activityLogService';
+import { api } from './apiClient';
 
 const localBridgingLogs: BridgingLog[] = [
   {
@@ -130,23 +131,33 @@ export const supabaseService = {
   // ── Tanks ───────────────────────────────────────────────────────────────────
   async getTanks(): Promise<Tank[]> {
     try {
-      const { data, error } = await supabase.from('tanks').select('*').order('name');
-      if (!error && data && data.length > 0) {
-        localTanks = data.map(row => ({
-          id: row.id,
-          name: row.name,
-          type: row.type,
-          capacity: Number(row.capacity),
-          currentLevel: Number(row.current_level),
-          safeMinLevel: Number(row.safe_min_level),
-          lastUpdated: row.last_updated
-        } as Tank));
-        // Cache to IndexedDB
+      const apiTanks = await api.tanks.getAll();
+      if (apiTanks && apiTanks.length > 0) {
+        localTanks = apiTanks;
         await fmsDb.bulkPut('tanks', localTanks);
         return localTanks;
       }
-    } catch (e) {
-      console.warn('[Supabase] Network query failed for getTanks, checking IndexedDB cache:', e);
+    } catch (apiErr) {
+      console.warn('[API] api.tanks.getAll failed, checking direct query/cache:', apiErr);
+      try {
+        const { data, error } = await supabase.from('tanks').select('*').order('name');
+        if (!error && data && data.length > 0) {
+          localTanks = data.map(row => ({
+            id: row.id,
+            name: row.name,
+            type: row.type,
+            capacity: Number(row.capacity),
+            currentLevel: Number(row.current_level),
+            safeMinLevel: Number(row.safe_min_level),
+            lastUpdated: row.last_updated
+          } as Tank));
+          // Cache to IndexedDB
+          await fmsDb.bulkPut('tanks', localTanks);
+          return localTanks;
+        }
+      } catch (e) {
+        console.warn('[Supabase] Network query failed for getTanks, checking IndexedDB cache:', e);
+      }
     }
 
     // Fallback to IndexedDB
@@ -172,17 +183,19 @@ export const supabaseService = {
 
     const payload = { current_level: newLevel, last_updated: lastUpdated };
 
-    // Enqueue mutation to IndexedDB Outbox
-    await fmsDb.enqueueOutbox({
-      action: 'UPDATE',
-      entityType: 'tank',
-      entityId: id,
-      payload,
-      idempotencyKey: `tank-lvl-${id}-${Date.now()}`
-    });
-
-    // Attempt background sync
-    syncEngine.flushOutbox().catch(err => console.warn('[Outbox] Background sync queued offline:', err));
+    try {
+      await api.tanks.update(id, { currentLevel: newLevel });
+    } catch (apiErr) {
+      // Enqueue mutation to IndexedDB Outbox
+      await fmsDb.enqueueOutbox({
+        action: 'UPDATE',
+        entityType: 'tank',
+        entityId: id,
+        payload,
+        idempotencyKey: `tank-lvl-${id}-${Date.now()}`
+      });
+      syncEngine.flushOutbox().catch(err => console.warn('[Outbox] Background sync queued offline:', err));
+    }
   },
 
   subscribeToTanks(callback: (tanks: Tank[]) => void) {
@@ -218,20 +231,25 @@ export const supabaseService = {
     localTanks.push(newTank);
     triggerTanksCallbacks();
 
-    const row = {
-      id: cleanId,
-      name: cleanId,
-      type: tank.type,
-      capacity: tank.capacity,
-      current_level: tank.currentLevel,
-      safe_min_level: tank.safeMinLevel,
-    };
-    const { error } = await supabase.from('tanks').insert([row]);
-    if (error) {
-      localTanks = localTanks.filter(t => t.id !== cleanId);
-      triggerTanksCallbacks();
-      console.error('[Supabase] addTank failed:', error);
-      throw error;
+    try {
+      await api.tanks.create(newTank);
+    } catch (apiErr) {
+      console.warn('[API] api.tanks.create failed, falling back to direct:', apiErr);
+      const row = {
+        id: cleanId,
+        name: cleanId,
+        type: tank.type,
+        capacity: tank.capacity,
+        current_level: tank.currentLevel,
+        safe_min_level: tank.safeMinLevel,
+      };
+      const { error } = await supabase.from('tanks').insert([row]);
+      if (error) {
+        localTanks = localTanks.filter(t => t.id !== cleanId);
+        triggerTanksCallbacks();
+        console.error('[Supabase] addTank failed:', error);
+        throw error;
+      }
     }
   },
 
@@ -244,23 +262,28 @@ export const supabaseService = {
       triggerTanksCallbacks();
     }
 
-    const row: Record<string, any> = {
-      last_updated: new Date().toISOString()
-    };
-    if ('name' in updates) row.name = updates.name;
-    if ('type' in updates) row.type = updates.type;
-    if ('capacity' in updates) row.capacity = updates.capacity;
-    if ('currentLevel' in updates) row.current_level = updates.currentLevel;
-    if ('safeMinLevel' in updates) row.safe_min_level = updates.safeMinLevel;
+    try {
+      await api.tanks.update(id, updates);
+    } catch (apiErr) {
+      console.warn('[API] api.tanks.update failed, falling back to direct:', apiErr);
+      const row: Record<string, any> = {
+        last_updated: new Date().toISOString()
+      };
+      if ('name' in updates) row.name = updates.name;
+      if ('type' in updates) row.type = updates.type;
+      if ('capacity' in updates) row.capacity = updates.capacity;
+      if ('currentLevel' in updates) row.current_level = updates.currentLevel;
+      if ('safeMinLevel' in updates) row.safe_min_level = updates.safeMinLevel;
 
-    const { error } = await supabase.from('tanks').update(row).eq('id', id);
-    if (error) {
-      if (index !== -1 && original) {
-        localTanks[index] = original;
-        triggerTanksCallbacks();
+      const { error } = await supabase.from('tanks').update(row).eq('id', id);
+      if (error) {
+        if (index !== -1 && original) {
+          localTanks[index] = original;
+          triggerTanksCallbacks();
+        }
+        console.error('[Supabase] updateTank failed:', error);
+        throw error;
       }
-      console.error('[Supabase] updateTank failed:', error);
-      throw error;
     }
   },
 
@@ -273,91 +296,105 @@ export const supabaseService = {
       triggerTanksCallbacks();
     }
 
-    const { error } = await supabase.from('tanks').delete().eq('id', id);
-    if (error) {
-      if (index !== -1 && original) {
-        localTanks.splice(index, 0, original);
-        triggerTanksCallbacks();
+    try {
+      await api.tanks.delete(id);
+    } catch (apiErr) {
+      console.warn('[API] api.tanks.delete failed, falling back to direct:', apiErr);
+      const { error } = await supabase.from('tanks').delete().eq('id', id);
+      if (error) {
+        if (index !== -1 && original) {
+          localTanks.splice(index, 0, original);
+          triggerTanksCallbacks();
+        }
+        console.error('[Supabase] deleteTank failed:', error);
+        throw error;
       }
-      console.error('[Supabase] deleteTank failed:', error);
-      throw error;
     }
   },
 
   // ── Flight Jobs ─────────────────────────────────────────────────────────────
   async getFlightJobs(): Promise<FlightJob[]> {
     try {
-      const { data, error } = await supabase.from('flight_jobs').select('*');
-      if (!error && data && data.length > 0) {
-        const jobs = data.map(row => {
-          let dateVal: string | undefined = undefined;
-          let routeVal: string | undefined = undefined;
-          let isDomesticVal: boolean | undefined = undefined;
-          let isAdhocVal: boolean | undefined = undefined;
-          let typeVal: 'arrival' | 'departure' | undefined = undefined;
-          let remarksVal = row.remarks || '';
-          let metaTObt: string | undefined = undefined;
-          let metaFrtAirline: string | undefined = undefined;
-          let metaFrtAocc: string | undefined = undefined;
-          let metaFrtFor: string | undefined = undefined;
-          let metaClearance: string | undefined = undefined;
-
-          if (row.remarks && row.remarks.startsWith('{"_fms_meta":')) {
-            try {
-              const meta = JSON.parse(row.remarks);
-              dateVal = meta.date;
-              routeVal = meta.route;
-              isDomesticVal = meta.isDomestic;
-              isAdhocVal = meta.isAdhoc;
-              typeVal = meta.type;
-              remarksVal = meta.remarks || '';
-              metaTObt = meta.tobt;
-              metaFrtAirline = meta.frtAirline;
-              metaFrtAocc = meta.frtAocc;
-              metaFrtFor = meta.frtFor;
-              metaClearance = meta.timestampClearance;
-            } catch (e) {}
-          }
-
-          return {
-            id: row.id,
-            flightNumber: row.flight_number,
-            aircraftReg: row.aircraft_reg,
-            aircraftType: row.aircraft_type,
-            stand: row.stand,
-            sta: row.sta,
-            eta: row.eta,
-            std: row.std,
-            assignedTo: row.assigned_to,
-            assignedOfficer: row.assigned_officer,
-            equipmentUsage: row.equipment_usage,
-            status: row.status,
-            vehicleId: row.vehicle_id,
-            remarks: remarksVal,
-            deliveryNumber: row.delivery_number,
-            pitNumber: row.pit_number,
-            date: dateVal || (row.id ? row.id.match(/\d{4}-\d{2}-\d{2}/)?.[0] : undefined),
-            route: routeVal,
-            isDomestic: isDomesticVal,
-            isAdhoc: isAdhocVal,
-            type: typeVal,
-            landed_alert_sent: !!row.landed_alert_sent,
-            eta_alert_15_sent: !!row.eta_alert_15_sent,
-            eta_alert_5_sent: !!row.eta_alert_5_sent,
-            tobt: row.tobt || metaTObt,
-            frtAirline: row.frt_airline || metaFrtAirline,
-            frtAocc: row.frt_aocc || metaFrtAocc,
-            frtFor: row.frt_for || metaFrtFor,
-            timestampClearance: row.timestamp_clearance || metaClearance
-          } as FlightJob;
-        });
-
-        // Cache in IndexedDB
-        await fmsDb.bulkPut('flight_jobs', jobs);
-        return jobs;
+      const apiJobs = await api.flightJobs.getAll();
+      if (apiJobs && apiJobs.length > 0) {
+        await fmsDb.bulkPut('flight_jobs', apiJobs);
+        return apiJobs;
       }
-    } catch (e) {
-      console.warn('[Supabase] getFlightJobs network query failed, falling back to IndexedDB:', e);
+    } catch (apiErr) {
+      console.warn('[API] api.flightJobs.getAll failed, checking direct query/cache:', apiErr);
+      try {
+        const { data, error } = await supabase.from('flight_jobs').select('*');
+        if (!error && data && data.length > 0) {
+          const jobs = data.map(row => {
+            let dateVal: string | undefined = undefined;
+            let routeVal: string | undefined = undefined;
+            let isDomesticVal: boolean | undefined = undefined;
+            let isAdhocVal: boolean | undefined = undefined;
+            let typeVal: 'arrival' | 'departure' | undefined = undefined;
+            let remarksVal = row.remarks || '';
+            let metaTObt: string | undefined = undefined;
+            let metaFrtAirline: string | undefined = undefined;
+            let metaFrtAocc: string | undefined = undefined;
+            let metaFrtFor: string | undefined = undefined;
+            let metaClearance: string | undefined = undefined;
+
+            if (row.remarks && row.remarks.startsWith('{"_fms_meta":')) {
+              try {
+                const meta = JSON.parse(row.remarks);
+                dateVal = meta.date;
+                routeVal = meta.route;
+                isDomesticVal = meta.isDomestic;
+                isAdhocVal = meta.isAdhoc;
+                typeVal = meta.type;
+                remarksVal = meta.remarks || '';
+                metaTObt = meta.tobt;
+                metaFrtAirline = meta.frtAirline;
+                metaFrtAocc = meta.frtAocc;
+                metaFrtFor = meta.frtFor;
+                metaClearance = meta.timestampClearance;
+              } catch (e) {}
+            }
+
+            return {
+              id: row.id,
+              flightNumber: row.flight_number,
+              aircraftReg: row.aircraft_reg,
+              aircraftType: row.aircraft_type,
+              stand: row.stand,
+              sta: row.sta,
+              eta: row.eta,
+              std: row.std,
+              assignedTo: row.assigned_to,
+              assignedOfficer: row.assigned_officer,
+              equipmentUsage: row.equipment_usage,
+              status: row.status,
+              vehicleId: row.vehicle_id,
+              remarks: remarksVal,
+              deliveryNumber: row.delivery_number,
+              pitNumber: row.pit_number,
+              date: dateVal || (row.id ? row.id.match(/\d{4}-\d{2}-\d{2}/)?.[0] : undefined),
+              route: routeVal,
+              isDomestic: isDomesticVal,
+              isAdhoc: isAdhocVal,
+              type: typeVal,
+              landed_alert_sent: !!row.landed_alert_sent,
+              eta_alert_15_sent: !!row.eta_alert_15_sent,
+              eta_alert_5_sent: !!row.eta_alert_5_sent,
+              tobt: row.tobt || metaTObt,
+              frtAirline: row.frt_airline || metaFrtAirline,
+              frtAocc: row.frt_aocc || metaFrtAocc,
+              frtFor: row.frt_for || metaFrtFor,
+              timestampClearance: row.timestamp_clearance || metaClearance
+            } as FlightJob;
+          });
+
+          // Cache in IndexedDB
+          await fmsDb.bulkPut('flight_jobs', jobs);
+          return jobs;
+        }
+      } catch (e) {
+        console.warn('[Supabase] getFlightJobs network query failed, falling back to IndexedDB:', e);
+      }
     }
 
     // Offline fallback from IndexedDB
@@ -416,13 +453,9 @@ export const supabaseService = {
       timestamp_clearance: job.timestampClearance || null
     };
 
-    // 2. Direct Supabase upsert with offline outbox fallback
+    // 2. Route via API with direct fallback
     try {
-      const { error } = await supabase.from('flight_jobs').upsert([row]);
-      if (error) {
-        console.warn('[Supabase] direct upsert flight_jobs error, enqueuing outbox:', error);
-        throw error;
-      }
+      await api.flightJobs.create(job);
       activityLogService.logAction(null, {
         module: LogModule.FLIGHT_JOBS,
         action: LogAction.CREATE,
@@ -432,15 +465,21 @@ export const supabaseService = {
         description: `Created flight turnaround job for ${job.flightNumber} (${job.aircraftReg || job.aircraftType || 'A/C'}) at Stand ${job.stand}`,
         after_state: row
       });
-    } catch (e) {
-      await fmsDb.enqueueOutbox({
-        action: 'INSERT',
-        entityType: 'flight_job',
-        entityId: job.id,
-        payload: row,
-        idempotencyKey: `fj-ins-${job.id}-${Date.now()}`
-      });
-      syncEngine.flushOutbox().catch(err => console.warn('[Outbox] Background sync queued offline:', err));
+    } catch (apiErr) {
+      console.warn('[API] api.flightJobs.create failed, falling back to direct/outbox:', apiErr);
+      try {
+        const { error } = await supabase.from('flight_jobs').upsert([row]);
+        if (error) throw error;
+      } catch (e) {
+        await fmsDb.enqueueOutbox({
+          action: 'INSERT',
+          entityType: 'flight_job',
+          entityId: job.id,
+          payload: row,
+          idempotencyKey: `fj-ins-${job.id}-${Date.now()}`
+        });
+        syncEngine.flushOutbox().catch(err => console.warn('[Outbox] Background sync queued offline:', err));
+      }
     }
   },
 
@@ -494,20 +533,9 @@ export const supabaseService = {
     if ('deliveryNumber' in updates) row.delivery_number = updates.deliveryNumber === undefined ? null : updates.deliveryNumber;
     if ('pitNumber' in updates) row.pit_number = updates.pitNumber === undefined ? null : updates.pitNumber;
 
-    // 2. Direct Supabase update with upsert fallback if row not created yet
+    // 2. Route via API with direct fallback
     try {
-      const { data, error } = await supabase.from('flight_jobs').update(row).eq('id', id).select('id');
-      if (!data || data.length === 0) {
-        const flightNum = row.flight_number || existing?.flightNumber;
-        if (!flightNum) {
-          console.warn('[Supabase] updateFlightJob cannot insert fallback without flight_number for id:', id);
-          return;
-        }
-        const fullPayload = { id, flight_number: flightNum, ...row };
-        const { error: upsertErr } = await supabase.from('flight_jobs').upsert([fullPayload]);
-        if (upsertErr) throw upsertErr;
-      }
-
+      await api.flightJobs.update(id, updates);
       activityLogService.logAction(null, {
         module: LogModule.FLIGHT_JOBS,
         action: updates.assignedTo ? LogAction.ASSIGN : updates.status ? LogAction.STATUS_CHANGE : LogAction.UPDATE,
@@ -522,16 +550,30 @@ export const supabaseService = {
         before_state: existing ? { status: existing.status, assignedTo: existing.assignedTo, vehicleId: existing.vehicleId } : null,
         after_state: updates
       });
-    } catch (e) {
-      console.warn('[Supabase] direct update flight_jobs error, enqueuing outbox:', e);
-      await fmsDb.enqueueOutbox({
-        action: 'UPDATE',
-        entityType: 'flight_job',
-        entityId: id,
-        payload: row,
-        idempotencyKey: `fj-upd-${id}-${Date.now()}`
-      });
-      syncEngine.flushOutbox().catch(err => console.warn('[Outbox] Background sync queued offline:', err));
+    } catch (apiErr) {
+      console.warn('[API] api.flightJobs.update failed, falling back to direct/outbox:', apiErr);
+      try {
+        const { data, error } = await supabase.from('flight_jobs').update(row).eq('id', id).select('id');
+        if (!data || data.length === 0) {
+          const flightNum = row.flight_number || existing?.flightNumber;
+          if (flightNum) {
+            const { data: byFlight } = await supabase.from('flight_jobs').update(row).ilike('flight_number', flightNum).select('id');
+            if (!byFlight || byFlight.length === 0) {
+              const fullPayload = { id, flight_number: flightNum, ...row };
+              await supabase.from('flight_jobs').upsert([fullPayload]);
+            }
+          }
+        }
+      } catch (e) {
+        await fmsDb.enqueueOutbox({
+          action: 'UPDATE',
+          entityType: 'flight_job',
+          entityId: id,
+          payload: row,
+          idempotencyKey: `fj-upd-${id}-${Date.now()}`
+        });
+        syncEngine.flushOutbox().catch(err => console.warn('[Outbox] Background sync queued offline:', err));
+      }
     }
   },
 
@@ -545,21 +587,32 @@ export const supabaseService = {
       entity_label: id,
       description: `Deleted flight job record ${id}`
     });
-    await fmsDb.enqueueOutbox({
-      action: 'DELETE',
-      entityType: 'flight_job',
-      entityId: id,
-      payload: null,
-      idempotencyKey: `fj-del-${id}-${Date.now()}`
-    });
-    syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
+
+    try {
+      await api.flightJobs.delete(id);
+    } catch (apiErr) {
+      console.warn('[API] api.flightJobs.delete failed, falling back to outbox:', apiErr);
+      await fmsDb.enqueueOutbox({
+        action: 'DELETE',
+        entityType: 'flight_job',
+        entityId: id,
+        payload: null,
+        idempotencyKey: `fj-del-${id}-${Date.now()}`
+      });
+      syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
+    }
   },
 
   async clearAllFlightJobs(): Promise<void> {
-    const { error } = await supabase.from('flight_jobs').delete().neq('id', '');
-    if (error) {
-      console.error('[Supabase] clearAllFlightJobs failed:', error);
-      throw error;
+    try {
+      await api.flightJobs.clearAll();
+    } catch (apiErr) {
+      console.warn('[API] api.flightJobs.clearAll failed, falling back to direct:', apiErr);
+      const { error } = await supabase.from('flight_jobs').delete().neq('id', '');
+      if (error) {
+        console.error('[Supabase] clearAllFlightJobs failed:', error);
+        throw error;
+      }
     }
     activityLogService.logAction(null, {
       module: LogModule.FLIGHT_JOBS,
@@ -704,9 +757,11 @@ export const supabaseService = {
       const deduped = recent.filter(l => l.id !== fullLog.id && (!fullLog.deliveryNumber || l.deliveryNumber !== fullLog.deliveryNumber));
       deduped.unshift(fullLog);
       localStorage.setItem('fms_recent_flight_logs', JSON.stringify(deduped.slice(0, 100)));
-      // Dispatch custom event for real-time reactivity in active tabs
+      // Dispatch custom event for real-time reactivity in active tabs (deferred to avoid render phase setState conflicts)
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('fms:flight-log-created', { detail: fullLog }));
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('fms:flight-log-created', { detail: fullLog }));
+        }, 0);
       }
     } catch (storageErr) {
       console.warn('[Storage] Failed to cache recent flight log:', storageErr);
@@ -714,12 +769,33 @@ export const supabaseService = {
 
     try {
       const headers = await this._bqAuthHeaders();
-      const res = await fetch(`${this._bqBase()}/operations-log`, {
+      let res = await fetch(`${this._bqBase()}/operations-log`, {
         method: 'POST',
         headers,
         body: JSON.stringify(fullLog),
       });
-      if (!res.ok) throw new Error(`BigQuery POST failed: ${res.status} ${await res.text()}`);
+
+      if (!res.ok) {
+        const errText = await res.text();
+        if (errText.includes('is not present in table') || errText.includes('Column std')) {
+          console.warn('[BigQuery] Server missing optional columns, retrying without optional timing fields...');
+          const stripped = { ...fullLog };
+          delete (stripped as any).std;
+          delete (stripped as any).tobt;
+          delete (stripped as any).frtAirline;
+          delete (stripped as any).frtAocc;
+          delete (stripped as any).frtFor;
+          res = await fetch(`${this._bqBase()}/operations-log`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(stripped),
+          });
+        }
+        if (!res.ok) {
+          throw new Error(`BigQuery POST failed: ${res.status} ${await res.text().catch(() => errText)}`);
+        }
+      }
+
       const data = await res.json().catch(() => ({}));
       if (data && data.id && data.id !== fullLog.id) {
         fullLog.id = data.id;
@@ -736,8 +812,16 @@ export const supabaseService = {
       return fullLog;
     } catch (error) {
       console.error('[BigQuery] createFlightLog error:', error);
-      // Still return fullLog so optimistic local flow succeeded
-      return fullLog;
+      // Clean up optimistic cache if persistent save failed
+      try {
+        const raw = localStorage.getItem('fms_recent_flight_logs');
+        if (raw) {
+          const recent: FlightLog[] = JSON.parse(raw);
+          const cleaned = recent.filter(l => l.id !== fullLog.id && (!fullLog.deliveryNumber || l.deliveryNumber !== fullLog.deliveryNumber));
+          localStorage.setItem('fms_recent_flight_logs', JSON.stringify(cleaned));
+        }
+      } catch {}
+      throw error;
     }
   },
 
@@ -756,7 +840,9 @@ export const supabaseService = {
         }
       }
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('fms:flight-log-updated', { detail: { id, updates } }));
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('fms:flight-log-updated', { detail: { id, updates } }));
+        }, 0);
       }
     } catch (e) {}
 
@@ -836,9 +922,11 @@ export const supabaseService = {
         localStorage.setItem('fms_recent_flight_logs', JSON.stringify(filtered));
       }
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('fms:flight-log-deleted', { 
-          detail: { id, flightNumber: fallbackFlightNumber, deliveryNumber: fallbackDeliveryNumber } 
-        }));
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('fms:flight-log-deleted', { 
+            detail: { id, flightNumber: fallbackFlightNumber, deliveryNumber: fallbackDeliveryNumber } 
+          }));
+        }, 0);
       }
     } catch (e) {
       console.warn('[Storage] Failed to remove deleted flight log from cache:', e);
@@ -1080,38 +1168,50 @@ export const supabaseService = {
 
   // ── Alerts ──────────────────────────────────────────────────────────────────
   async getAlerts(): Promise<Alert[]> {
-    const { data, error } = await supabase.from('alerts').select('*').order('timestamp', { ascending: false });
-    if (error) {
-      console.error('[Supabase] getAlerts failed:', error);
-      return [];
-    }
-    if (!data || data.length === 0) return [];
+    try {
+      const apiAlerts = await api.alerts.getAll();
+      if (apiAlerts && apiAlerts.length > 0) {
+        return apiAlerts.map(row => ({
+          ...row,
+          timestamp: row.timestamp && !row.timestamp.includes(':') 
+            ? new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+            : row.timestamp
+        }));
+      }
+    } catch (apiErr) {
+      console.warn('[API] api.alerts.getAll failed, checking direct query:', apiErr);
+      const { data, error } = await supabase.from('alerts').select('*').order('timestamp', { ascending: false });
+      if (error) {
+        console.error('[Supabase] getAlerts failed:', error);
+        return [];
+      }
+      if (!data || data.length === 0) return [];
 
-    // Automatically detect whether extended columns exist in the alerts table
-    if (data[0] && 'alert_type' in data[0]) {
-      alertsExtendedSupported = true;
-    }
+      if (data[0] && 'alert_type' in data[0]) {
+        alertsExtendedSupported = true;
+      }
 
-    return data.map(row => ({
-      id: row.id,
-      severity: row.severity,
-      message: row.message,
-      // Convert stored ISO timestamp to a human-readable HH:MM string for the UI
-      timestamp: row.timestamp
-        ? new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
-        : row.timestamp,
-      acknowledged: row.acknowledged,
-      acknowledgedAt: row.acknowledged_at || row.acknowledgedAt || null,
-      acknowledged_at: row.acknowledged_at || row.acknowledgedAt || null,
-      acknowledgedBy: row.acknowledged_by || row.acknowledgedBy || null,
-      targetRole: row.target_role,
-      alertType: row.alert_type || row.alertType || null,
-      flightNumber: row.flight_number || row.flightNumber || null,
-      assignedStaffId: row.assigned_staff_id || row.assignedStaffId || null,
-      metadata: row.metadata ? (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata) : null,
-      senderId: row.sender_id || row.senderId || null,
-      senderName: row.sender_name || row.senderName || null
-    } as Alert));
+      return data.map(row => ({
+        id: row.id,
+        severity: row.severity,
+        message: row.message,
+        timestamp: row.timestamp
+          ? new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+          : row.timestamp,
+        acknowledged: row.acknowledged,
+        acknowledgedAt: row.acknowledged_at || row.acknowledgedAt || null,
+        acknowledged_at: row.acknowledged_at || row.acknowledgedAt || null,
+        acknowledgedBy: row.acknowledged_by || row.acknowledgedBy || null,
+        targetRole: row.target_role,
+        alertType: row.alert_type || row.alertType || null,
+        flightNumber: row.flight_number || row.flightNumber || null,
+        assignedStaffId: row.assigned_staff_id || row.assignedStaffId || null,
+        metadata: row.metadata ? (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata) : null,
+        senderId: row.sender_id || row.senderId || null,
+        senderName: row.sender_name || row.senderName || null
+      } as Alert));
+    }
+    return [];
   },
 
   subscribeToAlerts(callback: (alerts: Alert[]) => void) {
@@ -1135,84 +1235,93 @@ export const supabaseService = {
   },
 
   async acknowledgeAlert(id: string, ackData?: { acknowledgedAt?: string; acknowledgedBy?: string }): Promise<void> {
-    const updatePayload: any = { 
-      acknowledged: true,
-      acknowledged_at: ackData?.acknowledgedAt || new Date().toISOString()
-    };
-    if (ackData?.acknowledgedBy) {
-      updatePayload.acknowledged_by = ackData.acknowledgedBy;
-    }
-    const { error } = await supabase.from('alerts').update(updatePayload).eq('id', id);
-    if (error) {
-      console.error('[Supabase] acknowledgeAlert failed:', error);
-      if (error.message?.includes('acknowledged_at') || error.message?.includes('acknowledged_by') || error.code === 'PGRST204') {
-        await supabase.from('alerts').update({ acknowledged: true }).eq('id', id);
+    try {
+      await api.alerts.acknowledge(id, ackData);
+    } catch (apiErr) {
+      console.warn('[API] api.alerts.acknowledge failed, falling back to direct:', apiErr);
+      const updatePayload: any = { 
+        acknowledged: true,
+        acknowledged_at: ackData?.acknowledgedAt || new Date().toISOString()
+      };
+      if (ackData?.acknowledgedBy) {
+        updatePayload.acknowledged_by = ackData.acknowledgedBy;
+      }
+      const { error } = await supabase.from('alerts').update(updatePayload).eq('id', id);
+      if (error) {
+        if (error.message?.includes('acknowledged_at') || error.message?.includes('acknowledged_by') || error.code === 'PGRST204') {
+          await supabase.from('alerts').update({ acknowledged: true }).eq('id', id);
+        }
       }
     }
   },
 
   async acknowledgeAllAlerts(ids: string[], ackData?: { acknowledgedAt?: string; acknowledgedTime?: string; acknowledgedBy?: string }): Promise<void> {
-    const updatePayload: any = { 
-      acknowledged: true,
-      acknowledged_at: ackData?.acknowledgedAt || new Date().toISOString()
-    };
-    if (ackData?.acknowledgedBy) {
-      updatePayload.acknowledged_by = ackData.acknowledgedBy;
-    }
-    const { error } = await supabase.from('alerts').update(updatePayload).in('id', ids);
-    if (error) {
-      console.error('[Supabase] acknowledgeAllAlerts failed:', error);
-      if (error.message?.includes('acknowledged_at') || error.message?.includes('acknowledged_by') || error.code === 'PGRST204') {
-        await supabase.from('alerts').update({ acknowledged: true }).in('id', ids);
+    try {
+      await api.alerts.acknowledgeBulk(ids, ackData);
+    } catch (apiErr) {
+      console.warn('[API] api.alerts.acknowledgeBulk failed, falling back to direct:', apiErr);
+      const updatePayload: any = { 
+        acknowledged: true,
+        acknowledged_at: ackData?.acknowledgedAt || new Date().toISOString()
+      };
+      if (ackData?.acknowledgedBy) {
+        updatePayload.acknowledged_by = ackData.acknowledgedBy;
+      }
+      const { error } = await supabase.from('alerts').update(updatePayload).in('id', ids);
+      if (error) {
+        if (error.message?.includes('acknowledged_at') || error.message?.includes('acknowledged_by') || error.code === 'PGRST204') {
+          await supabase.from('alerts').update({ acknowledged: true }).in('id', ids);
+        }
       }
     }
   },
 
   async deleteAlerts(ids: string[]): Promise<void> {
-    const { error } = await supabase.from('alerts').delete().in('id', ids);
-    if (error) {
-      console.error('[Supabase] deleteAlerts failed:', error);
-      throw error;
+    try {
+      await api.alerts.deleteBulk(ids);
+    } catch (apiErr) {
+      console.warn('[API] api.alerts.deleteBulk failed, falling back to direct:', apiErr);
+      const { error } = await supabase.from('alerts').delete().in('id', ids);
+      if (error) {
+        console.error('[Supabase] deleteAlerts failed:', error);
+        throw error;
+      }
     }
   },
 
   async createAlert(alert: Omit<Alert, 'id'>): Promise<void> {
-    const baseRow = {
-      severity: alert.severity,
-      message: alert.message,
-      // Always use a full ISO 8601 timestamp for the DB column (timestamptz).
-      timestamp: new Date().toISOString(),
-      acknowledged: alert.acknowledged,
-      target_role: alert.targetRole || null
-    };
-
-    if (alertsExtendedSupported) {
-      const extendedRow = {
-        ...baseRow,
-        alert_type: alert.alertType || null,
-        flight_number: alert.flightNumber || null,
-        assigned_staff_id: alert.assignedStaffId || null,
-        metadata: alert.metadata ? JSON.stringify(alert.metadata) : null,
-        sender_id: alert.senderId || null,
-        sender_name: alert.senderName || null
+    try {
+      await api.alerts.create(alert);
+    } catch (apiErr) {
+      console.warn('[API] api.alerts.create failed, falling back to direct:', apiErr);
+      const baseRow = {
+        severity: alert.severity,
+        message: alert.message,
+        timestamp: new Date().toISOString(),
+        acknowledged: alert.acknowledged,
+        target_role: alert.targetRole || null
       };
 
-      const { error } = await supabase.from('alerts').insert([extendedRow]);
-      if (error) {
-        if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('alert_type')) {
-          alertsExtendedSupported = false;
-          const fallbackRes = await supabase.from('alerts').insert([baseRow]);
-          if (fallbackRes.error) {
-            console.error('[Supabase] createAlert fallback failed:', fallbackRes.error);
+      if (alertsExtendedSupported) {
+        const extendedRow = {
+          ...baseRow,
+          alert_type: alert.alertType || null,
+          flight_number: alert.flightNumber || null,
+          assigned_staff_id: alert.assignedStaffId || null,
+          metadata: alert.metadata ? JSON.stringify(alert.metadata) : null,
+          sender_id: alert.senderId || null,
+          sender_name: alert.senderName || null
+        };
+
+        const { error } = await supabase.from('alerts').insert([extendedRow]);
+        if (error) {
+          if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('alert_type')) {
+            alertsExtendedSupported = false;
+            await supabase.from('alerts').insert([baseRow]);
           }
-        } else {
-          console.error('[Supabase] createAlert failed:', error);
         }
-      }
-    } else {
-      const { error } = await supabase.from('alerts').insert([baseRow]);
-      if (error) {
-        console.error('[Supabase] createAlert failed:', error);
+      } else {
+        await supabase.from('alerts').insert([baseRow]);
       }
     }
 
@@ -1399,26 +1508,35 @@ export const supabaseService = {
 
   // ── Equipment ───────────────────────────────────────────────────────────────
   async getEquipment(): Promise<Equipment[]> {
-    const { data, error } = await supabase.from('equipment').select('*').order('name');
-    if (error) {
-      console.warn('[Supabase] getEquipment failed, falling back to static constants:', error);
-      if (localEquipment.length === 0) localEquipment = EQUIPMENT;
-      return localEquipment;
+    try {
+      const apiEq = await api.equipment.getAll();
+      if (apiEq && apiEq.length > 0) {
+        localEquipment = apiEq;
+        return localEquipment;
+      }
+    } catch (apiErr) {
+      console.warn('[API] api.equipment.getAll failed, checking direct query:', apiErr);
+      try {
+        const { data, error } = await supabase.from('equipment').select('*').order('name');
+        if (!error && data && data.length > 0) {
+          localEquipment = data.map(row => ({
+            id: row.id,
+            name: row.name,
+            type: row.type,
+            status: row.status,
+            currentVolume: Number(row.current_volume),
+            maxCapacity: Number(row.max_capacity),
+            lastUpdated: row.last_updated,
+            maintenanceDetails: row.maintenance_details
+          } as Equipment));
+          return localEquipment;
+        }
+      } catch (e) {
+        console.warn('[Supabase] getEquipment failed, falling back to static constants:', e);
+      }
     }
-    if (!data || data.length === 0) {
-      if (localEquipment.length === 0) localEquipment = EQUIPMENT;
-      return localEquipment;
-    }
-    localEquipment = data.map(row => ({
-      id: row.id,
-      name: row.name,
-      type: row.type,
-      status: row.status,
-      currentVolume: Number(row.current_volume),
-      maxCapacity: Number(row.max_capacity),
-      lastUpdated: row.last_updated,
-      maintenanceDetails: row.maintenance_details
-    } as Equipment));
+
+    if (localEquipment.length === 0) localEquipment = EQUIPMENT;
     return localEquipment;
   },
 
@@ -1431,17 +1549,22 @@ export const supabaseService = {
       triggerEquipmentCallbacks();
     }
 
-    const { error } = await supabase.from('equipment').update({
-      status: status,
-      last_updated: new Date().toISOString()
-    }).eq('id', id);
+    try {
+      await api.equipment.updateStatus(id, status);
+    } catch (apiErr) {
+      console.warn('[API] api.equipment.updateStatus failed, falling back to direct:', apiErr);
+      const { error } = await supabase.from('equipment').update({
+        status: status,
+        last_updated: new Date().toISOString()
+      }).eq('id', id);
 
-    if (error) {
-      if (index !== -1 && original) {
-        localEquipment[index] = original;
-        triggerEquipmentCallbacks();
+      if (error) {
+        if (index !== -1 && original) {
+          localEquipment[index] = original;
+          triggerEquipmentCallbacks();
+        }
+        console.error('[Supabase] updateEquipmentStatus failed:', error);
       }
-      console.error('[Supabase] updateEquipmentStatus failed:', error);
     }
   },
 
@@ -1454,23 +1577,28 @@ export const supabaseService = {
       triggerEquipmentCallbacks();
     }
 
-    const row: Record<string, any> = {
-      last_updated: new Date().toISOString()
-    };
-    if ('name' in updates) row.name = updates.name;
-    if ('type' in updates) row.type = updates.type;
-    if ('status' in updates) row.status = updates.status;
-    if ('currentVolume' in updates) row.current_volume = updates.currentVolume;
-    if ('maxCapacity' in updates) row.max_capacity = updates.maxCapacity;
-    if ('maintenanceDetails' in updates) row.maintenance_details = updates.maintenanceDetails;
+    try {
+      await api.equipment.update(id, updates);
+    } catch (apiErr) {
+      console.warn('[API] api.equipment.update failed, falling back to direct:', apiErr);
+      const row: Record<string, any> = {
+        last_updated: new Date().toISOString()
+      };
+      if ('name' in updates) row.name = updates.name;
+      if ('type' in updates) row.type = updates.type;
+      if ('status' in updates) row.status = updates.status;
+      if ('currentVolume' in updates) row.current_volume = updates.currentVolume;
+      if ('maxCapacity' in updates) row.max_capacity = updates.maxCapacity;
+      if ('maintenanceDetails' in updates) row.maintenance_details = updates.maintenanceDetails;
 
-    const { error } = await supabase.from('equipment').update(row).eq('id', id);
-    if (error) {
-      if (index !== -1 && original) {
-        localEquipment[index] = original;
-        triggerEquipmentCallbacks();
+      const { error } = await supabase.from('equipment').update(row).eq('id', id);
+      if (error) {
+        if (index !== -1 && original) {
+          localEquipment[index] = original;
+          triggerEquipmentCallbacks();
+        }
+        console.error('[Supabase] updateEquipment failed:', error);
       }
-      console.error('[Supabase] updateEquipment failed:', error);
     }
   },
 
@@ -1507,21 +1635,26 @@ export const supabaseService = {
     localEquipment.push(newEq);
     triggerEquipmentCallbacks();
 
-    const row = {
-      id: cleanId,
-      name: cleanId,
-      type: eq.type,
-      status: eq.status,
-      current_volume: eq.currentVolume,
-      max_capacity: eq.maxCapacity,
-      maintenance_details: eq.maintenanceDetails || null
-    };
-    const { error } = await supabase.from('equipment').insert([row]);
-    if (error) {
-      localEquipment = localEquipment.filter(e => e.id !== cleanId);
-      triggerEquipmentCallbacks();
-      console.error('[Supabase] addEquipment failed:', error);
-      throw error;
+    try {
+      await api.equipment.create(newEq);
+    } catch (apiErr) {
+      console.warn('[API] api.equipment.create failed, falling back to direct:', apiErr);
+      const row = {
+        id: cleanId,
+        name: cleanId,
+        type: eq.type,
+        status: eq.status,
+        current_volume: eq.currentVolume,
+        max_capacity: eq.maxCapacity,
+        maintenance_details: eq.maintenanceDetails || null
+      };
+      const { error } = await supabase.from('equipment').insert([row]);
+      if (error) {
+        localEquipment = localEquipment.filter(e => e.id !== cleanId);
+        triggerEquipmentCallbacks();
+        console.error('[Supabase] addEquipment failed:', error);
+        throw error;
+      }
     }
   },
 
@@ -1534,19 +1667,29 @@ export const supabaseService = {
       triggerEquipmentCallbacks();
     }
 
-    const { error } = await supabase.from('equipment').delete().eq('id', id);
-    if (error) {
-      if (index !== -1 && original) {
-        localEquipment.splice(index, 0, original);
-        triggerEquipmentCallbacks();
+    try {
+      await api.equipment.delete(id);
+    } catch (apiErr) {
+      console.warn('[API] api.equipment.delete failed, falling back to direct:', apiErr);
+      const { error } = await supabase.from('equipment').delete().eq('id', id);
+      if (error) {
+        if (index !== -1 && original) {
+          localEquipment.splice(index, 0, original);
+          triggerEquipmentCallbacks();
+        }
+        console.error('[Supabase] deleteEquipment failed:', error);
+        throw error;
       }
-      console.error('[Supabase] deleteEquipment failed:', error);
-      throw error;
     }
   },
 
   // ── Domestic & Equipment Assignments ────────────────────────────────────────
   async getDomesticAssignments(date: string) {
+    try {
+      const res = await api.shiftBriefing.getDomesticAssignments(date);
+      if (res && res.length > 0) return res;
+    } catch (e) {}
+
     const { data, error } = await supabase
       .from('domestic_assignments')
       .select('*')
@@ -1560,6 +1703,13 @@ export const supabaseService = {
   },
 
   async upsertDomesticAssignment(date: string, teamName: string, op1: string, op2: string) {
+    try {
+      await api.shiftBriefing.saveDomesticAssignment(date, teamName, op1, op2);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] saveDomesticAssignment failed, falling back to direct:', apiErr);
+    }
+
     const docId = `${date}_${teamName}`;
     const { error } = await supabase.from('domestic_assignments').upsert({
       id: docId,
@@ -1574,6 +1724,11 @@ export const supabaseService = {
   },
 
   async getEquipmentAssignments(date: string, shiftType: string) {
+    try {
+      const res = await api.shiftBriefing.getEquipmentAssignments(date, shiftType);
+      if (res && res.length > 0) return res;
+    } catch (e) {}
+
     const { data, error } = await supabase
       .from('equipment_assignments')
       .select('*')
@@ -1588,6 +1743,13 @@ export const supabaseService = {
   },
 
   async upsertEquipmentAssignment(date: string, eqId: string, shiftType: string, op1: string, op2: string) {
+    try {
+      await api.shiftBriefing.saveEquipmentAssignment(date, eqId, shiftType, op1, op2);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] saveEquipmentAssignment failed, falling back to direct:', apiErr);
+    }
+
     const docId = `${date}_${eqId}_${shiftType}`;
     const { error } = await supabase.from('equipment_assignments').upsert({
       id: docId,
@@ -1604,6 +1766,13 @@ export const supabaseService = {
 
   // ── Shift Briefings ─────────────────────────────────────────────────────────
   async getShiftBriefingInfo(date: string, shift: string) {
+    try {
+      const briefing = await api.shiftBriefing.get(date, shift);
+      if (briefing && (briefing.info?.length > 0 || briefing.dieselNeeds?.length > 0 || briefing.staffAssignments)) {
+        return briefing;
+      }
+    } catch (e) {}
+
     const docId = `${date}_${shift}`;
     const { data, error } = await supabase
       .from('shift_briefing_info')
@@ -1626,6 +1795,13 @@ export const supabaseService = {
   },
 
   async upsertShiftBriefingInfo(date: string, shift: string, info: any[], dieselNeeds: string[], staffAssignments: any) {
+    try {
+      await api.shiftBriefing.save(date, shift, info, dieselNeeds, staffAssignments);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] saveShiftBriefing failed, falling back to direct:', apiErr);
+    }
+
     const docId = `${date}_${shift}`;
     const { error } = await supabase.from('shift_briefing_info').upsert({
       id: docId,
@@ -1673,37 +1849,52 @@ export const supabaseService = {
     // Step 1: Base map from code definitions (INITIAL_STAFF_LIST)
     INITIAL_STAFF_LIST.forEach(s => mergedMap.set(s.id, s));
 
-    // Step 2: Fetch remote database records from Supabase
+    // Step 2: Fetch remote database records via API with fallback to Supabase
     try {
-      const { data, error } = await supabase.from('staff').select('*').order('name');
-      if (!error && data && data.length > 0) {
-        data.forEach(row => {
-          const dbStaff: StaffMember = {
-            id: row.id,
-            name: row.name,
-            role: row.role as UserRole,
-            employeeId: row.employee_id,
-            phone: row.phone,
-            email: row.email,
-            status: row.status as 'active' | 'inactive',
-            joinDate: row.join_date || new Date().toISOString(),
-            avatar: row.avatar,
-            currentStatus: (row.current_status as any) || 'OFFLINE',
-            currentJobId: row.current_job_id || undefined,
-            currentVehicleId: row.current_vehicle_id || undefined,
-            lastActiveAt: row.last_active_at || undefined,
-            currentLocation: row.current_location || undefined
-          };
-          const existing = mergedMap.get(dbStaff.id);
+      const apiStaff = await api.staff.getAll();
+      if (apiStaff && apiStaff.length > 0) {
+        apiStaff.forEach(s => {
+          const existing = mergedMap.get(s.id);
           if (existing) {
-            mergedMap.set(dbStaff.id, { ...existing, ...dbStaff });
+            mergedMap.set(s.id, { ...existing, ...s });
           } else {
-            mergedMap.set(dbStaff.id, dbStaff);
+            mergedMap.set(s.id, s);
           }
         });
       }
-    } catch (e) {
-      console.warn('[Supabase] Remote staff fetch warning:', e);
+    } catch (apiErr) {
+      console.warn('[API] api.staff.getAll failed, checking direct Supabase query:', apiErr);
+      try {
+        const { data, error } = await supabase.from('staff').select('*').order('name');
+        if (!error && data && data.length > 0) {
+          data.forEach(row => {
+            const dbStaff: StaffMember = {
+              id: row.id,
+              name: row.name,
+              role: row.role as UserRole,
+              employeeId: row.employee_id,
+              phone: row.phone,
+              email: row.email,
+              status: row.status as 'active' | 'inactive',
+              joinDate: row.join_date || new Date().toISOString(),
+              avatar: row.avatar,
+              currentStatus: (row.current_status as any) || 'OFFLINE',
+              currentJobId: row.current_job_id || undefined,
+              currentVehicleId: row.current_vehicle_id || undefined,
+              lastActiveAt: row.last_active_at || undefined,
+              currentLocation: row.current_location || undefined
+            };
+            const existing = mergedMap.get(dbStaff.id);
+            if (existing) {
+              mergedMap.set(dbStaff.id, { ...existing, ...dbStaff });
+            } else {
+              mergedMap.set(dbStaff.id, dbStaff);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('[Supabase] Remote staff fetch warning:', e);
+      }
     }
 
     // Step 3: ABSOLUTE TOP PRIORITY: User UI Edits (fms_staff_user_edits)
@@ -1732,6 +1923,11 @@ export const supabaseService = {
 
   async findStaffByEmailOrRc(identifier: string): Promise<StaffMember | null> {
     if (!identifier) return null;
+    try {
+      const staff = await api.staff.find(identifier);
+      if (staff) return staff;
+    } catch (e) {}
+
     const staffList = await this.getStaff();
     const clean = identifier.trim().toLowerCase();
     
@@ -1771,20 +1967,25 @@ export const supabaseService = {
     };
 
     try {
-      const { error } = await supabase.from('staff').insert([payload]);
-      if (error) console.warn('[Supabase] Direct addStaff error:', error);
-    } catch (e) {
-      console.warn('[Supabase] Direct addStaff failed:', e);
-    }
+      await api.staff.create(newMember);
+    } catch (apiErr) {
+      console.warn('[API] api.staff.create failed, falling back to direct/outbox:', apiErr);
+      try {
+        const { error } = await supabase.from('staff').insert([payload]);
+        if (error) console.warn('[Supabase] Direct addStaff error:', error);
+      } catch (e) {
+        console.warn('[Supabase] Direct addStaff failed:', e);
+      }
 
-    await fmsDb.enqueueOutbox({
-      action: 'INSERT',
-      entityType: 'staff',
-      entityId: newId,
-      payload,
-      idempotencyKey: `staff-ins-${newId}-${Date.now()}`
-    });
-    syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
+      await fmsDb.enqueueOutbox({
+        action: 'INSERT',
+        entityType: 'staff',
+        entityId: newId,
+        payload,
+        idempotencyKey: `staff-ins-${newId}-${Date.now()}`
+      });
+      syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
+    }
   },
 
   async updateStaff(id: string, updates: Partial<Omit<StaffMember, 'id'>>): Promise<void> {
@@ -1807,20 +2008,25 @@ export const supabaseService = {
     if ('avatar' in updates) row.avatar = updates.avatar;
 
     try {
-      const { error } = await supabase.from('staff').update(row).eq('id', id);
-      if (error) console.warn('[Supabase] Direct updateStaff error:', error);
-    } catch (e) {
-      console.warn('[Supabase] Direct updateStaff failed:', e);
-    }
+      await api.staff.update(id, updates);
+    } catch (apiErr) {
+      console.warn('[API] api.staff.update failed, falling back to direct/outbox:', apiErr);
+      try {
+        const { error } = await supabase.from('staff').update(row).eq('id', id);
+        if (error) console.warn('[Supabase] Direct updateStaff error:', error);
+      } catch (e) {
+        console.warn('[Supabase] Direct updateStaff failed:', e);
+      }
 
-    await fmsDb.enqueueOutbox({
-      action: 'UPDATE',
-      entityType: 'staff',
-      entityId: id,
-      payload: row,
-      idempotencyKey: `staff-upd-${id}-${Date.now()}`
-    });
-    syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
+      await fmsDb.enqueueOutbox({
+        action: 'UPDATE',
+        entityType: 'staff',
+        entityId: id,
+        payload: row,
+        idempotencyKey: `staff-upd-${id}-${Date.now()}`
+      });
+      syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
+    }
   },
 
   async deleteStaff(id: string): Promise<void> {
@@ -1834,20 +2040,25 @@ export const supabaseService = {
     }
 
     try {
-      const { error } = await supabase.from('staff').delete().eq('id', id);
-      if (error) console.warn('[Supabase] Direct deleteStaff error:', error);
-    } catch (e) {
-      console.warn('[Supabase] Direct deleteStaff failed:', e);
-    }
+      await api.staff.delete(id);
+    } catch (apiErr) {
+      console.warn('[API] api.staff.delete failed, falling back to direct/outbox:', apiErr);
+      try {
+        const { error } = await supabase.from('staff').delete().eq('id', id);
+        if (error) console.warn('[Supabase] Direct deleteStaff error:', error);
+      } catch (e) {
+        console.warn('[Supabase] Direct deleteStaff failed:', e);
+      }
 
-    await fmsDb.enqueueOutbox({
-      action: 'DELETE',
-      entityType: 'staff',
-      entityId: id,
-      payload: null,
-      idempotencyKey: `staff-del-${id}-${Date.now()}`
-    });
-    syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
+      await fmsDb.enqueueOutbox({
+        action: 'DELETE',
+        entityType: 'staff',
+        entityId: id,
+        payload: null,
+        idempotencyKey: `staff-del-${id}-${Date.now()}`
+      });
+      syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
+    }
   },
 
   // ── BigQuery Sync ──────────────────────────────────────────────────────────
@@ -1870,6 +2081,13 @@ export const supabaseService = {
 
   // ── Finance & Billing Module ───────────────────────────────────────────────
   async getFinCustomers(): Promise<CustomerAccount[]> {
+    try {
+      const apiCusts = await api.finance.getCustomers();
+      if (apiCusts && apiCusts.length > 0) return apiCusts;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.getCustomers failed, falling back to direct:', apiErr);
+    }
+
     const { data, error } = await supabase.from('fin_customers').select('*').order('name');
     if (error) {
       console.error('[Supabase] getFinCustomers failed:', error);
@@ -1893,6 +2111,13 @@ export const supabaseService = {
   },
 
   async upsertFinCustomers(custs: CustomerAccount[]): Promise<void> {
+    try {
+      await api.finance.upsertCustomers(custs);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.upsertCustomers failed, falling back to direct:', apiErr);
+    }
+
     const rows = custs.map(c => ({
       id: c.id,
       name: c.name,
@@ -1916,6 +2141,13 @@ export const supabaseService = {
   },
 
   async getFinUpcomingPayments(): Promise<UpcomingPayment[]> {
+    try {
+      const apiPayments = await api.finance.getUpcomingPayments();
+      if (apiPayments && apiPayments.length > 0) return apiPayments;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.getUpcomingPayments failed, falling back to direct:', apiErr);
+    }
+
     const { data, error } = await supabase.from('fin_upcoming_payments').select('*').order('upload_date', { ascending: false });
     if (error) {
       console.error('[Supabase] getFinUpcomingPayments failed:', error);
@@ -1934,6 +2166,13 @@ export const supabaseService = {
   },
 
   async createFinUpcomingPayment(payment: UpcomingPayment): Promise<void> {
+    try {
+      await api.finance.createUpcomingPayment(payment);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.createUpcomingPayment failed, falling back to direct:', apiErr);
+    }
+
     const row = {
       id: payment.id,
       customer_id: payment.customerId,
@@ -1952,6 +2191,13 @@ export const supabaseService = {
   },
 
   async updateFinUpcomingPayment(id: string, updates: Partial<UpcomingPayment>): Promise<void> {
+    try {
+      await api.finance.updateUpcomingPayment(id, updates);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.updateUpcomingPayment failed, falling back to direct:', apiErr);
+    }
+
     const row: Record<string, any> = {};
     if ('status' in updates) row.status = updates.status;
     if ('swiftCopyUrl' in updates) row.swift_copy_url = updates.swiftCopyUrl;
@@ -1964,6 +2210,13 @@ export const supabaseService = {
   },
 
   async getFinInvoices(): Promise<Invoice[]> {
+    try {
+      const apiInvoices = await api.finance.getInvoices();
+      if (apiInvoices && apiInvoices.length > 0) return apiInvoices;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.getInvoices failed, falling back to direct:', apiErr);
+    }
+
     const { data, error } = await supabase.from('fin_invoices').select('*').order('date', { ascending: false });
     if (error) {
       console.error('[Supabase] getFinInvoices failed:', error);
@@ -1984,6 +2237,13 @@ export const supabaseService = {
   },
 
   async createFinInvoice(invoice: Invoice): Promise<void> {
+    try {
+      await api.finance.createInvoice(invoice);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.createInvoice failed, falling back to direct:', apiErr);
+    }
+
     const row = {
       id: invoice.id,
       invoice_number: invoice.invoiceNumber,
@@ -2004,6 +2264,13 @@ export const supabaseService = {
   },
 
   async upsertFinInvoices(invoices: Invoice[]): Promise<void> {
+    try {
+      await api.finance.upsertInvoices(invoices);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.upsertInvoices failed, falling back to direct:', apiErr);
+    }
+
     const rows = invoices.map(i => ({
       id: i.id,
       invoice_number: i.invoiceNumber,
@@ -2024,6 +2291,13 @@ export const supabaseService = {
   },
 
   async getFinReceipts(): Promise<Receipt[]> {
+    try {
+      const apiReceipts = await api.finance.getReceipts();
+      if (apiReceipts && apiReceipts.length > 0) return apiReceipts;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.getReceipts failed, falling back to direct:', apiErr);
+    }
+
     const { data, error } = await supabase.from('fin_receipts').select('*').order('date', { ascending: false });
     if (error) {
       console.error('[Supabase] getFinReceipts failed:', error);
@@ -2042,6 +2316,13 @@ export const supabaseService = {
   },
 
   async createFinReceipt(receipt: Receipt): Promise<void> {
+    try {
+      await api.finance.createReceipt(receipt);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.createReceipt failed, falling back to direct:', apiErr);
+    }
+
     const row = {
       id: receipt.id,
       receipt_number: receipt.receiptNumber,
@@ -2060,6 +2341,13 @@ export const supabaseService = {
   },
 
   async upsertFinReceipts(receipts: Receipt[]): Promise<void> {
+    try {
+      await api.finance.upsertReceipts(receipts);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.upsertReceipts failed, falling back to direct:', apiErr);
+    }
+
     const rows = receipts.map(r => ({
       id: r.id,
       receipt_number: r.receiptNumber,
@@ -2078,6 +2366,13 @@ export const supabaseService = {
   },
 
   async getFinProformaRegister(): Promise<ProformaRecord[]> {
+    try {
+      const apiRecords = await api.finance.getProforma();
+      if (apiRecords && apiRecords.length > 0) return apiRecords;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.getProforma failed, falling back to direct:', apiErr);
+    }
+
     const { data, error } = await supabase.from('fin_proforma_register').select('*').order('date', { ascending: false });
     if (error) {
       console.error('[Supabase] getFinProformaRegister failed:', error);
@@ -2095,6 +2390,13 @@ export const supabaseService = {
   },
 
   async createFinProforma(record: ProformaRecord): Promise<void> {
+    try {
+      await api.finance.createProforma(record);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.createProforma failed, falling back to direct:', apiErr);
+    }
+
     const row = {
       id: record.id,
       date: record.date,
@@ -2112,6 +2414,13 @@ export const supabaseService = {
   },
 
   async getFinFuelRequests(): Promise<FuelRequest[]> {
+    try {
+      const apiRequests = await api.finance.getFuelRequests();
+      if (apiRequests && apiRequests.length > 0) return apiRequests;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.getFuelRequests failed, falling back to direct:', apiErr);
+    }
+
     const { data, error } = await supabase.from('fin_fuel_requests').select('*').order('date', { ascending: false });
     if (error) {
       console.error('[Supabase] getFinFuelRequests failed:', error);
@@ -2147,6 +2456,13 @@ export const supabaseService = {
   },
 
   async createFinFuelRequest(request: FuelRequest): Promise<void> {
+    try {
+      await api.finance.createFuelRequest(request);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.createFuelRequest failed, falling back to direct:', apiErr);
+    }
+
     const row = {
       id: request.id,
       delivery_number: request.deliveryNumber,
@@ -2182,6 +2498,13 @@ export const supabaseService = {
   },
 
   async updateFinFuelRequest(id: string, updates: Partial<FuelRequest>): Promise<void> {
+    try {
+      await api.finance.updateFuelRequest(id, updates);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.updateFuelRequest failed, falling back to direct:', apiErr);
+    }
+
     const row: Record<string, any> = {};
     if ('status' in updates) row.status = updates.status;
     if ('invoiceNumber' in updates) row.invoice_number = updates.invoiceNumber;
@@ -2194,6 +2517,13 @@ export const supabaseService = {
   },
 
   async getFinVarianceLogs(): Promise<MonthEndVariance[]> {
+    try {
+      const apiVars = await api.finance.getVariances();
+      if (apiVars && apiVars.length > 0) return apiVars;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.getVariances failed, falling back to direct:', apiErr);
+    }
+
     const { data, error } = await supabase.from('fin_variance_logs').select('*').order('month', { ascending: false });
     if (error) {
       console.error('[Supabase] getFinVarianceLogs failed:', error);
@@ -2214,6 +2544,13 @@ export const supabaseService = {
   },
 
   async createFinVarianceLog(log: MonthEndVariance): Promise<void> {
+    try {
+      await api.finance.createVariance(log);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.createVariance failed, falling back to direct:', apiErr);
+    }
+
     const row = {
       id: log.id,
       month: log.month,
@@ -2234,6 +2571,13 @@ export const supabaseService = {
   },
 
   async updateFinVarianceLog(id: string, updates: Partial<MonthEndVariance>): Promise<void> {
+    try {
+      await api.finance.updateVariance(id, updates);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.updateVariance failed, falling back to direct:', apiErr);
+    }
+
     const row: Record<string, any> = {};
     if ('status' in updates) row.status = updates.status;
     if ('physicalCheckUploaded' in updates) row.physical_check_uploaded = updates.physicalCheckUploaded;
@@ -2247,6 +2591,13 @@ export const supabaseService = {
   },
 
   async getFinProcurementPRs(): Promise<ProcurementPR[]> {
+    try {
+      const apiPRs = await api.finance.getProcurement();
+      if (apiPRs && apiPRs.length > 0) return apiPRs;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.getProcurement failed, falling back to direct:', apiErr);
+    }
+
     const { data, error } = await supabase.from('fin_procurement_prs').select('*').order('date', { ascending: false });
     if (error) {
       console.error('[Supabase] getFinProcurementPRs failed:', error);
@@ -2268,6 +2619,13 @@ export const supabaseService = {
   },
 
   async createFinProcurementPR(pr: ProcurementPR): Promise<void> {
+    try {
+      await api.finance.createProcurement(pr);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.createProcurement failed, falling back to direct:', apiErr);
+    }
+
     const row = {
       id: pr.id,
       pr_number: pr.prNumber,
@@ -2289,6 +2647,13 @@ export const supabaseService = {
   },
 
   async updateFinProcurementPR(id: string, updates: Partial<ProcurementPR>): Promise<void> {
+    try {
+      await api.finance.updateProcurement(id, updates);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.updateProcurement failed, falling back to direct:', apiErr);
+    }
+
     const row: Record<string, any> = {};
     if ('status' in updates) row.status = updates.status;
     if ('vendorInvoiceVerified' in updates) row.vendor_invoice_verified = updates.vendorInvoiceVerified;
@@ -2303,6 +2668,13 @@ export const supabaseService = {
   },
 
   async getFinSurcharges(): Promise<SurchargeRecord[]> {
+    try {
+      const apiSur = await api.finance.getSurcharges();
+      if (apiSur && apiSur.length > 0) return apiSur;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.getSurcharges failed, falling back to direct:', apiErr);
+    }
+
     const { data, error } = await supabase.from('fin_surcharges').select('*').order('date', { ascending: false });
     if (error) {
       console.error('[Supabase] getFinSurcharges failed:', error);
@@ -2318,6 +2690,13 @@ export const supabaseService = {
   },
 
   async createFinSurcharge(surcharge: SurchargeRecord): Promise<void> {
+    try {
+      await api.finance.createSurcharge(surcharge);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.createSurcharge failed, falling back to direct:', apiErr);
+    }
+
     const row = {
       grn_number: surcharge.grnNumber,
       original_value: surcharge.originalValue,
@@ -2333,6 +2712,13 @@ export const supabaseService = {
   },
 
   async getFinMpdSales(): Promise<MpdSale[]> {
+    try {
+      const apiSales = await api.finance.getMpdSales();
+      if (apiSales && apiSales.length > 0) return apiSales;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.getMpdSales failed, falling back to direct:', apiErr);
+    }
+
     const { data, error } = await supabase.from('fin_mpd_sales').select('*').order('date', { ascending: false });
     if (error) {
       console.error('[Supabase] getFinMpdSales failed:', error);
@@ -2359,6 +2745,13 @@ export const supabaseService = {
   },
 
   async createFinMpdSale(sale: MpdSale): Promise<void> {
+    try {
+      await api.finance.createMpdSale(sale);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.createMpdSale failed, falling back to direct:', apiErr);
+    }
+
     const row = {
       id: sale.id,
       delivery_no: sale.deliveryNo,
@@ -2385,6 +2778,13 @@ export const supabaseService = {
   },
 
   async getFinCustomsShipments(): Promise<CustomsShipment[]> {
+    try {
+      const apiCustoms = await api.finance.getCustoms();
+      if (apiCustoms && apiCustoms.length > 0) return apiCustoms;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.getCustoms failed, falling back to direct:', apiErr);
+    }
+
     const { data, error } = await supabase.from('fin_customs_shipments').select('*').order('arrival_date', { ascending: false });
     if (error) {
       console.error('[Supabase] getFinCustomsShipments failed:', error);
@@ -2406,6 +2806,13 @@ export const supabaseService = {
   },
 
   async createFinCustomsShipment(shipment: CustomsShipment): Promise<void> {
+    try {
+      await api.finance.createCustoms(shipment);
+      return;
+    } catch (apiErr) {
+      console.warn('[API] api.finance.createCustoms failed, falling back to direct:', apiErr);
+    }
+
     const row = {
       id: shipment.id,
       shipment_number: shipment.shipmentNumber,
@@ -2492,6 +2899,11 @@ export const supabaseService = {
 
   // ── App Settings (Service Tank) ─────────────────────────────────────────────
   async getServiceTank(): Promise<string | null> {
+    try {
+      const tankId = await api.settings.getServiceTank();
+      if (tankId !== undefined && tankId !== null) return tankId;
+    } catch (e) {}
+
     const { data, error } = await supabase
       .from('app_settings')
       .select('value')
@@ -2509,14 +2921,19 @@ export const supabaseService = {
   },
 
   async setServiceTank(tankId: string): Promise<void> {
-    const { error } = await supabase.from('app_settings').upsert({
-      key: 'service_tank',
-      value: { tankId },
-      updated_at: new Date().toISOString()
-    });
-    if (error) {
-      console.error('[Supabase] setServiceTank failed:', error);
-      throw error;
+    try {
+      await api.settings.setServiceTank(tankId);
+    } catch (apiErr) {
+      console.warn('[API] api.settings.setServiceTank failed, falling back to direct:', apiErr);
+      const { error } = await supabase.from('app_settings').upsert({
+        key: 'service_tank',
+        value: { tankId },
+        updated_at: new Date().toISOString()
+      });
+      if (error) {
+        console.error('[Supabase] setServiceTank failed:', error);
+        throw error;
+      }
     }
   },
 
@@ -2564,22 +2981,32 @@ export const supabaseService = {
   },
 
   async getVessels(): Promise<Vessel[]> {
-    const { data, error } = await supabase.from('vessels').select('*').order('name');
-    if (error) {
-      console.warn('[Supabase] getVessels failed:', error);
+    try {
+      const apiVessels = await api.vessels.getAll();
+      if (apiVessels && apiVessels.length > 0) {
+        localVessels = apiVessels;
+        return localVessels;
+      }
+    } catch (apiErr) {
+      console.warn('[API] api.vessels.getAll failed, checking direct query:', apiErr);
+      const { data, error } = await supabase.from('vessels').select('*').order('name');
+      if (error) {
+        console.warn('[Supabase] getVessels failed:', error);
+        return localVessels;
+      }
+      if (!data || data.length === 0) {
+        return localVessels;
+      }
+      localVessels = data.map(row => ({
+        id: row.id,
+        name: row.name,
+        imo: row.imo,
+        flag: row.flag,
+        status: row.status as 'active' | 'inactive',
+        created_at: row.created_at
+      }));
       return localVessels;
     }
-    if (!data || data.length === 0) {
-      return localVessels;
-    }
-    localVessels = data.map(row => ({
-      id: row.id,
-      name: row.name,
-      imo: row.imo,
-      flag: row.flag,
-      status: row.status as 'active' | 'inactive',
-      created_at: row.created_at
-    }));
     return localVessels;
   },
 
@@ -2592,18 +3019,23 @@ export const supabaseService = {
     localVessels.push(newVessel);
     triggerVesselCallbacks();
 
-    const row = {
-      name: vessel.name,
-      imo: vessel.imo || null,
-      flag: vessel.flag || null,
-      status: vessel.status,
-    };
-    const { error } = await supabase.from('vessels').insert([row]);
-    if (error) {
-      localVessels = localVessels.filter(v => v.id !== newId);
-      triggerVesselCallbacks();
-      console.error('[Supabase] addVessel failed:', error);
-      throw error;
+    try {
+      await api.vessels.create(newVessel);
+    } catch (apiErr) {
+      console.warn('[API] api.vessels.create failed, falling back to direct:', apiErr);
+      const row = {
+        name: vessel.name,
+        imo: vessel.imo || null,
+        flag: vessel.flag || null,
+        status: vessel.status,
+      };
+      const { error } = await supabase.from('vessels').insert([row]);
+      if (error) {
+        localVessels = localVessels.filter(v => v.id !== newId);
+        triggerVesselCallbacks();
+        console.error('[Supabase] addVessel failed:', error);
+        throw error;
+      }
     }
   },
 
@@ -2616,20 +3048,25 @@ export const supabaseService = {
       triggerVesselCallbacks();
     }
 
-    const row: Record<string, any> = {};
-    if ('name' in updates) row.name = updates.name;
-    if ('imo' in updates) row.imo = updates.imo;
-    if ('flag' in updates) row.flag = updates.flag;
-    if ('status' in updates) row.status = updates.status;
+    try {
+      await api.vessels.update(id, updates);
+    } catch (apiErr) {
+      console.warn('[API] api.vessels.update failed, falling back to direct:', apiErr);
+      const row: Record<string, any> = {};
+      if ('name' in updates) row.name = updates.name;
+      if ('imo' in updates) row.imo = updates.imo;
+      if ('flag' in updates) row.flag = updates.flag;
+      if ('status' in updates) row.status = updates.status;
 
-    const { error } = await supabase.from('vessels').update(row).eq('id', id);
-    if (error) {
-      if (index !== -1 && original) {
-        localVessels[index] = original;
-        triggerVesselCallbacks();
+      const { error } = await supabase.from('vessels').update(row).eq('id', id);
+      if (error) {
+        if (index !== -1 && original) {
+          localVessels[index] = original;
+          triggerVesselCallbacks();
+        }
+        console.error('[Supabase] updateVessel failed:', error);
+        throw error;
       }
-      console.error('[Supabase] updateVessel failed:', error);
-      throw error;
     }
   },
 
@@ -2642,14 +3079,19 @@ export const supabaseService = {
       triggerVesselCallbacks();
     }
 
-    const { error } = await supabase.from('vessels').delete().eq('id', id);
-    if (error) {
-      if (index !== -1 && original) {
-        localVessels.splice(index, 0, original);
-        triggerVesselCallbacks();
+    try {
+      await api.vessels.delete(id);
+    } catch (apiErr) {
+      console.warn('[API] api.vessels.delete failed, falling back to direct:', apiErr);
+      const { error } = await supabase.from('vessels').delete().eq('id', id);
+      if (error) {
+        if (index !== -1 && original) {
+          localVessels.splice(index, 0, original);
+          triggerVesselCallbacks();
+        }
+        console.error('[Supabase] deleteVessel failed:', error);
+        throw error;
       }
-      console.error('[Supabase] deleteVessel failed:', error);
-      throw error;
     }
   },
 
@@ -2657,29 +3099,38 @@ export const supabaseService = {
   unmigratedTables: new Set<string>(['airlines', 'flight_master', 'aircraft_master']),
 
   async getAirlines(): Promise<AirlineMaster[]> {
-    if (!this.unmigratedTables.has('airlines')) {
-      try {
-        const { data, error } = await supabase.from('airlines').select('*').order('name');
-        if (error) {
-          if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
-            this.unmigratedTables.add('airlines');
+    try {
+      const apiAirlines = await api.master.getAirlines();
+      if (apiAirlines && apiAirlines.length > 0) {
+        await fmsDb.bulkPut('airlines', apiAirlines);
+        return this.dedupeAirlines(apiAirlines);
+      }
+    } catch (apiErr) {
+      console.warn('[API] api.master.getAirlines failed, checking direct Supabase/cache:', apiErr);
+      if (!this.unmigratedTables.has('airlines')) {
+        try {
+          const { data, error } = await supabase.from('airlines').select('*').order('name');
+          if (error) {
+            if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+              this.unmigratedTables.add('airlines');
+            }
+          } else if (data && data.length > 0) {
+            const result: AirlineMaster[] = data.map(row => ({
+              id: row.id,
+              name: row.name,
+              iataCode: row.iata_code || undefined,
+              icaoCode: row.icao_code || undefined,
+              category: row.category || 'INT',
+              isActive: row.is_active ?? true,
+              createdAt: row.created_at,
+              updatedAt: row.updated_at
+            }));
+            await fmsDb.bulkPut('airlines', result);
+            return this.dedupeAirlines(result);
           }
-        } else if (data && data.length > 0) {
-          const result: AirlineMaster[] = data.map(row => ({
-            id: row.id,
-            name: row.name,
-            iataCode: row.iata_code || undefined,
-            icaoCode: row.icao_code || undefined,
-            category: row.category || 'INT',
-            isActive: row.is_active ?? true,
-            createdAt: row.created_at,
-            updatedAt: row.updated_at
-          }));
-          await fmsDb.bulkPut('airlines', result);
-          return this.dedupeAirlines(result);
+        } catch (e) {
+          this.unmigratedTables.add('airlines');
         }
-      } catch (e) {
-        this.unmigratedTables.add('airlines');
       }
     }
     const cached = await fmsDb.getAll<AirlineMaster>('airlines');
@@ -2887,72 +3338,92 @@ export const supabaseService = {
       return updated;
     }
 
-    const row = {
-      name: cleanName,
-      iata_code: iataCode?.toUpperCase().trim() || null,
-      icao_code: icaoCode?.toUpperCase().trim() || null,
-      category: category,
-      is_active: true
-    };
+    try {
+      const { airline } = await api.master.createAirline({
+        name: cleanName,
+        iataCode: iataCode?.toUpperCase().trim(),
+        icaoCode: icaoCode?.toUpperCase().trim(),
+        category,
+        isActive: true
+      });
+      await fmsDb.put('airlines', airline);
+      const updatedList = this.dedupeAirlines([...existing, airline]);
+      try { localStorage.setItem('fms_master_airlines', JSON.stringify(updatedList)); } catch (e) {}
+      return airline;
+    } catch (apiErr) {
+      console.warn('[API] api.master.createAirline failed, falling back to direct:', apiErr);
+      const row = {
+        name: cleanName,
+        iata_code: iataCode?.toUpperCase().trim() || null,
+        icao_code: icaoCode?.toUpperCase().trim() || null,
+        category: category,
+        is_active: true
+      };
 
-    if (!this.unmigratedTables.has('airlines')) {
-      try {
-        const { data, error } = await supabase.from('airlines').insert([row]).select().single();
-        if (error) {
-          if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
-            this.unmigratedTables.add('airlines');
+      if (!this.unmigratedTables.has('airlines')) {
+        try {
+          const { data, error } = await supabase.from('airlines').insert([row]).select().single();
+          if (error) {
+            if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+              this.unmigratedTables.add('airlines');
+            }
+          } else if (data) {
+            const created: AirlineMaster = {
+              id: data.id,
+              name: data.name,
+              iataCode: data.iata_code || undefined,
+              icaoCode: data.icao_code || undefined,
+              category: data.category || category,
+              isActive: data.is_active,
+              createdAt: data.created_at,
+              updatedAt: data.updated_at
+            };
+            await fmsDb.put('airlines', created);
+            return created;
           }
-        } else if (data) {
-          const created: AirlineMaster = {
-            id: data.id,
-            name: data.name,
-            iataCode: data.iata_code || undefined,
-            icaoCode: data.icao_code || undefined,
-            category: data.category || category,
-            isActive: data.is_active,
-            createdAt: data.created_at,
-            updatedAt: data.updated_at
-          };
-          await fmsDb.put('airlines', created);
-          return created;
+        } catch (e) {
+          this.unmigratedTables.add('airlines');
         }
-      } catch (e) {
-        this.unmigratedTables.add('airlines');
       }
-    }
 
-    // Local Fallback
-    const created: AirlineMaster = {
-      id: `airline-${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-      name: cleanName,
-      iataCode: iataCode?.toUpperCase().trim() || undefined,
-      icaoCode: icaoCode?.toUpperCase().trim() || undefined,
-      category: category,
-      isActive: true,
-      createdAt: new Date().toISOString()
-    };
-    await fmsDb.put('airlines', created);
-    const updatedList = this.dedupeAirlines([...existing, created]);
-    try { localStorage.setItem('fms_master_airlines', JSON.stringify(updatedList)); } catch (e) {}
-    return created;
+      // Local Fallback
+      const created: AirlineMaster = {
+        id: `airline-${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+        name: cleanName,
+        iataCode: iataCode?.toUpperCase().trim() || undefined,
+        icaoCode: icaoCode?.toUpperCase().trim() || undefined,
+        category: category,
+        isActive: true,
+        createdAt: new Date().toISOString()
+      };
+      await fmsDb.put('airlines', created);
+      const updatedList = this.dedupeAirlines([...existing, created]);
+      try { localStorage.setItem('fms_master_airlines', JSON.stringify(updatedList)); } catch (e) {}
+      return created;
+    }
   },
 
   async updateAirline(id: string, updates: Partial<AirlineMaster>): Promise<void> {
-    if (!this.unmigratedTables.has('airlines')) {
-      const row: Record<string, any> = {};
-      if ('name' in updates && updates.name) row.name = updates.name.trim();
-      if ('iataCode' in updates) row.iata_code = updates.iataCode?.toUpperCase().trim() || null;
-      if ('icaoCode' in updates) row.icao_code = updates.icaoCode?.toUpperCase().trim() || null;
-      if ('category' in updates) row.category = updates.category;
-      if ('isActive' in updates) row.is_active = updates.isActive;
+    try {
+      await api.master.updateAirline(id, updates);
+    } catch (apiErr) {
+      console.warn('[API] api.master.updateAirline failed, falling back to direct:', apiErr);
+      if (!this.unmigratedTables.has('airlines')) {
+        const row: Record<string, any> = {};
+        if ('name' in updates && updates.name) row.name = updates.name.trim();
+        if ('iataCode' in updates) row.iata_code = updates.iataCode?.toUpperCase().trim() || null;
+        if ('icaoCode' in updates) row.icao_code = updates.icaoCode?.toUpperCase().trim() || null;
+        if ('category' in updates) row.category = updates.category;
+        if ('isActive' in updates) row.is_active = updates.isActive;
 
-      try {
-        const { error } = await supabase.from('airlines').update(row).eq('id', id);
-        if (error && (error.code === 'PGRST205' || error.message?.includes('schema cache'))) {
+        try {
+          const { error } = await supabase.from('airlines').update(row).eq('id', id);
+          if (error && (error.code === 'PGRST205' || error.message?.includes('schema cache'))) {
+            this.unmigratedTables.add('airlines');
+          }
+        } catch (e) {
           this.unmigratedTables.add('airlines');
         }
-      } catch (e) {
-        this.unmigratedTables.add('airlines');
       }
     }
 
@@ -2966,10 +3437,15 @@ export const supabaseService = {
   },
 
   async deleteAirline(id: string): Promise<void> {
-    if (!this.unmigratedTables.has('airlines')) {
-      try {
-        await supabase.from('airlines').delete().eq('id', id);
-      } catch (e) {}
+    try {
+      await api.master.deleteAirline(id);
+    } catch (apiErr) {
+      console.warn('[API] api.master.deleteAirline failed, falling back to direct:', apiErr);
+      if (!this.unmigratedTables.has('airlines')) {
+        try {
+          await supabase.from('airlines').delete().eq('id', id);
+        } catch (e) {}
+      }
     }
     await fmsDb.delete('airlines', id);
     const existing = await this.getAirlines();
@@ -2978,29 +3454,38 @@ export const supabaseService = {
   },
 
   async getFlightMaster(): Promise<FlightMaster[]> {
-    if (!this.unmigratedTables.has('flight_master')) {
-      try {
-        const { data, error } = await supabase.from('flight_master').select('*').order('flight_number');
-        if (error) {
-          if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
-            this.unmigratedTables.add('flight_master');
+    try {
+      const apiFlights = await api.master.getFlights();
+      if (apiFlights && apiFlights.length > 0) {
+        await fmsDb.bulkPut('flight_master', apiFlights);
+        return this.dedupeFlights(apiFlights);
+      }
+    } catch (apiErr) {
+      console.warn('[API] api.master.getFlights failed, checking direct query:', apiErr);
+      if (!this.unmigratedTables.has('flight_master')) {
+        try {
+          const { data, error } = await supabase.from('flight_master').select('*').order('flight_number');
+          if (error) {
+            if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+              this.unmigratedTables.add('flight_master');
+            }
+          } else if (data && data.length > 0) {
+            const result: FlightMaster[] = data.map(row => ({
+              id: row.id,
+              airlineId: row.airline_id,
+              airlineName: row.airline_name,
+              flightNumber: row.flight_number,
+              route: row.route || undefined,
+              isActive: row.is_active ?? true,
+              createdAt: row.created_at,
+              updatedAt: row.updated_at
+            }));
+            await fmsDb.bulkPut('flight_master', result);
+            return this.dedupeFlights(result);
           }
-        } else if (data && data.length > 0) {
-          const result: FlightMaster[] = data.map(row => ({
-            id: row.id,
-            airlineId: row.airline_id,
-            airlineName: row.airline_name,
-            flightNumber: row.flight_number,
-            route: row.route || undefined,
-            isActive: row.is_active ?? true,
-            createdAt: row.created_at,
-            updatedAt: row.updated_at
-          }));
-          await fmsDb.bulkPut('flight_master', result);
-          return this.dedupeFlights(result);
+        } catch (e) {
+          this.unmigratedTables.add('flight_master');
         }
-      } catch (e) {
-        this.unmigratedTables.add('flight_master');
       }
     }
     const cached = await fmsDb.getAll<FlightMaster>('flight_master');
@@ -3041,70 +3526,90 @@ export const supabaseService = {
       return updated;
     }
 
-    const row = {
-      airline_id: airlineId,
-      airline_name: cleanAirline,
-      flight_number: cleanFlt,
-      route: route?.trim() || null,
-      is_active: true
-    };
+    try {
+      const { flight } = await api.master.createFlight({
+        airlineId,
+        airlineName: cleanAirline,
+        flightNumber: cleanFlt,
+        route: route?.trim(),
+        isActive: true
+      });
+      await fmsDb.put('flight_master', flight);
+      const updatedList = this.dedupeFlights([...existing, flight]);
+      try { localStorage.setItem('fms_master_flights', JSON.stringify(updatedList)); } catch (e) {}
+      return flight;
+    } catch (apiErr) {
+      console.warn('[API] api.master.createFlight failed, falling back to direct:', apiErr);
+      const row = {
+        airline_id: airlineId,
+        airline_name: cleanAirline,
+        flight_number: cleanFlt,
+        route: route?.trim() || null,
+        is_active: true
+      };
 
-    if (!this.unmigratedTables.has('flight_master')) {
-      try {
-        const { data, error } = await supabase.from('flight_master').insert([row]).select().single();
-        if (error) {
-          if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
-            this.unmigratedTables.add('flight_master');
+      if (!this.unmigratedTables.has('flight_master')) {
+        try {
+          const { data, error } = await supabase.from('flight_master').insert([row]).select().single();
+          if (error) {
+            if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+              this.unmigratedTables.add('flight_master');
+            }
+          } else if (data) {
+            const created: FlightMaster = {
+              id: data.id,
+              airlineId: data.airline_id,
+              airlineName: data.airline_name,
+              flightNumber: data.flight_number,
+              route: data.route || undefined,
+              isActive: data.is_active,
+              createdAt: data.created_at,
+              updatedAt: data.updated_at
+            };
+            await fmsDb.put('flight_master', created);
+            return created;
           }
-        } else if (data) {
-          const created: FlightMaster = {
-            id: data.id,
-            airlineId: data.airline_id,
-            airlineName: data.airline_name,
-            flightNumber: data.flight_number,
-            route: data.route || undefined,
-            isActive: data.is_active,
-            createdAt: data.created_at,
-            updatedAt: data.updated_at
-          };
-          await fmsDb.put('flight_master', created);
-          return created;
+        } catch (e) {
+          this.unmigratedTables.add('flight_master');
         }
-      } catch (e) {
-        this.unmigratedTables.add('flight_master');
       }
-    }
 
-    // Local Fallback
-    const created: FlightMaster = {
-      id: `flt-${cleanAirline.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${cleanFlt.toLowerCase()}`,
-      airlineId,
-      airlineName: cleanAirline,
-      flightNumber: cleanFlt,
-      route: route?.trim() || undefined,
-      isActive: true,
-      createdAt: new Date().toISOString()
-    };
-    await fmsDb.put('flight_master', created);
-    const updatedList = this.dedupeFlights([...existing, created]);
-    try { localStorage.setItem('fms_master_flights', JSON.stringify(updatedList)); } catch (e) {}
-    return created;
+      // Local Fallback
+      const created: FlightMaster = {
+        id: `flt-${cleanAirline.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${cleanFlt.toLowerCase()}`,
+        airlineId,
+        airlineName: cleanAirline,
+        flightNumber: cleanFlt,
+        route: route?.trim() || undefined,
+        isActive: true,
+        createdAt: new Date().toISOString()
+      };
+      await fmsDb.put('flight_master', created);
+      const updatedList = this.dedupeFlights([...existing, created]);
+      try { localStorage.setItem('fms_master_flights', JSON.stringify(updatedList)); } catch (e) {}
+      return created;
+    }
   },
 
   async updateFlightMaster(id: string, updates: Partial<FlightMaster>): Promise<void> {
-    if (!this.unmigratedTables.has('flight_master')) {
-      const row: Record<string, any> = {};
-      if ('flightNumber' in updates && updates.flightNumber) row.flight_number = updates.flightNumber.toUpperCase().trim();
-      if ('route' in updates) row.route = updates.route?.trim() || null;
-      if ('isActive' in updates) row.is_active = updates.isActive;
+    try {
+      await api.master.updateFlight(id, updates);
+    } catch (apiErr) {
+      console.warn('[API] api.master.updateFlight failed, falling back to direct:', apiErr);
+      if (!this.unmigratedTables.has('flight_master')) {
+        const row: Record<string, any> = {};
+        if ('flightNumber' in updates && updates.flightNumber) row.flight_number = updates.flightNumber.toUpperCase().trim();
+        if ('route' in updates) row.route = updates.route?.trim() || null;
+        if ('isActive' in updates) row.is_active = updates.isActive;
 
-      try {
-        const { error } = await supabase.from('flight_master').update(row).eq('id', id);
-        if (error && (error.code === 'PGRST205' || error.message?.includes('schema cache'))) {
+        try {
+          const { error } = await supabase.from('flight_master').update(row).eq('id', id);
+          if (error && (error.code === 'PGRST205' || error.message?.includes('schema cache'))) {
+            this.unmigratedTables.add('flight_master');
+          }
+        } catch (e) {
           this.unmigratedTables.add('flight_master');
         }
-      } catch (e) {
-        this.unmigratedTables.add('flight_master');
       }
     }
 
@@ -3118,10 +3623,15 @@ export const supabaseService = {
   },
 
   async deleteFlightMaster(id: string): Promise<void> {
-    if (!this.unmigratedTables.has('flight_master')) {
-      try {
-        await supabase.from('flight_master').delete().eq('id', id);
-      } catch (e) {}
+    try {
+      await api.master.deleteFlight(id);
+    } catch (apiErr) {
+      console.warn('[API] api.master.deleteFlight failed, falling back to direct:', apiErr);
+      if (!this.unmigratedTables.has('flight_master')) {
+        try {
+          await supabase.from('flight_master').delete().eq('id', id);
+        } catch (e) {}
+      }
     }
     await fmsDb.delete('flight_master', id);
     const existing = await this.getFlightMaster();
@@ -3130,29 +3640,38 @@ export const supabaseService = {
   },
 
   async getAircraftMaster(): Promise<AircraftMaster[]> {
-    if (!this.unmigratedTables.has('aircraft_master')) {
-      try {
-        const { data, error } = await supabase.from('aircraft_master').select('*').order('aircraft_reg');
-        if (error) {
-          if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
-            this.unmigratedTables.add('aircraft_master');
+    try {
+      const apiAircraft = await api.master.getAircraft();
+      if (apiAircraft && apiAircraft.length > 0) {
+        await fmsDb.bulkPut('aircraft_master', apiAircraft);
+        return this.dedupeAircrafts(apiAircraft);
+      }
+    } catch (apiErr) {
+      console.warn('[API] api.master.getAircraft failed, checking direct query:', apiErr);
+      if (!this.unmigratedTables.has('aircraft_master')) {
+        try {
+          const { data, error } = await supabase.from('aircraft_master').select('*').order('aircraft_reg');
+          if (error) {
+            if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+              this.unmigratedTables.add('aircraft_master');
+            }
+          } else if (data && data.length > 0) {
+            const result: AircraftMaster[] = data.map(row => ({
+              id: row.id,
+              airlineId: row.airline_id,
+              airlineName: row.airline_name,
+              aircraftReg: row.aircraft_reg,
+              aircraftType: row.aircraft_type,
+              isActive: row.is_active ?? true,
+              createdAt: row.created_at,
+              updatedAt: row.updated_at
+            }));
+            await fmsDb.bulkPut('aircraft_master', result);
+            return this.dedupeAircrafts(result);
           }
-        } else if (data && data.length > 0) {
-          const result: AircraftMaster[] = data.map(row => ({
-            id: row.id,
-            airlineId: row.airline_id,
-            airlineName: row.airline_name,
-            aircraftReg: row.aircraft_reg,
-            aircraftType: row.aircraft_type,
-            isActive: row.is_active ?? true,
-            createdAt: row.created_at,
-            updatedAt: row.updated_at
-          }));
-          await fmsDb.bulkPut('aircraft_master', result);
-          return this.dedupeAircrafts(result);
+        } catch (e) {
+          this.unmigratedTables.add('aircraft_master');
         }
-      } catch (e) {
-        this.unmigratedTables.add('aircraft_master');
       }
     }
     const cached = await fmsDb.getAll<AircraftMaster>('aircraft_master');
@@ -3195,70 +3714,90 @@ export const supabaseService = {
       return updated;
     }
 
-    const row = {
-      airline_id: airlineId,
-      airline_name: cleanAirline,
-      aircraft_reg: cleanReg,
-      aircraft_type: cleanType,
-      is_active: true
-    };
+    try {
+      const { aircraft } = await api.master.createAircraft({
+        airlineId,
+        airlineName: cleanAirline,
+        aircraftReg: cleanReg,
+        aircraftType: cleanType,
+        isActive: true
+      });
+      await fmsDb.put('aircraft_master', aircraft);
+      const updatedList = this.dedupeAircrafts([...existing, aircraft]);
+      try { localStorage.setItem('fms_master_aircrafts', JSON.stringify(updatedList)); } catch (e) {}
+      return aircraft;
+    } catch (apiErr) {
+      console.warn('[API] api.master.createAircraft failed, falling back to direct:', apiErr);
+      const row = {
+        airline_id: airlineId,
+        airline_name: cleanAirline,
+        aircraft_reg: cleanReg,
+        aircraft_type: cleanType,
+        is_active: true
+      };
 
-    if (!this.unmigratedTables.has('aircraft_master')) {
-      try {
-        const { data, error } = await supabase.from('aircraft_master').insert([row]).select().single();
-        if (error) {
-          if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
-            this.unmigratedTables.add('aircraft_master');
+      if (!this.unmigratedTables.has('aircraft_master')) {
+        try {
+          const { data, error } = await supabase.from('aircraft_master').insert([row]).select().single();
+          if (error) {
+            if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+              this.unmigratedTables.add('aircraft_master');
+            }
+          } else if (data) {
+            const created: AircraftMaster = {
+              id: data.id,
+              airlineId: data.airline_id,
+              airlineName: data.airline_name,
+              aircraftReg: data.aircraft_reg,
+              aircraftType: data.aircraft_type,
+              isActive: data.is_active,
+              createdAt: data.created_at,
+              updatedAt: data.updated_at
+            };
+            await fmsDb.put('aircraft_master', created);
+            return created;
           }
-        } else if (data) {
-          const created: AircraftMaster = {
-            id: data.id,
-            airlineId: data.airline_id,
-            airlineName: data.airline_name,
-            aircraftReg: data.aircraft_reg,
-            aircraftType: data.aircraft_type,
-            isActive: data.is_active,
-            createdAt: data.created_at,
-            updatedAt: data.updated_at
-          };
-          await fmsDb.put('aircraft_master', created);
-          return created;
+        } catch (e) {
+          this.unmigratedTables.add('aircraft_master');
         }
-      } catch (e) {
-        this.unmigratedTables.add('aircraft_master');
       }
-    }
 
-    // Local Fallback
-    const created: AircraftMaster = {
-      id: `ac-${cleanReg.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-      airlineId,
-      airlineName: cleanAirline,
-      aircraftReg: cleanReg,
-      aircraftType: cleanType,
-      isActive: true,
-      createdAt: new Date().toISOString()
-    };
-    await fmsDb.put('aircraft_master', created);
-    const updatedList = this.dedupeAircrafts([...existing, created]);
-    try { localStorage.setItem('fms_master_aircrafts', JSON.stringify(updatedList)); } catch (e) {}
-    return created;
+      // Local Fallback
+      const created: AircraftMaster = {
+        id: `ac-${cleanReg.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+        airlineId,
+        airlineName: cleanAirline,
+        aircraftReg: cleanReg,
+        aircraftType: cleanType,
+        isActive: true,
+        createdAt: new Date().toISOString()
+      };
+      await fmsDb.put('aircraft_master', created);
+      const updatedList = this.dedupeAircrafts([...existing, created]);
+      try { localStorage.setItem('fms_master_aircrafts', JSON.stringify(updatedList)); } catch (e) {}
+      return created;
+    }
   },
 
   async updateAircraftMaster(id: string, updates: Partial<AircraftMaster>): Promise<void> {
-    if (!this.unmigratedTables.has('aircraft_master')) {
-      const row: Record<string, any> = {};
-      if ('aircraftReg' in updates && updates.aircraftReg) row.aircraft_reg = updates.aircraftReg.toUpperCase().trim();
-      if ('aircraftType' in updates && updates.aircraftType) row.aircraft_type = updates.aircraftType.trim();
-      if ('isActive' in updates) row.is_active = updates.isActive;
+    try {
+      await api.master.updateAircraft(id, updates);
+    } catch (apiErr) {
+      console.warn('[API] api.master.updateAircraft failed, falling back to direct:', apiErr);
+      if (!this.unmigratedTables.has('aircraft_master')) {
+        const row: Record<string, any> = {};
+        if ('aircraftReg' in updates && updates.aircraftReg) row.aircraft_reg = updates.aircraftReg.toUpperCase().trim();
+        if ('aircraftType' in updates && updates.aircraftType) row.aircraft_type = updates.aircraftType.trim();
+        if ('isActive' in updates) row.is_active = updates.isActive;
 
-      try {
-        const { error } = await supabase.from('aircraft_master').update(row).eq('id', id);
-        if (error && (error.code === 'PGRST205' || error.message?.includes('schema cache'))) {
+        try {
+          const { error } = await supabase.from('aircraft_master').update(row).eq('id', id);
+          if (error && (error.code === 'PGRST205' || error.message?.includes('schema cache'))) {
+            this.unmigratedTables.add('aircraft_master');
+          }
+        } catch (e) {
           this.unmigratedTables.add('aircraft_master');
         }
-      } catch (e) {
-        this.unmigratedTables.add('aircraft_master');
       }
     }
 
@@ -3272,10 +3811,15 @@ export const supabaseService = {
   },
 
   async deleteAircraftMaster(id: string): Promise<void> {
-    if (!this.unmigratedTables.has('aircraft_master')) {
-      try {
-        await supabase.from('aircraft_master').delete().eq('id', id);
-      } catch (e) {}
+    try {
+      await api.master.deleteAircraft(id);
+    } catch (apiErr) {
+      console.warn('[API] api.master.deleteAircraft failed, falling back to direct:', apiErr);
+      if (!this.unmigratedTables.has('aircraft_master')) {
+        try {
+          await supabase.from('aircraft_master').delete().eq('id', id);
+        } catch (e) {}
+      }
     }
     await fmsDb.delete('aircraft_master', id);
     const existing = await this.getAircraftMaster();
@@ -3284,6 +3828,13 @@ export const supabaseService = {
   },
 
   async getMasterDBHierarchy(): Promise<AirlineHierarchyNode[]> {
+    try {
+      const hierarchy = await api.master.getHierarchy();
+      if (hierarchy && hierarchy.length > 0) {
+        return hierarchy;
+      }
+    } catch (e) {}
+
     const [rawAirlines, rawFlights, rawAircrafts] = await Promise.all([
       this.getAirlines(),
       this.getFlightMaster(),
@@ -3353,6 +3904,26 @@ export const supabaseService = {
       };
     };
 
+    if (!isCleared) {
+      try {
+        const apiSchedules = await api.schedules.getAll();
+        if (apiSchedules && apiSchedules.length > 0) {
+          const normalized = apiSchedules.map(normalizeSchedule);
+          const userSchedules = normalized.filter(s => !s.id.startsWith('intl-sch-1') && !s.id.startsWith('dom-sch-1'));
+          const uniqueMap = new Map<string, InternationalSchedule>();
+          for (const s of userSchedules) {
+            const key = `${s.flightNumber}-${s.daysOfWeek.join(',')}-${s.effectiveFrom}`;
+            if (!uniqueMap.has(key)) uniqueMap.set(key, s);
+          }
+          const list = Array.from(uniqueMap.values());
+          await fmsDb.bulkPut('international_schedules', list);
+          return list;
+        }
+      } catch (apiErr) {
+        console.warn('[API] api.schedules.getAll failed, checking local cache:', apiErr);
+      }
+    }
+
     try {
       const local = await fmsDb.getAll<InternationalSchedule>('international_schedules');
       if (local && local.length > 0) {
@@ -3388,6 +3959,11 @@ export const supabaseService = {
 
   async saveInternationalSchedule(sch: InternationalSchedule): Promise<void> {
     try {
+      await api.schedules.save(sch);
+    } catch (apiErr) {
+      console.warn('[API] api.schedules.save failed, falling back to local:', apiErr);
+    }
+    try {
       await fmsDb.put('international_schedules', sch);
     } catch (e) {}
     const existing = await this.getInternationalSchedules();
@@ -3404,6 +3980,11 @@ export const supabaseService = {
 
   async bulkSaveInternationalSchedules(schedules: InternationalSchedule[]): Promise<void> {
     localStorage.removeItem('fms_intl_schedules_cleared');
+    try {
+      await api.schedules.bulkSave(schedules);
+    } catch (apiErr) {
+      console.warn('[API] api.schedules.bulkSave failed, falling back to local:', apiErr);
+    }
     for (const sch of schedules) {
       try { await fmsDb.put('international_schedules', sch); } catch (e) {}
     }
@@ -3415,6 +3996,11 @@ export const supabaseService = {
   },
 
   async deleteInternationalSchedule(id: string): Promise<void> {
+    try {
+      await api.schedules.delete(id);
+    } catch (apiErr) {
+      console.warn('[API] api.schedules.delete failed, falling back to local:', apiErr);
+    }
     try { await fmsDb.delete('international_schedules', id); } catch (e) {}
     const existing = await this.getInternationalSchedules();
     const filtered = existing.filter(s => s.id !== id);
@@ -3422,6 +4008,11 @@ export const supabaseService = {
   },
 
   async deleteAllInternationalSchedules(): Promise<void> {
+    try {
+      await api.schedules.clearAll();
+    } catch (apiErr) {
+      console.warn('[API] api.schedules.clearAll failed, falling back to local:', apiErr);
+    }
     try { await fmsDb.clear('international_schedules'); } catch (e) {}
     try {
       localStorage.removeItem('fms_intl_schedules');
@@ -3430,16 +4021,34 @@ export const supabaseService = {
   },
 
   async toggleInternationalScheduleActive(id: string, isActive: boolean): Promise<void> {
+    try {
+      await api.schedules.toggleActive(id, isActive);
+    } catch (apiErr) {
+      console.warn('[API] api.schedules.toggleActive failed, falling back to local:', apiErr);
+    }
     const existing = await this.getInternationalSchedules();
     const target = existing.find(s => s.id === id);
     if (target) {
       target.isActive = isActive;
-      await this.saveInternationalSchedule(target);
+      try { await fmsDb.put('international_schedules', target); } catch (e) {}
+      try { localStorage.setItem('fms_intl_schedules', JSON.stringify(existing)); } catch (e) {}
     }
   },
 
   // ── AOCC Delay Records Log ───────────────────────────────────────────────
   async getDelayLogs(): Promise<DelayLog[]> {
+    try {
+      const apiLogs = await api.delayLogs.getAll();
+      if (apiLogs && apiLogs.length > 0) {
+        try {
+          localStorage.setItem('fms_delay_logs', JSON.stringify(apiLogs));
+        } catch (e) {}
+        return apiLogs;
+      }
+    } catch (apiErr) {
+      console.warn('[API] api.delayLogs.getAll failed, checking direct/cache:', apiErr);
+    }
+
     if (!this.unmigratedTables.has('delay_logs')) {
       try {
         const { data, error } = await supabase
@@ -3488,12 +4097,25 @@ export const supabaseService = {
 
   async createDelayLog(log: Omit<DelayLog, 'id'>): Promise<DelayLog> {
     const id = `delay-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    const newRecord: DelayLog = {
+    let newRecord: DelayLog = {
       ...log,
       id,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
+
+    try {
+      const apiCreated = await api.delayLogs.create(log);
+      if (apiCreated && apiCreated.id) {
+        newRecord = apiCreated;
+        const existing = await this.getDelayLogs();
+        const updated = [newRecord, ...existing.filter(r => r.id !== newRecord.id)];
+        localStorage.setItem('fms_delay_logs', JSON.stringify(updated));
+        return newRecord;
+      }
+    } catch (apiErr) {
+      console.warn('[API] api.delayLogs.create failed, falling back to direct:', apiErr);
+    }
 
     if (!this.unmigratedTables.has('delay_logs')) {
       try {
@@ -3535,6 +4157,12 @@ export const supabaseService = {
   },
 
   async updateDelayLog(id: string, updates: Partial<DelayLog>): Promise<void> {
+    try {
+      await api.delayLogs.update(id, updates);
+    } catch (apiErr) {
+      console.warn('[API] api.delayLogs.update failed, falling back to direct:', apiErr);
+    }
+
     if (!this.unmigratedTables.has('delay_logs')) {
       try {
         const row: Record<string, any> = { updated_at: new Date().toISOString() };
@@ -3569,6 +4197,12 @@ export const supabaseService = {
   },
 
   async deleteDelayLog(id: string): Promise<void> {
+    try {
+      await api.delayLogs.delete(id);
+    } catch (apiErr) {
+      console.warn('[API] api.delayLogs.delete failed, falling back to direct:', apiErr);
+    }
+
     if (!this.unmigratedTables.has('delay_logs')) {
       try {
         const { error } = await supabase.from('delay_logs').delete().eq('id', id);

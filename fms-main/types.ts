@@ -180,6 +180,13 @@ export interface FlightLog {
   destination?: string;
   paymentType?: string;
   created_at?: string;
+
+  // Digital Signature & Declaration of Acknowledgment
+  signatureDataUrl?: string;
+  signerName?: string;
+  signerDesignation?: string;
+  signedAt?: string;
+  declarationConfirmed?: boolean;
 }
 
 export interface BridgingLog {
@@ -418,5 +425,23 @@ export interface SystemActivityLog {
   ip_address?: string | null;
   user_agent?: string | null;
   created_at: string;
+}
+
+export type TicketCategory = 'JET_A1' | 'MGO' | 'PAPER_OFFLINE';
+
+export interface TicketSequenceConfig {
+  category: TicketCategory;
+  isAutoEnabled: boolean;
+  prefix: string;
+  formatPattern: string; // e.g. '{PREFIX}{NUMBER}', '{PREFIX}D-{NUMBER}', '{PREFIX}P-{NUMBER}'
+  paddingLength: number;
+  currentNumber: number;
+  minNumber: number;
+  maxNumber: number;
+  description?: string;
+  lastGeneratedTicket?: string;
+  lastGeneratedAt?: string;
+  updatedAt?: string;
+  updatedBy?: string;
 }
 

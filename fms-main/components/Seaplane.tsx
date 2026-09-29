@@ -5,13 +5,18 @@ import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { UserRole } from '../types';
 import { checkDuplicateTicketAcrossJetA1 } from '../services/ticketValidation';
+import { SignatureAcknowledgment } from './SignatureAcknowledgment';
 
 interface SeaplaneProps {
     user?: any;
 }
 
 export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
-    const { flightLogs, staff, tanks, updateTankLevel } = useOperationalData();
+    const { flightLogs, staff, tanks, updateTankLevel, isTicketAutoEnabled, previewNextTicketNumber, generateTicketNumber } = useOperationalData();
+    const isAutoJetA1 = isTicketAutoEnabled('JET_A1');
+    const isAutoPaper = isTicketAutoEnabled('PAPER_OFFLINE');
+    const [isPaperMode, setIsPaperMode] = useState(false);
+
     const activeOfficers = (staff || []).filter(s => [UserRole.DEPOT_MANAGER, UserRole.ITP_MANAGER, UserRole.ADMIN].includes(s.role));
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -22,7 +27,10 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
         date: new Date().toISOString().split('T')[0],
         deliveryNumber: '',
         volume: '',
-        co: ''
+        co: '',
+        signerName: '',
+        signerDesignation: '',
+        signatureDataUrl: null as string | null
     });
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -37,13 +45,24 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
         e.preventDefault();
         setDuplicateError(null);
 
-        // ── Duplicate delivery number check across all Jet A-1 operations ──
-        const fullDeliveryNumber = formData.deliveryNumber ? (formData.deliveryNumber.startsWith('MLE-') ? formData.deliveryNumber : `MLE-${formData.deliveryNumber}`) : '';
-        if (fullDeliveryNumber) {
-            const ticketVal = await checkDuplicateTicketAcrossJetA1(fullDeliveryNumber, undefined, flightLogs);
+        let finalDeliveryNumber = formData.deliveryNumber ? (formData.deliveryNumber.startsWith('MLE-') ? formData.deliveryNumber : `MLE-${formData.deliveryNumber}`) : '';
+
+        // If auto-generation is active, atomically reserve number
+        if (isAutoJetA1 && !finalDeliveryNumber) {
+            const cat = isPaperMode ? 'PAPER_OFFLINE' : 'JET_A1';
+            const genRes = await generateTicketNumber(cat, user?.name || user?.id || 'System Admin');
+            if (genRes.success && genRes.ticketNumber) {
+                finalDeliveryNumber = genRes.ticketNumber;
+            }
+        } else if (isPaperMode && !finalDeliveryNumber.includes('-P-')) {
+            finalDeliveryNumber = `MLE-P-${formData.deliveryNumber.replace(/^MLE-P-/i, '')}`;
+        }
+
+        if (finalDeliveryNumber) {
+            const ticketVal = await checkDuplicateTicketAcrossJetA1(finalDeliveryNumber, undefined, flightLogs);
             if (ticketVal.isDuplicate) {
                 setDuplicateError(
-                    ticketVal.message || `Delivery ticket ${fullDeliveryNumber} already exists in the operations log. Each ticket number must be unique.`
+                    ticketVal.message || `Delivery ticket ${finalDeliveryNumber} already exists in the operations log. Each ticket number must be unique.`
                 );
                 return;
             }
@@ -61,7 +80,7 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                 vehicleId: formData.pumpId.toUpperCase(),
                 status: 'COMPLETED' as const,
                 logType: 'SEAPLANE' as const,
-                deliveryNumber: formData.deliveryNumber ? `MLE-${formData.deliveryNumber}` : undefined,
+                deliveryNumber: finalDeliveryNumber || undefined,
                 timestampStart: `${formData.date}T08:00:00.000Z`,
                 timestampFinalEnd: `${formData.date}T16:00:00.000Z`,
                 timestampClearance: new Date().toISOString(),
@@ -73,7 +92,12 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                 appearanceCheck: true,
                 waterCheck: true,
                 co: formData.co,
-                remarks: `Seaplane Volume logged for ${formData.operator}`
+                remarks: `Seaplane Volume logged for ${formData.operator}`,
+                signatureDataUrl: formData.signatureDataUrl || undefined,
+                signerName: formData.signerName || undefined,
+                signerDesignation: formData.signerDesignation || undefined,
+                signedAt: formData.signatureDataUrl ? new Date().toISOString() : undefined,
+                declarationConfirmed: !!formData.signatureDataUrl,
             };
 
             await supabaseService.createFlightLog(logToSave);
@@ -93,7 +117,10 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                 date: new Date().toISOString().split('T')[0],
                 deliveryNumber: '',
                 volume: '',
-                co: ''
+                co: '',
+                signerName: '',
+                signerDesignation: '',
+                signatureDataUrl: null
             });
         } catch (error) {
             console.error('Error logging seaplane volume:', error);
@@ -148,27 +175,74 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Standalone Delivery Ticket Card designed like IntoPlane */}
                     <div className="card-premium p-6 lg:p-8 border-outline overflow-hidden lg:col-span-2 flex flex-col justify-center">
-                        <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Delivery Ticket Number</label>
-                        <div className="flex items-center gap-2 max-w-full overflow-hidden">
-                            <span className="text-2xl sm:text-3xl font-mono font-black text-on-surface-dim opacity-30 shrink-0">MLE-</span>
-                            <input 
-                                type="text" 
-                                maxLength={6}
-                                required
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                className={`flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 transition-all text-error placeholder:text-error/20 ${
-                                    duplicateError ? 'border-error' : 'border-outline focus:border-primary'
-                                }`}
-                                placeholder="000000"
-                                value={formData.deliveryNumber}
-                                onChange={(e) => {
-                                    const val = e.target.value.replace(/\D/g, '').slice(0, 6);
-                                    setFormData(prev => ({ ...prev, deliveryNumber: val }));
-                                    if (duplicateError) setDuplicateError(null);
-                                }}
-                            />
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
+                                <label className="text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] opacity-40">
+                                    Delivery Ticket Number
+                                </label>
+                                {isAutoJetA1 && (
+                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
+                                        isPaperMode ? 'bg-success/10 text-success border border-success/20' : 'bg-primary/10 text-primary border border-primary/20'
+                                    }`}>
+                                        {isPaperMode ? 'AUTO: PAPER TICKET' : 'AUTO-GENERATED: JET A-1'}
+                                    </span>
+                                )}
+                            </div>
+
+                            <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-bold text-on-surface-dim hover:text-on-surface transition-colors select-none">
+                                <input 
+                                    type="checkbox"
+                                    checked={isPaperMode}
+                                    onChange={e => setIsPaperMode(e.target.checked)}
+                                    className="rounded border-outline text-primary focus:ring-primary w-3.5 h-3.5 cursor-pointer"
+                                />
+                                <span>Paper / Offline Ticket</span>
+                            </label>
                         </div>
+
+                        {isAutoJetA1 && !isPaperMode ? (
+                            <div className="flex items-center justify-between gap-2 max-w-full overflow-hidden py-2">
+                                <div className="text-4xl sm:text-5xl font-mono font-black text-error">
+                                    {formData.deliveryNumber || previewNextTicketNumber('JET_A1')}
+                                </div>
+                                <span className="text-[9px] font-black text-on-surface-dim opacity-50 uppercase tracking-widest bg-surface-container-low px-3 py-1.5 rounded-xl border border-outline shrink-0">
+                                    System Assigned
+                                </span>
+                            </div>
+                        ) : isPaperMode && isAutoPaper ? (
+                            <div className="flex items-center justify-between gap-2 max-w-full overflow-hidden py-2">
+                                <div className="text-4xl sm:text-5xl font-mono font-black text-success">
+                                    {formData.deliveryNumber || previewNextTicketNumber('PAPER_OFFLINE')}
+                                </div>
+                                <span className="text-[9px] font-black text-success/80 uppercase tracking-widest bg-success/10 px-3 py-1.5 rounded-xl border border-success/20 shrink-0">
+                                    Auto Paper Series
+                                </span>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 max-w-full overflow-hidden">
+                                <span className="text-2xl sm:text-3xl font-mono font-black text-on-surface-dim opacity-30 shrink-0">
+                                    {isPaperMode ? 'MLE-P-' : 'MLE-'}
+                                </span>
+                                <input 
+                                    type="text" 
+                                    maxLength={isPaperMode ? 8 : 6}
+                                    required={!isAutoJetA1}
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    className={`flex-1 min-w-0 text-5xl font-mono font-black py-2 bg-transparent outline-none border-b-2 transition-all text-error placeholder:text-error/20 ${
+                                        duplicateError ? 'border-error' : 'border-outline focus:border-primary'
+                                    }`}
+                                    placeholder="000000"
+                                    value={formData.deliveryNumber}
+                                    onChange={(e) => {
+                                        const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                                        setFormData(prev => ({ ...prev, deliveryNumber: val }));
+                                        if (duplicateError) setDuplicateError(null);
+                                    }}
+                                />
+                            </div>
+                        )}
+
                         {duplicateError && (
                             <div className="mt-4 flex items-start gap-3 p-3 bg-error/10 border border-error/30 rounded-xl">
                                 <AlertTriangle className="w-4 h-4 text-error mt-0.5 shrink-0" />
@@ -294,10 +368,30 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                     </div>
                 </div>
 
+                {/* Customer / Seaplane Operator Signature & Declaration */}
+                <SignatureAcknowledgment
+                  signerName={formData.signerName}
+                  onSignerNameChange={(val) => setFormData(prev => ({ ...prev, signerName: val }))}
+                  signerDesignation={formData.signerDesignation}
+                  onSignerDesignationChange={(val) => setFormData(prev => ({ ...prev, signerDesignation: val }))}
+                  signatureDataUrl={formData.signatureDataUrl}
+                  onSignatureChange={(val) => setFormData(prev => ({ ...prev, signatureDataUrl: val }))}
+                  designationPresets={[
+                    'Pilot in Command (PIC)',
+                    'First Officer',
+                    'Base Maintenance Engineer',
+                    'TMA Operations Coordinator',
+                    'Manta Air Rep'
+                  ]}
+                  declarationText="I hereby acknowledge and certify receipt of the recorded seaplane hydrant flow volume. Totalizer readings and quality parameters have been verified and accepted."
+                  title="Customer / Seaplane Operator Acknowledgment"
+                  subtitle="Seaplane Hydrant Fuel Distribution Certification"
+                />
+
                 <div className="flex justify-end">
                     <button 
                         type="submit" 
-                        disabled={loading || formData.deliveryNumber.length !== 6}
+                        disabled={loading || (!isAutoJetA1 && (!formData.deliveryNumber || formData.deliveryNumber.length < 4))}
                         className="w-full md:w-auto px-12 py-5 kinetic-gradient text-white rounded-2xl font-[900] text-[12px] uppercase tracking-[0.4em] shadow-premium hover:scale-105 active:scale-95 transition-all flex items-center justify-center disabled:opacity-20"
                     >
                         {loading ? 'SYNCHRONIZING...' : (

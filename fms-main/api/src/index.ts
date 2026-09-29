@@ -5,6 +5,19 @@ import { BigQuery, TableSchema } from '@google-cloud/bigquery';
 import crypto from 'crypto';
 import authRouter from './auth';
 import { pushService, StoredSubscription, PushNotificationPayload } from './pushService';
+import tanksRouter from './routes/tanks';
+import flightJobsRouter from './routes/flightJobs';
+import equipmentRouter from './routes/equipment';
+import staffRouter from './routes/staff';
+import alertsRouter from './routes/alerts';
+import vesselsRouter from './routes/vessels';
+import masterDataRouter from './routes/masterData';
+import schedulesRouter from './routes/schedules';
+import shiftBriefingRouter from './routes/shiftBriefing';
+import delayLogsRouter from './routes/delayLogs';
+import financeRouter from './routes/finance';
+import appSettingsRouter from './routes/appSettings';
+import activityLogsRouter from './routes/activityLogs';
 
 // ─── Web Push VAPID initialization ───────────────────────────────────────────
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
@@ -140,6 +153,21 @@ async function ensureSchema(): Promise<void> {
   if (!tableExists) {
     await dataset.createTable(TABLE_ID, { schema: OPERATIONS_LOG_SCHEMA });
     console.log(`[BigQuery] Created table: ${DATASET_ID}.${TABLE_ID}`);
+  } else {
+    try {
+      await bigquery.query({
+        query: `ALTER TABLE \`${DATASET_ID}.${TABLE_ID}\`
+          ADD COLUMN IF NOT EXISTS std STRING,
+          ADD COLUMN IF NOT EXISTS tobt STRING,
+          ADD COLUMN IF NOT EXISTS frt_airline STRING,
+          ADD COLUMN IF NOT EXISTS frt_aocc STRING,
+          ADD COLUMN IF NOT EXISTS frt_for STRING`,
+        location: 'US'
+      });
+      console.log(`[BigQuery] Ensured STD and FRT columns exist on ${DATASET_ID}.${TABLE_ID}`);
+    } catch (colErr: any) {
+      console.warn(`[BigQuery] Column schema update check: ${colErr.message}`);
+    }
   }
 
   // New Table: filling_station_log
@@ -492,8 +520,42 @@ app.get('/', (_req: Request, res: Response) => {
   res.json({ service: 'MACL FMS BigQuery API', status: 'OK', version: '1.0.0' });
 });
 
+// ─── Schema Migration Endpoint ────────────────────────────────────────────────
+app.get('/migrate-schema', async (_req: Request, res: Response) => {
+  try {
+    await bigquery.query({
+      query: `ALTER TABLE \`${DATASET_ID}.${TABLE_ID}\`
+        ADD COLUMN IF NOT EXISTS std STRING,
+        ADD COLUMN IF NOT EXISTS tobt STRING,
+        ADD COLUMN IF NOT EXISTS frt_airline STRING,
+        ADD COLUMN IF NOT EXISTS frt_aocc STRING,
+        ADD COLUMN IF NOT EXISTS frt_for STRING`,
+      location: 'US'
+    });
+    res.json({ status: 'OK', message: 'Schema migration complete: STD & FRT columns verified on BigQuery operations_log.' });
+  } catch (err: any) {
+    console.error('[BigQuery] /migrate-schema error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Auth Routes ──────────────────────────────────────────────────────────────
 app.use('/auth', authRouter);
+
+// ─── Unified Application Database API Routes ─────────────────────────────────
+app.use('/tanks', tanksRouter);
+app.use('/flight-jobs', flightJobsRouter);
+app.use('/equipment', equipmentRouter);
+app.use('/staff', staffRouter);
+app.use('/alerts', alertsRouter);
+app.use('/vessels', vesselsRouter);
+app.use('/master', masterDataRouter);
+app.use('/schedules', schedulesRouter);
+app.use('/shift-briefing', shiftBriefingRouter);
+app.use('/delay-logs', delayLogsRouter);
+app.use('/finance', financeRouter);
+app.use('/settings', appSettingsRouter);
+app.use('/activity-logs', activityLogsRouter);
 
 // ─── External flights proxy (public endpoint) ─────────────────────────────────
 app.get('/external-flights', async (_req: Request, res: Response) => {
@@ -1031,6 +1093,35 @@ app.post('/operations-log', requireAuth, async (req: Request, res: Response) => 
     res.status(201).json({ id: newId, message: 'Log entry created.' });
   } catch (err: any) {
     console.error('[BigQuery] POST error:', err.message, err.errors);
+    if (err.message && err.message.includes('is not present in table')) {
+      try {
+        console.log('[BigQuery] Missing column detected during INSERT. Running auto-alter and retrying...');
+        await bigquery.query({
+          query: `ALTER TABLE \`${DATASET_ID}.${TABLE_ID}\`
+            ADD COLUMN IF NOT EXISTS std STRING,
+            ADD COLUMN IF NOT EXISTS tobt STRING,
+            ADD COLUMN IF NOT EXISTS frt_airline STRING,
+            ADD COLUMN IF NOT EXISTS frt_aocc STRING,
+            ADD COLUMN IF NOT EXISTS frt_for STRING`,
+          location: 'US'
+        });
+        await bigquery.query({ query: sql, params, location: 'US' });
+        return res.status(201).json({ id: newId, message: 'Log entry created after schema update.' });
+      } catch (retryErr: any) {
+        console.warn('[BigQuery] Auto-alter retry failed, falling back to safe columns:', retryErr.message);
+        try {
+          const safeActiveEntries = activeEntries.filter(([k]) => !['std', 'tobt', 'frt_airline', 'frt_aocc', 'frt_for'].includes(k));
+          const safeColumns = safeActiveEntries.map(([k]) => k).join(', ');
+          const safeParamRefs = safeActiveEntries.map(([k]) => `@${k}`).join(', ');
+          const safeParams = Object.fromEntries(safeActiveEntries);
+          const safeSql = `INSERT INTO ${TABLE_REF} (${safeColumns}) VALUES (${safeParamRefs})`;
+          await bigquery.query({ query: safeSql, params: safeParams, location: 'US' });
+          return res.status(201).json({ id: newId, message: 'Log entry created (safe fallback).' });
+        } catch (fallbackErr: any) {
+          console.error('[BigQuery] Fallback insert error:', fallbackErr.message);
+        }
+      }
+    }
     res.status(500).json({ error: err.message, details: err.errors });
   }
 });

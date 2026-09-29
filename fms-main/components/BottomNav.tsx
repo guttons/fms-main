@@ -1,44 +1,23 @@
 import React, { useState, useCallback } from 'react';
-import { User, UserRole } from '../types';
+import { User } from '../types';
 import { 
-  LayoutDashboard, 
-  Plane, 
-  FileText, 
-  Database, 
-  Droplet, 
-  Anchor, 
-  Sailboat,
-  TrendingUp,
-  Settings,
-  Calendar,
-  Truck,
   SlidersHorizontal,
-  Fuel,
-  BookOpen,
-  History,
-  Briefcase,
-  Coins,
-  Receipt,
-  BarChart3,
+  Settings,
   HelpCircle,
   LogOut,
   Sun,
   Moon,
   Eclipse,
-  Ship,
-  Search,
-  Radar,
-  Users
 } from 'lucide-react';
-import { StockIcon } from './StockIcon';
 import { BottomSheet, SheetAction, SheetDivider, SheetSectionHeader } from './BottomSheet';
 import { haptic } from '../utils/haptics';
+import { getRoleNavItems, getRoleOverflowItems } from '../utils/navigation';
 
 interface BottomNavProps {
   user: User;
   activeView: string;
   setActiveView: (view: string) => void;
-  onMenuClick: () => void;
+  onMenuClick?: () => void;
   isVisible?: boolean;
   onSettingsClick?: () => void;
   onLogout?: () => void;
@@ -47,14 +26,6 @@ interface BottomNavProps {
   pendingTasks?: number;
   activeJobs?: number;
   unreadAlerts?: number;
-}
-
-interface NavItem {
-  id: string;
-  label: string;
-  icon: React.ElementType;
-  badge?: number;
-  badgeColor?: string;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({ 
@@ -73,195 +44,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 }) => {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
-  // ── Primary Nav Items (shown in bottom bar) ────────────────────────────────
-  const getNavItems = (): NavItem[] => {
-    if (!user || !user.role) return [];
-    switch (user.role) {
-      case UserRole.ITP_OPERATOR:
-      case UserRole.ITP_SUPERVISOR:
-      case UserRole.ITP_HD_OPERATOR:
-        return [
-          { id: 'dashboard', label: 'Tasks', icon: LayoutDashboard, badge: pendingTasks, badgeColor: pendingTasks > 0 ? 'bg-red-500' : undefined },
-          { id: 'intoplane', label: 'Refuel', icon: Plane, badge: activeJobs, badgeColor: activeJobs > 0 ? 'bg-amber-500' : undefined },
-          { id: 'briefing', label: 'Briefing', icon: BookOpen },
-          { id: 'equipment', label: 'Equipment', icon: Truck },
-          { id: 'history', label: 'Logs', icon: History },
-        ];
+  // ── Primary Nav Items (derived from authoritative role config) ──────────────
+  const navItems = getRoleNavItems(user?.role, { pendingTasks, activeJobs, unreadAlerts });
 
-      case UserRole.ITP_OFFICER:
-        return [
-          { id: 'dashboard', label: 'Tasks', icon: LayoutDashboard, badge: pendingTasks, badgeColor: pendingTasks > 0 ? 'bg-red-500' : undefined },
-          { id: 'intoplane', label: 'Refuel', icon: Plane },
-          { id: 'schedule', label: 'Schedule', icon: Calendar },
-          { id: 'briefing', label: 'Briefing', icon: BookOpen },
-          { id: 'history', label: 'Logs', icon: History },
-        ];
+  // ── Overflow Sheet Items (all role modules not in bottom bar) ──────────────
+  const overflowItems = getRoleOverflowItems(user?.role, navItems);
 
-      case UserRole.ITP_MANAGER:
-        return [
-          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'intoplane', label: 'Refuel', icon: Plane },
-          { id: 'schedule', label: 'Schedule', icon: Calendar },
-          { id: 'depot-reports', label: 'Reports', icon: BarChart3 },
-          { id: 'history', label: 'Logs', icon: History },
-        ];
-
-      case UserRole.DEPOT_OPERATOR:
-        return [
-          { id: 'dashboard', label: 'Status', icon: LayoutDashboard },
-          { id: 'stock', label: 'Tanks', icon: StockIcon },
-          { id: 'bridging', label: 'Loading', icon: Droplet },
-          { id: 'marine', label: 'Marine', icon: Anchor },
-          { id: 'lfs-afs', label: 'Stations', icon: Fuel },
-        ];
-
-      case UserRole.DEPOT_MANAGER:
-        return [
-          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'stock', label: 'Stock', icon: StockIcon },
-          { id: 'bridging', label: 'Transfer', icon: Droplet },
-          { id: 'forecasting', label: 'Forecast', icon: TrendingUp },
-          { id: 'depot-reports', label: 'Reports', icon: BarChart3 },
-        ];
-
-      case UserRole.EXECUTIVE:
-        return [
-          { id: 'executive', label: 'Overview', icon: LayoutDashboard },
-          { id: 'forecasting', label: 'Forecast', icon: TrendingUp },
-          { id: 'depot-reports', label: 'Reports', icon: BarChart3 },
-          { id: 'commercial-reports', label: 'Commercial', icon: Coins },
-          { id: 'finance', label: 'Finance', icon: Receipt },
-        ];
-
-      case UserRole.COMMERCIAL:
-        return [
-          { id: 'commercial-reports', label: 'Commercial', icon: Coins },
-          { id: 'forecasting', label: 'Forecast', icon: TrendingUp },
-          { id: 'depot-reports', label: 'Reports', icon: BarChart3 },
-          { id: 'finance', label: 'Finance', icon: Receipt },
-        ];
-
-      case UserRole.FINANCE:
-        return [
-          { id: 'finance', label: 'Finance', icon: Receipt },
-          { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
-          { id: 'reports', label: 'Reports', icon: FileText },
-        ];
-
-      case UserRole.FUEL_MANAGEMENT:
-        return [
-          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'intoplane', label: 'Refuel', icon: Plane },
-          { id: 'forecasting', label: 'Forecast', icon: TrendingUp },
-          { id: 'depot-reports', label: 'Reports', icon: BarChart3 },
-          { id: 'executive', label: 'Executive', icon: Briefcase },
-        ];
-
-      case UserRole.ADMIN:
-        return [
-          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'admin', label: 'Admin', icon: Settings },
-          { id: 'schedule', label: 'Schedule', icon: Calendar },
-          { id: 'intoplane', label: 'Refuel', icon: Plane },
-          { id: 'stock', label: 'Stock', icon: StockIcon },
-        ];
-
-      case UserRole.CUSTOMER:
-        // Customer portal is self-contained — no bottom nav
-        return [];
-
-      default:
-        return [
-          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'history', label: 'Logs', icon: History },
-        ];
-    }
-  };
-
-  // ── Overflow Sheet Items (items NOT in bottom nav) ─────────────────────────
-  const getOverflowItems = (): NavItem[] => {
-    if (!user || !user.role) return [];
-    switch (user.role) {
-      case UserRole.ITP_OPERATOR:
-      case UserRole.ITP_SUPERVISOR:
-      case UserRole.ITP_HD_OPERATOR:
-        return [];
-
-      case UserRole.ITP_OFFICER:
-        return [
-          { id: 'equipment', label: 'Equipment Status', icon: Truck },
-        ];
-
-      case UserRole.ITP_MANAGER:
-        return [
-          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
-          { id: 'equipment', label: 'Equipment Status', icon: Truck },
-          { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
-        ];
-
-      case UserRole.DEPOT_OPERATOR:
-        return [
-          { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
-          { id: 'seaplane', label: 'Seaplane Ops', icon: Sailboat },
-          { id: 'equipment', label: 'Equipment Status', icon: Truck },
-        ];
-
-      case UserRole.DEPOT_MANAGER:
-        return [
-          { id: 'marine-loading', label: 'Marine Provisioning', icon: Ship },
-          { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
-          { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
-          { id: 'marine', label: 'Marine Oversight', icon: Anchor },
-          { id: 'equipment', label: 'Equipment Status', icon: Truck },
-          { id: 'history', label: 'Log History', icon: History },
-        ];
-
-      case UserRole.EXECUTIVE:
-        return [
-          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        ];
-
-      case UserRole.COMMERCIAL:
-        return [];
-
-      case UserRole.FINANCE:
-        return [];
-
-      case UserRole.FUEL_MANAGEMENT:
-        return [
-          { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
-          { id: 'equipment', label: 'Equipment Status', icon: Truck },
-          { id: 'history', label: 'Log History', icon: History },
-          { id: 'executive', label: 'Executive Module', icon: Briefcase },
-          { id: 'commercial-reports', label: 'Commercial Reports', icon: Coins },
-          { id: 'finance', label: 'Finance & Billing', icon: Receipt },
-        ];
-
-      case UserRole.ADMIN:
-        return [
-          { id: 'staff-tracker', label: 'Staff Tracker', icon: Users },
-          { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
-          { id: 'equipment', label: 'Equipment Status', icon: Truck },
-          { id: 'history', label: 'Log History', icon: History },
-          { id: 'bridging', label: 'Transfer Oversight', icon: Droplet },
-          { id: 'marine-loading', label: 'Marine Loading', icon: Ship },
-          { id: 'seaplane', label: 'Seaplane Oversight', icon: Sailboat },
-          { id: 'lfs-afs', label: 'Filling Stations', icon: Fuel },
-          { id: 'marine', label: 'Marine Oversight', icon: Anchor },
-          { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
-          { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
-          { id: 'executive', label: 'Executive Module', icon: Briefcase },
-          { id: 'commercial-reports', label: 'Commercial Reports', icon: Coins },
-          { id: 'finance', label: 'Finance & Billing', icon: Receipt },
-        ];
-
-      default:
-        return [];
-    }
-  };
-
-  const navItems = getNavItems();
-  const overflowItems = getOverflowItems();
   const activeIndex = navItems.findIndex(item => item.id === activeView);
   // Check if activeView is in overflow items (to highlight the "more" button)
   const isOverflowActive = overflowItems.some(item => item.id === activeView);
@@ -337,13 +125,14 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             <button
               onClick={handleOverflowOpen}
               className={`flex flex-col items-center justify-center flex-1 min-w-0 py-1 group active:scale-95 transition-all duration-300 rounded-full ${
-                isOverflowActive ? 'text-primary' : 'text-on-surface-dim'
+                isOverflowActive || isSheetOpen ? 'text-primary' : 'text-on-surface-dim'
               }`}
+              aria-label="More options"
             >
               <div className={`p-2 rounded-2xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                isOverflowActive ? 'bg-primary/10 shadow-glow scale-110' : 'opacity-60 group-hover:bg-primary/5'
+                isOverflowActive || isSheetOpen ? 'bg-primary/10 shadow-glow scale-110' : 'opacity-60 group-hover:bg-primary/5'
               }`}>
-                <SlidersHorizontal className="w-5 h-5 transition-transform duration-500" />
+                <SlidersHorizontal className={`w-5 h-5 transition-transform duration-500 ${isSheetOpen ? 'rotate-90 text-primary' : ''}`} />
               </div>
             </button>
           )}
@@ -367,6 +156,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 label={item.label}
                 onClick={() => handleSheetNavClick(item.id)}
                 badge={item.badge}
+                isActive={activeView === item.id}
               />
             ))}
           </div>
@@ -395,6 +185,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 onSettingsClick();
                 setIsSheetOpen(false);
               }}
+              isActive={activeView === 'admin'}
             />
           )}
           <SheetAction

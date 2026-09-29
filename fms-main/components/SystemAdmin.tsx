@@ -4,7 +4,7 @@ import {
   Users, Activity,
   Plus, Pencil, Trash2, X, Check, AlertTriangle,
   Truck, Fuel, ChevronDown, Phone, Mail, IdCard, UserCheck, UserX,
-  RefreshCw, Anchor, Plane, Globe, ShieldCheck
+  RefreshCw, Anchor, Plane, Globe, ShieldCheck, FileText
 } from 'lucide-react';
 import { UserRole, EquipmentType, EquipmentStatus, FuelType } from '../types';
 import type { StaffMember, Equipment, Tank, Vessel } from '../types';
@@ -17,9 +17,10 @@ import { activityLogService, LogModule, LogAction } from '../services/activityLo
 import { FlightMasterTab } from './FlightMasterTab';
 import { InternationalScheduleTab } from './InternationalScheduleTab';
 import { ActivityLogTab } from './ActivityLogTab';
+import { TicketSettingsTab } from './TicketSettingsTab';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Tab = 'staff' | 'equipment' | 'tanks' | 'vessels' | 'flight-master' | 'intl-schedule' | 'activity-log';
+type Tab = 'staff' | 'equipment' | 'tanks' | 'vessels' | 'flight-master' | 'intl-schedule' | 'activity-log' | 'ticket-settings';
 
 interface ConfirmState { open: boolean; message: string; onConfirm: () => void; }
 
@@ -1305,6 +1306,7 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
     { key: 'flight-master', label: 'Airline & Aircraft Master', icon: <Plane className="w-4 h-4" /> },
     { key: 'intl-schedule', label: 'Flight Schedule', icon: <Globe className="w-4 h-4" /> },
     { key: 'activity-log', label: 'Activity Tracker', icon: <ShieldCheck className="w-4 h-4" /> },
+    { key: 'ticket-settings', label: 'Ticket Numbering', icon: <FileText className="w-4 h-4" /> },
   ];
 
   return (
@@ -1405,6 +1407,11 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
           {activeTab === 'activity-log' && (
             <div key="activity-log" className="animate-in fade-in slide-in-from-right-4 duration-500">
               <ActivityLogTab currentUser={currentUser} pushNotification={notify} />
+            </div>
+          )}
+          {activeTab === 'ticket-settings' && (
+            <div key="ticket-settings" className="animate-in fade-in slide-in-from-right-4 duration-500">
+              <TicketSettingsTab currentUser={currentUser} pushNotification={notify} />
             </div>
           )}
         </div>
