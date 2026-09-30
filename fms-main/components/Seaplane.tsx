@@ -68,6 +68,11 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
             }
         }
 
+        if (!formData.signatureDataUrl || !formData.signerName?.trim()) {
+            alert('Customer / Representative signature and full name are required to synchronize.');
+            return;
+        }
+
         setLoading(true);
         try {
             const parsedVolume = parseFloat(formData.volume.replace(/,/g, '')) || 0;
@@ -388,11 +393,11 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                   subtitle="Seaplane Hydrant Fuel Distribution Certification"
                 />
 
-                <div className="flex justify-end">
+                <div className="flex flex-col items-end gap-2">
                     <button 
                         type="submit" 
-                        disabled={loading || (!isAutoJetA1 && (!formData.deliveryNumber || formData.deliveryNumber.length < 4))}
-                        className="w-full md:w-auto px-12 py-5 kinetic-gradient text-white rounded-2xl font-[900] text-[12px] uppercase tracking-[0.4em] shadow-premium hover:scale-105 active:scale-95 transition-all flex items-center justify-center disabled:opacity-20"
+                        disabled={loading || (!isAutoJetA1 && (!formData.deliveryNumber || formData.deliveryNumber.length < 4)) || !formData.signatureDataUrl || !formData.signerName?.trim()}
+                        className="w-full md:w-auto px-12 py-5 kinetic-gradient text-white rounded-2xl font-[900] text-[12px] uppercase tracking-[0.4em] shadow-premium hover:scale-105 active:scale-95 transition-all flex items-center justify-center disabled:opacity-20 disabled:scale-100 disabled:grayscale cursor-pointer"
                     >
                         {loading ? 'SYNCHRONIZING...' : (
                             <>
@@ -401,6 +406,12 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                             </>
                         )}
                     </button>
+                    {(!formData.signatureDataUrl || !formData.signerName?.trim()) && (
+                      <div className="flex items-center justify-center gap-2 text-amber-400 text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-center py-1 animate-pulse">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        <span>Customer / Representative signature and full name are required to submit</span>
+                      </div>
+                    )}
                 </div>
             </form>
         </div>

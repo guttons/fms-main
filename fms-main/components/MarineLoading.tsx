@@ -266,6 +266,11 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
       };
 
       try {
+        if (!formData.signatureDataUrl || !formData.signerName?.trim()) {
+          notify('Customer / Vessel signature and full name are required to finalize.', 'warning');
+          return;
+        }
+
         // Save to global flight/operations log
         const logToSave = {
           flightNumber: `VESSEL-${formData.vesselName.toUpperCase()}`,
@@ -813,7 +818,7 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
 
                 <button 
                     type="submit" 
-                    disabled={loading || !formData.visualCheck || !formData.waterCheck || (!isAutoJetA1 && (!formData.deliveryNumber || formData.deliveryNumber.length < 4))}
+                    disabled={loading || !formData.visualCheck || !formData.waterCheck || (!isAutoJetA1 && (!formData.deliveryNumber || formData.deliveryNumber.length < 4)) || !formData.signatureDataUrl || !formData.signerName?.trim()}
                     className="w-full py-6 kinetic-gradient text-white rounded-[32px] font-[900] text-sm uppercase tracking-[0.4em] hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-20 disabled:scale-100 disabled:grayscale flex items-center justify-center shadow-premium"
                 >
                     {loading ? 'SYNCHRONIZING...' : (
@@ -823,6 +828,12 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
                     </>
                     )}
                 </button>
+                {(!formData.signatureDataUrl || !formData.signerName?.trim()) && (
+                  <div className="flex items-center justify-center gap-2 text-amber-400 text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-center py-2 animate-pulse">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Customer / Vessel signature and full name are required to submit</span>
+                  </div>
+                )}
             </form>
         </div>
 

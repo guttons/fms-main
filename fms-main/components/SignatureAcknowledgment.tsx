@@ -1,10 +1,11 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { PenTool, RotateCcw, CheckCircle2, ShieldCheck, UserCheck, Briefcase } from 'lucide-react';
+import { PenTool, RotateCcw, CheckCircle2, ShieldCheck, UserCheck, Briefcase, Mail } from 'lucide-react';
 
 export interface SignatureData {
   signatureDataUrl: string;
   signerName: string;
   signerDesignation: string;
+  signerEmail?: string;
   signedAt: string;
 }
 
@@ -13,6 +14,8 @@ export interface SignatureAcknowledgmentProps {
   onSignerNameChange: (val: string) => void;
   signerDesignation: string;
   onSignerDesignationChange: (val: string) => void;
+  signerEmail?: string;
+  onSignerEmailChange?: (val: string) => void;
   signatureDataUrl: string | null;
   onSignatureChange: (val: string | null) => void;
   designationPresets?: string[];
@@ -28,6 +31,8 @@ export const SignatureAcknowledgment: React.FC<SignatureAcknowledgmentProps> = (
   onSignerNameChange,
   signerDesignation,
   onSignerDesignationChange,
+  signerEmail,
+  onSignerEmailChange,
   signatureDataUrl,
   onSignatureChange,
   designationPresets = [
@@ -148,7 +153,7 @@ export const SignatureAcknowledgment: React.FC<SignatureAcknowledgmentProps> = (
   };
 
   return (
-    <div className="card-premium p-5 sm:p-6 border-outline space-y-5 rounded-2xl bg-surface-dim/40 shadow-sm">
+    <div className="sm:card-premium p-3 sm:p-6 border sm:border-outline border-outline/30 space-y-4 sm:space-y-5 rounded-2xl bg-surface-dim/40 shadow-none sm:shadow-sm">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 border-b border-outline/30 pb-3">
         <div className="flex items-center gap-3">
@@ -174,12 +179,12 @@ export const SignatureAcknowledgment: React.FC<SignatureAcknowledgmentProps> = (
       </div>
 
       {/* Declaration legal statement */}
-      <div className="p-3.5 rounded-xl bg-surface-container-low border border-outline/30 text-[10px] text-on-surface-dim leading-relaxed italic">
+      <div className="p-3 sm:p-3.5 rounded-xl bg-surface-container-low border border-outline/30 text-[10px] text-on-surface-dim leading-relaxed italic">
         "{declarationText}"
       </div>
 
       {/* Signer Details: Full Name & Designation */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         {/* Name Field */}
         <div>
           <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-1.5 opacity-60">
@@ -240,6 +245,26 @@ export const SignatureAcknowledgment: React.FC<SignatureAcknowledgmentProps> = (
         </div>
       )}
 
+      {/* Representative Email for Instant Invoice Dispatch */}
+      {onSignerEmailChange && (
+        <div>
+          <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-1.5 opacity-60">
+            Representative Email Address <span className="opacity-50 text-[8px] font-medium lowercase">(for instant invoice delivery)</span>
+          </label>
+          <div className="relative">
+            <input
+              type="email"
+              value={signerEmail || ''}
+              onChange={(e) => onSignerEmailChange(e.target.value)}
+              disabled={disabled}
+              placeholder="e.g., flightops@airline.com or rep@company.aero"
+              className="w-full px-4 py-2.5 bg-surface-dim border border-outline rounded-xl text-xs font-bold text-on-surface placeholder:opacity-30 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 outline-none transition-all disabled:opacity-50"
+            />
+            <Mail className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim opacity-40 pointer-events-none" />
+          </div>
+        </div>
+      )}
+
       {/* JavaScript Signature Box */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -261,14 +286,14 @@ export const SignatureAcknowledgment: React.FC<SignatureAcknowledgmentProps> = (
         <div className="relative rounded-2xl border-2 border-dashed border-outline/60 bg-surface-container-lowest overflow-hidden transition-all hover:border-cyan-400/50">
           <canvas
             ref={canvasRef}
-            width={600}
-            height={160}
+            width={800}
+            height={200}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={finishDrawing}
             onPointerLeave={finishDrawing}
             onPointerCancel={finishDrawing}
-            className={`w-full h-32 sm:h-36 block select-none ${
+            className={`w-full h-36 sm:h-44 block select-none ${
               disabled ? 'cursor-not-allowed opacity-60' : 'cursor-crosshair'
             }`}
             style={{ touchAction: 'none' }}

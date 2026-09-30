@@ -123,6 +123,7 @@ export interface FlightJob {
   timestampClearance?: string;   // Ramp clearance / safety zone exit
   co?: string;
   operatorName?: string;
+  userEditedAircraftType?: boolean;
 }
 
 export interface FlightLog {
@@ -186,8 +187,11 @@ export interface FlightLog {
   signatureDataUrl?: string;
   signerName?: string;
   signerDesignation?: string;
+  signerEmail?: string;
   signedAt?: string;
   declarationConfirmed?: boolean;
+  invoiceHtml?: string;
+  invoiceSavedAt?: string;
 }
 
 export interface BridgingLog {

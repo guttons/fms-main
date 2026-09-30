@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { FlightLog, User, FlightJob, Equipment, EquipmentStatus, UserRole, isDomesticFlight, cleanRemarks } from '../types';
 import { MOCK_USERS, PIT_MAPPING } from '../constants';
-import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, AlertCircle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Users, Lock, Calendar, X, CreditCard, Ban, Eye, Zap, Bell, BellOff, BellRing, Megaphone, ExternalLink, Droplet, PlaneLanding, PlaneTakeoff, ArrowRightCircle, Check, CheckCheck, RotateCcw, Pencil, Plane, Fuel } from 'lucide-react';
+import { Clock, CheckCircle, Truck, Play, Pause, AlertTriangle, AlertCircle, Wifi, WifiOff, Save, ChevronRight, ChevronLeft, MapPin, User as UserIcon, Users, Lock, Calendar, X, CreditCard, Ban, Eye, Zap, Bell, BellOff, BellRing, Megaphone, ExternalLink, Droplet, PlaneLanding, PlaneTakeoff, ArrowRightCircle, Check, CheckCheck, RotateCcw, Pencil, Plane, Fuel, FileText, Printer, Mail, Share2 } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { flightRadarService } from '../services/flightRadarService';
 import { getWatchedFlightIds, saveWatchedFlightIds } from '../services/watchedFlightsService';
@@ -17,6 +17,7 @@ import { cleanAircraftTypeName, normalizeRegistration } from '../services/aircra
 import { checkDuplicateTicketAcrossJetA1 } from '../services/ticketValidation';
 import { serverTimeService } from '../services/serverTimeService';
 import { SignatureAcknowledgment } from './SignatureAcknowledgment';
+import { generateInvoiceHtml, openPrintInvoice, sendInvoiceEmail, shareInvoice } from '../services/invoicePdfService';
 
 interface IntoPlaneProps {
     user: User;
@@ -574,8 +575,10 @@ const ScreenDashboard: React.FC<{
     const usersList = staff && staff.length > 0 ? staff : MOCK_USERS;
     const assignee = usersList.find(u => u.id === job.assignedTo || u.name.toLowerCase() === (job.assignedTo || '').toLowerCase());
     const assigneeName = assignee?.name || job.assignedTo || null;
-    const officer = job.assignedOfficer ? usersList.find(u => u.id === job.assignedOfficer || u.name.toLowerCase() === (job.assignedOfficer || '').toLowerCase()) : null;
-    const officerName = officer?.name || job.assignedOfficer || null;
+    const isRefueller = job.equipmentUsage === 'REFUELLER';
+    const isMockOfficer = !job.assignedOfficer || /^u\d+b?$/i.test(job.assignedOfficer);
+    const officer = (isRefueller && !isMockOfficer) ? usersList.find(u => u.id === job.assignedOfficer || u.name.toLowerCase() === (job.assignedOfficer || '').toLowerCase()) : null;
+    const officerName = officer?.name || null;
 
     const alertMeta = {
       aircraftReg: job.aircraftReg,
@@ -885,6 +888,8 @@ const ScreenDashboard: React.FC<{
       ...(existing || {}),
       ...f,
       id: liveJob?.id || dbJob?.id || f.id || existing?.id,
+      aircraftType: dbJob?.aircraftType || liveJob?.aircraftType || existing?.aircraftType || f.aircraftType,
+      aircraftReg: dbJob?.aircraftReg || liveJob?.aircraftReg || existing?.aircraftReg || f.aircraftReg,
       status: computedStatus,
       fidsStatus: f.status,
       std: liveJob?.std || dbJob?.std || existing?.std || f.std || ((f as any).type === 'departure' ? (f as any).scheduledTime : '') || (f as any).scheduledTime || '',
@@ -897,11 +902,15 @@ const ScreenDashboard: React.FC<{
         : (dbJob && dbJob.assignedTo !== undefined && dbJob.assignedTo !== null)
         ? dbJob.assignedTo
         : (f.assignedTo || existing?.assignedTo || ''),
-      assignedOfficer: (liveJob && liveJob.assignedOfficer !== undefined && liveJob.assignedOfficer !== null)
-        ? liveJob.assignedOfficer
-        : (dbJob && dbJob.assignedOfficer !== undefined && dbJob.assignedOfficer !== null)
-        ? dbJob.assignedOfficer
-        : (f.assignedOfficer || existing?.assignedOfficer || ''),
+      assignedOfficer: (() => {
+        const usage = liveJob?.equipmentUsage || dbJob?.equipmentUsage || f.equipmentUsage || existing?.equipmentUsage || 'HYDRANT';
+        const raw = (liveJob && liveJob.assignedOfficer !== undefined && liveJob.assignedOfficer !== null)
+          ? liveJob.assignedOfficer
+          : (dbJob && dbJob.assignedOfficer !== undefined && dbJob.assignedOfficer !== null)
+          ? dbJob.assignedOfficer
+          : (f.assignedOfficer || existing?.assignedOfficer || '');
+        return (usage === 'REFUELLER' && raw && !/^u\d+b?$/i.test(raw)) ? raw : '';
+      })(),
       vehicleId: liveJob?.vehicleId !== undefined ? liveJob.vehicleId : (dbJob?.vehicleId !== undefined ? dbJob.vehicleId : (f.vehicleId || existing?.vehicleId)),
       equipmentUsage: liveJob?.equipmentUsage || dbJob?.equipmentUsage || f.equipmentUsage || existing?.equipmentUsage || 'HYDRANT',
     });
@@ -936,6 +945,8 @@ const ScreenDashboard: React.FC<{
         ...(existing || {}),
         ...ff,
         id: liveJob?.id || dbJob?.id || ff.id || existing?.id,
+        aircraftType: dbJob?.aircraftType || liveJob?.aircraftType || existing?.aircraftType || ff.aircraftType,
+        aircraftReg: dbJob?.aircraftReg || liveJob?.aircraftReg || existing?.aircraftReg || ff.aircraftReg,
         status: computedStatus,
         fidsStatus: existing?.fidsStatus || ff.status,
         std: liveJob?.std || dbJob?.std || existing?.std || ff.std || (ff.type === 'departure' ? ff.scheduledTime : '') || ff.scheduledTime || '',
@@ -948,11 +959,15 @@ const ScreenDashboard: React.FC<{
           : (dbJob && dbJob.assignedTo !== undefined && dbJob.assignedTo !== null)
           ? dbJob.assignedTo
           : (ff.assignedTo || existing?.assignedTo || ''),
-        assignedOfficer: (liveJob && liveJob.assignedOfficer !== undefined && liveJob.assignedOfficer !== null)
-          ? liveJob.assignedOfficer
-          : (dbJob && dbJob.assignedOfficer !== undefined && dbJob.assignedOfficer !== null)
-          ? dbJob.assignedOfficer
-          : (ff.assignedOfficer || existing?.assignedOfficer || ''),
+        assignedOfficer: (() => {
+          const usage = liveJob?.equipmentUsage || dbJob?.equipmentUsage || ff.equipmentUsage || existing?.equipmentUsage || 'HYDRANT';
+          const raw = (liveJob && liveJob.assignedOfficer !== undefined && liveJob.assignedOfficer !== null)
+            ? liveJob.assignedOfficer
+            : (dbJob && dbJob.assignedOfficer !== undefined && dbJob.assignedOfficer !== null)
+            ? dbJob.assignedOfficer
+            : (ff.assignedOfficer || existing?.assignedOfficer || '');
+          return (usage === 'REFUELLER' && raw && !/^u\d+b?$/i.test(raw)) ? raw : '';
+        })(),
         vehicleId: liveJob?.vehicleId !== undefined ? liveJob.vehicleId : (dbJob?.vehicleId !== undefined ? dbJob.vehicleId : (ff.vehicleId || existing?.vehicleId)),
         equipmentUsage: liveJob?.equipmentUsage || dbJob?.equipmentUsage || ff.equipmentUsage || existing?.equipmentUsage || 'HYDRANT',
       });
@@ -1238,8 +1253,10 @@ const ScreenDashboard: React.FC<{
       const usersList = staff && staff.length > 0 ? staff : MOCK_USERS;
       const assignee = usersList.find(u => u.id === job.assignedTo || u.name.toLowerCase() === (job.assignedTo || '').toLowerCase());
       const assigneeName = assignee?.name || job.assignedTo || 'Unassigned';
-      const officer = job.assignedOfficer ? usersList.find(u => u.id === job.assignedOfficer || u.name.toLowerCase() === (job.assignedOfficer || '').toLowerCase()) : null;
-      const officerName = officer?.name || job.assignedOfficer || null;
+      const isRefueller = job.equipmentUsage === 'REFUELLER';
+      const isMockOfficer = !job.assignedOfficer || /^u\d+b?$/i.test(job.assignedOfficer);
+      const officer = (isRefueller && !isMockOfficer) ? usersList.find(u => u.id === job.assignedOfficer || u.name.toLowerCase() === (job.assignedOfficer || '').toLowerCase()) : null;
+      const officerName = officer?.name || null;
       const delayed = isDelayed(job.sta, job.eta);
       
       let displayStatus = 'PENDING';
@@ -1873,17 +1890,22 @@ const ScreenDashboard: React.FC<{
                                     <button 
                                         onClick={() => {
                                             if (job.status === 'COMPLETED') {
-                                                notify(`Log for ${job.flightNumber} is already finalized.`, "info");
+                                                const matchingLog = (flightLogs || []).find(l => l && l.flightNumber === job.flightNumber && l.status === 'COMPLETED');
+                                                if (matchingLog) {
+                                                    openPrintInvoice(matchingLog, user);
+                                                } else {
+                                                    notify(`Log for ${job.flightNumber} is finalized.`, "info");
+                                                }
                                             } else if (canLogFlight) {
                                                 onStartJob(job);
                                             }
                                         }}
                                          className={`w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm cursor-pointer
-                                              ${job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/20' : 'kinetic-gradient text-white hover:scale-[1.05] active:scale-95 shadow-premium'}
+                                              ${job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/20 hover:bg-success hover:text-white' : 'kinetic-gradient text-white hover:scale-[1.05] active:scale-95 shadow-premium'}
                                          `}
-                                         title={job.status === 'COMPLETED' ? 'View Log' : displayStatus === 'IN_PROGRESS' ? 'Resume Fueling' : 'Start Job'}
+                                         title={job.status === 'COMPLETED' ? 'View / Print Invoice (PDF)' : displayStatus === 'IN_PROGRESS' ? 'Resume Fueling' : 'Start Job'}
                                      >
-                                         {job.status === 'COMPLETED' ? <ChevronRight className="w-5 h-5 sm:w-7 sm:h-7 stroke-[3]" /> : <Play className="w-[18px] h-[18px] sm:w-[24px] sm:h-[24px] flex-shrink-0 ml-0.5" fill="white" color="white" strokeWidth={2.5} />}
+                                         {job.status === 'COMPLETED' ? <FileText className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" /> : <Play className="w-[18px] h-[18px] sm:w-[24px] sm:h-[24px] flex-shrink-0 ml-0.5" fill="white" color="white" strokeWidth={2.5} />}
                                      </button>
                                   )}
                             </div>
@@ -2224,7 +2246,10 @@ const ScreenDashboard: React.FC<{
             try {
               await updateFlightJob(editingAircraftJob.id, {
                 aircraftType: newType,
-                aircraftReg: newReg
+                aircraftReg: newReg,
+                flightNumber: editingAircraftJob.flightNumber,
+                date: editingAircraftJob.date || selectedBriefingDate,
+                userEditedAircraftType: true
               });
               notify(`Updated aircraft for flight ${editingAircraftJob.flightNumber} to ${newType} (${newReg})`, 'success');
             } catch (err) {
@@ -2616,9 +2641,9 @@ const ScreenTimestamps: React.FC<{
                                     <button 
                                         key={idx}
                                         onClick={() => onInputChange('pitNumber', m.pit)}
-                                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
+                                        className={`px-3.5 py-2 rounded-xl text-[11px] font-black tracking-wider border transition-all cursor-pointer ${
                                             isSelected 
-                                                ? 'bg-primary text-white border-primary shadow-sm' 
+                                                ? 'kinetic-gradient text-white border-transparent shadow-md scale-[1.03]' 
                                                 : 'bg-surface-container-low text-primary border-primary/20 hover:bg-primary/10'
                                         }`}
                                     >
@@ -3172,14 +3197,17 @@ const ScreenQC: React.FC<{
     }
   };
 
+  const isSignatureValid = !!activeFlight?.signatureDataUrl && !!activeFlight?.signerName?.trim();
+  const isQcValid = !!activeFlight?.panelCheck && !!activeFlight?.walkAroundCheck && !!activeFlight?.appearanceCheck && !!activeFlight?.waterCheck;
+
   return (
-    <div className="p-5 flex flex-col h-full min-h-[calc(100vh-140px)] pb-32">
-        <button onClick={onBack} className="flex items-center text-on-surface-dim hover:text-primary mb-6 font-black text-[11px] uppercase tracking-widest transition-colors">
+    <div className="p-1 sm:p-5 flex flex-col h-full min-h-[calc(100vh-140px)] pb-32">
+        <button onClick={onBack} className="flex items-center text-on-surface-dim hover:text-primary mb-6 font-black text-[11px] uppercase tracking-widest transition-colors px-2 sm:px-0">
            <ChevronLeft className="w-4 h-4 mr-2" /> Back to Metering
         </button>
-        <h2 className="text-on-surface text-xl sm:text-2xl font-black mb-8 tracking-tighter uppercase">JIG <span className="text-primary italic">Compliance Protocol</span></h2>
+        <h2 className="text-on-surface text-xl sm:text-2xl font-black mb-8 tracking-tighter uppercase px-2 sm:px-0">JIG <span className="text-primary italic">Compliance Protocol</span></h2>
 
-        <div className="space-y-4 card-premium p-8 border-outline shadow-inner">
+        <div className="space-y-4 p-2 sm:p-8 sm:card-premium sm:border sm:border-outline sm:shadow-inner bg-transparent sm:bg-surface-container-lowest rounded-none sm:rounded-3xl border-0">
            {['panelCheck', 'walkAroundCheck', 'appearanceCheck', 'waterCheck'].map((check) => {
                const isChecked = !!activeFlight?.[check as keyof FlightLog];
                const isDisabled = isReadOnly(user.role);
@@ -3188,7 +3216,7 @@ const ScreenQC: React.FC<{
                return (
                    <label 
                        key={check} 
-                       className={`flex items-center p-5 rounded-2xl border-2 transition-all 
+                       className={`flex items-center p-4 sm:p-5 rounded-2xl border-2 transition-all 
                            ${isChecked ? 'border-success/40 bg-success/5' : 'border-outline bg-surface-dim'} 
                            ${isDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-primary/30'}
                        `}
@@ -3205,7 +3233,7 @@ const ScreenQC: React.FC<{
                            disabled={isDisabled}
                            className="hidden"
                        />
-                       <div className="ml-5">
+                       <div className="ml-4 sm:ml-5">
                            <span className="block text-[10px] font-[900] text-on-surface uppercase tracking-widest">
                                {details.title}
                            </span>
@@ -3222,12 +3250,12 @@ const ScreenQC: React.FC<{
               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-3 opacity-50">
                  Safety & Ramp Clearance Milestone
               </label>
-              <div className="flex gap-4 items-stretch w-full">
+              <div className="flex gap-3 sm:gap-4 items-stretch w-full">
                   <button 
                       type="button"
                       onClick={() => onTimestamp ? onTimestamp('timestampClearance') : undefined}
                       disabled={isReadOnly(user.role)}
-                      className={`flex-1 p-5 sm:p-6 rounded-2xl border-2 text-left transition-all relative overflow-hidden group
+                      className={`flex-1 p-4 sm:p-6 rounded-2xl border-2 text-left transition-all relative overflow-hidden group
                           ${activeFlight?.timestampClearance 
                               ? 'bg-success/5 border-success text-on-surface' 
                               : isReadOnly(user.role)
@@ -3237,7 +3265,7 @@ const ScreenQC: React.FC<{
                   >
                       <div className="relative z-10">
                           <span className="block text-[9px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-1">Safety Milestone</span>
-                          <span className={`block text-lg sm:text-xl font-[900] tracking-tighter ${activeFlight?.timestampClearance ? 'text-success' : 'text-on-surface'}`}>
+                          <span className={`block text-base sm:text-xl font-[900] tracking-tighter ${activeFlight?.timestampClearance ? 'text-success' : 'text-on-surface'}`}>
                               LOG CLEARANCE TIME
                           </span>
                           {activeFlight?.timestampClearance && (
@@ -3250,7 +3278,7 @@ const ScreenQC: React.FC<{
                       {!activeFlight?.timestampClearance && <CheckCircle className="absolute right-4 bottom-4 w-12 h-12 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
                       {activeFlight?.timestampClearance && <CheckCircle className="absolute right-4 bottom-4 w-12 h-12 text-success opacity-10" />}
                   </button>
-                  <div className="card-premium p-4 border-outline flex flex-col justify-center items-center w-36 sm:w-44 shrink-0">
+                  <div className="card-premium p-3 sm:p-4 border-outline flex flex-col justify-center items-center w-32 sm:w-44 shrink-0">
                       <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-2 text-center">Manual Time</span>
                       <div className="relative w-full">
                           <input 
@@ -3286,6 +3314,8 @@ const ScreenQC: React.FC<{
                 onSignerNameChange={(val) => onInputChange('signerName', val)}
                 signerDesignation={activeFlight?.signerDesignation || ''}
                 onSignerDesignationChange={(val) => onInputChange('signerDesignation', val)}
+                signerEmail={activeFlight?.signerEmail || ''}
+                onSignerEmailChange={(val) => onInputChange('signerEmail', val)}
                 signatureDataUrl={activeFlight?.signatureDataUrl || null}
                 onSignatureChange={(val) => {
                   onInputChange('signatureDataUrl', val);
@@ -3306,10 +3336,10 @@ const ScreenQC: React.FC<{
             </div>
         </div>
 
-        <div className="mt-auto pt-10 space-y-6">
-            <div className="bg-warning/5 border border-warning/20 p-6 rounded-3xl flex items-start">
-                <AlertTriangle className="w-6 h-6 text-warning mr-4 flex-shrink-0" />
-                <p className="text-[11px] font-bold text-on-surface opacity-60 leading-relaxed uppercase tracking-widest">Digital certification required. By committing, you verify JIG compliance and manual safety checks are complete.</p>
+        <div className="mt-auto pt-6 sm:pt-10 space-y-4 sm:space-y-6 px-2 sm:px-0">
+            <div className="bg-warning/5 border border-warning/20 p-4 sm:p-6 rounded-2xl sm:rounded-3xl flex items-start">
+                <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-warning mr-3 sm:mr-4 flex-shrink-0 mt-0.5" />
+                <p className="text-[10px] sm:text-[11px] font-bold text-on-surface opacity-60 leading-relaxed uppercase tracking-widest">Digital certification required. By committing, you verify JIG compliance, fuel appearance checks, and representative signature are complete.</p>
             </div>
             
             {isReadOnly(user.role) ? (
@@ -3320,18 +3350,26 @@ const ScreenQC: React.FC<{
                   Return to Dashboard
                </button>
             ) : (
-               <button 
-                  onClick={onSubmit}
-                  disabled={loading || !activeFlight?.panelCheck || !activeFlight?.walkAroundCheck || !activeFlight?.appearanceCheck || !activeFlight?.waterCheck}
-                  className="w-full kinetic-gradient p-5 lg:p-7 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-40 disabled:grayscale shadow-premium active:scale-95 transition-all text-white"
-               >
-                  {loading ? 'ENCRYPTING & SYNCING...' : (
-                      <>
-                          <Save className="w-5 h-5 lg:w-6 lg:h-6 mr-4" />
-                          AUTHORIZE TASK COMPLETE
-                      </>
-                  )}
-               </button>
+               <div className="space-y-2">
+                 <button 
+                    onClick={onSubmit}
+                    disabled={loading || !isQcValid || !isSignatureValid}
+                    className="w-full kinetic-gradient p-5 lg:p-7 rounded-2xl sm:rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-40 disabled:grayscale shadow-premium active:scale-95 transition-all text-white cursor-pointer"
+                 >
+                    {loading ? 'ENCRYPTING & SYNCING...' : (
+                        <>
+                            <Save className="w-5 h-5 lg:w-6 lg:h-6 mr-3 sm:mr-4" />
+                            AUTHORIZE TASK COMPLETE
+                        </>
+                    )}
+                 </button>
+                 {!isSignatureValid && (
+                    <div className="flex items-center justify-center gap-2 text-amber-400 text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-center py-1 animate-pulse">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Customer / Flight Crew signature and full name are required to authorize</span>
+                    </div>
+                 )}
+               </div>
             )}
         </div>
    </div>
@@ -3358,6 +3396,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   const [voidSaving, setVoidSaving] = useState(false);
   const [voidSuccess, setVoidSuccess] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [completedInvoiceLog, setCompletedInvoiceLog] = useState<FlightLog | null>(null);
   const [showEditActiveAircraft, setShowEditActiveAircraft] = useState(false);
   const [showEditActiveStand, setShowEditActiveStand] = useState(false);
   const [showEditActiveFrt, setShowEditActiveFrt] = useState(false);
@@ -4083,6 +4122,11 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       }
     }
 
+    if (!activeFlight.signatureDataUrl || !activeFlight.signerName?.trim()) {
+      notify('Customer / Flight Crew signature and full name are required before finalizing the fueling log.', 'warning');
+      return;
+    }
+
     if (finalDeliveryNumber) {
       const ticketVal = await checkDuplicateTicketAcrossJetA1(finalDeliveryNumber, undefined, flightLogs);
       if (ticketVal.isDuplicate) {
@@ -4238,9 +4282,17 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         signatureDataUrl: activeFlight.signatureDataUrl || undefined,
         signerName: activeFlight.signerName || undefined,
         signerDesignation: activeFlight.signerDesignation || undefined,
+        signerEmail: activeFlight.signerEmail || undefined,
         signedAt: activeFlight.signatureDataUrl ? (activeFlight.signedAt || new Date().toISOString()) : undefined,
         declarationConfirmed: !!activeFlight.signatureDataUrl,
+        invoiceSavedAt: new Date().toISOString(),
       };
+
+      try {
+        logToSave.invoiceHtml = generateInvoiceHtml(logToSave, user);
+      } catch (invErr) {
+        console.warn('[IntoPlane] Invoice HTML generation error:', invErr);
+      }
 
       // Optimistically push into in-memory state so user sees it right away in Log History
       if (addFlightLogEntry) {
@@ -4327,7 +4379,9 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
       // Refresh in background so user doesn't wait
       refreshData().catch(e => console.warn('[IntoPlane] Background refresh failed:', e));
+      const finalizedLog = { ...logToSave };
       completeOrCancelJobAndExit("Job Completed & Synced to Database!");
+      setCompletedInvoiceLog(finalizedLog);
     } catch (error) {
       console.error('Error saving flight log:', error);
       isSubmittingOrCompletingRef.current = false;
@@ -4363,10 +4417,16 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
             onClose={() => setShowEditActiveAircraft(false)}
             onSave={async (newType, newReg) => {
               setActiveFlight(prev => prev ? ({ ...prev, aircraftType: newType, aircraftReg: newReg }) : null);
-              const matching = (flightJobs || []).find(j => j.flightNumber === activeFlight.flightNumber);
-              if (matching) {
-                await updateFlightJob(matching.id, { aircraftType: newType, aircraftReg: newReg });
-              }
+              const cleanNo = (activeFlight.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+              const matching = (flightJobs || []).find(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo);
+              const targetId = matching?.id || activeFlight.id || `fj-${cleanNo}-${activeFlight.operationalDate || selectedBriefingDate}`;
+              await updateFlightJob(targetId, {
+                aircraftType: newType,
+                aircraftReg: newReg,
+                flightNumber: activeFlight.flightNumber,
+                date: activeFlight.operationalDate || selectedBriefingDate,
+                userEditedAircraftType: true
+              });
               notify(`Aircraft updated to ${newType} (${newReg})`, 'success');
             }}
           />
@@ -4651,6 +4711,8 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                   onSignerNameChange={(val) => handleInputChange('signerName', val)}
                   signerDesignation={activeFlight.signerDesignation || ''}
                   onSignerDesignationChange={(val) => handleInputChange('signerDesignation', val)}
+                  signerEmail={activeFlight.signerEmail || ''}
+                  onSignerEmailChange={(val) => handleInputChange('signerEmail', val)}
                   signatureDataUrl={activeFlight.signatureDataUrl || null}
                   onSignatureChange={(val) => {
                     handleInputChange('signatureDataUrl', val);
@@ -4683,8 +4745,8 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                     setShowConfirmModal(false);
                     await handleSubmit();
                   }}
-                  disabled={loading}
-                  className="flex-1 py-4 kinetic-gradient text-white rounded-2xl font-[900] text-[11px] uppercase tracking-[0.2em] shadow-premium hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                  disabled={loading || !activeFlight.signatureDataUrl || !activeFlight.signerName?.trim()}
+                  className="flex-1 py-4 kinetic-gradient text-white rounded-2xl font-[900] text-[11px] uppercase tracking-[0.2em] shadow-premium hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:grayscale"
                 >
                   {loading ? (
                     <span className="font-[900]">SYNCING...</span>
@@ -4967,6 +5029,133 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                   className="flex-1 py-3 rounded-2xl kinetic-gradient text-white font-black text-sm shadow-premium hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
                   Start Job
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+        {/* Post-Completion Invoice Modal with Print, Email & Share */}
+        {completedInvoiceLog && createPortal(
+          <div
+            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200"
+            onClick={() => setCompletedInvoiceLog(null)}
+          >
+            <div
+              className="bg-surface border border-outline rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="p-6 border-b border-outline/30 flex items-center justify-between bg-surface-container-low">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-success/15 text-success flex items-center justify-center shrink-0">
+                    <CheckCheck className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="block text-[9px] font-black uppercase tracking-[0.2em] text-success">
+                      Operations Log Finalized & Synced
+                    </span>
+                    <h3 className="text-xl font-[900] tracking-tight text-on-surface">
+                      DELIVERY INVOICE READY
+                    </h3>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setCompletedInvoiceLog(null)}
+                  className="w-9 h-9 rounded-xl bg-surface-dim hover:bg-surface-container text-on-surface-dim hover:text-on-surface flex items-center justify-center transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 space-y-4">
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-surface-dim border border-outline/30">
+                  <div>
+                    <span className="block text-[8px] font-black uppercase tracking-widest text-on-surface-dim opacity-50">
+                      Official Delivery Ticket
+                    </span>
+                    <span className="text-lg font-black text-rose-500 tracking-wider">
+                      {completedInvoiceLog.deliveryNumber || 'MLE-INVOICE'}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="block text-[8px] font-black uppercase tracking-widest text-on-surface-dim opacity-50">
+                      Total Fuel Uplift
+                    </span>
+                    <span className="text-lg font-black text-primary">
+                      {completedInvoiceLog.volume ? completedInvoiceLog.volume.toLocaleString() : '0'} L
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 rounded-xl bg-surface-container-lowest border border-outline/20">
+                    <span className="block text-[8px] font-black uppercase text-on-surface-dim opacity-50">Flight No</span>
+                    <span className="font-black text-on-surface text-sm">{completedInvoiceLog.flightNumber}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-surface-container-lowest border border-outline/20">
+                    <span className="block text-[8px] font-black uppercase text-on-surface-dim opacity-50">Aircraft</span>
+                    <span className="font-black text-on-surface text-sm">{completedInvoiceLog.aircraftReg} ({completedInvoiceLog.aircraftType})</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-surface-container-lowest border border-outline/20">
+                    <span className="block text-[8px] font-black uppercase text-on-surface-dim opacity-50">Stand / PIT</span>
+                    <span className="font-bold text-on-surface">Stand {completedInvoiceLog.stand}{completedInvoiceLog.pitNumber ? ` • Pit ${completedInvoiceLog.pitNumber}` : ''}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-surface-container-lowest border border-outline/20">
+                    <span className="block text-[8px] font-black uppercase text-on-surface-dim opacity-50">Signer / Representative</span>
+                    <span className="font-bold text-on-surface truncate block">{completedInvoiceLog.signerName || 'Flight Crew'}</span>
+                  </div>
+                </div>
+
+                {completedInvoiceLog.signerEmail && (
+                  <div className="flex items-center gap-2 p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-cyan-300 text-xs">
+                    <Mail className="w-4 h-4 shrink-0" />
+                    <span className="truncate">Representative Email: <strong>{completedInvoiceLog.signerEmail}</strong></span>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="p-6 pt-2 space-y-2 border-t border-outline/20">
+                <button
+                  type="button"
+                  onClick={() => openPrintInvoice(completedInvoiceLog, user)}
+                  className="w-full py-4 kinetic-gradient text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-premium hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center gap-3 cursor-pointer"
+                >
+                  <Printer className="w-5 h-5" />
+                  Print / Save PDF Invoice (FORM NO: G-001)
+                </button>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => sendInvoiceEmail(completedInvoiceLog, completedInvoiceLog.signerEmail)}
+                    className="flex-1 py-3 px-4 bg-surface-dim hover:bg-surface-container border border-outline rounded-xl font-black text-[11px] uppercase tracking-wider text-on-surface transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Mail className="w-4 h-4 text-primary" />
+                    Email to Rep
+                  </button>
+
+                  {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+                    <button
+                      type="button"
+                      onClick={() => shareInvoice(completedInvoiceLog)}
+                      className="flex-1 py-3 px-4 bg-surface-dim hover:bg-surface-container border border-outline rounded-xl font-black text-[11px] uppercase tracking-wider text-on-surface transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Share2 className="w-4 h-4 text-cyan-400" />
+                      Share
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCompletedInvoiceLog(null)}
+                  className="w-full py-2.5 text-center text-[10px] font-black uppercase tracking-widest text-on-surface-dim hover:text-on-surface transition-colors cursor-pointer mt-1"
+                >
+                  Done & Return to Dashboard
                 </button>
               </div>
             </div>

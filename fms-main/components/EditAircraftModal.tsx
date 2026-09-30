@@ -46,7 +46,13 @@ export const EditAircraftModal: React.FC<EditAircraftModalProps> = ({
     try {
       const normalizedType = cleanAircraftTypeName(acType.trim().toUpperCase());
       const normalizedReg = acReg.trim() ? normalizeRegistration(acReg.trim().toUpperCase()) : '';
-      await onSave(normalizedType, normalizedReg);
+      await Promise.race([
+        Promise.resolve(onSave(normalizedType, normalizedReg)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Save timeout')), 4000))
+      ]);
+      onClose();
+    } catch (err) {
+      console.warn('Aircraft update handled:', err);
       onClose();
     } finally {
       setSaving(false);

@@ -74,6 +74,12 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
             }
         }
 
+        const effectiveSignerName = (formData.signerName || formData.receivedBy || formData.driverName || '').trim();
+        if (!formData.signatureDataUrl || !effectiveSignerName) {
+            alert('Recipient / Driver signature and name are required to confirm transaction.');
+            return;
+        }
+
         setLoading(true);
         try {
             const parsedVolume = parseFloat(formData.volume.replace(/,/g, '')) || 0;
@@ -462,11 +468,11 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                   subtitle="Ground Fuel Provision & Invoice Certification"
                 />
 
-                <div className="flex justify-end">
+                <div className="flex flex-col items-end gap-2">
                     <button 
                         type="submit" 
-                        disabled={loading || (!isAutoMgo && (!formData.invoiceNumber || formData.invoiceNumber.length < 4)) || !formData.volume || formData.volume === '0'}
-                        className="w-full md:w-auto px-12 py-5 kinetic-gradient text-white rounded-2xl font-[900] text-[12px] uppercase tracking-[0.4em] shadow-premium hover:scale-105 active:scale-95 transition-all flex items-center justify-center disabled:opacity-20"
+                        disabled={loading || (!isAutoMgo && (!formData.invoiceNumber || formData.invoiceNumber.length < 4)) || !formData.volume || formData.volume === '0' || !formData.signatureDataUrl || !(formData.signerName || formData.receivedBy || formData.driverName)?.trim()}
+                        className="w-full md:w-auto px-12 py-5 kinetic-gradient text-white rounded-2xl font-[900] text-[12px] uppercase tracking-[0.4em] shadow-premium hover:scale-105 active:scale-95 transition-all flex items-center justify-center disabled:opacity-20 cursor-pointer"
                     >
                         {loading ? 'SYNCHRONIZING...' : (
                             <>
@@ -475,6 +481,12 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                             </>
                         )}
                     </button>
+                    {(!formData.signatureDataUrl || !(formData.signerName || formData.receivedBy || formData.driverName)?.trim()) && (
+                      <div className="flex items-center justify-center gap-2 text-amber-400 text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-center py-1 animate-pulse">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        <span>Recipient / Driver signature and name are required to confirm</span>
+                      </div>
+                    )}
                 </div>
             </form>
         </div>

@@ -562,10 +562,23 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       if (existingJobIdx !== -1) {
         const currentStatus = merged[existingJobIdx].status;
         const newStatus = getStatusFromFids(resolvedFids, currentStatus);
+        const existingJob = merged[existingJobIdx];
+        const existingAc = existingJob.aircraftType;
+        const isGenericExisting = !existingAc || ['A320', 'Widebody Heavy', 'Widebody', 'N/A', ''].includes(existingAc);
+        const resolvedAircraftType = existingJob.userEditedAircraftType
+          ? existingJob.aircraftType
+          : (!isGenericExisting
+              ? scheduleImportService.normalizeAircraftType(existingAc)
+              : matchedAcType);
+
+        const effectiveUsage = merged[existingJobIdx].equipmentUsage || 'HYDRANT';
+        const rawOfficer = merged[existingJobIdx].assignedOfficer || '';
+        const cleanOfficer = effectiveUsage === 'REFUELLER' && rawOfficer && !/^u\d+b?$/i.test(rawOfficer) ? rawOfficer : '';
 
         merged[existingJobIdx] = {
           ...merged[existingJobIdx],
-          aircraftType: (merged[existingJobIdx].aircraftType && !['A320', 'Widebody Heavy', 'Widebody'].includes(merged[existingJobIdx].aircraftType)) ? scheduleImportService.normalizeAircraftType(merged[existingJobIdx].aircraftType) : matchedAcType,
+          aircraftType: resolvedAircraftType,
+          userEditedAircraftType: existingJob.userEditedAircraftType || lf.userEditedAircraftType,
           aircraftReg: (merged[existingJobIdx].aircraftReg && merged[existingJobIdx].aircraftReg !== '8Q-TBA' && !merged[existingJobIdx].aircraftReg.startsWith('8Q-DOM')) ? merged[existingJobIdx].aircraftReg : ((lf.aircraftReg && lf.aircraftReg !== '8Q-TBA' && !lf.aircraftReg.startsWith('8Q-DOM')) ? lf.aircraftReg : ''),
           sta: staVal || merged[existingJobIdx].sta,
           eta: etaVal || merged[existingJobIdx].eta,
@@ -574,6 +587,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
           route: routeStr || merged[existingJobIdx].route,
           date: lfDateStr || (merged[existingJobIdx].date ? merged[existingJobIdx].date.split('T')[0] : selectedBriefingDate),
           type: lf.type || merged[existingJobIdx].type,
+          assignedOfficer: cleanOfficer,
           status: newStatus,
           fidsStatus: resolvedFids
         };
@@ -600,10 +614,27 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         });
       }
     });
-    const seenIds = new Set<string>();
-    return merged.filter(job => {
-      if (!job.id || seenIds.has(job.id)) return false;
-      seenIds.add(job.id);
+
+    // Deduplicate by normalized flight number and date so duplicate records (e.g. DB job + live FIDS virtual entry) never both exist!
+    const seenFlightKeys = new Set<string>();
+    // Sort so DB jobs (non-virtual or jobs with assignments / user edits) come first
+    const sortedMerged = [...merged].sort((a, b) => {
+      const aScore = (a.isVirtual ? 0 : 2) + (a.userEditedAircraftType ? 2 : 0) + (a.assignedTo ? 1 : 0);
+      const bScore = (b.isVirtual ? 0 : 2) + (b.userEditedAircraftType ? 2 : 0) + (b.assignedTo ? 1 : 0);
+      return bScore - aScore;
+    });
+
+    return sortedMerged.filter(job => {
+      if (!job.id) return false;
+      const cleanNo = (job.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      const jobDate = job.date ? job.date.split('T')[0] : selectedBriefingDate;
+      const key = `${cleanNo}_${jobDate}`;
+      if (cleanNo && seenFlightKeys.has(key)) {
+        return false;
+      }
+      if (cleanNo) {
+        seenFlightKeys.add(key);
+      }
       return true;
     });
   }, [flightJobs, externalFlights, internationalSchedules, selectedBriefingDate]);
@@ -1441,6 +1472,16 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     const updatesDate = updates.date ? updates.date.split('T')[0] : '';
     const targetDate = updatesDate || selectedBriefingDate;
 
+    if (updates.aircraftType) {
+      updates.userEditedAircraftType = true;
+    }
+
+    if (updates.equipmentUsage === 'HYDRANT') {
+      updates.assignedOfficer = '';
+    } else if (updates.assignedOfficer && /^u\d+b?$/i.test(updates.assignedOfficer)) {
+      updates.assignedOfficer = '';
+    }
+
     const existingJob = flightJobs.find(j => {
       if (j.id === id) return true;
       const jDate = j.date ? j.date.split('T')[0] : '';
@@ -1487,6 +1528,11 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         ? virtualJob.id
         : (id || fallbackId);
 
+      const finalEqUsage = updates.equipmentUsage || virtualJob?.equipmentUsage || (isDom ? 'REFUELLER' : 'HYDRANT');
+      const resolvedOfficer = finalEqUsage === 'REFUELLER'
+        ? (updates.assignedOfficer !== undefined ? updates.assignedOfficer : (virtualJob?.assignedOfficer && !/^u\d+b?$/i.test(virtualJob.assignedOfficer) ? virtualJob.assignedOfficer : ''))
+        : '';
+
       const fullJob: FlightJob = {
         ...virtualJob,
         ...updates,
@@ -1494,12 +1540,14 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         flightNumber: finalFlightNum,
         aircraftReg: updates.aircraftReg !== undefined ? updates.aircraftReg : ((virtualJob?.aircraftReg && virtualJob.aircraftReg !== '8Q-TBA' && !virtualJob.aircraftReg.startsWith('8Q-DOM')) ? virtualJob.aircraftReg : ''),
         aircraftType: cleanAircraftTypeName(updates.aircraftType || virtualJob?.aircraftType || (isDom ? 'ATR' : 'A320')),
+        userEditedAircraftType: updates.userEditedAircraftType ?? (updates.aircraftType ? true : virtualJob?.userEditedAircraftType),
         stand: updates.stand || virtualJob?.stand || '---',
         sta: updates.sta || virtualJob?.sta || (virtualJob?.type === 'arrival' ? (virtualJob as any)?.scheduledTime : '') || '',
         eta: updates.eta || virtualJob?.eta || '',
         std: updates.std || virtualJob?.std || (virtualJob?.type === 'departure' ? (virtualJob as any)?.scheduledTime : '') || (virtualJob as any)?.scheduledTime || '',
         status: updates.status || virtualJob?.status || 'PENDING',
-        equipmentUsage: updates.equipmentUsage || virtualJob?.equipmentUsage || (isDom ? 'REFUELLER' : 'HYDRANT'),
+        equipmentUsage: finalEqUsage,
+        assignedOfficer: resolvedOfficer,
         isDomestic: isDom,
         isAdhoc: isAdhoc,
         co: updates.co !== undefined ? updates.co : (virtualJob?.co || ''),

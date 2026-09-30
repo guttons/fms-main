@@ -41,7 +41,13 @@ export const EditStandModal: React.FC<{
     if (!stand.trim()) return;
     setSaving(true);
     try {
-      await onSave(stand.trim().toUpperCase());
+      await Promise.race([
+        Promise.resolve(onSave(stand.trim().toUpperCase())),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Save timeout')), 4000))
+      ]);
+      onClose();
+    } catch (err) {
+      console.warn('Stand update handled:', err);
       onClose();
     } finally {
       setSaving(false);
@@ -542,10 +548,25 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
           ? liveJob.status
           : (existing?.status || ff.status || 'PENDING');
 
+        const eqUsage = rawDbJob?.equipmentUsage || liveJob?.equipmentUsage || existing?.equipmentUsage || ff.equipmentUsage || 'HYDRANT';
+        const rawOfficer = (rawDbJob && rawDbJob.assignedOfficer !== undefined && rawDbJob.assignedOfficer !== null)
+          ? rawDbJob.assignedOfficer
+          : (liveJob && liveJob.assignedOfficer !== undefined && liveJob.assignedOfficer !== null)
+          ? liveJob.assignedOfficer
+          : (existing && existing.assignedOfficer !== undefined && existing.assignedOfficer !== null)
+          ? existing.assignedOfficer
+          : (ff.assignedOfficer || '');
+        const isRefueller = eqUsage === 'REFUELLER';
+        const isMockOfficer = /^u\d+b?$/i.test(rawOfficer);
+        const sanitizedOfficer = (isRefueller && !isMockOfficer) ? rawOfficer : '';
+
         flightMap.set(cleanNo, {
           ...(existing || {}),
           ...ff,
-          // Preserve any live db updates such as status, stand, assignments, vehicle, or timings
+          equipmentUsage: eqUsage,
+          // Preserve any live db updates such as aircraft type, reg, status, stand, assignments, vehicle, or timings
+          aircraftType: rawDbJob?.aircraftType || liveJob?.aircraftType || existing?.aircraftType || ff.aircraftType,
+          aircraftReg: rawDbJob?.aircraftReg || liveJob?.aircraftReg || existing?.aircraftReg || ff.aircraftReg,
           stand: rawDbJob?.stand || liveJob?.stand || existing?.stand || ff.stand,
           status: effectiveStatus,
           std: rawDbJob?.std || liveJob?.std || existing?.std || ff.std,
@@ -560,21 +581,19 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
             : (existing && existing.assignedTo !== undefined && existing.assignedTo !== null)
             ? existing.assignedTo
             : (ff.assignedTo || ''),
-          assignedOfficer: (rawDbJob && rawDbJob.assignedOfficer !== undefined && rawDbJob.assignedOfficer !== null)
-            ? rawDbJob.assignedOfficer
-            : (liveJob && liveJob.assignedOfficer !== undefined && liveJob.assignedOfficer !== null)
-            ? liveJob.assignedOfficer
-            : (existing && existing.assignedOfficer !== undefined && existing.assignedOfficer !== null)
-            ? existing.assignedOfficer
-            : (ff.assignedOfficer || ''),
+          assignedOfficer: sanitizedOfficer,
           vehicleId: rawDbJob?.vehicleId !== undefined ? rawDbJob.vehicleId : (liveJob?.vehicleId !== undefined ? liveJob.vehicleId : (existing?.vehicleId || ff.vehicleId)),
         });
       });
 
-      const seenKeys = new Set<string>();
+      const seenFlightKeys = new Set<string>();
       return Array.from(flightMap.values()).filter(f => {
-        if (!f.id || seenKeys.has(f.id)) return false;
-        seenKeys.add(f.id);
+        if (!f.id) return false;
+        const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const fDate = f.date ? f.date.split('T')[0] : todayDate;
+        const key = `${cleanNo}_${fDate}`;
+        if (cleanNo && seenFlightKeys.has(key)) return false;
+        if (cleanNo) seenFlightKeys.add(key);
         return true;
       }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
     }
@@ -601,9 +620,22 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
         ? liveJob.status
         : (f.status || 'PENDING');
 
+      const eqUsage = rawDbJob?.equipmentUsage || liveJob?.equipmentUsage || f.equipmentUsage || 'HYDRANT';
+      const rawOfficer = (rawDbJob && rawDbJob.assignedOfficer !== undefined && rawDbJob.assignedOfficer !== null)
+        ? rawDbJob.assignedOfficer
+        : (liveJob && liveJob.assignedOfficer !== undefined && liveJob.assignedOfficer !== null)
+        ? liveJob.assignedOfficer
+        : (f.assignedOfficer || '');
+      const isRefueller = eqUsage === 'REFUELLER';
+      const isMockOfficer = /^u\d+b?$/i.test(rawOfficer);
+      const sanitizedOfficer = (isRefueller && !isMockOfficer) ? rawOfficer : '';
+
       if (liveJob || rawDbJob) {
         return {
           ...f,
+          equipmentUsage: eqUsage,
+          aircraftType: rawDbJob?.aircraftType || liveJob?.aircraftType || f.aircraftType,
+          aircraftReg: rawDbJob?.aircraftReg || liveJob?.aircraftReg || f.aircraftReg,
           stand: rawDbJob?.stand || liveJob?.stand || f.stand,
           status: effectiveStatus,
           std: rawDbJob?.std || liveJob?.std || f.std,
@@ -616,21 +648,25 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
             : (liveJob && liveJob.assignedTo !== undefined && liveJob.assignedTo !== null)
             ? liveJob.assignedTo
             : (f.assignedTo || ''),
-          assignedOfficer: (rawDbJob && rawDbJob.assignedOfficer !== undefined && rawDbJob.assignedOfficer !== null)
-            ? rawDbJob.assignedOfficer
-            : (liveJob && liveJob.assignedOfficer !== undefined && liveJob.assignedOfficer !== null)
-            ? liveJob.assignedOfficer
-            : (f.assignedOfficer || ''),
+          assignedOfficer: sanitizedOfficer,
           vehicleId: rawDbJob?.vehicleId !== undefined ? rawDbJob.vehicleId : (liveJob?.vehicleId !== undefined ? liveJob.vehicleId : f.vehicleId),
         };
       }
-      return f;
+      return {
+        ...f,
+        equipmentUsage: eqUsage,
+        assignedOfficer: sanitizedOfficer,
+      };
     });
 
-    const seenKeys = new Set<string>();
+    const seenFlightKeys = new Set<string>();
     return reconciledLive.filter(f => {
-      if (!f.id || seenKeys.has(f.id)) return false;
-      seenKeys.add(f.id);
+      if (!f.id) return false;
+      const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      const fDate = f.date ? f.date.split('T')[0] : todayDate;
+      const key = `${cleanNo}_${fDate}`;
+      if (cleanNo && seenFlightKeys.has(key)) return false;
+      if (cleanNo) seenFlightKeys.add(key);
       return true;
     }).sort((a, b) => (a.std || '').localeCompare(b.std || ''));
   }, [flightJobs, rawFlightJobs, selectedBriefingShift, todayDate, briefingInfo]);
@@ -675,15 +711,27 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
         flightMap.set(cleanNo, {
           ...(existing || {}),
           ...ff,
+          aircraftType: rawDbJob?.aircraftType || liveJob?.aircraftType || existing?.aircraftType || ff.aircraftType,
+          aircraftReg: rawDbJob?.aircraftReg || liveJob?.aircraftReg || existing?.aircraftReg || ff.aircraftReg,
           stand: rawDbJob?.stand || liveJob?.stand || existing?.stand || ff.stand,
           status: effectiveStatus,
           vehicleId: rawDbJob?.vehicleId || liveJob?.vehicleId || existing?.vehicleId || ff.vehicleId,
         });
       });
 
-      return Array.from(flightMap.values()).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
+      const seenFlightKeys = new Set<string>();
+      return Array.from(flightMap.values()).filter(f => {
+        if (!f.id) return false;
+        const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+        const fDate = f.date ? f.date.split('T')[0] : todayDate;
+        const key = `${cleanNo}_${fDate}`;
+        if (cleanNo && seenFlightKeys.has(key)) return false;
+        if (cleanNo) seenFlightKeys.add(key);
+        return true;
+      }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
     }
 
+    const seenFlightKeys = new Set<string>();
     return [...liveFiltered].map(f => {
       const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
       const flightDate = f.date ? f.date.split('T')[0] : todayDate;
@@ -706,9 +754,19 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
         : (f.status || 'PENDING');
       return {
         ...f,
+        aircraftType: rawDbJob?.aircraftType || liveJob?.aircraftType || f.aircraftType,
+        aircraftReg: rawDbJob?.aircraftReg || liveJob?.aircraftReg || f.aircraftReg,
         status: effectiveStatus,
         vehicleId: rawDbJob?.vehicleId || liveJob?.vehicleId || f.vehicleId
       };
+    }).filter(f => {
+      if (!f.id) return false;
+      const cleanNo = (f.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      const fDate = f.date ? f.date.split('T')[0] : todayDate;
+      const key = `${cleanNo}_${fDate}`;
+      if (cleanNo && seenFlightKeys.has(key)) return false;
+      if (cleanNo) seenFlightKeys.add(key);
+      return true;
     }).sort((a: any, b: any) => (a.std || '').localeCompare(b.std || ''));
   }, [domesticFlights, flightJobs, rawFlightJobs, selectedBriefingShift, todayDate, briefingInfo]);
 
@@ -759,43 +817,36 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
     (rfHdEquipment || []).map(eq => ({ id: eq.id, eqNumber: eq.id, op1: '', op2: '', shift_type: currentShiftLabel, eqType: eq.type }))
   );
 
-  // Filter operators by those marked present (attendees) in the selected briefing shift
+  // Generate the staff assigning dropdown list strictly from the staffs in that selected shift's briefing
   const allStaff = (staff && staff.length > 0 ? staff : MOCK_USERS);
-  const briefingAttendees = briefingInfo?.staffAssignments?.attendees || [];
 
-  const operators = (() => {
-    if (briefingAttendees.length > 0) {
-      return briefingAttendees
-        .map(id => allStaff.find(u => u.id === id))
-        .filter((u): u is typeof allStaff[0] => !!u)
-        .filter(u => u.role.startsWith('ITP_'));
-    }
-    
-    // Fallback if no attendees are marked present yet: show all assigned staff in the briefing
-    const briefingStaffIds = briefingInfo?.staffAssignments ? Array.from(new Set([
-      ...(briefingInfo.staffAssignments.activeOperators || []),
-      ...(briefingInfo.staffAssignments.activeOfficers || []),
-      ...(briefingInfo.staffAssignments.hydrantOpsOfficers || []),
-      briefingInfo.staffAssignments.dutySupervisor,
-      briefingInfo.staffAssignments.shiftInCharge
-    ].filter(Boolean))) : [];
+  const operators = useMemo(() => {
+    const staffAssignments = briefingInfo?.staffAssignments;
+    if (!staffAssignments) return [];
 
-    if (briefingStaffIds.length > 0) {
-      return briefingStaffIds
-        .map(id => allStaff.find(u => u.id === id))
-        .filter((u): u is typeof allStaff[0] => !!u)
-        .filter(u => u.role.startsWith('ITP_'));
+    // Collect all staff configured for this selected shift's briefing:
+    // (attendees, active operators, officers, hydrant officers, supervisors, shift in-charges)
+    const briefingStaffIds = Array.from(new Set([
+      ...(staffAssignments.attendees || []),
+      ...(staffAssignments.activeOperators || []),
+      ...(staffAssignments.activeOfficers || []),
+      ...(staffAssignments.hydrantOpsOfficers || []),
+      ...(staffAssignments.dutySupervisors || []),
+      ...(staffAssignments.shiftInCharges || []),
+      staffAssignments.dutySupervisor || '',
+      staffAssignments.shiftInCharge || ''
+    ].filter(Boolean)));
+
+    if (briefingStaffIds.length === 0) {
+      return [];
     }
 
-    // Secondary fallback: all ITP staff roles
-    return allStaff.filter(u => [
-      UserRole.ITP_OPERATOR,
-      UserRole.ITP_HD_OPERATOR,
-      UserRole.ITP_SUPERVISOR,
-      UserRole.ITP_OFFICER,
-      UserRole.ITP_MANAGER
-    ].includes(u.role));
-  })();
+    return briefingStaffIds
+      .map(id => allStaff.find(u => u.id === id))
+      .filter((u): u is typeof allStaff[0] => !!u)
+      .filter(u => u.role.startsWith('ITP_'))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [briefingInfo?.staffAssignments, allStaff]);
 
   const getStaffInitials = (name: string) => {
     if (!name) return '??';
@@ -859,7 +910,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
     const meta = flightMeta || (scheduledFlights || []).find((f: any) => f.id === flightId) || (flightJobs || []).find(f => f.id === flightId);
     const resolvedFlightNumber = meta?.flightNumber || (flightId.startsWith('departure-') || flightId.startsWith('arrival-') ? flightId.split('-')[1] : undefined);
     const resolvedDate = meta?.date ? meta.date.split('T')[0] : (flightId.startsWith('departure-') || flightId.startsWith('arrival-') ? flightId.split('-')[2] : todayDate);
-    updateFlightJob(flightId, { 
+    const updates: any = { 
       [field]: value,
       flightNumber: resolvedFlightNumber,
       date: resolvedDate || todayDate,
@@ -876,7 +927,11 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
       frtFor: meta?.frtFor || undefined,
       isDomestic: meta?.isDomestic !== undefined ? meta.isDomestic : undefined,
       isAdhoc: meta?.isAdhoc !== undefined ? meta.isAdhoc : undefined,
-    });
+    };
+    if (field === 'equipmentUsage' && value === 'HYDRANT') {
+      updates.assignedOfficer = '';
+    }
+    updateFlightJob(flightId, updates);
   };
 
   const handleSaveStand = async (newStand: string) => {
@@ -1115,13 +1170,15 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                 : 'bg-surface-dim text-error border-outline'
           }`}
         >
-          <option value="" className="bg-surface-dim text-error font-bold">-- UNASSIGNED --</option>
+          <option value="" className="bg-surface-dim text-error font-bold">
+            {operators.length === 0 ? '-- NO STAFF IN BRIEFING --' : '-- UNASSIGNED --'}
+          </option>
           {operators.map(op => (
             <option key={op.id} value={op.id} className="bg-surface-dim text-on-surface">{op.name.toUpperCase()}</option>
           ))}
           {extraStaff && (
             <option key={extraStaff.id} value={extraStaff.id} className="bg-surface-dim text-on-surface">
-              {extraStaff.name.toUpperCase()}
+              {extraStaff.name.toUpperCase()} (OUTSIDE BRIEFING)
             </option>
           )}
         </select>

@@ -46,6 +46,23 @@ export const DEFAULT_TICKET_SEQUENCES: Record<TicketCategory, TicketSequenceConf
   }
 };
 
+const isMissingTableError = (error: any): boolean => {
+  if (!error) return false;
+  return (
+    error.code === '42P01' ||
+    error.code === 'PGRST204' ||
+    error.code === 'PGRST200' ||
+    error.status === 404 ||
+    (error as any).statusCode === 404 ||
+    (typeof error.message === 'string' && (
+      error.message.includes('does not exist') ||
+      error.message.includes('schema cache') ||
+      error.message.includes('Not Found') ||
+      error.message.includes('not found')
+    ))
+  );
+};
+
 type SequenceListener = (sequences: Record<TicketCategory, TicketSequenceConfig>) => void;
 
 class TicketGeneratorService {
@@ -113,6 +130,10 @@ class TicketGeneratorService {
       return { ...this.inMemoryCache };
     }
 
+    if (forceRefresh) {
+      this.isDbTableAvailable = true;
+    }
+
     try {
       // 1. Try fetching from public.ticket_sequences table
       if (this.isDbTableAvailable) {
@@ -145,7 +166,7 @@ class TicketGeneratorService {
           this.saveToLocalStorage();
           this.notifyListeners();
           return { ...this.inMemoryCache };
-        } else if (error && (error.code === '42P01' || error.message?.includes('does not exist'))) {
+        } else if (error && isMissingTableError(error)) {
           // Table doesn't exist yet, flag and fallback to app_settings
           this.isDbTableAvailable = false;
         }
@@ -228,7 +249,7 @@ class TicketGeneratorService {
           });
 
         if (error) {
-          if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          if (isMissingTableError(error)) {
             this.isDbTableAvailable = false;
           } else {
             console.error('[TicketGenerator] Error upserting to ticket_sequences:', error);

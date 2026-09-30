@@ -61,17 +61,28 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
       ...(options.headers || {})
     };
 
-    const res = await fetch(url, {
-      ...options,
-      headers
-    });
+    const controller = new AbortController();
+    const timeoutMs = method === 'GET' ? 4000 : 3500;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    if (!res.ok) {
-      const errorBody = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(errorBody.error || `HTTP error ${res.status}`);
+    try {
+      const res = await fetch(url, {
+        ...options,
+        headers,
+        signal: options.signal || controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(errorBody.error || `HTTP error ${res.status}`);
+      }
+
+      return res.json() as Promise<T>;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
     }
-
-    return res.json() as Promise<T>;
   };
 
   if (method === 'GET') {

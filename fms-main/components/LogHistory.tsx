@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { MOCK_USERS } from '../constants';
-import { FileText, Search, Download, Filter, X, Calendar, Plane, Anchor, Droplet, Fuel, Truck, Sailboat, AlertTriangle, Gauge } from 'lucide-react';
+import { FileText, Search, Download, Filter, X, Calendar, Plane, Anchor, Droplet, Fuel, Truck, Sailboat, AlertTriangle, Gauge, Printer } from 'lucide-react';
 import { Logo } from './Logo';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { FlightLog, User, UserRole, EquipmentType, cleanRemarks } from '../types';
 import { supabaseService } from '../services/supabaseService';
 import { supabase } from '../supabase';
 import { checkDuplicateTicketAcrossJetA1 } from '../services/ticketValidation';
+import { openPrintInvoice } from '../services/invoicePdfService';
 
 const parseGroundLog = (log: FlightLog) => {
   const parts = (log.flightNumber || '').split('-');
@@ -1358,6 +1359,18 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
                            {/* Edit / Details Action Cell (always the last column) */}
                            <td className="px-10 py-6 text-right">
+                             <div className="flex items-center justify-end gap-2.5">
+                               <button
+                                 type="button"
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   openPrintInvoice(log, user);
+                                 }}
+                                 className="p-1.5 rounded-lg bg-primary/10 hover:bg-primary text-primary hover:text-white transition-all active:scale-95 border border-primary/20 cursor-pointer"
+                                 title="View / Print Jet A-1 Delivery Invoice (FORM NO: G-001)"
+                                >
+                                 <FileText className="w-3.5 h-3.5" />
+                               </button>
                                {canEditLog(log) ? (
                                  <button 
                                    onClick={(e) => {
@@ -1441,6 +1454,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                   {isExpanded ? 'HIDE' : 'DETAILS'}
                                 </button>
                               )}
+                             </div>
 </td>
                         </tr>
                         {isExpanded && (
@@ -2678,6 +2692,15 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
 
             {/* Footer: sticky/fixed */}
             <div className="p-5 sm:p-8 pt-4 border-t border-outline shrink-0 flex gap-4">
+              <button 
+                type="button"
+                onClick={() => editingLog && openPrintInvoice(editingLog, user)}
+                className="px-4 bg-primary/10 border border-primary/30 text-primary hover:bg-primary hover:text-white font-black uppercase tracking-[0.2em] py-4 rounded-xl transition-all active:scale-95 text-[11px] flex items-center justify-center gap-2 cursor-pointer"
+                title="Print / View Delivery Invoice (FORM NO: G-001)"
+              >
+                <FileText className="w-4 h-4" />
+                <span className="hidden sm:inline">Invoice</span>
+              </button>
               <button 
                 type="button"
                 onClick={() => setShowConfirmDelete(true)}
