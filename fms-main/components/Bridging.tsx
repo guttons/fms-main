@@ -11,6 +11,25 @@ interface BridgingProps {
   setActiveView?: (view: string) => void;
 }
 
+const formatRequestedDateTime = (raw?: string): string => {
+  if (!raw || raw === '--:--') return '--:--';
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(raw.trim())) return raw.trim();
+  try {
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = months[d.getMonth()];
+      const year = d.getFullYear();
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      if (!raw.includes('T') && !raw.includes(':')) return `${day}-${month}-${year}`;
+      return `${day}-${month}-${year} • ${hours}:${minutes}`;
+    }
+  } catch {}
+  return raw;
+};
+
 export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
   const { tanks, updateTankLevel, alerts, acknowledgeAlert, createAlert, equipment, updateEquipment, staff } = useOperationalData();
   const [logs, setLogs] = useState<BridgingLog[]>([]);
@@ -39,7 +58,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
       return {
         id: `synth-${rf.id}`,
         message: `Replenishment requested for unit ${rf.id} (Low fuel: ${rf.currentVolume?.toLocaleString() || 0}L)`,
-        timestamp: rf.lastUpdated ? new Date(rf.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--',
+        timestamp: rf.lastUpdated || '--:--',
         acknowledged: false
       };
     }
@@ -104,7 +123,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
       await createAlert({
         severity: 'low',
         message: `Replenishment Initiated: Refueller ${vehicleId} is being loaded at the depot`,
-        timestamp: serverTimeService.getServerTimeString(),
+        timestamp: new Date().toISOString(),
         acknowledged: false,
         targetRole: UserRole.ITP_MANAGER
       });
@@ -273,13 +292,17 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
         await handleBridgingComplete(formData.vehicleId);
 
         // Notify ITP Duty Manager of replenishment completion
-        await createAlert({
-          severity: 'low',
-          message: `Replenishment Complete: Refueller ${formData.vehicleId} loaded with ${Number(formData.volume).toLocaleString()}L by ${formData.operatorName || user?.name || 'Operator'}`,
-          timestamp: serverTimeService.getServerTimeString(),
-          acknowledged: false,
-          targetRole: UserRole.ITP_MANAGER
-        });
+        try {
+          await createAlert({
+            severity: 'low',
+            message: `Replenishment Complete: Refueller ${formData.vehicleId} loaded with ${Number(formData.volume).toLocaleString()}L by ${formData.operatorName || user?.name || 'Operator'}`,
+            timestamp: new Date().toISOString(),
+            acknowledged: false,
+            targetRole: UserRole.ITP_MANAGER
+          });
+        } catch (alertErr) {
+          console.warn('Replenishment completion alert warning:', alertErr);
+        }
         
         setLoading(false);
         setSuccess(true);
@@ -325,7 +348,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
         </p>
         <button 
           onClick={() => setSuccess(false)}
-          className="mt-12 px-10 py-4 kinetic-gradient text-white font-black text-[11px] uppercase rounded-2xl transition-all shadow-premium hover:scale-105 active:scale-95"
+          className="mt-12 px-10 py-4 kinetic-gradient-no-glow text-white font-black text-[11px] uppercase rounded-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer"
         >
           INITIATE NEW LOAD
         </button>
@@ -374,7 +397,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
                             <span className="text-[11px] font-bold text-on-surface">{req.message}</span>
                             <span className="text-[9px] font-black text-on-surface-dim opacity-50 uppercase tracking-widest mt-1 flex items-center">
                               <Clock className="w-3 h-3 mr-1" />
-                              Requested: {req.timestamp}
+                              Requested: {formatRequestedDateTime(req.timestamp)}
                             </span>
                           </div>
                         </div>
@@ -387,7 +410,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
                               sendInitiatedAlert(vehicleId);
                             }
                           }}
-                          className="px-4 py-1.5 kinetic-gradient text-white hover:scale-105 active:scale-95 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all shadow-sm"
+                          className="px-4 py-1.5 kinetic-gradient-no-glow text-white hover:scale-105 active:scale-95 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer"
                         >
                           Initiate
                         </button>
@@ -462,7 +485,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
                             return (
                               <div className="mt-2 text-[9px] font-black text-primary uppercase tracking-widest flex items-center bg-primary/5 px-3 py-1.5 rounded-lg border border-primary/10 animate-pulse">
                                 <Clock className="w-3.5 h-3.5 mr-1.5" />
-                                ITP Replenishment Request Sent At: {timeStr}
+                                ITP Replenishment Request Sent At: {formatRequestedDateTime(timeStr)}
                               </div>
                             );
                           }
@@ -709,7 +732,7 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
                                                 (a.message.toLowerCase().includes('replenish') || a.message.toLowerCase().includes('refuel')) &&
                                                 a.message.includes(`unit ${log.vehicleId}`)
                                               );
-                                              return req ? <span className="text-primary flex items-center"><Clock className="w-2.5 h-2.5 mr-1" />REQ: {req.timestamp}</span> : null;
+                                              return req ? <span className="text-primary flex items-center"><Clock className="w-2.5 h-2.5 mr-1" />REQ: {formatRequestedDateTime(req.timestamp)}</span> : null;
                                             })()}
                                             <span>OP: {log.operatorId}</span>
                                         </div>

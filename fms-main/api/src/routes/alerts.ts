@@ -69,15 +69,30 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    // Determine operational date: prefer explicit flightDate, fall back to today
+    // Normalize timestamp to valid ISO string without throwing on partial time strings like "09:13"
+    let validTimestamp = new Date().toISOString();
+    if (alert.timestamp) {
+      const parsed = new Date(alert.timestamp);
+      if (!isNaN(parsed.getTime())) {
+        validTimestamp = parsed.toISOString();
+      } else if (typeof alert.timestamp === 'string' && /^\d{1,2}:\d{2}/.test(alert.timestamp)) {
+        const today = new Date().toISOString().split('T')[0];
+        const combined = new Date(`${today}T${alert.timestamp.padStart(5, '0')}:00Z`);
+        if (!isNaN(combined.getTime())) {
+          validTimestamp = combined.toISOString();
+        }
+      }
+    }
+
+    // Determine operational date: prefer explicit flightDate, fall back to timestamp date or today
     const flightDate = alert.flightDate
-      || (alert.timestamp ? new Date(alert.timestamp).toISOString().split('T')[0] : null)
+      || validTimestamp.split('T')[0]
       || new Date().toISOString().split('T')[0];
 
     const row: Record<string, any> = {
       severity: alert.severity || 'low',
       message: alert.message,
-      timestamp: alert.timestamp || new Date().toISOString(),
+      timestamp: validTimestamp,
       acknowledged: false,
       target_role: alert.targetRole || null,
       alert_type: alert.alertType || null,

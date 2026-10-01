@@ -12,7 +12,9 @@ export enum UserRole {
   COMMERCIAL = 'COMMERCIAL',
   FINANCE = 'FINANCE',
   FUEL_MANAGEMENT = 'FUEL_MANAGEMENT',
-  CUSTOMER = 'CUSTOMER'
+  CUSTOMER = 'CUSTOMER',
+  MACL_MANAGEMENT = 'MACL_MANAGEMENT',
+  FUEL_ADMINISTRATION = 'FUEL_ADMINISTRATION'
 }
 
 export enum EquipmentType {
@@ -54,6 +56,7 @@ export interface User {
   name: string;
   role: UserRole;
   avatar: string;
+  designation?: string;
 }
 
 export interface StaffMember {
@@ -63,6 +66,7 @@ export interface StaffMember {
   employeeId: string;
   phone?: string;
   email?: string;
+  designation?: string;
   status: 'active' | 'inactive';
   joinDate: string;
   avatar?: string;

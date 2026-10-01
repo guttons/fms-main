@@ -38,12 +38,13 @@ export const UnauthorizedPage: React.FC<UnauthorizedPageProps> = ({
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface p-4 relative overflow-hidden transition-colors duration-500">
+    <div className="h-screen h-[100dvh] w-full overflow-y-auto overflow-x-hidden bg-surface relative transition-colors duration-500 custom-scrollbar overscroll-contain">
       {/* Background glow accents */}
-      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-error/5 rounded-full blur-[140px] -mr-64 -mt-64 pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] -ml-64 -mb-64 pointer-events-none" />
+      <div className="fixed top-0 right-0 w-[600px] h-[600px] bg-error/5 rounded-full blur-[140px] -mr-64 -mt-64 pointer-events-none" />
+      <div className="fixed bottom-0 left-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] -ml-64 -mb-64 pointer-events-none" />
 
-      <div className="max-w-lg w-full bg-surface p-8 sm:p-12 border border-outline shadow-premium rounded-[40px] relative z-10 fade-in text-center">
+      <div className="min-h-full w-full flex flex-col items-center justify-center p-4 py-8 sm:py-12 relative z-10">
+        <div className="my-auto max-w-lg w-full bg-surface p-6 sm:p-10 lg:p-12 border border-outline shadow-premium rounded-[32px] sm:rounded-[40px] relative z-10 fade-in text-center">
         
         {/* MACL Brand Logo */}
         <div className="mx-auto mb-6 flex justify-center">
@@ -135,6 +136,7 @@ export const UnauthorizedPage: React.FC<UnauthorizedPageProps> = ({
           </p>
         </div>
 
+      </div>
       </div>
     </div>
   );

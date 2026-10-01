@@ -1,38 +1,96 @@
 import { FlightLog, User } from '../types';
 import { numberToWords } from '../utils/numberToWords';
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 /**
- * Formats an ISO string or time string into HH:MM or HHMM
+ * Formats an ISO string or time string into 24-hour HH:MM format
  */
 function formatTime(isoString?: string | null): string {
   if (!isoString) return '-';
   try {
-    const d = new Date(isoString);
+    const str = String(isoString).trim();
+    const ampmMatch = str.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+    if (ampmMatch) {
+      let hours = parseInt(ampmMatch[1], 10);
+      const minutes = ampmMatch[2];
+      const modifier = (ampmMatch[3] || '').toUpperCase();
+      if (modifier === 'PM' && hours < 12) hours += 12;
+      if (modifier === 'AM' && hours === 12) hours = 0;
+      return `${String(hours).padStart(2, '0')}:${minutes}`;
+    }
+
+    const d = new Date(str);
     if (!isNaN(d.getTime())) {
       const h = String(d.getHours()).padStart(2, '0');
       const m = String(d.getMinutes()).padStart(2, '0');
       return `${h}:${m}`;
     }
-    // If it's already HH:MM
-    if (/^\d{2}:\d{2}/.test(isoString)) {
-      return isoString.substring(0, 5);
+    if (/^\d{1,2}:\d{2}/.test(str)) {
+      const parts = str.split(':');
+      return `${parts[0].padStart(2, '0')}:${parts[1].substring(0, 2)}`;
     }
   } catch {}
   return isoString || '-';
 }
 
 /**
- * Formats an operational date to DD/MM/YYYY
+ * Formats an operational date to DD-Mon-YY format (e.g. 01-Oct-26)
  */
 function formatDate(dateStr?: string | null): string {
-  if (!dateStr) return new Date().toLocaleDateString('en-GB');
+  if (!dateStr) {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = MONTHS[now.getMonth()];
+    const year = String(now.getFullYear()).slice(-2);
+    return `${day}-${month}-${year}`;
+  }
+  try {
+    const str = String(dateStr).trim();
+    // Check for YYYY-MM-DD
+    const matchYMD = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (matchYMD) {
+      const day = matchYMD[3];
+      const monthIdx = parseInt(matchYMD[2], 10) - 1;
+      const year = matchYMD[1].slice(-2);
+      const month = MONTHS[monthIdx] || 'Jan';
+      return `${day}-${month}-${year}`;
+    }
+    // Check for DD/MM/YYYY
+    const matchDMY = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if (matchDMY) {
+      const day = matchDMY[1].padStart(2, '0');
+      const monthIdx = parseInt(matchDMY[2], 10) - 1;
+      const year = matchDMY[3].slice(-2);
+      const month = MONTHS[monthIdx] || 'Jan';
+      return `${day}-${month}-${year}`;
+    }
+
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = MONTHS[d.getMonth()] || 'Jan';
+      const year = String(d.getFullYear()).slice(-2);
+      return `${day}-${month}-${year}`;
+    }
+  } catch {}
+  return dateStr;
+}
+
+/**
+ * Formats date and time into DD-Mon-YY, HH:MM (24-hour format)
+ */
+function formatDateTime(dateStr?: string | null): string {
+  if (!dateStr) return '-';
   try {
     const d = new Date(dateStr);
     if (!isNaN(d.getTime())) {
       const day = String(d.getDate()).padStart(2, '0');
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const year = d.getFullYear();
-      return `${day}/${month}/${year}`;
+      const month = MONTHS[d.getMonth()] || 'Jan';
+      const year = String(d.getFullYear()).slice(-2);
+      const h = String(d.getHours()).padStart(2, '0');
+      const m = String(d.getMinutes()).padStart(2, '0');
+      return `${day}-${month}-${year}, ${h}:${m}`;
     }
   } catch {}
   return dateStr;
@@ -43,27 +101,147 @@ function formatDate(dateStr?: string | null): string {
  */
 export function generateInvoiceHtml(log: Partial<FlightLog>, operatorUser?: Partial<User>): string {
   const deliveryNum = log.deliveryNumber || `MLE-${Math.floor(100000 + Math.random() * 900000)}`;
-  const dateFormatted = formatDate(log.timestampStart || log.created_at);
+  const dateFormatted = formatDate(log.timestampStart || log.operationalDate || log.created_at);
   const volumeNumber = typeof log.volume === 'number' ? log.volume : parseFloat(String(log.volume || 0));
   const volumeInWords = numberToWords(volumeNumber);
   
   const isCash = (log.paymentType || '').toUpperCase() === 'CASH';
   const isCredit = !isCash;
 
-  const isDomestic = !!log.isDomestic || (log.intDom || '').toUpperCase() === 'DOMESTIC';
-  const isInternal = (log.intDom || '').toUpperCase() === 'INTERNAL';
+  const isMarineOrSeaplane = 
+    log.logType === 'MARINE' || 
+    log.logType === 'SEAPLANE' || 
+    (log.flightNumber || '').startsWith('SEAPLANE') || 
+    (log.flightNumber || '').startsWith('VESSEL') ||
+    ['SEA', 'MARINE'].includes((log.intDom || '').toUpperCase());
+
+  const isDomestic = isMarineOrSeaplane || !!log.isDomestic || ['DOMESTIC', 'DOM', 'DOM.'].includes((log.intDom || '').toUpperCase());
+  const isInternal = !isMarineOrSeaplane && (log.intDom || '').toUpperCase() === 'INTERNAL';
   const isInternational = !isDomestic && !isInternal;
 
   const arrivedTime = formatTime(log.timestampArrived || log.timestampStart);
   const commencedTime = formatTime(log.timestampFinalStart || log.timestampStart);
   const overTime = formatTime(log.timestampFinalEnd || log.timestampClearance);
 
-  const operatorName = log.operatorName || operatorUser?.name || 'AFSAH';
-  const operatorDesignation = operatorUser?.role ? operatorUser.role.replace(/_/g, ' ') : 'Refuelling Officer / Operator';
+  // Delivered By: strictly MACL fuel services refuelling staff (Officer / Operator), NOT aircraft operator
+  const deliveringOfficer = log.officer || log.tacticalOperator || (log.operatorId && !log.operatorId.startsWith('st-') ? log.operatorId : '') || operatorUser?.name || 'Refuelling Officer';
+  
+  // Use specific staff position/designation if configured
+  let deliveringDesignation = (operatorUser as any)?.designation;
+  if (!deliveringDesignation && typeof window !== 'undefined') {
+    try {
+      const rawStaff = localStorage.getItem('fms_staff_list_v3');
+      if (rawStaff) {
+        const staffList: any[] = JSON.parse(rawStaff);
+        const officerLower = (deliveringOfficer || '').toLowerCase().trim();
+        const matched = staffList.find(s => 
+          (operatorUser?.id && s.id === operatorUser.id) ||
+          (s.name && s.name.toLowerCase().trim() === officerLower) ||
+          (log.operatorId && (s.id === log.operatorId || s.employeeId?.toLowerCase() === log.operatorId.toLowerCase()))
+        );
+        if (matched?.designation) {
+          deliveringDesignation = matched.designation;
+        }
+      }
+    } catch {}
+  }
+  if (!deliveringDesignation) {
+    deliveringDesignation = operatorUser?.role ? operatorUser.role.replace(/_/g, ' ') : 'Refuelling Officer / Operator';
+  }
 
-  const signerName = log.signerName || 'Authorized Flight Crew Rep';
-  const signerDesignation = log.signerDesignation || 'Captain / Rep';
-  const signatureImg = log.signatureDataUrl;
+  // Fallback to localStorage signature cache if not in memory
+  let signatureImg = log.signatureDataUrl;
+  let signerName = log.signerName;
+  let signerDesignation = log.signerDesignation;
+  let signerEmail = log.signerEmail;
+  let signedAt = log.signedAt;
+
+  if (typeof window !== 'undefined') {
+    try {
+      const keysToTry = [
+        log.deliveryNumber ? `fms_sig_${log.deliveryNumber}` : null,
+        log.id ? `fms_sig_${log.id}` : null,
+        log.flightNumber ? `fms_sig_${log.flightNumber}` : null,
+      ].filter(Boolean) as string[];
+
+      for (const k of keysToTry) {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.signatureDataUrl) {
+            signatureImg = signatureImg || parsed.signatureDataUrl;
+            signerName = signerName || parsed.signerName;
+            signerDesignation = signerDesignation || parsed.signerDesignation;
+            signerEmail = signerEmail || parsed.signerEmail;
+            signedAt = signedAt || parsed.signedAt;
+            break;
+          }
+        }
+      }
+
+      if (!signatureImg) {
+        const rawRecent = localStorage.getItem('fms_recent_flight_logs');
+        if (rawRecent) {
+          const recents: FlightLog[] = JSON.parse(rawRecent);
+          const match = recents.find(r => 
+            (log.deliveryNumber && r.deliveryNumber === log.deliveryNumber) || 
+            (log.id && r.id === log.id)
+          );
+          if (match && match.signatureDataUrl) {
+            signatureImg = match.signatureDataUrl;
+            signerName = signerName || match.signerName;
+            signerDesignation = signerDesignation || match.signerDesignation;
+            signerEmail = signerEmail || match.signerEmail;
+            signedAt = signedAt || match.signedAt;
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  signerName = signerName ? signerName.toUpperCase() : 'Authorized Flight Crew Rep';
+  signerDesignation = signerDesignation || 'Captain / Representative';
+
+  // Customer / Operator / C/O details
+  let customerDisplay = '';
+  let operatorDisplay = '';
+
+  if (log.isAdhoc) {
+    customerDisplay = log.co || (log.airline && log.airline !== 'Maldivian' ? log.airline : '') || 'GENERAL AVIATION';
+    operatorDisplay = log.operatorName || (log.airline && log.airline !== customerDisplay && log.airline !== 'Maldivian' ? log.airline : '') || '';
+  } else if (log.logType === 'SEAPLANE' || (log.flightNumber || '').startsWith('SEAPLANE')) {
+    const spCust = log.airline || log.operatorName || (log.flightNumber ? log.flightNumber.replace('SEAPLANE-', '') : '') || log.co || 'SEAPLANE OPERATOR';
+    customerDisplay = spCust;
+    operatorDisplay = spCust;
+  } else if (log.logType === 'MARINE' || (log.flightNumber || '').startsWith('VESSEL')) {
+    const vesselName = (log as any).vesselName || log.operatorName || (log.flightNumber ? log.flightNumber.replace('VESSEL-', '') : '') || log.co || 'MARINE VESSEL';
+    customerDisplay = vesselName;
+    operatorDisplay = vesselName;
+  } else {
+    customerDisplay = log.airline || (log as any).customer || 'Maldivian';
+    operatorDisplay = log.operatorName || (log.co && log.co !== customerDisplay ? log.co : '');
+  }
+  const coDisplay = (log.co && log.co !== customerDisplay) ? log.co : '';
+
+  // Route / Origin / Destination
+  let goingTo = log.destination || '';
+  if (!goingTo && log.route) {
+    if (log.route.includes('➔')) {
+      goingTo = log.route.split('➔').pop()?.trim() || '';
+    } else if (log.route.includes('-')) {
+      goingTo = log.route.split('-').pop()?.trim() || '';
+    } else {
+      goingTo = log.route;
+    }
+  }
+  if (!goingTo) goingTo = 'N/A';
+
+  let comingFrom = (log as any).origin || '';
+  if (!comingFrom && log.route && log.route.includes('➔')) {
+    const parts = log.route.split('➔').map(p => p.trim());
+    if (parts.length > 1) comingFrom = parts[0];
+  }
+  if (!comingFrom) comingFrom = 'MLE';
 
   const meterOpen = typeof log.meterOpen === 'number' ? log.meterOpen.toLocaleString() : (log.meterOpen || '-');
   const meterClose = typeof log.meterClose === 'number' ? log.meterClose.toLocaleString() : (log.meterClose || '-');
@@ -76,7 +254,7 @@ export function generateInvoiceHtml(log: Partial<FlightLog>, operatorUser?: Part
   <style>
     @page {
       size: A4 portrait;
-      margin: 8mm;
+      margin: 14mm 12mm 14mm 12mm;
     }
     * {
       box-sizing: border-box;
@@ -86,7 +264,7 @@ export function generateInvoiceHtml(log: Partial<FlightLog>, operatorUser?: Part
     body {
       font-family: Arial, Helvetica, sans-serif;
       font-size: 10px;
-      line-height: 1.25;
+      line-height: 1.3;
       color: #000;
       background-color: #fff;
       margin: 0;
@@ -94,13 +272,15 @@ export function generateInvoiceHtml(log: Partial<FlightLog>, operatorUser?: Part
     }
     .invoice-wrapper {
       width: 100%;
-      max-width: 194mm;
+      max-width: 186mm;
+      min-height: 258mm;
       margin: 0 auto;
       border: 2px solid #000;
-      padding: 10px 12px;
+      padding: 14px 16px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      justify-content: space-between;
+      gap: 10px;
     }
 
     /* Header */
@@ -327,7 +507,7 @@ export function generateInvoiceHtml(log: Partial<FlightLog>, operatorUser?: Part
       margin-bottom: 6px;
     }
     .sig-pad-box {
-      height: 52px;
+      height: 68px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -336,7 +516,7 @@ export function generateInvoiceHtml(log: Partial<FlightLog>, operatorUser?: Part
       position: relative;
     }
     .sig-pad-box img {
-      max-height: 48px;
+      max-height: 64px;
       max-width: 90%;
       object-fit: contain;
     }
@@ -426,11 +606,13 @@ export function generateInvoiceHtml(log: Partial<FlightLog>, operatorUser?: Part
     <!-- Flight & Operational Details Table -->
     <table class="grid-table">
       <tr>
-        <td style="width: 35%;">
+        <td style="width: 36%;">
           <span class="label">CUSTOMER / OPERATOR</span>
-          <span class="val">${log.airline || (log as any).customer || 'Maldivian'}</span>
+          <span class="val">${customerDisplay}</span>
+          ${operatorDisplay && operatorDisplay !== customerDisplay ? `<div style="font-size: 8.5px; font-weight: 800; color: #475569; margin-top: 2px;">OP: ${operatorDisplay}</div>` : ''}
+          ${coDisplay ? `<div style="font-size: 8.5px; font-weight: 800; color: #1e3a8a; margin-top: 2px;">C/O: ${coDisplay}</div>` : ''}
         </td>
-        <td style="width: 25%;">
+        <td style="width: 24%;">
           <span class="label">AIRCRAFT REG</span>
           <span class="val">${log.aircraftReg || 'N/A'}</span>
         </td>
@@ -446,11 +628,11 @@ export function generateInvoiceHtml(log: Partial<FlightLog>, operatorUser?: Part
       <tr>
         <td>
           <span class="label">COMING FROM</span>
-          <span class="val">${(log as any).origin || 'MLE'}</span>
+          <span class="val">${comingFrom}</span>
         </td>
         <td>
           <span class="label">GOING TO</span>
-          <span class="val">${log.destination || 'N/A'}</span>
+          <span class="val">${goingTo}</span>
         </td>
         <td colspan="2">
           <span class="label">STAND / PIT NUMBER</span>
@@ -527,18 +709,18 @@ export function generateInvoiceHtml(log: Partial<FlightLog>, operatorUser?: Part
       <div class="sig-col">
         <div class="sig-title">DELIVERED BY (MACL FUEL SERVICES)</div>
         <div class="sig-pad-box">
-          <div style="font-family: 'Brush Script MT', cursive, sans-serif; font-size: 22px; color: #1e3a8a; font-style: italic;">
-            ${operatorName}
+          <div style="font-family: 'Brush Script MT', cursive, sans-serif; font-size: 24px; color: #1e3a8a; font-style: italic;">
+            ${deliveringOfficer}
           </div>
         </div>
         <div class="sig-fields">
           <div class="sig-field-row">
             <span class="lbl">NAME:</span>
-            <span class="val">${operatorName}</span>
+            <span class="val">${deliveringOfficer}</span>
           </div>
           <div class="sig-field-row">
             <span class="lbl">DESIGNATION:</span>
-            <span class="val">${operatorDesignation}</span>
+            <span class="val">${deliveringDesignation}</span>
           </div>
         </div>
       </div>
@@ -549,7 +731,7 @@ export function generateInvoiceHtml(log: Partial<FlightLog>, operatorUser?: Part
         <div class="sig-pad-box">
           ${signatureImg 
             ? `<img src="${signatureImg}" alt="Customer Signature" />` 
-            : `<span style="font-size: 10px; color: #94a3b8; font-style: italic;">Signature on File</span>`
+            : `<span style="font-size: 11px; color: #94a3b8; font-style: italic; font-weight: bold;">Signature on File</span>`
           }
         </div>
         <div class="sig-fields">
@@ -561,10 +743,10 @@ export function generateInvoiceHtml(log: Partial<FlightLog>, operatorUser?: Part
             <span class="lbl">DESIGNATION:</span>
             <span class="val">${signerDesignation}</span>
           </div>
-          ${log.signedAt ? `
+          ${signedAt ? `
           <div class="sig-field-row">
             <span class="lbl">SIGNED AT:</span>
-            <span class="val" style="font-size: 8px;">${new Date(log.signedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+            <span class="val" style="font-size: 8.5px; font-weight: 700;">${formatDateTime(signedAt)}</span>
           </div>` : ''}
         </div>
       </div>
@@ -617,11 +799,47 @@ export function composeInvoiceEmailUri(log: Partial<FlightLog>, recipientEmail?:
   const deliveryNum = log.deliveryNumber || 'MLE-INVOICE';
   const flightNo = log.flightNumber || 'FLIGHT';
   const volume = typeof log.volume === 'number' ? log.volume.toLocaleString() : (log.volume || '0');
-  const dateStr = formatDate(log.timestampStart || log.created_at);
+  const dateStr = formatDate(log.timestampStart || log.operationalDate || log.created_at);
   const aircraftReg = log.aircraftReg || 'N/A';
   const stand = log.stand || 'N/A';
 
-  const to = recipientEmail || log.signerEmail || '';
+  let goingTo = log.destination || '';
+  if (!goingTo && log.route) {
+    if (log.route.includes('➔')) {
+      goingTo = log.route.split('➔').pop()?.trim() || '';
+    } else if (log.route.includes('-')) {
+      goingTo = log.route.split('-').pop()?.trim() || '';
+    } else {
+      goingTo = log.route;
+    }
+  }
+
+  let signerName = log.signerName;
+  let signerDesignation = log.signerDesignation;
+  let signerEmail = recipientEmail || log.signerEmail;
+
+  if ((!signerName || !signerEmail) && typeof window !== 'undefined') {
+    try {
+      const keysToTry = [
+        log.deliveryNumber ? `fms_sig_${log.deliveryNumber}` : null,
+        log.id ? `fms_sig_${log.id}` : null,
+        log.flightNumber ? `fms_sig_${log.flightNumber}` : null,
+      ].filter(Boolean) as string[];
+
+      for (const k of keysToTry) {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          signerName = signerName || parsed.signerName;
+          signerDesignation = signerDesignation || parsed.signerDesignation;
+          signerEmail = signerEmail || parsed.signerEmail;
+          if (signerName && signerEmail) break;
+        }
+      }
+    } catch (e) {}
+  }
+
+  const to = signerEmail || '';
   const subject = encodeURIComponent(`[MACL Fuel Services] Jet A-1 Delivery Invoice - ${deliveryNum} (${flightNo} / ${aircraftReg})`);
   
   const bodyText = `Dear Customer / Representative,
@@ -638,6 +856,7 @@ Date: ${dateStr}
 Flight Number: ${flightNo}
 Aircraft Reg: ${aircraftReg}
 Aircraft Type: ${log.aircraftType || 'N/A'}
+Destination: ${goingTo || 'N/A'}
 Stand / PIT: Stand ${stand}${log.pitNumber ? ` / Pit ${log.pitNumber}` : ''}
 
 Net Fuel Uplift: ${volume} Litres
@@ -647,7 +866,7 @@ Meter Closing: ${log.meterClose || '-'}
 Equipment: ${log.vehicleId || 'DF-12'}
 
 Quality Control: JIG & AFQRJOS Verified (Clear & Bright, Free of Water)
-Signer: ${log.signerName || 'Flight Crew'} (${log.signerDesignation || 'Authorized Representative'})
+Signer: ${(signerName || 'Flight Crew').toUpperCase()} (${signerDesignation || 'Authorized Representative'})
 
 A signed physical copy has been registered in the MACL Operational System.
 

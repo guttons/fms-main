@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { MOCK_USERS } from '../constants';
-import { FileText, Search, Download, Filter, X, Calendar, Plane, Anchor, Droplet, Fuel, Truck, Sailboat, AlertTriangle, Gauge, Printer } from 'lucide-react';
+import { FileText, Search, Download, Filter, X, Calendar, Plane, Anchor, Droplet, Fuel, Truck, Sailboat, AlertTriangle, Gauge, Printer, Pencil } from 'lucide-react';
 import { Logo } from './Logo';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { FlightLog, User, UserRole, EquipmentType, cleanRemarks } from '../types';
@@ -556,7 +556,13 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           operationalDate: editForm.date || editingLog.operationalDate,
           timestampStart: combineDateAndTime(editForm.date, editForm.timeStart),
           timestampFinalEnd: combineDateAndTime(editForm.date, editForm.timeEnd),
-          co: editForm.seaplaneCo,
+          airline: editForm.seaplaneOperator.toUpperCase(),
+          operatorName: editForm.seaplaneOperator.toUpperCase(),
+          co: editForm.seaplaneOperator.toUpperCase(),
+          officer: editForm.seaplaneCo,
+          tacticalOperator: editForm.seaplaneCo,
+          isDomestic: true,
+          intDom: 'DOM',
           remarks: editForm.remarks || `Seaplane Volume logged for ${editForm.seaplaneOperator}`
         };
         await supabaseService.updateFlightLog(editingLog.id, updatedPayload as any, editingLog.deliveryNumber || undefined);
@@ -576,6 +582,8 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
           operationalDate: editForm.date || editingLog.operationalDate,
           timestampStart: combineDateAndTime(editForm.date, editForm.timeStart),
           timestampFinalEnd: combineDateAndTime(editForm.date, editForm.timeEnd),
+          isDomestic: true,
+          intDom: 'DOM',
           remarks: remarksStr
         };
         await supabaseService.updateFlightLog(editingLog.id, updatedPayload as any, editingLog.deliveryNumber || undefined);
@@ -1145,20 +1153,28 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                   </tr>
                 ) : (
                   sortedLogs.map((log) => {
+                      const isSeaplane = log.logType === 'SEAPLANE' || (log.flightNumber || '').startsWith('SEAPLANE-');
+                      const seaplaneCustomer = log.airline || (log.flightNumber && log.flightNumber.startsWith('SEAPLANE-') ? log.flightNumber.replace('SEAPLANE-', '') : '') || log.co || 'N/A';
+                      const seaplaneOfficer = log.officer || (log.co && log.co !== seaplaneCustomer ? log.co : '') || (log as any).tacticalOperator || '-';
+
                       const operatorName = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => 
                          u.id === log.operatorId || 
                          u.id.toLowerCase() === (log.tacticalOperator || '').toLowerCase() ||
                          u.name.toLowerCase() === (log.tacticalOperator || '').toLowerCase()
                        )?.name || log.tacticalOperator || '-';
+
+                      const rawOfficer = isSeaplane && (!log.officer || log.officer === 'ITP Officer') ? seaplaneOfficer : log.officer;
                       const officerName = (staff && staff.length > 0 ? staff : MOCK_USERS).find(u => 
-                         u.id === log.officer || 
-                         u.id.toLowerCase() === (log.officer || '').toLowerCase() ||
-                         u.name.toLowerCase() === (log.officer || '').toLowerCase()
-                       )?.name || (log.officer && log.officer !== 'ITP Officer' ? log.officer : '-');
+                         u.id === rawOfficer || 
+                         u.id.toLowerCase() === (rawOfficer || '').toLowerCase() ||
+                         u.name.toLowerCase() === (rawOfficer || '').toLowerCase()
+                       )?.name || (rawOfficer && rawOfficer !== 'ITP Officer' ? rawOfficer : '-');
                       const isExpanded = expandedLogId === log.id;
                       
-                      const seaplaneOp = log.officer || log.tacticalOperator || '-';
-                      const customerName = log.co || log.airline || (log.flightNumber && !log.flightNumber.startsWith('SEAPLANE-') ? log.flightNumber : 'N/A');
+                      const seaplaneOp = seaplaneOfficer;
+                      const customerName = isSeaplane
+                        ? seaplaneCustomer
+                        : (log.co || log.airline || (log.flightNumber && !log.flightNumber.startsWith('SEAPLANE-') ? log.flightNumber : 'N/A'));
                       const pumpId = log.vehicleId || log.aircraftReg.replace('PUMP-', '') || 'N/A';
                       
                       const groundData = parseGroundLog(log);
@@ -1366,7 +1382,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                    e.stopPropagation();
                                    openPrintInvoice(log, user);
                                  }}
-                                 className="p-1.5 rounded-lg bg-primary/10 hover:bg-primary text-primary hover:text-white transition-all active:scale-95 border border-primary/20 cursor-pointer"
+                                 className="p-1.5 rounded-lg bg-primary/10 hover-kinetic-gradient text-primary border border-primary/20 transition-all active:scale-95 cursor-pointer"
                                  title="View / Print Jet A-1 Delivery Invoice (FORM NO: G-001)"
                                 >
                                  <FileText className="w-3.5 h-3.5" />
@@ -1382,8 +1398,9 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                      // Parse ground and marine fields
                                      const groundData = parseGroundLog(log);
                                      const marineData = parseMarineLog(log);
-                                     const seaplaneOp = logType === 'SEAPLANE' ? (log.flightNumber || '').replace('SEAPLANE-', '') : 'TMA';
-                                     const seaplanePump = logType === 'SEAPLANE' ? (log.aircraftReg || '').replace('PUMP-', '') : '';
+                                     const seaplaneOp = logType === 'SEAPLANE' ? (log.airline || (log.flightNumber || '').replace('SEAPLANE-', '') || 'TMA') : 'TMA';
+                                     const seaplanePump = logType === 'SEAPLANE' ? (log.vehicleId || (log.aircraftReg || '').replace('PUMP-', '') || 'SCADA') : '';
+                                     const seaplaneOfficerVal = (log as any).officer || ((log as any).co !== seaplaneOp ? (log as any).co : '') || (log as any).tacticalOperator || '';
 
                                      setEditForm({
                                        flightNumber: log.flightNumber || '',
@@ -1415,7 +1432,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                        // Seaplane specific
                                        seaplaneOperator: seaplaneOp,
                                        seaplanePumpId: seaplanePump,
-                                       seaplaneCo: (log as any).co || '',
+                                       seaplaneCo: seaplaneOfficerVal,
 
                                        // Marine specific
                                        marineVesselName: marineData.vesselName || '',
@@ -1445,12 +1462,20 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                        bridgingSupervisor: (log as any).co || ''
                                      });
                                    }} 
-                                   className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-[0.3em] transition-all"
+                                   className="p-1.5 rounded-lg bg-primary/10 hover-kinetic-gradient text-primary border border-primary/20 transition-all active:scale-95 cursor-pointer"
+                                   title="Edit Operational Log"
                                  >
-                                   EDIT
+                                   <Pencil className="w-3.5 h-3.5" />
                                  </button>
                                ) : (
-                                <button className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-[0.3em] transition-all">
+                                <button 
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setExpandedLogId(isExpanded ? null : log.id);
+                                  }}
+                                  className="text-[10px] font-black text-primary hover:text-on-surface uppercase tracking-[0.3em] transition-all cursor-pointer"
+                                >
                                   {isExpanded ? 'HIDE' : 'DETAILS'}
                                 </button>
                               )}
@@ -2695,7 +2720,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
               <button 
                 type="button"
                 onClick={() => editingLog && openPrintInvoice(editingLog, user)}
-                className="px-4 bg-primary/10 border border-primary/30 text-primary hover:bg-primary hover:text-white font-black uppercase tracking-[0.2em] py-4 rounded-xl transition-all active:scale-95 text-[11px] flex items-center justify-center gap-2 cursor-pointer"
+                className="px-4 bg-primary/10 border border-primary/30 text-primary hover-kinetic-gradient font-black uppercase tracking-[0.2em] py-4 rounded-xl transition-all active:scale-95 text-[11px] flex items-center justify-center gap-2 cursor-pointer"
                 title="Print / View Delivery Invoice (FORM NO: G-001)"
               >
                 <FileText className="w-4 h-4" />
@@ -2705,7 +2730,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                 type="button"
                 onClick={() => setShowConfirmDelete(true)}
                 disabled={saving}
-                className="flex-1 bg-error/10 border border-error/30 text-error hover:bg-error hover:text-white font-black uppercase tracking-[0.2em] py-4 rounded-xl transition-all active:scale-95 text-[11px] disabled:opacity-30 disabled:cursor-not-allowed"
+                className="flex-1 bg-error/10 border border-error/30 text-error hover-gradient-error font-black uppercase tracking-[0.2em] py-4 rounded-xl transition-all active:scale-95 text-[11px] disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {saving ? 'Processing...' : 'Delete Record'}
               </button>

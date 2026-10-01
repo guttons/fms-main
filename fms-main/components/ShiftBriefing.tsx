@@ -169,7 +169,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
   };
 
   const getBriefingStatusStyle = (status?: string) => {
-    if (!status) return 'bg-surface border border-white/10 text-on-surface-dim';
+    if (!status) return 'bg-surface border border-outline text-on-surface-dim';
     const s = status.toUpperCase();
     if (s === 'COMPLETED') {
       return 'bg-success/10 text-success border border-success/10';
@@ -189,7 +189,7 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
     if (s.includes('BOARDING') || s.includes('GATE') || s.includes('FINAL') || s.includes('CLOSED')) {
       return 'bg-warning/10 text-warning border border-warning/10';
     }
-    return 'bg-surface border border-white/10 text-on-surface-dim';
+    return 'bg-surface border border-outline text-on-surface-dim';
   };
 
   const renderStatusBadge = (status?: string) => {

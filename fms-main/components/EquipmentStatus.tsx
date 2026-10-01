@@ -176,7 +176,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
       const success = await createAlert({
         severity: 'medium',
         message: `Replenishment requested for unit ${eqId}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+        timestamp: new Date().toISOString(),
         acknowledged: false,
         targetRole: UserRole.DEPOT_OPERATOR
       });
@@ -768,7 +768,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                     </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 lg:gap-8">
                         {statusGroups.inService.map(eq => (
-                          <div key={eq.id} className="card-premium bg-surface-dim border border-white/10 flex flex-col group transition-all duration-500 hover:scale-[1.02] hover:border-primary/30 hover:shadow-glow shadow-premium">
+                          <div key={eq.id} className="card-premium bg-surface-dim border border-outline flex flex-col group transition-all duration-500 hover:scale-[1.02] hover:border-primary/30 hover:shadow-glow shadow-premium">
                           <div className="p-5 md:p-6 flex-1">
                             <div className="flex justify-between items-start mb-6">
                               <div>
@@ -888,7 +888,7 @@ export const EquipmentStatus: React.FC<EquipmentStatusProps> = ({ user }) => {
                     </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 lg:gap-8">
                         {statusGroups.outOfService.map(eq => (
-                          <div key={eq.id} className="bg-surface-dim/60 border border-white/5 rounded-[24px] overflow-hidden flex flex-col opacity-75 grayscale-[0.6] hover:opacity-100 hover:grayscale-0 transition-all duration-500 hover:border-error/30 shadow-premium">
+                          <div key={eq.id} className="bg-surface-dim/60 border border-outline/40 rounded-[24px] overflow-hidden flex flex-col opacity-75 grayscale-[0.6] hover:opacity-100 hover:grayscale-0 transition-all duration-500 hover:border-error/30 shadow-premium">
                           <div className="p-5 md:p-6 flex-1 relative">
                             <div className="flex justify-between items-start mb-6">
                               <div>

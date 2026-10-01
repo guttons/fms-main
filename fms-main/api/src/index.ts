@@ -131,6 +131,11 @@ const OPERATIONS_LOG_SCHEMA: TableSchema = {
     { name: 'operator_name',        type: 'STRING',    mode: 'NULLABLE'  },
     { name: 'destination',          type: 'STRING',    mode: 'NULLABLE'  },
     { name: 'payment_type',         type: 'STRING',    mode: 'NULLABLE'  },
+    { name: 'signature_data_url',   type: 'STRING',    mode: 'NULLABLE'  },
+    { name: 'signer_name',          type: 'STRING',    mode: 'NULLABLE'  },
+    { name: 'signer_designation',   type: 'STRING',    mode: 'NULLABLE'  },
+    { name: 'signer_email',         type: 'STRING',    mode: 'NULLABLE'  },
+    { name: 'signed_at',            type: 'TIMESTAMP', mode: 'NULLABLE'  },
     { name: 'is_deleted',           type: 'BOOL',      mode: 'NULLABLE'  },
     { name: 'created_at',           type: 'TIMESTAMP', mode: 'NULLABLE'  },
     { name: 'updated_at',           type: 'TIMESTAMP', mode: 'NULLABLE'  },
@@ -161,10 +166,15 @@ async function ensureSchema(): Promise<void> {
           ADD COLUMN IF NOT EXISTS tobt STRING,
           ADD COLUMN IF NOT EXISTS frt_airline STRING,
           ADD COLUMN IF NOT EXISTS frt_aocc STRING,
-          ADD COLUMN IF NOT EXISTS frt_for STRING`,
+          ADD COLUMN IF NOT EXISTS frt_for STRING,
+          ADD COLUMN IF NOT EXISTS signature_data_url STRING,
+          ADD COLUMN IF NOT EXISTS signer_name STRING,
+          ADD COLUMN IF NOT EXISTS signer_designation STRING,
+          ADD COLUMN IF NOT EXISTS signer_email STRING,
+          ADD COLUMN IF NOT EXISTS signed_at TIMESTAMP`,
         location: 'US'
       });
-      console.log(`[BigQuery] Ensured STD and FRT columns exist on ${DATASET_ID}.${TABLE_ID}`);
+      console.log(`[BigQuery] Ensured STD, FRT, and Signature columns exist on ${DATASET_ID}.${TABLE_ID}`);
     } catch (colErr: any) {
       console.warn(`[BigQuery] Column schema update check: ${colErr.message}`);
     }
@@ -238,7 +248,7 @@ function rowToLog(row: Record<string, any>) {
     tacticalOperator:    row.tactical_operator,
     route:               row.route,
     co:                  row.co,
-    isDomestic:          row.is_domestic,
+    isDomestic:          (row.is_domestic === true || String(row.flight_number || '').startsWith('SEAPLANE-') || String(row.flight_number || '').startsWith('VESSEL-') || String(row.aircraft_type || '').toUpperCase() === 'MARINE VESSEL' || String(row.aircraft_type || '').toUpperCase() === 'DHC-6') ? true : row.is_domestic,
     intDom:              (String(row.airline || row.co || row.remarks || '').toUpperCase().includes('CANCELLED DELIVERY') || String(row.INT_DOM || row.int_dom || '').toUpperCase() === 'VOID') ? 'VOID' : (row.INT_DOM || row.int_dom || null),
     airline:             row.airline,
     operationalDate:     dt(row.operational_date),
@@ -250,6 +260,11 @@ function rowToLog(row: Record<string, any>) {
     operatorName:        row.operator_name,
     destination:         row.destination,
     paymentType:         row.payment_type,
+    signatureDataUrl:    row.signature_data_url ?? null,
+    signerName:          row.signer_name ?? null,
+    signerDesignation:   row.signer_designation ?? null,
+    signerEmail:         row.signer_email ?? null,
+    signedAt:            ts(row.signed_at),
   };
 }
 
@@ -291,8 +306,8 @@ function logToRow(log: Record<string, any>, id: string): Record<string, any> {
     tactical_operator:     log.tacticalOperator    ?? null,
     route:                 log.route               ?? null,
     co:                    log.co                  ?? null,
-    is_domestic:           log.isDomestic          ?? null,
-    int_dom:               isCancelled ? 'VOID' : (log.intDom || (log.logType === 'SEAPLANE' ? 'SEA' : (log.isDomestic ? 'DOM' : 'INT'))),
+    is_domestic:           (log.logType === 'SEAPLANE' || log.logType === 'MARINE' || (log.flightNumber || '').startsWith('SEAPLANE-') || (log.flightNumber || '').startsWith('VESSEL-')) ? true : (log.isDomestic ?? null),
+    int_dom:               isCancelled ? 'VOID' : (log.intDom || (log.logType === 'SEAPLANE' ? 'SEA' : (log.logType === 'MARINE' ? 'DOM' : (log.isDomestic ? 'DOM' : 'INT')))),
     airline:               log.airline             ?? null,
     operational_date:      log.operationalDate     ?? null,
     pit_number:            log.pitNumber           ?? null,
@@ -303,6 +318,11 @@ function logToRow(log: Record<string, any>, id: string): Record<string, any> {
     operator_name:         log.operatorName        ?? null,
     destination:           log.destination         ?? null,
     payment_type:          log.paymentType         ?? null,
+    signature_data_url:    log.signatureDataUrl    ?? null,
+    signer_name:           log.signerName          ?? null,
+    signer_designation:    log.signerDesignation   ?? null,
+    signer_email:          log.signerEmail         ?? null,
+    signed_at:             log.signedAt            ?? null,
     is_deleted:            false,
     created_at:            now,
     updated_at:            now,

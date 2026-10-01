@@ -899,6 +899,10 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   const prevFlightStatusesRef = React.useRef<Map<string, string>>(new Map());
   const todayDateStr = new Date().toISOString().split('T')[0];
   const landedAlertsSentRef = React.useRef<Set<string>>(getSentAlertsCache('landed', todayDateStr));
+  const flightLogsRef = React.useRef(flightLogs);
+  useEffect(() => {
+    flightLogsRef.current = flightLogs;
+  }, [flightLogs]);
 
   // Sync alerts to localStorage whenever updated
   useEffect(() => {
@@ -1701,7 +1705,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
   };
 
-  const updateFlightLog = async (id: string, updates: Partial<FlightLog>) => {
+  const updateFlightLog = useCallback(async (id: string, updates: Partial<FlightLog>) => {
     setFlightLogs(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
     try {
       await supabaseService.updateFlightLog(id, updates);
@@ -1709,7 +1713,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       console.error('Failed to update flight log in BigQuery:', error);
       throw error;
     }
-  };
+  }, []);
 
   const addFlightLogEntry = useCallback((log: FlightLog) => {
     setFlightLogs(prev => {
@@ -1739,11 +1743,11 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     } catch (e) {}
   }, []);
 
-  const deleteFlightLogEntry = useCallback((id: string, fallbackFlightNumber?: string, fallbackDeliveryNumber?: string) => {
+  const deleteFlightLogEntry = useCallback((id: string, fallbackFlightNumber?: string, fallbackDeliveryNumber?: string, broadcast = true) => {
     let fn = fallbackFlightNumber || '';
     let dn = fallbackDeliveryNumber || '';
     if (!fn || !dn) {
-      const found = flightLogs.find(l => l.id === id);
+      const found = flightLogsRef.current.find(l => l.id === id);
       if (found) {
         if (!fn) fn = found.flightNumber || '';
         if (!dn) dn = found.deliveryNumber || '';
@@ -1874,7 +1878,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
         localStorage.setItem('fms_recent_flight_logs', JSON.stringify(filtered));
       }
     } catch (e) {}
-  }, [flightLogs, selectedBriefingDate, selectedBriefingShift]);
+  }, [selectedBriefingDate, selectedBriefingShift]);
 
   // Real-time listener for newly created, updated & deleted flight logs across components
   useEffect(() => {
@@ -1893,7 +1897,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     const handleDeletedLog = (e: Event) => {
       const customEvent = e as CustomEvent<{ id: string; flightNumber?: string; deliveryNumber?: string }>;
       if (customEvent && customEvent.detail?.id) {
-        deleteFlightLogEntry(customEvent.detail.id, customEvent.detail.flightNumber, customEvent.detail.deliveryNumber);
+        deleteFlightLogEntry(customEvent.detail.id, customEvent.detail.flightNumber, customEvent.detail.deliveryNumber, false);
       }
     };
     window.addEventListener('fms:flight-log-created', handleNewLog);
@@ -2047,9 +2051,9 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       setAlerts(uniqueAlerts);
       return true;
     } catch (error) {
-      console.error('Failed to create alert:', error);
+      console.warn('Failed to create alert (non-blocking):', error);
       if (vehicleId) delete replenishmentLocks.current[vehicleId];
-      throw error;
+      return false;
     } finally {
       pendingAlertHashes.current.delete(alertHash);
     }

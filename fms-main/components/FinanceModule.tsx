@@ -1648,7 +1648,7 @@ export const FinanceModule: React.FC = () => {
               </div>
 
               {/* Customer and billing info */}
-              <div className="grid grid-cols-2 gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+              <div className="grid grid-cols-2 gap-6 bg-slate-50 p-6 rounded-2xl border border-outline">
                 <div className="space-y-1">
                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Billed To:</span>
                   <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">{selectedTicket.customerName}</h3>
@@ -1728,7 +1728,7 @@ export const FinanceModule: React.FC = () => {
                       ).toLocaleString()}
                     </span>
                   </div>
-                  <div className="flex justify-between text-sm font-black text-slate-900 border-t border-slate-100 pt-2">
+                  <div className="flex justify-between text-sm font-black text-slate-900 border-t border-outline pt-2">
                     <span>Grand Total:</span>
                     <span className="text-slate-900">
                       ${('amount' in selectedTicket 
@@ -1741,7 +1741,7 @@ export const FinanceModule: React.FC = () => {
               </div>
 
               {/* Supporting delivery logs matching screenshot */}
-              <div className="pt-6 border-t border-slate-100">
+              <div className="pt-6 border-t border-outline">
                 <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Supporting Uplift Logs</h4>
                 <table className="w-full text-left text-[10px] text-slate-500 border-collapse">
                   <thead>
@@ -1793,10 +1793,10 @@ export const FinanceModule: React.FC = () => {
             </div>
 
             {/* Print trigger footer */}
-            <div className="bg-slate-50 px-8 py-5 flex items-center justify-end gap-3 border-t border-slate-100">
+            <div className="bg-slate-50 px-8 py-5 flex items-center justify-end gap-3 border-t border-outline">
               <button 
                 onClick={() => notify('PDF Invoice copy download triggered.', 'success')}
-                className="px-5 py-2.5 rounded-xl border border-slate-200 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-100 hover:scale-105 active:scale-95 transition-all"
+                className="px-5 py-2.5 rounded-xl border border-outline text-[10px] font-black uppercase text-slate-600 hover:bg-slate-100 hover:scale-105 active:scale-95 transition-all"
               >
                 Download PDF
               </button>

@@ -58,7 +58,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       id: staff.id,
       name: staff.name,
       role: staff.role,
-      avatar: staff.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(staff.name)}`
+      avatar: staff.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(staff.name)}`,
+      designation: staff.designation || undefined
     };
     haptic('SUCCESS');
     onLogin(user);
@@ -242,11 +243,12 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface p-4 relative overflow-hidden transition-colors duration-500">
-      <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-primary/10 rounded-full blur-[140px] -mr-96 -mt-96 animate-pulse"></div>
-      <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] -ml-64 -mb-64"></div>
+    <div className="h-screen h-[100dvh] w-full overflow-y-auto overflow-x-hidden bg-surface relative transition-colors duration-500 custom-scrollbar overscroll-contain">
+      <div className="fixed top-0 right-0 w-[800px] h-[800px] bg-primary/10 rounded-full blur-[140px] -mr-96 -mt-96 animate-pulse pointer-events-none"></div>
+      <div className="fixed bottom-0 left-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] -ml-64 -mb-64 pointer-events-none"></div>
       
-      <div className={`max-w-md w-full bg-surface p-10 sm:p-12 lg:p-14 border border-outline shadow-premium rounded-[48px] relative z-10 fade-in ${shake ? 'animate-shake' : ''}`}>
+      <div className="min-h-full w-full flex flex-col items-center justify-center p-4 py-8 sm:py-12 relative z-10">
+        <div className={`my-auto max-w-md w-full bg-surface p-8 sm:p-12 lg:p-14 border border-outline shadow-premium rounded-[36px] sm:rounded-[48px] relative z-10 fade-in ${shake ? 'animate-shake' : ''}`}>
         <div className="text-center">
           <div className="mx-auto mb-8 flex justify-center">
             <Logo className="h-20 sm:h-24 w-auto object-contain text-primary" />
@@ -561,6 +563,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             MACL FUEL SERVICES
           </p>
         </div>
+      </div>
       </div>
       
       <style>{`

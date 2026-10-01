@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Users, User as UserIcon, MapPin, Clock, Activity, Search, Filter, 
   Briefcase, ChevronDown, ChevronUp, LogIn, LogOut, Play, CheckCircle, 
-  Coffee, Radio, X, KeyRound, ShieldAlert, Navigation, Sparkles, RefreshCw, Check,
+  Coffee, Radio, X, ShieldAlert, Navigation, Sparkles, RefreshCw, Check,
   ExternalLink, Droplets, Fuel
 } from 'lucide-react';
 import { supabase } from '../supabase';
@@ -77,6 +77,75 @@ export const isTodayLog = (log: FlightLog, todayDateStr?: string): boolean => {
   return false;
 };
 
+export const getJobDateStr = (job: any): string => {
+  if (!job) return '';
+  if (job.date) return job.date.split('T')[0];
+  if (job.operationalDate) return job.operationalDate.split('T')[0];
+  if (job.timestampStart) return job.timestampStart.split('T')[0];
+  const match = job.id?.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  if (match) return match[1];
+  return '';
+};
+
+export const formatLastOnline = (lastActiveStr?: string | null): string => {
+  if (!lastActiveStr) return '';
+  const d = new Date(lastActiveStr);
+  if (isNaN(d.getTime())) return '';
+  
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  
+  if (isToday) {
+    return timeStr;
+  }
+  
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = d.toDateString() === yesterday.toDateString();
+  if (isYesterday) {
+    return `Yesterday ${timeStr}`;
+  }
+  
+  const dayStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return `${dayStr} ${timeStr}`;
+};
+
+export const formatTimelineTimestamp = (created_at?: string | null): string => {
+  if (!created_at) return '';
+  const d = new Date(created_at);
+  if (!isNaN(d.getTime())) {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  if (typeof created_at === 'string' && /^\d{1,2}:\d{2}/.test(created_at.trim())) {
+    return created_at.trim();
+  }
+  return '';
+};
+
+export const getJobStartTime = (job: any, todayStr: string): string => {
+  if (!job) return new Date().toISOString();
+  if (job.timestampStart) {
+    const d = new Date(job.timestampStart);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  if (job.startedAt) {
+    const d = new Date(job.startedAt);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  if (job.created_at) {
+    const d = new Date(job.created_at);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  const timeVal = job.eta || job.sta || job.std;
+  if (timeVal && /^\d{1,2}:\d{2}/.test(String(timeVal).trim())) {
+    const cleanTime = String(timeVal).trim().length === 5 ? `${String(timeVal).trim()}:00` : String(timeVal).trim();
+    const d = new Date(`${todayStr}T${cleanTime}`);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  return new Date().toISOString();
+};
+
 export const SHIFTS = ['Morning', 'Evening', 'Night'] as const;
 export const ROLE_FILTERS = ['ALL', 'ITP', 'DEPOT', 'ON_JOB', 'ON_BREAK'] as const;
 
@@ -91,6 +160,8 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [selectedShift, setSelectedShift] = useState<'Morning' | 'Evening' | 'Night'>('Morning');
+  const [currentShiftBriefing, setCurrentShiftBriefing] = useState<any>(null);
+  const [justEnabledGps, setJustEnabledGps] = useState(false);
   const [currentUserStatus, setCurrentUserStatus] = useState<string>(() => {
     try {
       return localStorage.getItem('fms_staff_status_' + user.id) || 'ONLINE';
@@ -98,12 +169,6 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
       return 'ONLINE';
     }
   });
-
-  // Supervisor Password Reset Modal state
-  const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
-  const [newTempPassword, setNewTempPassword] = useState('macl2026');
-  const [passwordResetSuccess, setPasswordResetSuccess] = useState(false);
-  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   // Self activity tracking
   const { 
@@ -226,11 +291,13 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
     const todayStr = new Date().toISOString().split('T')[0];
 
     return effectiveStaff.map((s: any) => {
-      // Check active in-progress job
-      const activeJob = flightJobs.find(j => 
-        (j.status === 'IN_PROGRESS' || j.status === 'ASSIGNED') &&
-        (isStaffMatch(s, j.assignedTo) || isStaffMatch(s, j.assignedOfficer))
-      ) || null;
+      // Check active in-progress job (STRICTLY TODAY — ignore previous dates & non-in-progress)
+      const activeJob = flightJobs.find(j => {
+        if (j.status !== 'IN_PROGRESS') return false;
+        const jobDate = getJobDateStr(j);
+        if (jobDate && jobDate !== todayStr) return false;
+        return isStaffMatch(s, j.assignedTo) || isStaffMatch(s, j.assignedOfficer);
+      }) || null;
 
       // Find vehicle assigned
       let activeVehicle: Equipment | null = null;
@@ -287,9 +354,11 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
         isRecentlyActive = diffMs < 15 * 60 * 1000; // Active within past 15 mins
       }
 
+      const isUserActive = Boolean(presence || s.id === user.id || isRecentlyActive);
+
       // Determine live duty status accurately
       let liveStatus = 'OFFLINE';
-      if (activeJob && activeJob.status === 'IN_PROGRESS') {
+      if (activeJob && isUserActive) {
         liveStatus = 'ON_JOB';
       } else if (presence) {
         liveStatus = presence.status || 'ONLINE';
@@ -297,8 +366,6 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
         liveStatus = currentUserStatus;
       } else if (isRecentlyActive && ['ONLINE', 'IDLE', 'ON_BREAK'].includes(dbStatus)) {
         liveStatus = dbStatus;
-      } else if (dbStatus === 'ON_JOB' && activeJob) {
-        liveStatus = 'ON_JOB';
       } else {
         liveStatus = 'OFFLINE';
       }
@@ -308,20 +375,43 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
         ? currentLocation 
         : presence?.location || s.current_location || s.currentLocation || null;
 
-      // Determine time since last active
+      // Determine latest active timestamp across presence, DB fields, and today's completed flight logs
+      let latestActiveTimestamp = lastActive || s.last_login_at || s.lastLoginAt || null;
+      if (!latestActiveTimestamp && matchedFlightLogs.length > 0) {
+        const sortedLogs = [...matchedFlightLogs].sort((a, b) => {
+          const tA = new Date(a.timestampFinalEnd || a.timestampStart || 0).getTime();
+          const tB = new Date(b.timestampFinalEnd || b.timestampStart || 0).getTime();
+          return tB - tA;
+        });
+        if (sortedLogs[0]) {
+          latestActiveTimestamp = sortedLogs[0].timestampFinalEnd || sortedLogs[0].timestampStart || null;
+        }
+      }
+
       let timeSince = '';
+      let lastOnlineText = '';
+
       if (presence) {
-        timeSince = 'Active now (Live)';
+        timeSince = 'Active now';
+        lastOnlineText = 'Active now';
       } else if (s.id === user.id) {
         timeSince = 'Active now';
-      } else if (lastActive) {
-        const diffMs = Date.now() - new Date(lastActive).getTime();
+        lastOnlineText = 'Active now';
+      } else if (latestActiveTimestamp) {
+        const diffMs = Date.now() - new Date(latestActiveTimestamp).getTime();
         const diffMins = Math.floor(diffMs / 60000);
-        if (diffMins < 1) timeSince = 'Active now';
-        else if (diffMins < 60) timeSince = `${diffMins}m ago`;
-        else timeSince = `${Math.floor(diffMins / 60)}h ${diffMins % 60}m ago`;
+        if (diffMins < 2) {
+          timeSince = 'Active now';
+          lastOnlineText = 'Active now';
+        } else if (diffMins < 60) {
+          timeSince = `${diffMins}m ago`;
+        } else {
+          timeSince = `${Math.floor(diffMins / 60)}h ${diffMins % 60}m ago`;
+        }
+        lastOnlineText = formatLastOnline(latestActiveTimestamp);
       } else {
         timeSince = 'Offline';
+        lastOnlineText = 'Offline';
       }
 
       return {
@@ -332,13 +422,139 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
         completedJobsTodayCount,
         totalVolumeToday: totalVolumeLitersToday,
         current_location: loc,
-        timeSince
+        timeSince,
+        lastOnlineText
       };
     });
   }, [remoteStaffList, staff, flightJobs, equipment, allFlightLogs, onlinePresenceMap, user.id, currentLocation, currentUserStatus]);
 
-  const filteredStaff = useMemo(() => {
+  // Load shift briefing data for selected shift (Morning, Evening, Night)
+  useEffect(() => {
+    let isCancelled = false;
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    try {
+      const local = localStorage.getItem(`fms_briefing_info_${todayStr}_${selectedShift}`);
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (parsed && !isCancelled) setCurrentShiftBriefing(parsed);
+      }
+    } catch {}
+
+    supabaseService.getShiftBriefingInfo(todayStr, selectedShift).then(data => {
+      if (data && !isCancelled) {
+        setCurrentShiftBriefing(data);
+      }
+    }).catch(err => {
+      console.warn('[StaffTracker] Briefing fetch error:', err);
+    });
+
+    const channel = supabase
+      .channel(`staff_tracker_briefing_sync_${selectedShift}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_briefing_info' }, () => {
+        supabaseService.getShiftBriefingInfo(todayStr, selectedShift).then(data => {
+          if (data && !isCancelled) setCurrentShiftBriefing(data);
+        });
+      })
+      .subscribe();
+
+    return () => {
+      isCancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [selectedShift]);
+
+  const briefedStaffIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!currentShiftBriefing || !currentShiftBriefing.staffAssignments) return ids;
+    const s = currentShiftBriefing.staffAssignments;
+
+    const addVal = (val: any) => {
+      if (!val) return;
+      if (typeof val === 'string' && val.trim()) ids.add(val.trim().toLowerCase());
+      else if (typeof val === 'object' && val.id) ids.add(String(val.id).trim().toLowerCase());
+    };
+
+    const addArr = (arr: any) => {
+      if (Array.isArray(arr)) arr.forEach(addVal);
+    };
+
+    addArr(s.activeOperators);
+    addArr(s.activeOfficers);
+    addArr(s.hydrantOpsOfficers);
+    addArr(s.dutySupervisors);
+    addVal(s.dutySupervisor);
+    addArr(s.shiftInCharges);
+    addVal(s.shiftInCharge);
+    addArr(s.attendees);
+
+    if (s.staffStatuses && typeof s.staffStatuses === 'object') {
+      Object.keys(s.staffStatuses).forEach(k => addVal(k));
+    }
+
+    if (s.frozenFlights) {
+      const flights = [
+        ...(s.frozenFlights.intl || []),
+        ...(s.frozenFlights.domestic || []),
+        ...(s.frozenFlights.adhoc || [])
+      ];
+      flights.forEach((f: any) => {
+        if (f.assignedTo) addVal(f.assignedTo);
+        if (f.assignedOfficer) addVal(f.assignedOfficer);
+      });
+    }
+
+    if (Array.isArray(s.adhocFlights)) {
+      s.adhocFlights.forEach((f: any) => {
+        if (f.assignedTo) addVal(f.assignedTo);
+        if (f.assignedOfficer) addVal(f.assignedOfficer);
+      });
+    }
+
+    return ids;
+  }, [currentShiftBriefing]);
+
+  const isStaffBriefed = useCallback((s: any) => {
+    if (briefedStaffIds.size === 0) return false;
+    const sId = (s.id || '').trim().toLowerCase();
+    const sEmp = (s.employeeId || '').trim().toLowerCase();
+    const cleanEmp = sEmp.replace(/^[a-z]-?/i, '');
+    const sName = (s.name || '').trim().toLowerCase();
+
+    if (sId && briefedStaffIds.has(sId)) return true;
+    if (sEmp && briefedStaffIds.has(sEmp)) return true;
+    if (cleanEmp && briefedStaffIds.has(cleanEmp)) return true;
+    if (sName && briefedStaffIds.has(sName)) return true;
+
+    for (const bId of briefedStaffIds) {
+      if (isStaffMatch(s, bId)) return true;
+    }
+    return false;
+  }, [briefedStaffIds]);
+
+  // Filter staff based on shift briefing so tracker cards & stats reflect the active shift
+  const shiftStaff = useMemo(() => {
     return enrichedStaff.filter((s: any) => {
+      const isItp = ITP_ROLES.includes(s.role as UserRole);
+      const isDepot = DEPOT_ROLES.includes(s.role as UserRole);
+
+      // If user selected DEPOT tab in roleFilter
+      if (roleFilter === 'DEPOT') {
+        return isDepot;
+      }
+
+      // For ITP staff: strictly require being part of the selected shift's briefing
+      if (isItp) {
+        return isStaffBriefed(s);
+      }
+
+      // If other roles exist, include only if briefed
+      return isStaffBriefed(s);
+    });
+  }, [enrichedStaff, isStaffBriefed, roleFilter]);
+
+  const filteredStaff = useMemo(() => {
+    return shiftStaff.filter((s: any) => {
       // Role & status filter
       if (roleFilter === 'ITP' && !ITP_ROLES.includes(s.role as UserRole)) return false;
       if (roleFilter === 'DEPOT' && !DEPOT_ROLES.includes(s.role as UserRole)) return false;
@@ -363,11 +579,11 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
       if (aVal !== bVal) return aVal - bVal;
       return a.name.localeCompare(b.name);
     });
-  }, [enrichedStaff, roleFilter, searchTerm]);
+  }, [shiftStaff, roleFilter, searchTerm]);
 
   const stats = useMemo(() => {
     let onDuty = 0, onJob = 0, idle = 0, onBreak = 0, offline = 0;
-    enrichedStaff.forEach((s: any) => {
+    shiftStaff.forEach((s: any) => {
       if (['ONLINE', 'ON_JOB', 'IDLE', 'ON_BREAK'].includes(s.liveStatus)) onDuty++;
       if (s.liveStatus === 'ON_JOB') onJob++;
       if (s.liveStatus === 'IDLE' || s.liveStatus === 'ONLINE') idle++;
@@ -375,7 +591,7 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
       if (s.liveStatus === 'OFFLINE') offline++;
     });
     return { onDuty, onJob, idle, onBreak, offline };
-  }, [enrichedStaff]);
+  }, [shiftStaff]);
 
   // Fetch real activity timeline for selected staff member
   useEffect(() => {
@@ -424,25 +640,37 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
 
           staffLogs.forEach(log => {
             const vol = Number(log.volume || (log as any).grossLiters || 0);
+            const logRawTime = log.timestampFinalEnd || log.timestampStart || log.operationalDate;
+            let logIso = new Date().toISOString();
+            if (logRawTime) {
+              const d = new Date(logRawTime);
+              if (!isNaN(d.getTime())) logIso = d.toISOString();
+              else if (/^\d{1,2}:\d{2}/.test(String(logRawTime).trim())) {
+                const clean = String(logRawTime).trim().length === 5 ? `${String(logRawTime).trim()}:00` : String(logRawTime).trim();
+                const d2 = new Date(`${todayStr}T${clean}`);
+                if (!isNaN(d2.getTime())) logIso = d2.toISOString();
+              }
+            }
             timeline.push({
               id: `log-complete-${log.id || log.flightNumber}-${log.timestampStart}`,
               activity_type: 'JOB_COMPLETE',
               activity_data: { 
                 description: `Completed fueling flight ${log.flightNumber} at Stand ${log.stand || 'Apron'} • ${vol.toLocaleString()} L dispensed` 
               },
-              created_at: log.timestampFinalEnd || log.timestampStart || log.operationalDate || new Date().toISOString()
+              created_at: logIso
             });
           });
 
           // 3. Add active in-progress job if currently refueling
-          if (selectedStaff.activeJob) {
+          if (selectedStaff.activeJob && selectedStaff.liveStatus === 'ON_JOB') {
+            const startTimeIso = getJobStartTime(selectedStaff.activeJob, todayStr);
             timeline.push({
               id: `active-${selectedStaff.activeJob.id}`,
               activity_type: 'JOB_START',
               activity_data: { 
                 description: `Commenced fueling flight ${selectedStaff.activeJob.flightNumber} at Stand ${selectedStaff.activeJob.stand || 'N/A'}` 
               },
-              created_at: selectedStaff.activeJob.eta || new Date().toISOString()
+              created_at: startTimeIso
             });
           }
 
@@ -461,13 +689,19 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
           // 5. Add login event ONLY if staff member is online/on duty today, using real last active time
           const hasLogin = timeline.some(t => t.activity_type === 'LOGIN');
           if (!hasLogin && ['ONLINE', 'ON_JOB', 'ON_BREAK'].includes(selectedStaff.liveStatus)) {
+            const rawLogin = selectedStaff.last_active_at || selectedStaff.lastActiveAt;
+            let loginIso = new Date().toISOString();
+            if (rawLogin) {
+              const d = new Date(rawLogin);
+              if (!isNaN(d.getTime())) loginIso = d.toISOString();
+            }
             timeline.push({
               id: `login-${selectedStaff.id}`,
               activity_type: 'LOGIN',
               activity_data: { 
                 description: `Signed in for shift duty (${selectedShift} Shift)` 
               },
-              created_at: selectedStaff.last_active_at || selectedStaff.lastActiveAt || new Date().toISOString()
+              created_at: loginIso
             });
           }
 
@@ -493,26 +727,6 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
     } catch (e) {}
     await updateStatus(newStatus);
     await logActivity('STATUS_CHANGE', { newStatus });
-  };
-
-  const handleSupervisorResetPassword = async () => {
-    if (!selectedStaff || !newTempPassword) return;
-    setIsResettingPassword(true);
-    try {
-      const res = await staffAuthService.setPassword(selectedStaff.id, newTempPassword, true);
-      if (res.success) {
-        setPasswordResetSuccess(true);
-        haptic('SUCCESS');
-        setTimeout(() => {
-          setPasswordResetSuccess(false);
-          setShowPasswordResetModal(false);
-        }, 2000);
-      }
-    } catch (e) {
-      console.error('Password reset failed:', e);
-    } finally {
-      setIsResettingPassword(false);
-    }
   };
 
   const getStatusColor = (status: string) => {
@@ -681,8 +895,14 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
               type="button"
               onClick={() => {
                 haptic('TAP');
-                if (isTrackingLocation) stopLocationTracking();
-                else startLocationTracking();
+                if (isTrackingLocation) {
+                  stopLocationTracking();
+                  setJustEnabledGps(false);
+                } else {
+                  startLocationTracking();
+                  setJustEnabledGps(true);
+                  setTimeout(() => setJustEnabledGps(false), 1000);
+                }
               }}
               className={`px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95 ${
                 isTrackingLocation 
@@ -690,7 +910,7 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
                   : 'bg-surface-container-high/40 text-on-surface-dim hover:text-on-surface border border-outline hover:bg-surface-container font-bold'
               }`}
             >
-              <Navigation className={`w-3.5 h-3.5 ${isTrackingLocation ? 'animate-spin' : ''}`} />
+              <Navigation className={`w-3.5 h-3.5 ${justEnabledGps ? 'animate-spin' : ''}`} />
               {isTrackingLocation ? 'GPS Tracking Active' : 'Enable GPS'}
             </button>
           </div>
@@ -758,9 +978,18 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
          ───────────────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto min-h-0 pr-1 custom-scrollbar pb-24">
         {filteredStaff.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-on-surface-dim border border-dashed border-outline rounded-3xl p-6">
-            <Users className="w-12 h-12 mb-3 opacity-20" />
-            <p className="uppercase tracking-widest text-xs font-bold">No staff matching current filter</p>
+          <div className="flex flex-col items-center justify-center h-64 text-on-surface-dim border border-dashed border-outline rounded-3xl p-6 text-center">
+            <Users className="w-12 h-12 mb-3 opacity-20 text-primary" />
+            <p className="uppercase tracking-widest text-xs font-black text-on-surface">
+              {briefedStaffIds.size === 0 && roleFilter !== 'DEPOT'
+                ? `No staff briefed for ${selectedShift} shift yet`
+                : 'No staff matching current filter'}
+            </p>
+            {briefedStaffIds.size === 0 && roleFilter !== 'DEPOT' && (
+              <p className="text-[11px] text-on-surface-dim mt-1 max-w-sm">
+                Staff assigned in the Shift Briefing module for {selectedShift} shift will appear here.
+              </p>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
@@ -823,7 +1052,7 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
                     </div>
                   ) : (
                     <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider">
-                      <span className={s.liveStatus === 'OFFLINE' ? 'text-red-400' : s.liveStatus === 'ON_BREAK' ? 'text-amber-500' : 'text-emerald-500'}>
+                      <span className={s.liveStatus === 'OFFLINE' ? 'text-slate-400' : s.liveStatus === 'ON_BREAK' ? 'text-amber-500' : 'text-emerald-500'}>
                         {s.liveStatus.replace('_', ' ')}
                       </span>
                       <span className="text-[10px] text-on-surface-dim font-normal">
@@ -843,8 +1072,17 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
                   )}
                   
                   <div className="flex items-center justify-between text-[9px] text-on-surface-dim pt-2 border-t border-outline">
-                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {s.timeSince || 'Offline'}</span>
-                    <span className="text-primary font-bold group-hover:underline">Track Dossier →</span>
+                    <span className="flex items-center gap-1.5 truncate pr-2">
+                      <Clock className="w-3 h-3 text-on-surface-dim/70 shrink-0" />
+                      {s.liveStatus === 'ONLINE' || s.liveStatus === 'ON_JOB' ? (
+                        <span className="text-emerald-500 font-bold">Active now</span>
+                      ) : s.lastOnlineText && s.lastOnlineText !== 'Offline' ? (
+                        <span className="truncate">Last online: <strong className="text-on-surface font-mono font-bold">{s.lastOnlineText}</strong></span>
+                      ) : (
+                        <span>{s.timeSince || 'Offline'}</span>
+                      )}
+                    </span>
+                    <span className="text-primary font-bold group-hover:underline shrink-0">Track Dossier →</span>
                   </div>
                 </div>
               </div>
@@ -910,7 +1148,11 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
                     </span>
                   </div>
                   <span className="text-[9px] text-on-surface-dim block mt-1">
-                    {selectedStaff.timeSince || 'Offline'}
+                    {selectedStaff.liveStatus === 'ONLINE' || selectedStaff.liveStatus === 'ON_JOB' 
+                      ? 'Active now' 
+                      : selectedStaff.lastOnlineText && selectedStaff.lastOnlineText !== 'Offline'
+                        ? `Last online: ${selectedStaff.lastOnlineText}` 
+                        : (selectedStaff.timeSince || 'Offline')}
                   </span>
                 </div>
 
@@ -933,7 +1175,7 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
                 <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl">
                   <div className="flex items-center justify-between text-emerald-500 text-[10px] font-black uppercase tracking-wider mb-2">
                     <span className="flex items-center gap-1.5">
-                      <Navigation className="w-3.5 h-3.5 animate-pulse" /> Live Airfield Location
+                      <Navigation className="w-3.5 h-3.5" /> Live Airfield Location
                     </span>
                     <span className="bg-emerald-500/20 px-2 py-0.5 rounded text-[8.5px]">GPS Active</span>
                   </div>
@@ -954,7 +1196,7 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
               )}
 
               {/* Current Active Assignment */}
-              {selectedStaff.activeJob ? (
+              {selectedStaff.activeJob && selectedStaff.liveStatus === 'ON_JOB' ? (
                 <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-2xl">
                   <div className="flex items-center justify-between text-blue-500 text-[10px] font-black uppercase tracking-wider mb-2">
                     <span className="flex items-center gap-1.5"><Radio className="w-3.5 h-3.5 animate-pulse" /> Active Refueling Job</span>
@@ -985,31 +1227,16 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
                 </div>
               )}
 
-              {/* Supervisor Actions: Password Reset & Controls */}
-              {isSupervisorOrAdmin && (
-                <div className="p-4 bg-surface-dim border border-outline rounded-2xl space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black text-on-surface uppercase tracking-wider flex items-center gap-1.5">
-                      <ShieldAlert className="w-3.5 h-3.5 text-primary" /> Supervisor Controls
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      onClick={() => { setShowPasswordResetModal(true); setPasswordResetSuccess(false); }}
-                      className="flex-1 py-3 px-4 kinetic-gradient text-white rounded-xl text-[10px] font-black uppercase tracking-wider shadow-premium hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <KeyRound className="w-3.5 h-3.5" /> Reset Password
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {/* Activity Timeline */}
               <div>
-                <h4 className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <Activity className="w-3.5 h-3.5" /> Today's Activity Timeline
-                </h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider flex items-center gap-1.5">
+                    <Activity className="w-3.5 h-3.5 text-primary" /> Today's Activity Timeline
+                  </h4>
+                  <span className="text-[9px] font-mono text-on-surface-dim">
+                    {new Date().toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </div>
 
                 {isLoadingLogs ? (
                   <div className="py-8 flex justify-center">
@@ -1038,7 +1265,7 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
                               {log.activity_type.replace(/_/g, ' ')}
                             </span>
                             <span className="text-[9px] font-mono text-on-surface-dim">
-                              {log.created_at ? new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                              {formatTimelineTimestamp(log.created_at)}
                             </span>
                           </div>
                           <p className="text-[11px] text-on-surface-dim mt-0.5">
@@ -1061,58 +1288,6 @@ export const StaffTracker: React.FC<StaffTrackerProps> = ({ user }) => {
                 Close Dossier
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ─────────────────────────────────────────────────────────────────
-          SUPERVISOR PASSWORD RESET MODAL
-         ───────────────────────────────────────────────────────────────── */}
-      {showPasswordResetModal && selectedStaff && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-surface border border-outline rounded-[28px] w-full max-w-sm p-6 shadow-2xl relative">
-            <h3 className="text-sm font-[900] text-on-surface uppercase tracking-wider mb-1 flex items-center gap-2">
-              <KeyRound className="w-4 h-4 text-primary" /> Reset Password
-            </h3>
-            <p className="text-[11px] text-on-surface-dim mb-4">
-              Set a temporary password for <strong className="text-on-surface">{selectedStaff.name}</strong> ({selectedStaff.employeeId}). They will be required to change it on their next sign-in.
-            </p>
-
-            {passwordResetSuccess ? (
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-500 text-xs font-bold flex items-center gap-2 mb-4">
-                <Check className="w-4 h-4" /> Password reset successfully!
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[9px] font-black uppercase text-on-surface-dim block mb-1">
-                    Temporary Password
-                  </label>
-                  <input 
-                    type="text"
-                    value={newTempPassword}
-                    onChange={e => setNewTempPassword(e.target.value)}
-                    className="w-full bg-surface-dim border border-outline rounded-xl px-3 py-2 text-xs font-mono tracking-wider focus:border-primary outline-none"
-                  />
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                  <button
-                    onClick={() => setShowPasswordResetModal(false)}
-                    className="flex-1 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-container border border-outline text-[10px] font-black uppercase text-on-surface-dim hover:text-on-surface hover:scale-95 active:scale-90 transition-all cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSupervisorResetPassword}
-                    disabled={isResettingPassword || !newTempPassword}
-                    className="flex-1 py-2.5 rounded-xl kinetic-gradient text-white text-[10px] font-black uppercase tracking-wider shadow-premium hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 cursor-pointer"
-                  >
-                    {isResettingPassword ? 'Resetting...' : 'Confirm Reset'}
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}

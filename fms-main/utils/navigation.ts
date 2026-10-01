@@ -151,6 +151,30 @@ export const getRoleMenuItems = (role?: UserRole): NavigationItem[] => {
         { id: 'finance', label: 'Finance & Billing', icon: Receipt },
       ];
 
+    case UserRole.MACL_MANAGEMENT:
+      return [
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'executive', label: 'Executive Module', icon: Briefcase },
+        { id: 'forecasting', label: 'Forecasting & Trends', icon: TrendingUp },
+        { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
+        { id: 'commercial-reports', label: 'Commercial Reports', icon: Coins },
+        { id: 'schedule', label: 'Flight Schedule', icon: Calendar },
+        { id: 'history', label: 'Log History', icon: History },
+      ];
+
+    case UserRole.FUEL_ADMINISTRATION:
+      return [
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
+        { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
+        { id: 'equipment', label: 'Equipment Status', icon: Truck },
+        { id: 'stock', label: 'Stock Management', icon: StockIcon },
+        { id: 'history', label: 'Log History', icon: History },
+        { id: 'performance', label: 'Refueling Performance', icon: Gauge },
+        { id: 'depot-reports', label: 'Fuel Reports', icon: BarChart3 },
+        { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
+      ];
+
     case UserRole.ADMIN:
       return [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -275,6 +299,24 @@ export const getRoleNavItems = (
         { id: 'forecasting', label: 'Forecast', icon: TrendingUp },
         { id: 'depot-reports', label: 'Reports', icon: BarChart3 },
         { id: 'executive', label: 'Executive', icon: Briefcase },
+      ];
+
+    case UserRole.MACL_MANAGEMENT:
+      return [
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'executive', label: 'Executive', icon: Briefcase },
+        { id: 'depot-reports', label: 'Reports', icon: BarChart3 },
+        { id: 'commercial-reports', label: 'Commercial', icon: Coins },
+        { id: 'schedule', label: 'Schedule', icon: Calendar },
+      ];
+
+    case UserRole.FUEL_ADMINISTRATION:
+      return [
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'intoplane', label: 'Refuel', icon: Plane },
+        { id: 'schedule', label: 'Schedule', icon: Calendar },
+        { id: 'stock', label: 'Stock', icon: StockIcon },
+        { id: 'depot-reports', label: 'Reports', icon: BarChart3 },
       ];
 
     case UserRole.ADMIN:

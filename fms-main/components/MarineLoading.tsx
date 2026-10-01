@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Ship, Truck, CheckCircle, AlertTriangle, Save, Clock, ArrowRight, History, FileText, Anchor, Droplet, Users, Calendar } from 'lucide-react';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { EquipmentType, UserRole, FuelType, EquipmentStatus, User } from '../types';
@@ -6,6 +6,7 @@ import { useNotification } from '../context/NotificationContext';
 import { supabaseService } from '../services/supabaseService';
 import { checkDuplicateTicketAcrossJetA1 } from '../services/ticketValidation';
 import { SignatureAcknowledgment } from './SignatureAcknowledgment';
+import { generateInvoiceHtml } from '../services/invoicePdfService';
 
 interface MarineLoadingLog {
     id: string;
@@ -29,7 +30,7 @@ interface MarineLoadingProps {
 }
 
 export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
-  const { equipment, createAlert, alerts, flightLogs, staff, updateEquipment, refreshData, isTicketAutoEnabled, previewNextTicketNumber, generateTicketNumber } = useOperationalData();
+  const { equipment, createAlert, alerts, flightLogs, staff, updateEquipment, isTicketAutoEnabled, previewNextTicketNumber, generateTicketNumber } = useOperationalData();
   const { notify } = useNotification();
   const isAutoJetA1 = isTicketAutoEnabled('JET_A1');
   const isAutoPaper = isTicketAutoEnabled('PAPER_OFFLINE');
@@ -37,10 +38,8 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
-  const [logs, setLogs] = useState<MarineLoadingLog[]>([]);
-
-  // Load real logs from database context dynamically
-  useEffect(() => {
+  // Load real logs from database context dynamically via useMemo
+  const logs = useMemo<MarineLoadingLog[]>(() => {
     const parseTime = (tString?: string) => {
       if (!tString) return '';
       try {
@@ -92,7 +91,7 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
       }
     }
 
-    setLogs(deduplicatedLogs);
+    return deduplicatedLogs;
   }, [flightLogs]);
 
   const isOperator = user?.role === UserRole.DEPOT_OPERATOR;
@@ -138,21 +137,28 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
       };
       const lastLog = [...vehicleLogs].sort((a, b) => getLogTime(b) - getLogTime(a))[0];
       
-      const initialMeter = lastLog?.meterClose || 0;
+      const initialMeter = (lastLog?.meterClose || 0).toString();
       setFormData(prev => {
         const vol = parseFloat(prev.volume.toString().replace(/,/g, '')) || 0;
+        const newClose = ((parseFloat(initialMeter) || 0) + vol).toString();
+        if (prev.meterOpen === initialMeter && prev.meterClose === newClose) {
+          return prev;
+        }
         return {
           ...prev,
-          meterOpen: initialMeter.toString(),
-          meterClose: (initialMeter + vol).toString()
+          meterOpen: initialMeter,
+          meterClose: newClose
         };
       });
     } else {
-      setFormData(prev => ({
-        ...prev,
-        meterOpen: '',
-        meterClose: ''
-      }));
+      setFormData(prev => {
+        if (prev.meterOpen === '' && prev.meterClose === '') return prev;
+        return {
+          ...prev,
+          meterOpen: '',
+          meterClose: ''
+        };
+      });
     }
   }, [formData.refuellerId, flightLogs]);
 
@@ -286,6 +292,8 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
           vehicleId: formData.refuellerId.toUpperCase(),
           status: 'COMPLETED' as const,
           logType: 'MARINE' as const,
+          isDomestic: true,
+          intDom: 'DOM',
           deliveryNumber: finalDeliveryNumber || undefined,
           timestampStart: formData.startTime ? new Date(`${formData.date}T${formData.startTime}:00`).toISOString() : `${formData.date}T00:00:00.000Z`,
           timestampFinalEnd: formData.endTime ? new Date(`${formData.date}T${formData.endTime}:00`).toISOString() : `${formData.date}T00:00:00.000Z`,
@@ -303,7 +311,14 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
           signerDesignation: formData.signerDesignation || undefined,
           signedAt: formData.signatureDataUrl ? new Date().toISOString() : undefined,
           declarationConfirmed: !!formData.signatureDataUrl,
+          invoiceHtml: undefined as string | undefined,
         };
+
+        try {
+          logToSave.invoiceHtml = generateInvoiceHtml(logToSave, user || undefined);
+        } catch (invErr) {
+          console.warn('[MarineLoading] Invoice HTML generation error:', invErr);
+        }
 
         await supabaseService.createFlightLog(logToSave);
 
@@ -325,7 +340,7 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
                 await createAlert({
                   severity: 'medium',
                   message: `Replenishment requested for unit ${formData.refuellerId} (Low fuel: ${newVolume.toLocaleString()}L)`,
-                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                  timestamp: new Date().toISOString(),
                   acknowledged: false,
                   targetRole: UserRole.DEPOT_OPERATOR
                 });
@@ -336,27 +351,39 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
             }
           }
         }
-        await refreshData();
+        // Cache signature metadata for invoice retrieval
+        if (formData.signatureDataUrl) {
+          try {
+            const sigPayload = {
+              signatureDataUrl: formData.signatureDataUrl,
+              signerName: (formData.signerName || '').toUpperCase(),
+              signerDesignation: formData.signerDesignation,
+              signedAt: new Date().toISOString()
+            };
+            if (finalDeliveryNumber) {
+              localStorage.setItem(`fms_sig_${finalDeliveryNumber}`, JSON.stringify(sigPayload));
+            }
+            if (newLog.id) {
+              localStorage.setItem(`fms_sig_${newLog.id}`, JSON.stringify(sigPayload));
+            }
+          } catch (e) {}
+        }
       } catch (dbError) {
         console.error('Error saving marine log to database:', dbError);
       }
-
-      setLogs(prev => {
-        const deduped = prev.filter(l => 
-          !(finalDeliveryNumber && l.deliveryNumber === finalDeliveryNumber) &&
-          l.id !== newLog.id
-        );
-        return [newLog, ...deduped];
-      });
       
-      // Create alert for record
-      await createAlert({
-        severity: 'low',
-        message: `Marine loading completed: ${formData.vesselName} loaded with ${parsedVolume.toLocaleString()}L from ${formData.refuellerId}${finalDeliveryNumber ? ` (Ticket: ${finalDeliveryNumber})` : ''}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-        acknowledged: false,
-        targetRole: UserRole.DEPOT_MANAGER
-      });
+      // Create alert for record safely
+      try {
+        await createAlert({
+          severity: 'low',
+          message: `Marine loading completed: ${formData.vesselName} loaded with ${parsedVolume.toLocaleString()}L from ${formData.refuellerId}${finalDeliveryNumber ? ` (Ticket: ${finalDeliveryNumber})` : ''}`,
+          timestamp: new Date().toISOString(),
+          acknowledged: false,
+          targetRole: UserRole.DEPOT_MANAGER
+        });
+      } catch (alertErr) {
+        console.warn('Marine log completion alert warning:', alertErr);
+      }
 
       setLoading(false);
       setSuccess(true);
@@ -718,7 +745,8 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
                                     <button 
                                         type="button"
                                         onClick={() => setNow('startTime')}
-                                        className="px-5 bg-surface-dim border border-outline rounded-2xl hover:bg-primary hover:text-white transition-all text-on-surface-dim active:scale-95"
+                                        className="px-5 bg-surface-dim border border-outline rounded-2xl hover-kinetic-gradient transition-all text-on-surface-dim active:scale-95 cursor-pointer"
+                                        title="Set current time"
                                     >
                                         <Clock className="w-4 h-4" />
                                     </button>
@@ -738,7 +766,8 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
                                     <button 
                                         type="button"
                                         onClick={() => setNow('endTime')}
-                                        className="px-5 bg-surface-dim border border-outline rounded-2xl hover:bg-primary hover:text-white transition-all text-on-surface-dim active:scale-95"
+                                        className="px-5 bg-surface-dim border border-outline rounded-2xl hover-kinetic-gradient transition-all text-on-surface-dim active:scale-95 cursor-pointer"
+                                        title="Set current time"
                                     >
                                         <Clock className="w-4 h-4" />
                                     </button>
@@ -799,7 +828,7 @@ export const MarineLoading: React.FC<MarineLoadingProps> = ({ user }) => {
                 {/* Vessel Master / Customer Signature & Declaration */}
                 <SignatureAcknowledgment
                   signerName={formData.signerName}
-                  onSignerNameChange={(val) => setFormData(prev => ({ ...prev, signerName: val }))}
+                  onSignerNameChange={(val) => setFormData(prev => ({ ...prev, signerName: val.toUpperCase() }))}
                   signerDesignation={formData.signerDesignation}
                   onSignerDesignationChange={(val) => setFormData(prev => ({ ...prev, signerDesignation: val }))}
                   signatureDataUrl={formData.signatureDataUrl}

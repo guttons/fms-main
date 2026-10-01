@@ -996,7 +996,7 @@ export const TankerDischarge: React.FC = () => {
       await createAlert({
         severity: 'low',
         message: `Bulk import completed: ${curCalcs.summary.totalObservedVolume.toLocaleString()} KL discharged into tanks from vessel ${tankerName}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+        timestamp: new Date().toISOString(),
         acknowledged: false,
         targetRole: UserRole.DEPOT_MANAGER
       });

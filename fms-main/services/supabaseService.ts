@@ -1305,21 +1305,41 @@ export const supabaseService = {
   },
 
   async createAlert(alert: Omit<Alert, 'id'>): Promise<void> {
+    // Safely normalize alert timestamp to a valid ISO string
+    let validTimestamp = new Date().toISOString();
+    if (alert.timestamp) {
+      const parsed = new Date(alert.timestamp);
+      if (!isNaN(parsed.getTime())) {
+        validTimestamp = parsed.toISOString();
+      } else if (typeof alert.timestamp === 'string' && /^\d{1,2}:\d{2}/.test(alert.timestamp)) {
+        const today = new Date().toISOString().split('T')[0];
+        const combined = new Date(`${today}T${alert.timestamp.padStart(5, '0')}:00Z`);
+        if (!isNaN(combined.getTime())) {
+          validTimestamp = combined.toISOString();
+        }
+      }
+    }
+
+    const safeAlert = {
+      ...alert,
+      timestamp: validTimestamp
+    };
+
     try {
-      await api.alerts.create(alert);
+      await api.alerts.create(safeAlert);
     } catch (apiErr) {
       console.warn('[API] api.alerts.create failed, falling back to direct:', apiErr);
       const baseRow = {
-        severity: alert.severity,
-        message: alert.message,
-        timestamp: new Date().toISOString(),
-        acknowledged: alert.acknowledged,
-        target_role: alert.targetRole || null
+        severity: safeAlert.severity,
+        message: safeAlert.message,
+        timestamp: validTimestamp,
+        acknowledged: safeAlert.acknowledged,
+        target_role: safeAlert.targetRole || null
       };
 
       // Determine operational date
-      const flightDate = alert.flightDate
-        || (alert.timestamp ? new Date(alert.timestamp).toISOString().split('T')[0] : null)
+      const flightDate = safeAlert.flightDate
+        || validTimestamp.split('T')[0]
         || new Date().toISOString().split('T')[0];
 
       if (alertsExtendedSupported) {
@@ -1922,6 +1942,7 @@ export const supabaseService = {
               employeeId: row.employee_id,
               phone: row.phone,
               email: row.email,
+              designation: row.designation || undefined,
               status: row.status as 'active' | 'inactive',
               joinDate: row.join_date || new Date().toISOString(),
               avatar: row.avatar,
@@ -2009,6 +2030,7 @@ export const supabaseService = {
       employee_id: member.employeeId,
       phone: member.phone || null,
       email: member.email || null,
+      designation: member.designation || null,
       status: member.status,
       avatar: newMember.avatar
     };
@@ -2051,6 +2073,7 @@ export const supabaseService = {
     if ('employeeId' in updates) row.employee_id = updates.employeeId;
     if ('phone' in updates) row.phone = updates.phone;
     if ('email' in updates) row.email = updates.email;
+    if ('designation' in updates) row.designation = updates.designation;
     if ('status' in updates) row.status = updates.status;
     if ('avatar' in updates) row.avatar = updates.avatar;
 

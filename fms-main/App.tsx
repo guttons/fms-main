@@ -1081,7 +1081,7 @@ const AppContextContent: React.FC<any> = ({
       case 'history':
         return <LogHistory user={currentUser} />;
       case 'performance':
-        if (![UserRole.ITP_MANAGER, UserRole.ADMIN, UserRole.FUEL_MANAGEMENT].includes(currentUser?.role as UserRole)) {
+        if (![UserRole.ITP_MANAGER, UserRole.ADMIN, UserRole.FUEL_MANAGEMENT, UserRole.MACL_MANAGEMENT, UserRole.FUEL_ADMINISTRATION].includes(currentUser?.role as UserRole)) {
           return (
             <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-300">
               <div className="w-24 h-24 bg-error/10 rounded-[32px] flex items-center justify-center mb-6 border border-error/20 shadow-premium">
@@ -1147,7 +1147,7 @@ const AppContextContent: React.FC<any> = ({
         }
         return <CommercialReports />;
       case 'executive':
-        if (currentUser?.role && ![UserRole.ADMIN, UserRole.EXECUTIVE, UserRole.FUEL_MANAGEMENT].includes(currentUser.role)) {
+        if (currentUser?.role && ![UserRole.ADMIN, UserRole.EXECUTIVE, UserRole.FUEL_MANAGEMENT, UserRole.MACL_MANAGEMENT].includes(currentUser.role)) {
           return (
             <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-300">
               <div className="w-24 h-24 bg-error/10 rounded-[32px] flex items-center justify-center mb-6 border border-error/20 shadow-premium">

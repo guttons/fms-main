@@ -23,6 +23,25 @@ const fmtVol = (n: number) => {
   return `${n}L`;
 };
 
+const formatRequestedDateTime = (raw?: string): string => {
+  if (!raw || raw === '--:--') return '--:--';
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(raw.trim())) return raw.trim();
+  try {
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = months[d.getMonth()];
+      const year = d.getFullYear();
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      if (!raw.includes('T') && !raw.includes(':')) return `${day}-${month}-${year}`;
+      return `${day}-${month}-${year} • ${hours}:${minutes}`;
+    }
+  } catch {}
+  return raw;
+};
+
 // Mock Data for Charts
 const HOURLY_DATA_INT = [
   { hour: '06:00', flights: 2, volume: 15000 },
@@ -1834,7 +1853,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
         return {
           id: `synth-${rf.id}`,
           message: `Replenishment requested for unit ${rf.id} (Low fuel: ${rf.currentVolume?.toLocaleString() || 0}L)`,
-          timestamp: rf.lastUpdated ? new Date(rf.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--',
+          timestamp: rf.lastUpdated || '--:--',
           acknowledged: false
         };
       }
@@ -1929,7 +1948,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                         </div>
                         <div>
                           <p className="text-sm font-bold text-on-surface">{request.message}</p>
-                          <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-50 mt-0.5">Requested {request.timestamp}</p>
+                          <p className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60 mt-1 flex items-center">
+                            <Clock className="w-3 h-3 mr-1.5 text-primary/70 shrink-0" />
+                            <span>Requested: {formatRequestedDateTime(request.timestamp)}</span>
+                          </p>
                         </div>
                       </div>
                       <button

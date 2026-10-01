@@ -2900,7 +2900,7 @@ const ScreenTimestamps: React.FC<{
           className={`mt-6 w-full text-white p-4 lg:p-6 rounded-3xl font-black text-[13px] uppercase tracking-[0.2em] flex items-center justify-center active:scale-95 transition-all shadow-premium cursor-pointer ${
             isFormValid 
               ? 'kinetic-gradient hover:opacity-95' 
-              : 'bg-gradient-to-r from-slate-700 to-slate-800 opacity-90 hover:opacity-100 border border-white/10'
+              : 'bg-gradient-to-r from-slate-700 to-slate-800 opacity-90 hover:opacity-100 border border-outline'
           }`}
       >
           Proceed to Metering <ChevronRight className="ml-3 w-5 h-5" />
@@ -3311,7 +3311,7 @@ const ScreenQC: React.FC<{
             <div className="pt-4 border-t border-outline/40">
               <SignatureAcknowledgment
                 signerName={activeFlight?.signerName || ''}
-                onSignerNameChange={(val) => onInputChange('signerName', val)}
+                onSignerNameChange={(val) => onInputChange('signerName', val.toUpperCase())}
                 signerDesignation={activeFlight?.signerDesignation || ''}
                 onSignerDesignationChange={(val) => onInputChange('signerDesignation', val)}
                 signerEmail={activeFlight?.signerEmail || ''}
@@ -3383,7 +3383,17 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(() => {
     try {
       const saved = localStorage.getItem(`fms_active_flight_${user?.id || ''}`);
-      return saved ? JSON.parse(saved) : null;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const today = new Date().toISOString().split('T')[0];
+        const flightDate = parsed?.operationalDate || (parsed?.timestampStart ? parsed.timestampStart.split('T')[0] : '');
+        if (flightDate && flightDate !== today) {
+          localStorage.removeItem(`fms_active_flight_${user?.id || ''}`);
+          return null;
+        }
+        return parsed;
+      }
+      return null;
     } catch {
       return null;
     }
@@ -4264,12 +4274,16 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         meterClose: (activeFlight.meterOpen || 0) + (activeFlight.volume || 0),
         deliveryNumber: finalDeliveryNumber,
         pitNumber: activeFlight.pitNumber,
-        co: activeFlight.co,
+        co: activeFlight.co || (activeFlight.isAdhoc ? activeFlight.airline : undefined),
         isAdhoc: activeFlight.isAdhoc,
         route: savedRoute,
         isDomestic: activeFlight.isDomestic,
         intDom: isSeaplaneFlight ? 'SEA' : (activeFlight.isDomestic ? 'DOM' : 'INT'),
-        airline: getAirlineName(activeFlight.flightNumber || '', externalFlights),
+        airline: (activeFlight.airline && activeFlight.airline !== 'Maldivian' && activeFlight.airline !== 'N/A')
+          ? activeFlight.airline
+          : (activeFlight.isAdhoc
+              ? (activeFlight.co || activeFlight.operatorName || 'GENERAL AVIATION')
+              : (getAirlineName(activeFlight.flightNumber || '', externalFlights) || activeFlight.airline || 'N/A')),
         operationalDate: activeFlight.operationalDate || new Date().toISOString().split('T')[0],
         created_at: new Date().toISOString(),
         psi: activeFlight.psi,
@@ -4280,13 +4294,32 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         destination: activeFlight.destination,
         paymentType: paymentType || activeFlight.paymentType || 'CREDIT',
         signatureDataUrl: activeFlight.signatureDataUrl || undefined,
-        signerName: activeFlight.signerName || undefined,
+        signerName: activeFlight.signerName ? activeFlight.signerName.toUpperCase() : undefined,
         signerDesignation: activeFlight.signerDesignation || undefined,
         signerEmail: activeFlight.signerEmail || undefined,
         signedAt: activeFlight.signatureDataUrl ? (activeFlight.signedAt || new Date().toISOString()) : undefined,
         declarationConfirmed: !!activeFlight.signatureDataUrl,
         invoiceSavedAt: new Date().toISOString(),
       };
+
+      // Cache signature metadata for immediate/future invoice generation
+      if (activeFlight.signatureDataUrl) {
+        try {
+          const sigPayload = {
+            signatureDataUrl: activeFlight.signatureDataUrl,
+            signerName: (activeFlight.signerName || '').toUpperCase(),
+            signerDesignation: activeFlight.signerDesignation,
+            signerEmail: activeFlight.signerEmail,
+            signedAt: activeFlight.signedAt || new Date().toISOString()
+          };
+          if (finalDeliveryNumber) {
+            localStorage.setItem(`fms_sig_${finalDeliveryNumber}`, JSON.stringify(sigPayload));
+          }
+          if (newLogId) {
+            localStorage.setItem(`fms_sig_${newLogId}`, JSON.stringify(sigPayload));
+          }
+        } catch (e) {}
+      }
 
       try {
         logToSave.invoiceHtml = generateInvoiceHtml(logToSave, user);
@@ -4708,7 +4741,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 {/* Declaration of Acknowledgment & Signature */}
                 <SignatureAcknowledgment
                   signerName={activeFlight.signerName || ''}
-                  onSignerNameChange={(val) => handleInputChange('signerName', val)}
+                  onSignerNameChange={(val) => handleInputChange('signerName', val.toUpperCase())}
                   signerDesignation={activeFlight.signerDesignation || ''}
                   onSignerDesignationChange={(val) => handleInputChange('signerDesignation', val)}
                   signerEmail={activeFlight.signerEmail || ''}

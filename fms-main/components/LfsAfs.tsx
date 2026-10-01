@@ -108,13 +108,25 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                 operatorId: user?.name || user?.id || 'System Admin',
                 remarks: `Ground support refuel: ${formData.vehicleReg} loaded with ${parsedVolume}L ${formData.fuelType} (On account of: ${formData.driverName}, Payment: ${formData.paymentMode}, Received by: ${formData.receivedBy}, Equipment: ${formData.equipmentName})`,
                 signatureDataUrl: formData.signatureDataUrl || undefined,
-                signerName: formData.signerName || formData.receivedBy || formData.driverName || undefined,
+                signerName: (formData.signerName || formData.receivedBy || formData.driverName || '').toUpperCase() || undefined,
                 signerDesignation: formData.signerDesignation || undefined,
                 signedAt: formData.signatureDataUrl ? new Date().toISOString() : undefined,
                 declarationConfirmed: !!formData.signatureDataUrl,
             };
 
             await supabaseService.createFillingStationLog(logToSave);
+
+            if (formData.signatureDataUrl && fullDeliveryNumber) {
+                try {
+                    localStorage.setItem(`fms_sig_${fullDeliveryNumber}`, JSON.stringify({
+                        signatureDataUrl: formData.signatureDataUrl,
+                        signerName: (formData.signerName || formData.receivedBy || formData.driverName || '').toUpperCase(),
+                        signerDesignation: formData.signerDesignation,
+                        signedAt: new Date().toISOString()
+                    }));
+                } catch (e) {}
+            }
+
             setLoading(false);
             setSuccess(true);
             setFormData({
@@ -451,7 +463,7 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                 {/* Recipient / Driver Signature & Declaration */}
                 <SignatureAcknowledgment
                   signerName={formData.signerName || formData.receivedBy || formData.driverName}
-                  onSignerNameChange={(val) => setFormData(prev => ({ ...prev, signerName: val }))}
+                  onSignerNameChange={(val) => setFormData(prev => ({ ...prev, signerName: val.toUpperCase() }))}
                   signerDesignation={formData.signerDesignation}
                   onSignerDesignationChange={(val) => setFormData(prev => ({ ...prev, signerDesignation: val }))}
                   signatureDataUrl={formData.signatureDataUrl}

@@ -150,3 +150,29 @@ export const INITIAL_STAFF_LIST: StaffMember[] = [
   { id: 'st-6669', employeeId: 'A-6669', email: 'depot@macl.aero', name: 'Mohamed Nahud Ali', role: UserRole.DEPOT_OPERATOR, status: 'active', joinDate: '2023-01-01' },
   { id: 'st-8875', employeeId: '8875', email: 'depot@macl.aero', name: 'Umaru Ibrahim', role: UserRole.DEPOT_OPERATOR, status: 'active', joinDate: '2023-01-01' }
 ];
+
+const ROLE_DEFAULT_DESIGNATIONS: Record<UserRole, string> = {
+  [UserRole.ADMIN]: 'System Administrator',
+  [UserRole.ITP_MANAGER]: 'ITP Manager',
+  [UserRole.DEPOT_MANAGER]: 'Depot Manager',
+  [UserRole.ITP_OFFICER]: 'ITP Officer',
+  [UserRole.ITP_OPERATOR]: 'ITP Operator',
+  [UserRole.ITP_HD_OPERATOR]: 'HD Operator',
+  [UserRole.DEPOT_OPERATOR]: 'Depot Operator',
+  [UserRole.ITP_SUPERVISOR]: 'ITP Supervisor',
+  [UserRole.EXECUTIVE]: 'Executive',
+  [UserRole.COMMERCIAL]: 'Commercial Officer',
+  [UserRole.FINANCE]: 'Finance Manager',
+  [UserRole.FUEL_MANAGEMENT]: 'Fuel Management Officer',
+  [UserRole.CUSTOMER]: 'Aviation Customer',
+  [UserRole.MACL_MANAGEMENT]: 'MACL Management',
+  [UserRole.FUEL_ADMINISTRATION]: 'Fuel Administration',
+};
+
+// Ensure all staff have default designation populated
+INITIAL_STAFF_LIST.forEach(s => {
+  if (!s.designation) {
+    s.designation = ROLE_DEFAULT_DESIGNATIONS[s.role] || s.role.replace(/_/g, ' ');
+  }
+});
+

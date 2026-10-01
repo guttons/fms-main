@@ -170,7 +170,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
       {/* Floating Sheet Container (GPU Composited) */}
       <div
         ref={sheetRef}
-        className={`fixed bottom-0 left-0 right-0 z-[71] bg-surface border-t border-slate-300/40 dark:border-[rgba(255,255,255,0.08)] rounded-t-[28px] shadow-[0_-12px_48px_rgba(0,0,0,0.45)] transition-[transform,opacity] duration-350 ease-[cubic-bezier(0.32,0.72,0,1)] transform-gpu will-change-transform ${
+        className={`fixed bottom-0 left-0 right-0 z-[71] bg-surface border-t border-outline rounded-t-[28px] shadow-[0_-12px_48px_rgba(0,0,0,0.45)] transition-[transform,opacity] duration-350 ease-[cubic-bezier(0.32,0.72,0,1)] transform-gpu will-change-transform ${
           isVisible ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-90'
         }`}
         style={{
@@ -191,7 +191,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
 
         {/* Header Title with Close Button */}
         {title && (
-          <div className="px-5 pb-2.5 pt-0.5 border-b border-slate-300/40 dark:border-[rgba(255,255,255,0.06)] flex items-center justify-between">
+          <div className="px-5 pb-2.5 pt-0.5 border-b border-outline flex items-center justify-between">
             <h3 className="text-[11px] font-black text-on-surface/80 uppercase tracking-widest">
               {title}
             </h3>
@@ -289,5 +289,5 @@ export const SheetAction: React.FC<SheetActionProps> = ({
 
 // ── Sheet Divider ─────────────────────────────────────────────────────────────
 export const SheetDivider: React.FC = () => (
-  <div className="h-px bg-slate-300/40 dark:bg-[rgba(255,255,255,0.06)] mx-4 my-1.5" />
+  <div className="h-px bg-outline mx-4 my-1.5" />
 );

@@ -4,7 +4,7 @@ import {
   Users, Activity,
   Plus, Pencil, Trash2, X, Check, AlertTriangle,
   Truck, Fuel, ChevronDown, Phone, Mail, IdCard, UserCheck, UserX,
-  RefreshCw, Anchor, Plane, Globe, ShieldCheck, FileText
+  RefreshCw, Anchor, Plane, Globe, ShieldCheck, FileText, KeyRound
 } from 'lucide-react';
 import { UserRole, EquipmentType, EquipmentStatus, FuelType } from '../types';
 import type { StaffMember, Equipment, Tank, Vessel } from '../types';
@@ -13,14 +13,16 @@ import { Logo } from './Logo';
 import { useNotification, NotificationType } from '../context/NotificationContext';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { supabaseService } from '../services/supabaseService';
+import { staffAuthService } from '../services/staffAuthService';
 import { activityLogService, LogModule, LogAction } from '../services/activityLogService';
 import { FlightMasterTab } from './FlightMasterTab';
 import { InternationalScheduleTab } from './InternationalScheduleTab';
 import { ActivityLogTab } from './ActivityLogTab';
 import { TicketSettingsTab } from './TicketSettingsTab';
+import { RoleManagerTab } from './RoleManagerTab';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Tab = 'staff' | 'equipment' | 'tanks' | 'vessels' | 'flight-master' | 'intl-schedule' | 'activity-log' | 'ticket-settings';
+type Tab = 'staff' | 'equipment' | 'tanks' | 'vessels' | 'flight-master' | 'intl-schedule' | 'activity-log' | 'ticket-settings' | 'role-manager';
 
 interface ConfirmState { open: boolean; message: string; onConfirm: () => void; }
 
@@ -39,6 +41,8 @@ const ROLE_LABELS: Record<UserRole, string> = {
   [UserRole.FINANCE]: 'Finance Manager',
   [UserRole.FUEL_MANAGEMENT]: 'Fuel Management',
   [UserRole.CUSTOMER]: 'Aviation Customer',
+  [UserRole.MACL_MANAGEMENT]: 'MACL Management',
+  [UserRole.FUEL_ADMINISTRATION]: 'Fuel Administration',
 };
 
 const ROLE_COLORS: Record<UserRole, string> = {
@@ -55,6 +59,8 @@ const ROLE_COLORS: Record<UserRole, string> = {
   [UserRole.FINANCE]: 'bg-primary/10 text-primary border-primary/20',
   [UserRole.FUEL_MANAGEMENT]: 'bg-warning/10 text-warning border-warning/20',
   [UserRole.CUSTOMER]: 'bg-success/10 text-success border-success/20',
+  [UserRole.MACL_MANAGEMENT]: 'bg-primary/10 text-primary border-primary/20',
+  [UserRole.FUEL_ADMINISTRATION]: 'bg-warning/10 text-warning border-warning/20',
 };
 
 const EQ_TYPE_COLORS: Record<EquipmentType, string> = {
@@ -219,14 +225,73 @@ const StaffTab: React.FC<{
     employeeId: '',
     phone: '',
     email: '',
+    designation: '',
     status: 'active',
     joinDate: new Date().toISOString(),
     avatar: ''
   };
   const [form, setForm] = useState<Omit<StaffMember, 'id'>>(emptyForm);
 
+  // Password Reset Modal state for System Admin
+  const [resetTarget, setResetTarget] = useState<StaffMember | null>(null);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [tempPassword, setTempPassword] = useState('macl2026');
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
+
+  const handleOpenReset = (s: StaffMember) => {
+    setResetTarget(s);
+    setTempPassword('macl2026');
+    setResetSuccess(false);
+    setShowResetModal(true);
+  };
+
+  const handleConfirmReset = async () => {
+    if (!resetTarget || !tempPassword.trim()) return;
+    setIsResetting(true);
+    try {
+      const res = await staffAuthService.setPassword(resetTarget.id, tempPassword.trim(), true);
+      if (res.success) {
+        setResetSuccess(true);
+        activityLogService.logAction(currentUser, {
+          module: LogModule.STAFF,
+          action: LogAction.UPDATE,
+          entity_type: 'staff_member',
+          entity_id: resetTarget.id,
+          entity_label: `${resetTarget.name} (${resetTarget.employeeId})`,
+          description: `System Admin reset temporary password for ${resetTarget.name} (${resetTarget.employeeId})`
+        });
+        push(`Password for ${resetTarget.name} (${resetTarget.employeeId}) has been reset successfully!`, 'success');
+        setTimeout(() => {
+          setResetSuccess(false);
+          setShowResetModal(false);
+        }, 1500);
+      } else {
+        push(res.error || 'Failed to reset password', 'error');
+      }
+    } catch (e: any) {
+      push(e?.message || 'Password reset failed', 'error');
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   const openAdd = () => { setEditing(null); setForm(emptyForm); setShowModal(true); };
-  const openEdit = (s: StaffMember) => { setEditing(s); setForm({ name: s.name, role: s.role, employeeId: s.employeeId, phone: s.phone ?? '', email: s.email ?? '', status: s.status, joinDate: s.joinDate, avatar: s.avatar ?? '' }); setShowModal(true); };
+  const openEdit = (s: StaffMember) => { 
+    setEditing(s); 
+    setForm({ 
+      name: s.name, 
+      role: s.role, 
+      employeeId: s.employeeId, 
+      phone: s.phone ?? '', 
+      email: s.email ?? '', 
+      designation: s.designation ?? '',
+      status: s.status, 
+      joinDate: s.joinDate, 
+      avatar: s.avatar ?? '' 
+    }); 
+    setShowModal(true); 
+  };
 
   const handleSave = async () => {
     const trimmedName = form.name.trim();
@@ -265,7 +330,8 @@ const StaffTab: React.FC<{
         name: trimmedName,
         employeeId: trimmedEmpId,
         phone: form.phone ? form.phone.trim() : '',
-        email: form.email ? form.email.trim() : ''
+        email: form.email ? form.email.trim() : '',
+        designation: form.designation ? form.designation.trim() : ''
       };
       if (editing) {
         await updateStaff(editing.id, finalForm);
@@ -278,7 +344,7 @@ const StaffTab: React.FC<{
           entity_label: `${finalForm.name} (${finalForm.employeeId})`,
           description: isRoleChanged
             ? `Admin changed RBAC role for ${finalForm.name} (${finalForm.employeeId}) from ${editing.role} to ${finalForm.role}`
-            : `Updated staff profile for ${finalForm.name} (${finalForm.employeeId}): status=${finalForm.status}`,
+            : `Updated staff profile for ${finalForm.name} (${finalForm.employeeId}): designation="${finalForm.designation}", status=${finalForm.status}`,
           before_state: editing,
           after_state: finalForm
         });
@@ -290,7 +356,7 @@ const StaffTab: React.FC<{
           action: LogAction.CREATE,
           entity_type: 'staff_member',
           entity_label: `${finalForm.name} (${finalForm.employeeId})`,
-          description: `Admin registered new personnel ${finalForm.name} (${finalForm.employeeId}) with role ${finalForm.role}`,
+          description: `Admin registered new personnel ${finalForm.name} (${finalForm.employeeId}) with role ${finalForm.role} and designation "${finalForm.designation}"`,
           after_state: finalForm
         });
         push('Staff member added successfully', 'success');
@@ -421,7 +487,7 @@ const StaffTab: React.FC<{
           <table className="min-w-full divide-y divide-outline">
             <thead className="bg-surface-container-low">
               <tr>
-                {['Personnel', 'RC Number', 'Role (RBAC)', 'Contact Email', 'Status', 'Actions'].map(h => (
+                {['Personnel', 'Role (RBAC)', 'Designation', 'Contact Email', 'Actions'].map(h => (
                   <th key={h} className="px-6 py-4 text-left text-[9px] font-black text-on-surface-dim uppercase tracking-[0.2em]">{h}</th>
                 ))}
               </tr>
@@ -437,18 +503,21 @@ const StaffTab: React.FC<{
                       </div>
                       <div>
                         <p className="text-sm font-black text-on-surface uppercase tracking-tight">{s.name}</p>
-                        <p className="text-[10px] text-on-surface-dim opacity-40 uppercase tracking-widest">{s.joinDate ? new Date(s.joinDate).toLocaleDateString() : '—'}</p>
+                        <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-primary uppercase tracking-wider mt-0.5">
+                          <IdCard className="w-3 h-3 text-primary opacity-80" />
+                          <span>{s.employeeId || 'NO RC'}</span>
+                        </div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-5 whitespace-nowrap">
-                    <span className="flex items-center gap-2 text-[11px] font-black text-on-surface-dim uppercase tracking-widest">
-                      <IdCard className="w-3.5 h-3.5 opacity-40" />{s.employeeId || '—'}
+                    <span className={`px-3 py-1 text-[9px] font-black rounded-xl border uppercase tracking-widest ${ROLE_COLORS[s.role]}`}>
+                      {ROLE_LABELS[s.role]}
                     </span>
                   </td>
                   <td className="px-6 py-5 whitespace-nowrap">
-                    <span className={`px-3 py-1 text-[9px] font-black rounded-xl border uppercase tracking-widest ${ROLE_COLORS[s.role]}`}>
-                      {ROLE_LABELS[s.role]}
+                    <span className="text-[11px] font-bold text-on-surface">
+                      {s.designation || <span className="text-on-surface-dim opacity-30 italic">Not set</span>}
                     </span>
                   </td>
                   <td className="px-6 py-5 whitespace-nowrap">
@@ -458,20 +527,21 @@ const StaffTab: React.FC<{
                     </div>
                   </td>
                   <td className="px-6 py-5 whitespace-nowrap">
-                    <button 
-                      onClick={() => handleToggleStatus(s)}
-                      className={`px-3 py-1 text-[9px] font-black rounded-xl border uppercase tracking-widest transition-all ${s.status === 'active' ? 'bg-success/10 text-success border-success/20 hover:bg-success/20' : 'bg-error/10 text-error border-error/20 hover:bg-error/20'}`}
-                    >
-                      {s.status}
-                    </button>
-                  </td>
-                  <td className="px-6 py-5 whitespace-nowrap">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      {currentUser?.role === UserRole.ADMIN && (
+                        <button 
+                          onClick={() => handleOpenReset(s)} 
+                          title="Reset Password (Admin Only)" 
+                          className="p-2 rounded-xl hover:bg-warning/10 border border-transparent hover:border-warning/20 transition-all active:scale-90 text-warning"
+                        >
+                          <KeyRound className="w-4 h-4" />
+                        </button>
+                      )}
                       <button onClick={() => handleToggleStatus(s)} title={s.status === 'active' ? 'Deactivate Account' : 'Activate Account'} className="p-2 rounded-xl hover:bg-surface-container-low border border-transparent hover:border-outline transition-all active:scale-90">
                         {s.status === 'active' ? <UserX className="w-4 h-4 text-warning" /> : <UserCheck className="w-4 h-4 text-success" />}
                       </button>
-                      <button onClick={() => openEdit(s)} title="Configure RBAC Access Role & Status" className="p-2 rounded-xl hover:bg-primary/10 border border-transparent hover:border-primary/20 transition-all active:scale-90 flex items-center gap-1 text-[10px] font-bold text-primary">
-                        <Pencil className="w-4 h-4" /> Role
+                      <button onClick={() => openEdit(s)} title="Edit Staff Details & Role" className="p-2 rounded-xl hover:bg-primary/10 border border-transparent hover:border-primary/20 transition-all active:scale-90 flex items-center gap-1 text-[10px] font-bold text-primary">
+                        <Pencil className="w-4 h-4" /> Edit
                       </button>
                       <button onClick={() => handleDelete(s)} title="Remove Staff Member" className="p-2 rounded-xl hover:bg-error/10 border border-transparent hover:border-error/20 transition-all active:scale-90">
                         <Trash2 className="w-4 h-4 text-error" />
@@ -490,11 +560,17 @@ const StaffTab: React.FC<{
         Showing {filtered.length} of {staff.length} MACL personnel records
       </p>
 
-      {/* Add/Edit Modal: System Admin controls Access Roles & Active Status */}
+      {/* Add/Edit Modal: System Admin controls Full Profile, Designation, Role & Status */}
       {showModal && (
-        <Modal title={editing ? `Manage Access Role & Status (${editing.employeeId})` : 'Add New Staff Member'} onClose={() => setShowModal(false)}>
-          <div className="space-y-5">
-            {editing ? (
+        <Modal 
+          title={editing 
+            ? (currentUser?.role === UserRole.ADMIN ? `Edit Staff Member (${editing.employeeId})` : `Manage Access Role & Status (${editing.employeeId})`) 
+            : 'Add New Staff Member'
+          } 
+          onClose={() => setShowModal(false)}
+        >
+          <div className="space-y-4">
+            {editing && currentUser?.role !== UserRole.ADMIN ? (
               <div className="bg-surface-container-low p-4 rounded-2xl border border-outline/40 space-y-1.5">
                 <div className="text-xs font-black text-on-surface uppercase tracking-tight">{editing.name}</div>
                 <div className="text-[10px] font-bold text-on-surface-dim opacity-60 flex items-center gap-3">
@@ -507,11 +583,27 @@ const StaffTab: React.FC<{
                 <Field label="Full Name" required>
                   <input className={inputCls} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
                 </Field>
-                <Field label="RC Number / Employee ID" required>
-                  <input className={inputCls} value={form.employeeId} onChange={e => setForm(p => ({ ...p, employeeId: e.target.value }))} />
-                </Field>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="RC Number / Employee ID" required>
+                    <input className={inputCls} value={form.employeeId} onChange={e => setForm(p => ({ ...p, employeeId: e.target.value }))} />
+                  </Field>
+                  <Field label="Phone Number">
+                    <input className={inputCls} placeholder="+960 7xxxxxx" value={form.phone || ''} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+                  </Field>
+                </div>
                 <Field label="Email Address">
                   <input className={inputCls} placeholder="name@macl.aero" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
+                </Field>
+                <Field label="Designation (Delivery Receipt & PDF Title)">
+                  <input 
+                    className={inputCls} 
+                    placeholder="e.g. Fueling Officer, HD Operator, Senior Supervisor..." 
+                    value={form.designation || ''} 
+                    onChange={e => setForm(p => ({ ...p, designation: e.target.value }))} 
+                  />
+                  <span className="text-[9.5px] text-on-surface-dim/70 mt-1 block">
+                    This formal job title prints under DELIVERED BY on fuel delivery tickets (Form G-001) instead of the system role code.
+                  </span>
                 </Field>
               </>
             )}
@@ -537,11 +629,65 @@ const StaffTab: React.FC<{
 
             <div className="flex gap-3 pt-2">
               <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline text-[11px] font-black uppercase tracking-widest text-on-surface hover:text-primary transition-all active:scale-95 shadow-sm">Cancel</button>
-              <button onClick={handleSave} disabled={saving} className="flex-1 px-4 py-3 rounded-xl kinetic-gradient text-[11px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+              <button onClick={handleSave} disabled={saving} className="flex-1 px-4 py-3 rounded-xl kinetic-gradient text-[11px] font-black uppercase tracking-widest text-white hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-premium">
                 {saving && <Logo className="w-4 h-4 animate-pulse" />}
-                {editing ? 'Update Access Role' : 'Add Staff'}
+                {editing ? 'Save Changes' : 'Add Staff'}
               </button>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Password Reset Modal (Admin Only) */}
+      {showResetModal && resetTarget && (
+        <Modal title={`Reset Password — ${resetTarget.name}`} onClose={() => setShowResetModal(false)}>
+          <div className="space-y-4">
+            <div className="bg-warning/10 border border-warning/20 p-4 rounded-2xl flex items-start gap-3">
+              <KeyRound className="w-5 h-5 text-warning shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <p className="font-black text-on-surface uppercase tracking-wide">System Admin Password Reset</p>
+                <p className="text-on-surface-dim mt-0.5">
+                  Set a temporary password for <strong className="text-on-surface">{resetTarget.name}</strong> ({resetTarget.employeeId}). The staff member will be required to change it on their next sign-in.
+                </p>
+              </div>
+            </div>
+
+            {resetSuccess ? (
+              <div className="p-3 bg-success/10 border border-success/20 rounded-xl text-success text-xs font-bold flex items-center gap-2">
+                <Check className="w-4 h-4" /> Password reset successfully!
+              </div>
+            ) : (
+              <>
+                <Field label="Temporary Password" required>
+                  <input
+                    type="text"
+                    className={inputCls}
+                    value={tempPassword}
+                    onChange={e => setTempPassword(e.target.value)}
+                    placeholder="e.g. macl2026"
+                  />
+                </Field>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowResetModal(false)}
+                    className="flex-1 px-4 py-3 rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline text-[11px] font-black uppercase tracking-widest text-on-surface hover:text-primary transition-all active:scale-95 shadow-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmReset}
+                    disabled={isResetting || !tempPassword.trim()}
+                    className="flex-1 px-4 py-3 rounded-xl kinetic-gradient text-[11px] font-black uppercase tracking-widest text-white hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-premium"
+                  >
+                    {isResetting ? <Logo className="w-4 h-4 animate-pulse" /> : <Check className="w-4 h-4" />}
+                    {isResetting ? 'Resetting...' : 'Confirm Reset'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </Modal>
       )}
@@ -1300,12 +1446,13 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: 'staff', label: 'Staff Management', icon: <Users className="w-4 h-4" /> },
+    { key: 'role-manager', label: 'Role Manager', icon: <ShieldCheck className="w-4 h-4" /> },
     { key: 'equipment', label: 'Fleet Registry', icon: <Truck className="w-4 h-4" /> },
     { key: 'tanks', label: 'Tank Inventory', icon: <Fuel className="w-4 h-4" /> },
     { key: 'vessels', label: 'Vessel Registry', icon: <Anchor className="w-4 h-4" /> },
     { key: 'flight-master', label: 'Airline & Aircraft Master', icon: <Plane className="w-4 h-4" /> },
     { key: 'intl-schedule', label: 'Flight Schedule', icon: <Globe className="w-4 h-4" /> },
-    { key: 'activity-log', label: 'Activity Tracker', icon: <ShieldCheck className="w-4 h-4" /> },
+    { key: 'activity-log', label: 'Activity Tracker', icon: <Activity className="w-4 h-4" /> },
     { key: 'ticket-settings', label: 'Ticket Numbering', icon: <FileText className="w-4 h-4" /> },
   ];
 
@@ -1336,9 +1483,9 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
 
       {/* Tab Navigation */}
       <div className="bg-surface-container-lowest rounded-3xl border-transparent overflow-visible shadow-sm">
-        <div className="border-b border-outline p-2 sm:p-4 bg-surface-container-low/30 flex justify-center">
+        <div className="border-b border-outline p-2 sm:p-4 bg-surface-container-low/30 flex justify-center w-full">
           <div 
-            className="bg-surface-container-low p-1.5 rounded-2xl border-transparent relative grid w-full max-w-[1200px] shadow-inner"
+            className="bg-surface-container-low p-1.5 rounded-2xl border-transparent relative grid w-full shadow-inner"
             style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
           >
             <div 
@@ -1355,7 +1502,7 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
                   setActiveTab(tab.key);
                   triggerTooltip(tab.key);
                 }}
-                className={`flex items-center justify-center gap-1.5 sm:gap-2 px-1 sm:px-3 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest sm:tracking-[0.15em] transition-all relative z-10 overflow-visible text-center w-full rounded-xl
+                className={`flex items-center justify-center gap-1.5 sm:gap-2 px-1 sm:px-2 lg:px-3 py-2.5 sm:py-3 text-[9px] sm:text-[9.5px] lg:text-[10px] xl:text-[11px] font-black uppercase tracking-wider sm:tracking-[0.05em] lg:tracking-[0.1em] transition-all relative z-10 overflow-visible text-center w-full rounded-xl min-w-0
                   ${activeTab === tab.key ? 'text-white' : 'text-on-surface-dim opacity-50 hover:opacity-100'}`}
               >
                 {activeTooltip === tab.key && (
@@ -1377,6 +1524,11 @@ export const SystemAdmin: React.FC<{ currentUser?: any }> = ({ currentUser }) =>
           {activeTab === 'staff' && (
             <div key="staff" className="animate-in fade-in slide-in-from-left-4 duration-500">
               <StaffTab push={notify} confirm={confirmAction} currentUser={currentUser} />
+            </div>
+          )}
+          {activeTab === 'role-manager' && (
+            <div key="role-manager" className="animate-in fade-in slide-in-from-right-4 duration-500">
+              <RoleManagerTab push={notify} confirm={confirmAction} currentUser={currentUser} />
             </div>
           )}
           {activeTab === 'equipment' && (

@@ -422,8 +422,8 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
         </div>
 
         {/* Sub Navigation Bar with Kinetic Gradient Active Pill */}
-        <div className="mt-6 pt-6 border-t border-white/10">
-          <div className="bg-surface-dim/80 p-1.5 rounded-2xl md:rounded-full border border-white/15 shadow-inner inline-flex items-center gap-1.5 w-full sm:w-auto">
+        <div className="mt-6 pt-6 border-t border-outline">
+          <div className="bg-surface-dim/80 p-1.5 rounded-2xl md:rounded-full border border-outline shadow-inner inline-flex items-center gap-1.5 w-full sm:w-auto">
             <button
               onClick={() => {
                 setActiveSubTab('master');
@@ -436,7 +436,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               }`}
             >
               {activeSubTabTooltip === 'master' && (
-                <div className="absolute bottom-full mb-3 bg-surface-container border border-white/15 px-2.5 py-1.5 rounded-xl text-[10px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-150 md:hidden">
+                <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[10px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-150 md:hidden">
                   Schedule Registry ({internationalSchedules.length})
                   <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
                 </div>
@@ -458,7 +458,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               }`}
             >
               {activeSubTabTooltip === 'crosscheck' && (
-                <div className="absolute bottom-full mb-3 bg-surface-container border border-white/15 px-2.5 py-1.5 rounded-xl text-[10px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-150 md:hidden">
+                <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[10px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-150 md:hidden">
                   Daily Flight Cross-Check
                   <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
                 </div>
@@ -750,7 +750,7 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               </div>
 
               {/* Category Filter Pills (ALL / INT / DOM) with Animated Kinetic Gradient Sliding Pill */}
-              <div className="bg-surface-dim/80 p-1 rounded-2xl border border-white/15 relative flex items-center w-full sm:w-auto self-stretch sm:self-auto shadow-inner">
+              <div className="bg-surface-dim/80 p-1 rounded-2xl border border-outline relative flex items-center w-full sm:w-auto self-stretch sm:self-auto shadow-inner">
                 <div
                   className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${
                     crossCheckCategoryFilter === 'ALL'

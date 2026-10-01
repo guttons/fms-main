@@ -494,7 +494,7 @@ export const Forecasting: React.FC = () => {
                       <YAxis stroke="rgba(255,255,255,0.4)" tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.6)' }} tickFormatter={(val) => `${(val/1000).toFixed(0)}kL`} />
                       <Tooltip 
                         cursor={{ fill: 'transparent' }}
-                        contentStyle={{ backgroundColor: '#18181b', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '11px' }} 
+                        contentStyle={{ backgroundColor: 'var(--color-surface-dim)', borderColor: 'var(--color-outline)', color: 'var(--color-on-surface)', borderRadius: '12px', fontSize: '11px' }} 
                         formatter={(value: any) => [`${Number(value).toLocaleString()} Liters`, 'Predicted Uplift']}
                       />
                       <Bar 

@@ -6,6 +6,7 @@ import { useOperationalData } from '../context/OperationalDataContext';
 import { UserRole } from '../types';
 import { checkDuplicateTicketAcrossJetA1 } from '../services/ticketValidation';
 import { SignatureAcknowledgment } from './SignatureAcknowledgment';
+import { generateInvoiceHtml } from '../services/invoicePdfService';
 
 interface SeaplaneProps {
     user?: any;
@@ -23,11 +24,11 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
     const [duplicateError, setDuplicateError] = useState<string | null>(null);
     const [formData, setFormData] = useState({
         operator: '',
-        pumpId: '',
+        pumpId: 'SCADA',
         date: new Date().toISOString().split('T')[0],
         deliveryNumber: '',
         volume: '',
-        co: '',
+        officer: '',
         signerName: '',
         signerDesignation: '',
         signatureDataUrl: null as string | null
@@ -76,15 +77,23 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
         setLoading(true);
         try {
             const parsedVolume = parseFloat(formData.volume.replace(/,/g, '')) || 0;
+            const chosenPump = (formData.pumpId || 'SCADA').toUpperCase();
             const logToSave = {
                 flightNumber: `SEAPLANE-${formData.operator.toUpperCase()}`,
-                aircraftReg: `PUMP-${formData.pumpId.toUpperCase()}`,
+                aircraftReg: `PUMP-${chosenPump}`,
                 aircraftType: 'DHC-6',
                 stand: 'WATER DOCK',
                 operatorId: user?.id || 'System Admin',
-                vehicleId: formData.pumpId.toUpperCase(),
+                vehicleId: chosenPump,
                 status: 'COMPLETED' as const,
                 logType: 'SEAPLANE' as const,
+                isDomestic: true,
+                intDom: 'DOM',
+                airline: formData.operator.toUpperCase(),
+                operatorName: formData.operator.toUpperCase(),
+                co: formData.operator.toUpperCase(),
+                officer: formData.officer || user?.name || 'Refuelling Officer',
+                tacticalOperator: formData.officer || user?.name || 'Refuelling Officer',
                 deliveryNumber: finalDeliveryNumber || undefined,
                 timestampStart: `${formData.date}T08:00:00.000Z`,
                 timestampFinalEnd: `${formData.date}T16:00:00.000Z`,
@@ -96,16 +105,40 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                 walkAroundCheck: true,
                 appearanceCheck: true,
                 waterCheck: true,
-                co: formData.co,
                 remarks: `Seaplane Volume logged for ${formData.operator}`,
                 signatureDataUrl: formData.signatureDataUrl || undefined,
-                signerName: formData.signerName || undefined,
+                signerName: (formData.signerName || '').toUpperCase() || undefined,
                 signerDesignation: formData.signerDesignation || undefined,
                 signedAt: formData.signatureDataUrl ? new Date().toISOString() : undefined,
                 declarationConfirmed: !!formData.signatureDataUrl,
+                invoiceHtml: undefined as string | undefined,
             };
 
+            try {
+                logToSave.invoiceHtml = generateInvoiceHtml(logToSave, user);
+            } catch (invErr) {
+                console.warn('[Seaplane] Invoice HTML generation error:', invErr);
+            }
+
             await supabaseService.createFlightLog(logToSave);
+
+            // Cache signature metadata for invoice retrieval
+            if (formData.signatureDataUrl) {
+                try {
+                    const sigPayload = {
+                        signatureDataUrl: formData.signatureDataUrl,
+                        signerName: (formData.signerName || '').toUpperCase(),
+                        signerDesignation: formData.signerDesignation,
+                        signedAt: new Date().toISOString()
+                    };
+                    if (finalDeliveryNumber) {
+                        localStorage.setItem(`fms_sig_${finalDeliveryNumber}`, JSON.stringify(sigPayload));
+                    }
+                    if (logToSave.flightNumber) {
+                        localStorage.setItem(`fms_sig_${logToSave.flightNumber}`, JSON.stringify(sigPayload));
+                    }
+                } catch (e) {}
+            }
 
             // Deduct pumped volume from active seaplane fuel tank
             const targetSpfTank = (tanks || []).find(t => t.id === 'spf-e1') || (tanks || []).find(t => t.id.startsWith('spf'));
@@ -118,11 +151,11 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
             setSuccess(true);
             setFormData({
                 operator: '',
-                pumpId: '',
+                pumpId: 'SCADA',
                 date: new Date().toISOString().split('T')[0],
                 deliveryNumber: '',
                 volume: '',
-                co: '',
+                officer: '',
                 signerName: '',
                 signerDesignation: '',
                 signatureDataUrl: null
@@ -295,7 +328,7 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
 
                          {/* Operator Selection */}
                          <div>
-                            <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-4 tracking-widest opacity-40">Tactical Operator Identification</label>
+                            <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-4 tracking-widest opacity-40">Customer / Account</label>
                             <select 
                                 name="operator"
                                 value={formData.operator}
@@ -329,8 +362,8 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                              <label className="block text-[10px] font-black text-on-surface-dim uppercase mb-4 tracking-widest opacity-40">Verifying Officer Name</label>
                              <select 
                                  required 
-                                 name="co"
-                                 value={formData.co}
+                                 name="officer"
+                                 value={formData.officer}
                                  onChange={handleInputChange}
                                  className="w-full px-6 py-4 bg-surface-dim border border-outline rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all appearance-none cursor-pointer" 
                              >
@@ -376,7 +409,7 @@ export const Seaplane: React.FC<SeaplaneProps> = ({ user }) => {
                 {/* Customer / Seaplane Operator Signature & Declaration */}
                 <SignatureAcknowledgment
                   signerName={formData.signerName}
-                  onSignerNameChange={(val) => setFormData(prev => ({ ...prev, signerName: val }))}
+                  onSignerNameChange={(val) => setFormData(prev => ({ ...prev, signerName: val.toUpperCase() }))}
                   signerDesignation={formData.signerDesignation}
                   onSignerDesignationChange={(val) => setFormData(prev => ({ ...prev, signerDesignation: val }))}
                   signatureDataUrl={formData.signatureDataUrl}

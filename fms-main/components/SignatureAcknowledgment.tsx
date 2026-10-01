@@ -194,10 +194,10 @@ export const SignatureAcknowledgment: React.FC<SignatureAcknowledgmentProps> = (
             <input
               type="text"
               value={signerName}
-              onChange={(e) => onSignerNameChange(e.target.value)}
+              onChange={(e) => onSignerNameChange(e.target.value.toUpperCase())}
               disabled={disabled}
-              placeholder="e.g., Capt. Ahmed Rasheed"
-              className="w-full px-4 py-2.5 bg-surface-dim border border-outline rounded-xl text-xs font-bold text-on-surface placeholder:opacity-30 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 outline-none transition-all disabled:opacity-50"
+              placeholder=""
+              className="w-full px-4 py-2.5 bg-surface-dim border border-outline rounded-xl text-xs font-bold text-on-surface uppercase focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 outline-none transition-all disabled:opacity-50"
             />
             <UserCheck className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim opacity-40 pointer-events-none" />
           </div>
@@ -214,8 +214,8 @@ export const SignatureAcknowledgment: React.FC<SignatureAcknowledgmentProps> = (
               value={signerDesignation}
               onChange={(e) => onSignerDesignationChange(e.target.value)}
               disabled={disabled}
-              placeholder="e.g., Pilot in Command / Engineer"
-              className="w-full px-4 py-2.5 bg-surface-dim border border-outline rounded-xl text-xs font-bold text-on-surface placeholder:opacity-30 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 outline-none transition-all disabled:opacity-50"
+              placeholder=""
+              className="w-full px-4 py-2.5 bg-surface-dim border border-outline rounded-xl text-xs font-bold text-on-surface focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 outline-none transition-all disabled:opacity-50"
             />
             <Briefcase className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim opacity-40 pointer-events-none" />
           </div>
@@ -257,8 +257,8 @@ export const SignatureAcknowledgment: React.FC<SignatureAcknowledgmentProps> = (
               value={signerEmail || ''}
               onChange={(e) => onSignerEmailChange(e.target.value)}
               disabled={disabled}
-              placeholder="e.g., flightops@airline.com or rep@company.aero"
-              className="w-full px-4 py-2.5 bg-surface-dim border border-outline rounded-xl text-xs font-bold text-on-surface placeholder:opacity-30 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 outline-none transition-all disabled:opacity-50"
+              placeholder=""
+              className="w-full px-4 py-2.5 bg-surface-dim border border-outline rounded-xl text-xs font-bold text-on-surface focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 outline-none transition-all disabled:opacity-50"
             />
             <Mail className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-dim opacity-40 pointer-events-none" />
           </div>
