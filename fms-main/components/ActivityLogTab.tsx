@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ShieldCheck, Search, Filter, Download, RefreshCw, Calendar,
   ChevronLeft, ChevronRight, Eye, AlertTriangle, Radio,
@@ -53,6 +54,24 @@ const MODULE_COLORS: Record<string, string> = {
   [LogModule.TANKER_DISCHARGE]: 'text-cyan-300',
   [LogModule.STOCK]: 'text-emerald-300',
   [LogModule.SEAPLANE]: 'text-sky-300',
+};
+
+const formatActivityTimestamp = (raw?: string): string => {
+  if (!raw) return '--:--';
+  try {
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = months[d.getMonth()];
+      const year = d.getFullYear();
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const seconds = String(d.getSeconds()).padStart(2, '0');
+      return `${day}-${month}-${year} • ${hours}:${minutes}:${seconds}`;
+    }
+  } catch {}
+  return raw;
 };
 
 export const ActivityLogTab: React.FC<ActivityLogTabProps> = ({ currentUser, pushNotification }) => {
@@ -518,17 +537,17 @@ NOTIFY pgrst, 'reload schema';`;
       </div>
 
       {/* Forensic Inspection Modal */}
-      {selectedLog && (
+      {selectedLog && createPortal(
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto"
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 sm:p-6 overflow-y-auto"
           onClick={() => setSelectedLog(null)}
         >
           <div
-            className="bg-surface border border-outline rounded-3xl w-full max-w-2xl shadow-premium max-h-[90vh] overflow-y-auto my-auto animate-in fade-in zoom-in-95 duration-200"
+            className="bg-surface border border-outline rounded-3xl w-full max-w-2xl shadow-premium max-h-[90vh] flex flex-col my-auto relative animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="px-6 py-5 border-b border-outline/50 flex items-center justify-between bg-surface-container-low/40">
+            <div className="px-6 py-5 border-b border-outline/50 flex items-center justify-between bg-surface-container-low/40 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-xl bg-primary/10 border border-primary/20">
                   <ShieldCheck className="w-5 h-5 text-primary" />
@@ -551,7 +570,7 @@ NOTIFY pgrst, 'reload schema';`;
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 space-y-5">
+            <div className="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
               {/* Summary Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="bg-surface-container-low p-3 rounded-2xl border border-outline/40">
@@ -623,14 +642,14 @@ NOTIFY pgrst, 'reload schema';`;
 
               {/* Network / Session Metadata */}
               <div className="bg-surface-container-low/50 p-3 rounded-2xl border border-outline/30 space-y-1.5 text-[9px] font-mono text-on-surface-dim opacity-70">
-                <div>Timestamp: <strong className="text-on-surface">{selectedLog.created_at}</strong></div>
+                <div>Timestamp: <strong className="text-on-surface">{formatActivityTimestamp(selectedLog.created_at)}</strong></div>
                 {selectedLog.session_id && <div>Session ID: <strong className="text-on-surface">{selectedLog.session_id}</strong></div>}
                 {selectedLog.user_agent && <div className="truncate">User Agent: {selectedLog.user_agent}</div>}
               </div>
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-outline/50 flex justify-end bg-surface-container-low/30">
+            <div className="px-6 py-4 border-t border-outline/50 flex justify-end bg-surface-container-low/30 shrink-0">
               <button
                 onClick={() => setSelectedLog(null)}
                 className="px-5 py-2.5 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline text-[10px] font-black uppercase tracking-widest text-on-surface transition-all"
@@ -639,17 +658,18 @@ NOTIFY pgrst, 'reload schema';`;
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* SQL Migration Modal */}
-      {showSqlModal && (
+      {showSqlModal && createPortal(
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto"
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 sm:p-6 overflow-y-auto"
           onClick={() => setShowSqlModal(false)}
         >
           <div
-            className="bg-surface border border-outline rounded-3xl w-full max-w-xl shadow-premium my-auto p-6 space-y-4"
+            className="bg-surface border border-outline rounded-3xl w-full max-w-xl shadow-premium my-auto p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -681,7 +701,8 @@ NOTIFY pgrst, 'reload schema';`;
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

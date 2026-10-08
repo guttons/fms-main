@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { User, FlightLog, FlightJob, isDomesticFlight, cleanRemarks } from '../types';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { haptic } from '../utils/haptics';
-import { DelayRecordsLog } from './DelayRecordsLog';
+import { DelayRecordsLog, DelayRecordsLogHandle } from './DelayRecordsLog';
 import { 
   Gauge, 
   Plane, 
@@ -169,6 +169,9 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
   // Active View Tab: Performance Matrix vs AOCC Delay Records Log
   const [activeTab, setActiveTab] = useState<PerformanceTab>('TURNAROUND_MATRIX');
 
+  // Ref for imperative control of DelayRecordsLog (e.g. top-banner CSV export)
+  const delayRecordsRef = useRef<DelayRecordsLogHandle>(null);
+
   // Fast map for detecting flights with AOCC delay logs
   const delayFlightMap = useMemo(() => {
     const map = new Map<string, any>();
@@ -213,7 +216,14 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
     }
   };
 
-  // Radio button slider references & states for Category and Date filters
+  // Radio button slider references & states for Top Tabs, Category, and Date filters
+  const tabBtnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [tabSlider, setTabSlider] = useState<{ left: number; width: number; ready: boolean }>({
+    left: 0,
+    width: 0,
+    ready: false,
+  });
+
   const categoryBtnRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [categorySlider, setCategorySlider] = useState<{ left: number; width: number; ready: boolean }>({
     left: 0,
@@ -229,35 +239,52 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
   });
 
   const updateSliders = useCallback(() => {
-    const catIdx = CATEGORY_OPTIONS.findIndex(c => c.id === selectedCategory);
-    const catBtn = categoryBtnRefs.current[catIdx];
-    if (catBtn) {
-      setCategorySlider({
-        left: catBtn.offsetLeft,
-        width: catBtn.offsetWidth,
+    // 1. Top Tab Slider
+    const tabIdx = activeTab === 'TURNAROUND_MATRIX' ? 0 : 1;
+    const tabBtn = tabBtnRefs.current[tabIdx];
+    if (tabBtn) {
+      setTabSlider({
+        left: tabBtn.offsetLeft,
+        width: tabBtn.offsetWidth,
         ready: true,
       });
     }
 
-    const dateIdx = DATE_PRESET_OPTIONS.findIndex(p => p.id === datePreset);
-    const dateBtn = dateBtnRefs.current[dateIdx];
-    if (dateBtn) {
-      setDateSlider({
-        left: dateBtn.offsetLeft,
-        width: dateBtn.offsetWidth,
-        ready: true,
-      });
+    // 2. Category Slider (when TURNAROUND_MATRIX is active)
+    if (activeTab === 'TURNAROUND_MATRIX') {
+      const catIdx = CATEGORY_OPTIONS.findIndex(c => c.id === selectedCategory);
+      const catBtn = categoryBtnRefs.current[catIdx];
+      if (catBtn) {
+        setCategorySlider({
+          left: catBtn.offsetLeft,
+          width: catBtn.offsetWidth,
+          ready: true,
+        });
+      }
+
+      // 3. Date Slider (when TURNAROUND_MATRIX is active)
+      const dateIdx = DATE_PRESET_OPTIONS.findIndex(p => p.id === datePreset);
+      const dateBtn = dateBtnRefs.current[dateIdx];
+      if (dateBtn) {
+        setDateSlider({
+          left: dateBtn.offsetLeft,
+          width: dateBtn.offsetWidth,
+          ready: true,
+        });
+      }
     }
-  }, [selectedCategory, datePreset]);
+  }, [activeTab, selectedCategory, datePreset]);
 
   useEffect(() => {
     updateSliders();
     const frame = requestAnimationFrame(updateSliders);
-    const timer = setTimeout(updateSliders, 150);
+    const timer1 = setTimeout(updateSliders, 60);
+    const timer2 = setTimeout(updateSliders, 200);
     window.addEventListener('resize', updateSliders);
     return () => {
       cancelAnimationFrame(frame);
-      clearTimeout(timer);
+      clearTimeout(timer1);
+      clearTimeout(timer2);
       window.removeEventListener('resize', updateSliders);
     };
   }, [updateSliders]);
@@ -615,31 +642,68 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
     URL.revokeObjectURL(url);
   };
 
+  // Export Delay Logs to CSV (Called when activeTab === 'DELAY_LOGS' from top header banner)
+  const handleExportDelayCSV = useCallback(() => {
+    if (delayRecordsRef.current) {
+      delayRecordsRef.current.exportCSV();
+    } else {
+      haptic('SUCCESS');
+      const headers = [
+        'DATE',
+        'DELAY FROM',
+        'OPERATOR',
+        'FLIGHT',
+        'DELAY CODE',
+        'DELAY REASON',
+        'REMARKS',
+        'FUEL TEAM',
+        'FUEL TEAM COMMENT',
+        'DUTY IN-CHARGE',
+        'STATUS'
+      ];
+      const rows = (delayLogs || []).map(item => [
+        item.date,
+        item.delayFrom,
+        item.operator,
+        item.flightNumber,
+        item.delayCode || '-',
+        item.delayReason || '-',
+        item.remarks || '-',
+        item.fuelTeam || '-',
+        item.fuelTeamComment || '-',
+        item.dutyInCharge || '-',
+        item.status || 'PENDING'
+      ]);
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `MACL_AOCC_Delay_Log_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+  }, [delayLogs]);
+
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1920px] mx-auto space-y-6 animate-in fade-in duration-300">
+    <div className="p-3 sm:p-6 lg:p-8 pb-32 sm:pb-12 max-w-[1920px] mx-auto space-y-4 sm:space-y-6 animate-in fade-in duration-300">
       {/* Header Banner */}
-      <div className="card-premium p-6 sm:p-8 border-outline flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
+      <div className="card-premium p-4 sm:p-6 lg:p-8 border-outline flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 relative overflow-hidden">
         <div className="space-y-2 z-10">
           <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20 shadow-premium">
-              <Gauge className="w-6 h-6" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20 shadow-premium shrink-0">
+              <Gauge className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black uppercase tracking-[0.25em] text-primary">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] sm:tracking-[0.25em] text-primary">
                   Aviation Into-Plane Analytics
                 </span>
-                <span className="px-2 py-0.5 rounded-md bg-success/15 text-success border border-success/20 text-[9px] font-black tracking-widest uppercase">
-                  Audited Live
-                </span>
-                <span 
-                  className="px-2 py-0.5 rounded-md bg-primary/15 text-primary border border-primary/20 text-[9px] font-black tracking-widest uppercase cursor-help hidden sm:inline-flex"
-                  title="Showing active cached operational dataset (latest 10,000 records dynamically loaded from the 137k+ BigQuery historical archive for maximum client speed)"
-                >
-                  {enrichedLogs.length.toLocaleString()} Active Cached (137k+ BigQuery)
-                </span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-[900] text-on-surface tracking-tighter uppercase italic">
+              <h1 className="text-xl sm:text-3xl font-[900] text-on-surface tracking-tighter uppercase italic">
                 Refuelling <span className="text-primary">Performance</span>
               </h1>
             </div>
@@ -650,69 +714,83 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-3 z-10 flex-wrap">
+        <div className="flex items-center gap-2 sm:gap-3 z-10 flex-wrap">
           <button
             onClick={handleRefresh}
             disabled={isRefreshing || isLoading}
-            className="px-4 py-2.5 bg-surface-dim hover:bg-surface-container border border-outline rounded-xl text-xs font-black uppercase tracking-wider text-on-surface flex items-center gap-2 transition-all active:scale-95"
+            className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-surface-dim hover:bg-surface-container border border-outline rounded-xl text-xs font-black uppercase tracking-wider text-on-surface flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
             title="Refresh logs from database"
           >
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-primary' : ''}`} />
             <span>Sync</span>
           </button>
 
-          {activeTab === 'TURNAROUND_MATRIX' && (
-            <button
-              onClick={handleExportCSV}
-              disabled={filteredData.length === 0}
-              className="px-5 py-2.5 kinetic-gradient text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-premium hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:pointer-events-none"
-            >
-              <Download className="w-4 h-4" />
-              <span>Export CSV</span>
-            </button>
-          )}
+          <button
+            onClick={activeTab === 'TURNAROUND_MATRIX' ? handleExportCSV : handleExportDelayCSV}
+            disabled={activeTab === 'TURNAROUND_MATRIX' ? filteredData.length === 0 : (delayLogs || []).length === 0}
+            className="px-4 sm:px-5 py-2 sm:py-2.5 kinetic-gradient text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-premium hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+            title={activeTab === 'TURNAROUND_MATRIX' ? 'Export turnaround matrix records to CSV' : 'Export delay records log to CSV'}
+          >
+            <Download className="w-4 h-4" />
+            <span>Export CSV</span>
+          </button>
         </div>
       </div>
 
-      {/* Top Tab Switcher: Turnaround Matrix vs AOCC Delay Records Log */}
-      <div className="flex items-center gap-2 p-1.5 bg-surface-dim/60 border border-outline rounded-2xl w-full sm:w-fit backdrop-blur-sm">
+      {/* Top Tab Switcher: Turnaround Matrix vs AOCC Delay Records Log with Animated Radio Slider */}
+      <div className="relative flex items-center p-1 sm:p-1.5 bg-surface-dim/70 border border-outline rounded-2xl w-full sm:w-fit backdrop-blur-sm select-none">
+        {/* Animated Kinetic Gradient Radio Slider with White Ring (Matches Image 1) */}
+        {tabSlider.ready && (
+          <div 
+            className="absolute top-1 bottom-1 sm:top-1.5 sm:bottom-1.5 rounded-xl kinetic-gradient shadow-premium ring-2 ring-white/90 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] will-change-transform pointer-events-none"
+            style={{
+              left: `${tabSlider.left}px`,
+              width: `${tabSlider.width}px`,
+            }}
+          />
+        )}
+
         <button
+          ref={el => { tabBtnRefs.current[0] = el; }}
           type="button"
           onClick={() => {
             haptic('TAP');
             setActiveTab('TURNAROUND_MATRIX');
           }}
-          className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+          className={`relative z-10 flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 sm:gap-2 transition-colors duration-200 cursor-pointer whitespace-nowrap active:scale-95 select-none ${
             activeTab === 'TURNAROUND_MATRIX'
-              ? 'kinetic-gradient text-white shadow-premium'
+              ? 'text-white'
               : 'text-on-surface-dim hover:text-on-surface font-bold'
           }`}
         >
-          <Gauge className="w-4 h-4" />
-          <span>Turnaround Matrix</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
-            activeTab === 'TURNAROUND_MATRIX' ? 'bg-black/20 text-white' : 'bg-surface text-on-surface-dim border border-outline/40'
+          <Gauge className="w-4 h-4 shrink-0" />
+          <span className="hidden sm:inline">Turnaround Matrix</span>
+          <span className="sm:hidden">Turnaround</span>
+          <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-mono font-black transition-colors ${
+            activeTab === 'TURNAROUND_MATRIX' ? 'bg-black/25 text-white' : 'bg-surface text-on-surface-dim border border-outline/40'
           }`}>
             {filteredData.length}
           </span>
         </button>
 
         <button
+          ref={el => { tabBtnRefs.current[1] = el; }}
           type="button"
           onClick={() => {
             haptic('TAP');
             setActiveTab('DELAY_LOGS');
           }}
-          className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+          className={`relative z-10 flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 sm:gap-2 transition-colors duration-200 cursor-pointer whitespace-nowrap active:scale-95 select-none ${
             activeTab === 'DELAY_LOGS'
-              ? 'kinetic-gradient text-white shadow-premium'
+              ? 'text-white'
               : 'text-on-surface-dim hover:text-on-surface font-bold'
           }`}
         >
-          <Clock className="w-4 h-4" />
-          <span>AOCC Delay Records Log</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
-            activeTab === 'DELAY_LOGS' ? 'bg-black/20 text-white' : 'bg-surface text-on-surface-dim border border-outline/40'
+          <Clock className="w-4 h-4 shrink-0" />
+          <span className="hidden sm:inline">AOCC Delay Records Log</span>
+          <span className="sm:hidden">Delay Logs</span>
+          <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-mono font-black transition-colors ${
+            activeTab === 'DELAY_LOGS' ? 'bg-black/25 text-white' : 'bg-surface text-on-surface-dim border border-outline/40'
           }`}>
             {(delayLogs || []).length}
           </span>
@@ -722,87 +800,87 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
       {activeTab === 'TURNAROUND_MATRIX' ? (
         <>
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Flights */}
-        <div className="card-premium p-5 border-outline flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-60">
+        <div className="card-premium p-3.5 sm:p-5 border-outline flex items-center justify-between">
+          <div className="space-y-0.5 sm:space-y-1">
+            <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] text-on-surface-dim opacity-60">
               Total Refueled
             </span>
-            <div className="text-3xl font-[900] font-mono text-on-surface tracking-tight">
+            <div className="text-2xl sm:text-3xl font-[900] font-mono text-on-surface tracking-tight">
               {kpis.totalFlights}
             </div>
-            <span className="text-[10px] font-bold text-on-surface-dim opacity-60">
-              Intl: {kpis.intlCount} • Dom: {kpis.domCount} • Ad-Hoc: {kpis.adhocCount}
+            <span className="text-[9px] sm:text-[10px] font-bold text-on-surface-dim opacity-60 line-clamp-1">
+              Intl: {kpis.intlCount} • Dom: {kpis.domCount}
             </span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
-            <Plane className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20 shrink-0">
+            <Plane className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Ground Time Saved vs Exceeded */}
-        <div className="card-premium p-5 border-outline flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-60">
+        <div className="card-premium p-3.5 sm:p-5 border-outline flex items-center justify-between">
+          <div className="space-y-0.5 sm:space-y-1">
+            <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] text-on-surface-dim opacity-60">
               Ground Time Status
             </span>
-            <div className="text-3xl font-[900] font-mono text-success tracking-tight flex items-baseline gap-2">
+            <div className="text-2xl sm:text-3xl font-[900] font-mono text-success tracking-tight flex items-baseline gap-1.5">
               <span>{kpis.savedCount}</span>
-              <span className="text-xs font-sans font-bold text-success/80 uppercase">Saved</span>
+              <span className="text-[10px] sm:text-xs font-sans font-bold text-success/80 uppercase">Saved</span>
             </div>
-            <span className="text-[10px] font-bold text-on-surface-dim opacity-60">
+            <span className="text-[9px] sm:text-[10px] font-bold text-on-surface-dim opacity-60 line-clamp-1">
               {kpis.exceededCount > 0 ? (
-                <span className="text-error font-black">{kpis.exceededCount} Exceeded Ground Time</span>
+                <span className="text-error font-black">{kpis.exceededCount} Overruns</span>
               ) : (
-                <span>Zero ground time overruns</span>
+                <span>Zero overruns</span>
               )}
             </span>
           </div>
-          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${
+          <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center border shrink-0 ${
             kpis.exceededCount > 0 
               ? 'bg-error/10 text-error border-error/20' 
               : 'bg-success/10 text-success border-success/20'
           }`}>
-            {kpis.exceededCount > 0 ? <AlertTriangle className="w-6 h-6" /> : <CheckCircle className="w-6 h-6" />}
+            {kpis.exceededCount > 0 ? <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" /> : <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6" />}
           </div>
         </div>
 
         {/* GTE Adherence / On-Time Clearance */}
-        <div className="card-premium p-5 border-outline flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-60">
+        <div className="card-premium p-3.5 sm:p-5 border-outline flex items-center justify-between">
+          <div className="space-y-0.5 sm:space-y-1">
+            <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] text-on-surface-dim opacity-60">
               GTE On-Time Rate
             </span>
-            <div className={`text-3xl font-[900] font-mono tracking-tight ${
+            <div className={`text-2xl sm:text-3xl font-[900] font-mono tracking-tight ${
               kpis.gteAdherenceRate >= 90 ? 'text-success' : kpis.gteAdherenceRate >= 75 ? 'text-warning' : 'text-error'
             }`}>
               {kpis.gteAdherenceRate}%
             </div>
-            <span className="text-[10px] font-bold text-on-surface-dim opacity-60">
-              {kpis.tightCount > 0 ? `${kpis.tightCount} tight (<20m buffer)` : 'Cleared on schedule'}
+            <span className="text-[9px] sm:text-[10px] font-bold text-on-surface-dim opacity-60 line-clamp-1">
+              {kpis.tightCount > 0 ? `${kpis.tightCount} tight (<20m)` : 'On schedule'}
             </span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-warning/10 text-warning flex items-center justify-center border border-warning/20">
-            <TrendingUp className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-warning/10 text-warning flex items-center justify-center border border-warning/20 shrink-0">
+            <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Average Pumping Duration */}
-        <div className="card-premium p-5 border-outline flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-60">
+        <div className="card-premium p-3.5 sm:p-5 border-outline flex items-center justify-between">
+          <div className="space-y-0.5 sm:space-y-1">
+            <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] text-on-surface-dim opacity-60">
               Avg Pumping Time
             </span>
-            <div className="text-3xl font-[900] font-mono text-primary tracking-tight">
-              {kpis.avgPumping} <span className="text-sm font-sans font-bold text-on-surface-dim">min</span>
+            <div className="text-2xl sm:text-3xl font-[900] font-mono text-primary tracking-tight">
+              {kpis.avgPumping} <span className="text-xs font-sans font-bold text-on-surface-dim">min</span>
             </div>
-            <span className="text-[10px] font-bold text-on-surface-dim opacity-50">
-              Avg Clearance: {kpis.avgClearance} min
+            <span className="text-[9px] sm:text-[10px] font-bold text-on-surface-dim opacity-50 line-clamp-1">
+              Clearance: {kpis.avgClearance}m
             </span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
-            <Timer className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20 shrink-0">
+            <Timer className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
       </div>
@@ -832,7 +910,7 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
               {/* Animated Kinetic Gradient Radio Slider */}
               {categorySlider.ready && (
                 <div 
-                  className="absolute top-1 bottom-1 rounded-xl kinetic-gradient shadow-premium transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] will-change-transform pointer-events-none"
+                  className="absolute top-1 bottom-1 rounded-xl kinetic-gradient shadow-premium ring-2 ring-white/90 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] will-change-transform pointer-events-none"
                   style={{
                     left: `${categorySlider.left}px`,
                     width: `${categorySlider.width}px`,
@@ -916,19 +994,19 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
 
         {/* Row 2: Date Presets & Custom Range with Animated Radio Kinetic Slider */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-outline/50">
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full sm:w-auto">
-            <span className="text-[9px] font-black uppercase tracking-widest text-on-surface-dim opacity-50 flex items-center gap-1 shrink-0">
-              <Clock className="w-3 h-3" /> DATE:
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+            <span className="text-[9px] font-black uppercase tracking-widest text-on-surface-dim opacity-60 flex items-center gap-1 shrink-0">
+              <Clock className="w-3 h-3 text-primary" /> DATE:
             </span>
 
-            {/* Date Preset Radio Button Segmented Control */}
+            {/* Date Preset Radio Button Segmented Control (Even distribution on mobile, zero cut-off) */}
             <div 
-              className="relative flex items-center bg-surface-dim/90 p-1 rounded-2xl border border-outline shadow-inner select-none overflow-x-auto scrollbar-none w-full sm:w-auto"
+              className="relative flex items-center bg-surface-dim/90 p-1 rounded-2xl border border-outline shadow-inner select-none w-full sm:w-auto"
             >
-              {/* Animated Kinetic Gradient Radio Slider */}
+              {/* Animated Kinetic Gradient Radio Slider with White Ring */}
               {dateSlider.ready && (
                 <div 
-                  className="absolute top-1 bottom-1 rounded-xl kinetic-gradient shadow-premium transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] will-change-transform pointer-events-none"
+                  className="absolute top-1 bottom-1 rounded-xl kinetic-gradient shadow-premium ring-2 ring-white/90 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] will-change-transform pointer-events-none"
                   style={{
                     left: `${dateSlider.left}px`,
                     width: `${dateSlider.width}px`,
@@ -947,7 +1025,7 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
                       haptic('TAP');
                       setDatePreset(preset.id);
                     }}
-                    className={`relative z-10 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors duration-200 whitespace-nowrap cursor-pointer active:scale-95 select-none ${
+                    className={`relative z-10 flex-1 sm:flex-initial px-1.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-center transition-colors duration-200 whitespace-nowrap cursor-pointer active:scale-95 select-none ${
                       isSelected
                         ? 'text-white font-black'
                         : 'text-on-surface-dim hover:text-on-surface font-bold'
@@ -962,29 +1040,29 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
           </div>
 
           {datePreset === 'CUSTOM' && (
-            <div className="flex flex-wrap items-center gap-3 animate-in fade-in duration-200 w-full sm:w-auto">
-              <div className="flex items-center gap-2 flex-1 sm:flex-initial">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3 animate-in fade-in duration-200 w-full sm:w-auto">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                 <span className="text-[10px] font-black uppercase tracking-wider text-on-surface-dim">From:</span>
                 <input
                   type="date"
                   value={customStartDate}
                   onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="w-full sm:w-auto px-3 py-1.5 bg-surface-dim border border-outline rounded-xl text-xs font-mono font-bold text-on-surface outline-none focus:border-primary"
+                  className="w-full sm:w-auto px-2.5 py-1.5 bg-surface-dim border border-outline rounded-xl text-xs font-mono font-bold text-on-surface outline-none focus:border-primary"
                 />
               </div>
-              <div className="flex items-center gap-2 flex-1 sm:flex-initial">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                 <span className="text-[10px] font-black uppercase tracking-wider text-on-surface-dim">To:</span>
                 <input
                   type="date"
                   value={customEndDate}
                   onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="w-full sm:w-auto px-3 py-1.5 bg-surface-dim border border-outline rounded-xl text-xs font-mono font-bold text-on-surface outline-none focus:border-primary"
+                  className="w-full sm:w-auto px-2.5 py-1.5 bg-surface-dim border border-outline rounded-xl text-xs font-mono font-bold text-on-surface outline-none focus:border-primary"
                 />
               </div>
               {(customStartDate || customEndDate) && (
                 <button
                   onClick={() => { setCustomStartDate(''); setCustomEndDate(''); }}
-                  className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline"
+                  className="col-span-2 sm:col-span-1 text-[10px] font-black uppercase tracking-wider text-primary hover:underline text-left sm:text-center pt-1 sm:pt-0"
                 >
                   Clear Dates
                 </button>
@@ -996,27 +1074,37 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
 
       {/* Performance Matrix Table with GTE and STATUS columns */}
       <div className="card-premium border-outline overflow-hidden shadow-premium">
-        <div className="p-4 bg-surface-dim/40 border-b border-outline flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <FileSpreadsheet className="w-4 h-4 text-primary" />
-            <span className="text-xs font-black uppercase tracking-wider text-on-surface">
-              Performance Matrix
-            </span>
-            <span className="px-2 py-0.5 rounded-full bg-surface-dim text-[10px] font-mono font-bold text-on-surface-dim border border-outline">
+        <div className="p-3 sm:p-4 bg-surface-dim/40 border-b border-outline flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center justify-between sm:justify-start gap-2">
+            <div className="flex items-center gap-2">
+              <FileSpreadsheet className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-xs font-black uppercase tracking-wider text-on-surface">
+                Performance Matrix
+              </span>
+            </div>
+            <span className="px-2 py-0.5 rounded-full bg-surface-dim text-[10px] font-mono font-bold text-on-surface-dim border border-outline shrink-0">
               {filteredData.length} records
             </span>
           </div>
-          <div className="flex items-center gap-4 text-[9px] font-bold uppercase tracking-widest text-on-surface-dim opacity-70">
+          <div className="flex items-center gap-3 sm:gap-4 text-[9px] font-bold uppercase tracking-widest text-on-surface-dim opacity-80 flex-wrap">
             <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-success"></span> SAVED
+              <span className="w-2 h-2 rounded-full bg-success shrink-0"></span> SAVED
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span> &lt;20m Buffer
+              <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span> &lt;20m Buffer
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-error"></span> EXCEEDED (Minus)
+              <span className="w-2 h-2 rounded-full bg-error shrink-0"></span> EXCEEDED
             </span>
           </div>
+        </div>
+
+        {/* Mobile horizontal scroll hint */}
+        <div className="sm:hidden px-3 py-1.5 bg-surface-dim/70 text-[10px] font-bold text-on-surface-dim flex items-center justify-between border-b border-outline/30">
+          <span className="flex items-center gap-1 text-primary">
+            <span>⇄</span> Swipe table horizontally for all timings &amp; GTE
+          </span>
+          <span className="font-mono text-[9px] text-on-surface-dim/70">17 Columns</span>
         </div>
 
         <div className="overflow-x-auto custom-scrollbar">
@@ -1336,6 +1424,7 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
     </>
   ) : (
     <DelayRecordsLog
+      ref={delayRecordsRef}
       user={user}
       onInspectFlightInMatrix={(flightNum) => {
         setActiveTab('TURNAROUND_MATRIX');

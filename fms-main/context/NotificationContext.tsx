@@ -201,13 +201,15 @@ const Toast: React.FC<{ notification: Notification; onClose: () => void }> = ({ 
 
   return (
     <div
-      className={`pointer-events-auto relative overflow-hidden flex items-stretch gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border backdrop-blur-xl transition-all duration-300 transform group ${
+      onClick={handleDismiss}
+      className={`pointer-events-auto cursor-pointer relative overflow-hidden flex items-stretch gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border backdrop-blur-xl transition-all duration-300 transform group hover:brightness-105 active:scale-[0.99] select-none ${
         config.containerClasses
       } ${
         isDismissing 
           ? 'opacity-0 translate-y-2 scale-95' 
           : 'opacity-100 translate-y-0 scale-100 animate-slide-up'
       }`}
+      title="Click to dismiss notification"
     >
       <div className={`flex items-center justify-center p-2 rounded-xl shrink-0 self-center ${config.iconClasses}`}>
         {config.icon}
@@ -229,7 +231,8 @@ const Toast: React.FC<{ notification: Notification; onClose: () => void }> = ({ 
         </p>
         {action && (
           <button
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               action.onClick();
               handleDismiss();
             }}
@@ -241,7 +244,10 @@ const Toast: React.FC<{ notification: Notification; onClose: () => void }> = ({ 
         )}
       </div>
       <button
-        onClick={handleDismiss}
+        onClick={(e) => {
+          e.stopPropagation();
+          handleDismiss();
+        }}
         className="flex items-center justify-center p-1 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors shrink-0 self-start"
         title="Dismiss notification"
       >

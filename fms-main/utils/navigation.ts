@@ -23,6 +23,7 @@ import {
   Gauge 
 } from 'lucide-react';
 import { StockIcon } from '../components/StockIcon';
+import { roleService, PermissionMatrix } from '../services/roleService';
 
 export interface NavigationItem {
   id: string;
@@ -38,11 +39,36 @@ export interface BadgeCounts {
   unreadAlerts?: number;
 }
 
+export const MODULE_NAV_MAP: Record<string, { label: string; icon: React.ElementType }> = {
+  dashboard: { label: 'Dashboard', icon: LayoutDashboard },
+  briefing: { label: 'Shift Briefing', icon: BookOpen },
+  schedule: { label: 'Schedule & Assign', icon: Calendar },
+  intoplane: { label: 'Flight Refueling', icon: Plane },
+  equipment: { label: 'Equipment Status', icon: Truck },
+  history: { label: 'Log History', icon: History },
+  'staff-tracker': { label: 'Staff Tracker', icon: Users },
+  performance: { label: 'Refueling Performance', icon: Gauge },
+  'depot-reports': { label: 'Fuel Reports', icon: BarChart3 },
+  stock: { label: 'Tank Inventory', icon: StockIcon },
+  bridging: { label: 'Refueler Loading', icon: Droplet },
+  'marine-loading': { label: 'Marine Loading', icon: Ship },
+  marine: { label: 'Tanker Discharge', icon: Anchor },
+  seaplane: { label: 'Seaplane Ops', icon: Sailboat },
+  'lfs-afs': { label: 'Filling Stations', icon: Fuel },
+  forecasting: { label: 'Forecasting & Trends', icon: TrendingUp },
+  executive: { label: 'Executive Module', icon: Briefcase },
+  'commercial-reports': { label: 'Commercial Reports', icon: Coins },
+  finance: { label: 'Finance & Billing', icon: Receipt },
+  reports: { label: 'Financial Reports', icon: FileText },
+  'customer-portal': { label: 'Customer Portal', icon: Plane },
+  'system-admin': { label: 'System Settings', icon: Settings },
+  admin: { label: 'System Settings', icon: Settings },
+};
+
 /**
- * Authoritative list of all sidebar menu items per user role.
- * Single source of truth across desktop sidebar and mobile bottom navigation.
+ * Base built-in navigation items per role before custom permissions are applied.
  */
-export const getRoleMenuItems = (role?: UserRole): NavigationItem[] => {
+const getBaseRoleMenuItems = (role?: UserRole): NavigationItem[] => {
   if (!role) return [];
   switch (role) {
     case UserRole.ITP_OPERATOR:
@@ -60,7 +86,6 @@ export const getRoleMenuItems = (role?: UserRole): NavigationItem[] => {
       return [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'briefing', label: 'Shift Briefing', icon: BookOpen },
-        { id: 'schedule', label: 'Schedule & Assign', icon: Calendar },
         { id: 'intoplane', label: 'Flight Refueling', icon: Plane },
         { id: 'equipment', label: 'Equipment Status', icon: Truck },
         { id: 'history', label: 'Log History', icon: History },
@@ -208,9 +233,59 @@ export const getRoleMenuItems = (role?: UserRole): NavigationItem[] => {
 };
 
 /**
- * Primary 4-5 items shown directly on mobile bottom navigation bar.
+ * Authoritative list of all sidebar menu items per user role.
+ * Dynamically filtered and augmented by custom module permissions!
  */
-export const getRoleNavItems = (
+export const getRoleMenuItems = (
+  role?: UserRole | string,
+  permissions?: PermissionMatrix
+): NavigationItem[] => {
+  if (!role) return [];
+
+  // System admin role always has full access
+  if (role === UserRole.ADMIN) {
+    return getBaseRoleMenuItems(UserRole.ADMIN);
+  }
+
+  // Get active permissions (either supplied or synchronously resolved from local storage / defaults)
+  const perms = permissions || (typeof window !== 'undefined' ? roleService.getPermissionsSync(role) : undefined);
+  const baseItems = getBaseRoleMenuItems(role as UserRole);
+
+  if (!perms || Object.keys(perms).length === 0) {
+    return baseItems;
+  }
+
+  // 1. Filter base items: remove any item where canView is explicitly false
+  const filtered = baseItems.filter(item => {
+    const permKey = item.id === 'admin' ? 'system-admin' : item.id;
+    if (perms[permKey] !== undefined) {
+      return perms[permKey].canView;
+    }
+    return true;
+  });
+
+  // 2. Add modules where canView is explicitly true and not in baseItems
+  Object.entries(perms).forEach(([moduleKey, perm]) => {
+    if (perm && perm.canView) {
+      const navId = moduleKey === 'system-admin' ? 'admin' : moduleKey;
+      const alreadyPresent = filtered.some(item => item.id === navId);
+      if (!alreadyPresent && MODULE_NAV_MAP[navId]) {
+        filtered.push({
+          id: navId,
+          label: MODULE_NAV_MAP[navId].label,
+          icon: MODULE_NAV_MAP[navId].icon
+        });
+      }
+    }
+  });
+
+  return filtered;
+};
+
+/**
+ * Base 4-5 items shown directly on mobile bottom navigation bar.
+ */
+const getBaseRoleNavItems = (
   role?: UserRole, 
   counts: BadgeCounts = {}
 ): NavigationItem[] => {
@@ -233,8 +308,8 @@ export const getRoleNavItems = (
       return [
         { id: 'dashboard', label: 'Tasks', icon: LayoutDashboard, badge: pendingTasks, badgeColor: pendingTasks > 0 ? 'bg-red-500' : undefined },
         { id: 'intoplane', label: 'Refuel', icon: Plane },
-        { id: 'schedule', label: 'Schedule', icon: Calendar },
         { id: 'briefing', label: 'Briefing', icon: BookOpen },
+        { id: 'equipment', label: 'Equipment', icon: Truck },
         { id: 'history', label: 'Logs', icon: History },
       ];
 
@@ -337,15 +412,41 @@ export const getRoleNavItems = (
 };
 
 /**
+ * Primary 4-5 items shown directly on mobile bottom navigation bar,
+ * filtered dynamically according to role permissions.
+ */
+export const getRoleNavItems = (
+  role?: UserRole | string, 
+  counts: BadgeCounts = {},
+  permissions?: PermissionMatrix
+): NavigationItem[] => {
+  if (!role) return [];
+  const base = getBaseRoleNavItems(role as UserRole, counts);
+  if (role === UserRole.ADMIN) return base;
+
+  const perms = permissions || (typeof window !== 'undefined' ? roleService.getPermissionsSync(role) : undefined);
+  if (!perms || Object.keys(perms).length === 0) return base;
+
+  return base.filter(item => {
+    const permKey = item.id === 'admin' ? 'system-admin' : item.id;
+    if (perms[permKey] !== undefined) {
+      return perms[permKey].canView;
+    }
+    return true;
+  });
+};
+
+/**
  * Overflow items displayed in the "Other Modules" bottom sheet.
  * Dynamically computes all menu items for the role that are not in the bottom bar,
  * guaranteeing new modules added to getRoleMenuItems automatically appear on mobile!
  */
 export const getRoleOverflowItems = (
-  role?: UserRole, 
-  navItems: NavigationItem[] = []
+  role?: UserRole | string, 
+  navItems: NavigationItem[] = [],
+  permissions?: PermissionMatrix
 ): NavigationItem[] => {
-  const allItems = getRoleMenuItems(role);
+  const allItems = getRoleMenuItems(role, permissions);
   const navIds = new Set(navItems.map(item => item.id));
   return allItems.filter(item => !navIds.has(item.id));
 };

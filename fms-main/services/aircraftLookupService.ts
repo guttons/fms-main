@@ -62,12 +62,46 @@ export function cleanAircraftTypeName(raw: string): string {
   // Turboprops & Regional
   if (type.includes('ATR') || type.includes('AT7') || type.includes('AT4')) return 'ATR';
   if (type.includes('DHC-6') || type.includes('TWIN OTTER') || type.includes('DHC6')) return 'DHC6';
-  if (type.includes('DH8') || type.includes('DASH 8') || type.includes('Q400')) return 'DH8D';
+  if (type.includes('DH8') || type.includes('DASH 8') || type.includes('DASH8') || type.includes('Q400')) return 'DASH8';
   if (type.includes('EMBRAER') || type.includes('E190') || type.includes('E195') || type.includes('E170')) return 'E190';
   if (type.includes('CRJ')) return 'CRJ';
 
   return raw.trim();
 }
+
+/**
+ * Authoritative registry for domestic airlines in Maldives:
+ * - Island Aviation Services / Maldivian (Q2)
+ * - Manta Air (NR)
+ * - Villa Air (VP)
+ */
+export const DOMESTIC_FLEET_REGISTRY: Record<string, { aircraftType: string; airlineName: string }> = {
+  // Maldivian (Q2)
+  '8Q-AMD': { aircraftType: 'DASH8', airlineName: 'Maldivian' },
+  '8Q-IAA': { aircraftType: 'DASH8', airlineName: 'Maldivian' },
+  '8Q-IAK': { aircraftType: 'DASH8', airlineName: 'Maldivian' },
+  '8Q-IAO': { aircraftType: 'DASH8', airlineName: 'Maldivian' },
+  '8Q-IAR': { aircraftType: 'DASH8', airlineName: 'Maldivian' },
+  '8Q-IAT': { aircraftType: 'DASH8', airlineName: 'Maldivian' },
+  '8Q-IAQ': { aircraftType: 'DASH8', airlineName: 'Maldivian' },
+  '8Q-IAS': { aircraftType: 'DASH8', airlineName: 'Maldivian' },
+  '8Q-IAX': { aircraftType: 'ATR', airlineName: 'Maldivian' },
+  '8Q-IAY': { aircraftType: 'ATR', airlineName: 'Maldivian' },
+  '8Q-IAZ': { aircraftType: 'ATR', airlineName: 'Maldivian' },
+  '8Q-IAW': { aircraftType: 'ATR', airlineName: 'Maldivian' },
+  '8Q-IAV': { aircraftType: 'ATR', airlineName: 'Maldivian' },
+  '8Q-IAB': { aircraftType: 'A330', airlineName: 'Maldivian' },
+  '8Q-IAN': { aircraftType: 'A320', airlineName: 'Maldivian' },
+
+  // Manta Air (NR)
+  '8Q-RAX': { aircraftType: 'ATR', airlineName: 'Manta Air' },
+  '8Q-RAY': { aircraftType: 'ATR', airlineName: 'Manta Air' },
+  '8Q-RAZ': { aircraftType: 'ATR', airlineName: 'Manta Air' },
+
+  // Villa Air (VP)
+  '8Q-VAY': { aircraftType: 'ATR', airlineName: 'Villa Air' },
+  '8Q-VAV': { aircraftType: 'ATR', airlineName: 'Villa Air' }
+};
 
 /**
  * Known airline fleet registration patterns for instant offline resolution
@@ -138,6 +172,18 @@ export const aircraftLookupService = {
     const normReg = normalizeRegistration(rawReg);
     if (!normReg || normReg.length < 3) {
       return { registration: '', aircraftType: '', found: false, source: 'MANUAL' };
+    }
+
+    // Step 0: Check Authoritative Domestic Fleets (Maldivian, Manta Air, Villa Air)
+    if (DOMESTIC_FLEET_REGISTRY[normReg]) {
+      const match = DOMESTIC_FLEET_REGISTRY[normReg];
+      return {
+        registration: normReg,
+        aircraftType: match.aircraftType,
+        airlineName: match.airlineName,
+        source: 'LOCAL_DB',
+        found: true
+      };
     }
 
     // Step 1: Check Local Master Database / Supabase Cache

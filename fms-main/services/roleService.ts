@@ -222,7 +222,7 @@ const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionMatrix> = {
   [UserRole.ITP_OFFICER]: {
     dashboard: { canView: true, canEdit: true },
     briefing: { canView: true, canEdit: true },
-    schedule: { canView: true, canEdit: true },
+    schedule: { canView: false, canEdit: false },
     intoplane: { canView: true, canEdit: true },
     equipment: { canView: true, canEdit: true },
     history: { canView: true, canEdit: true },
@@ -332,12 +332,23 @@ class RoleService {
 
   private getLocalPermissions(): Record<string, PermissionMatrix> {
     try {
+      const versionKey = 'fms_permissions_seed_v2';
       const stored = localStorage.getItem('fms_role_permissions_v1');
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed && typeof parsed === 'object') {
+          // If v2 migration hasn't run, ensure ITP_OFFICER schedule default is false
+          if (typeof window !== 'undefined' && !localStorage.getItem(versionKey)) {
+            if (parsed[UserRole.ITP_OFFICER]) {
+              parsed[UserRole.ITP_OFFICER].schedule = { canView: false, canEdit: false };
+            }
+            localStorage.setItem(versionKey, 'true');
+            localStorage.setItem('fms_role_permissions_v1', JSON.stringify(parsed));
+          }
           return { ...DEFAULT_ROLE_PERMISSIONS, ...parsed };
         }
+      } else if (typeof window !== 'undefined') {
+        localStorage.setItem(versionKey, 'true');
       }
     } catch {}
     return { ...DEFAULT_ROLE_PERMISSIONS };
@@ -399,16 +410,33 @@ class RoleService {
           matrix[p.module_key] = { canView: !!p.can_view, canEdit: !!p.can_edit };
         });
         const allLocal = this.getLocalPermissions();
-        allLocal[roleName] = matrix;
+        const merged = { ...(DEFAULT_ROLE_PERMISSIONS[roleName] || {}), ...matrix };
+        allLocal[roleName] = merged;
         this.saveLocalPermissions(allLocal);
-        return matrix;
+        return merged;
       }
     } catch (err) {
       console.warn('[RoleService] Supabase getPermissions warning, using local fallback:', err);
     }
 
     const localAll = this.getLocalPermissions();
-    return localAll[roleName] || DEFAULT_ROLE_PERMISSIONS[roleName] || {};
+    const defaults = DEFAULT_ROLE_PERMISSIONS[roleName] || {};
+    const localRolePerms = localAll[roleName] || {};
+    return { ...defaults, ...localRolePerms };
+  }
+
+  /**
+   * Synchronously fetch permissions matrix for a role (zero-latency cache)
+   */
+  getPermissionsSync(roleName?: string): PermissionMatrix {
+    if (!roleName) return {};
+    if (roleName === UserRole.ADMIN) {
+      return DEFAULT_ROLE_PERMISSIONS[UserRole.ADMIN] || {};
+    }
+    const localAll = this.getLocalPermissions();
+    const defaults = DEFAULT_ROLE_PERMISSIONS[roleName] || {};
+    const localRolePerms = localAll[roleName] || {};
+    return { ...defaults, ...localRolePerms };
   }
 
   /**
@@ -446,6 +474,16 @@ class RoleService {
     const allLocalPerms = this.getLocalPermissions();
     allLocalPerms[formattedName] = permissions;
     this.saveLocalPermissions(allLocalPerms);
+
+    // Broadcast permission change immediately across the window & other tabs
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('fms_permissions_last_updated', Date.now().toString());
+      } catch {}
+      window.dispatchEvent(new CustomEvent('fms:role-permissions-changed', {
+        detail: { roleName: formattedName, permissions }
+      }));
+    }
 
     // Try Supabase sync
     try {
@@ -488,6 +526,15 @@ class RoleService {
     const allPerms = this.getLocalPermissions();
     delete allPerms[roleName];
     this.saveLocalPermissions(allPerms);
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('fms_permissions_last_updated', Date.now().toString());
+      } catch {}
+      window.dispatchEvent(new CustomEvent('fms:role-permissions-changed', {
+        detail: { roleName, permissions: {} }
+      }));
+    }
 
     try {
       await supabase.from('custom_roles').delete().eq('name', roleName);

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { MOCK_USERS, EQUIPMENT } from '../constants';
 import { UserRole, EquipmentType, FlightJob, isDomesticFlight } from '../types';
-import { Calendar, Zap, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home, Radio, RefreshCw, PlaneLanding, PlaneTakeoff, Check, XCircle, ArrowRightCircle, AlertTriangle, Lock, Ban, Play, CheckCircle, Globe, X, Pencil, Plus } from 'lucide-react';
+import { Calendar, Zap, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home, Radio, RefreshCw, PlaneLanding, PlaneTakeoff, Check, CheckCheck, Fuel, XCircle, ArrowRightCircle, AlertTriangle, Lock, Ban, Play, CheckCircle, Globe, X, Pencil, Plus } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { BriefingShift } from '../context/OperationalDataContext';
@@ -11,6 +11,9 @@ import { EditFuelRequestModal } from './EditFuelRequestModal';
 import { EditAircraftModal } from './EditAircraftModal';
 import { AddAdhocFlightModal, AdhocFlightData } from './AddAdhocFlightModal';
 import { cleanAircraftTypeName } from '../services/aircraftLookupService';
+import { useFuelDispatch } from '../hooks/useFuelDispatch';
+import { FuelDispatchControl } from './FuelDispatchControl';
+import { useRolePermissions } from '../hooks/useRolePermissions';
 
 export const COMMON_MLE_STANDS = [
   'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9',
@@ -27,127 +30,33 @@ export const COMMON_MLE_STANDS = [
   'N', 'E'
 ];
 
-export const EditStandModal: React.FC<{
-  flightNumber: string;
-  currentStand: string;
-  onClose: () => void;
-  onSave: (newStand: string) => Promise<void> | void;
-}> = ({ flightNumber, currentStand, onClose, onSave }) => {
-  const [stand, setStand] = useState(currentStand || '');
-  const [saving, setSaving] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!stand.trim()) return;
-    setSaving(true);
-    try {
-      await Promise.race([
-        Promise.resolve(onSave(stand.trim().toUpperCase())),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Save timeout')), 4000))
-      ]);
-      onClose();
-    } catch (err) {
-      console.warn('Stand update handled:', err);
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-surface border border-outline rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-premium text-on-surface animate-in zoom-in-95 duration-200 relative">
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
-              <MapPin className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base sm:text-lg font-black tracking-tight uppercase">Change Flight Stand</h3>
-              <p className="text-[10px] font-black text-primary uppercase tracking-widest">{flightNumber}</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-on-surface-dim hover:text-on-surface hover:bg-surface-dim transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-2 opacity-60">
-              Assigned Stand / Bay
-            </label>
-            <input
-              type="text"
-              required
-              value={stand}
-              onChange={(e) => setStand(e.target.value.toUpperCase())}
-              className="w-full px-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black uppercase tracking-wider focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all font-mono"
-            />
-          </div>
-
-          <div>
-            <span className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest mb-2 opacity-50">
-              Quick Select MLE Stands
-            </span>
-            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1">
-              {COMMON_MLE_STANDS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setStand(s)}
-                  className={`px-2.5 py-1 text-[9px] font-black uppercase rounded-lg border transition-all cursor-pointer ${
-                    stand.toUpperCase() === s
-                      ? 'bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 border-amber-500 font-black shadow-sm'
-                      : 'bg-surface-dim border-outline text-on-surface-dim hover:border-primary/50'
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3.5 bg-surface-dim border border-outline text-on-surface-dim hover:text-on-surface rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving || !stand.trim()}
-              className="flex-1 py-3.5 kinetic-gradient text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-premium disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              {saving ? 'Updating...' : 'Confirm Stand'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body
-  );
-};
+export const EditStandModal = EditAircraftModal;
 
 
 
 interface ScheduleProps {
   user?: any;
   onStartJob?: (job: FlightJob) => void;
+  canEditSchedule?: boolean;
 }
 
-export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
+export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSchedule }) => {
   const { notify } = useNotification();
-  const [editingStandFlight, setEditingStandFlight] = useState<any | null>(null);
+  const [editingFlight, setEditingFlight] = useState<any | null>(null);
   const [editingFrtFlight, setEditingFrtFlight] = useState<FlightJob | null>(null);
-  const [editingAircraftFlight, setEditingAircraftFlight] = useState<any | null>(null);
   const [isAddAdhocModalOpen, setIsAddAdhocModalOpen] = useState(false);
-  const isItpManagerOrAdmin = user?.role === UserRole.ITP_MANAGER || user?.role === UserRole.ADMIN;
+  const { canEdit: checkEditPerm } = useRolePermissions(user?.role);
+  const isItpManagerOrAdmin = canEditSchedule !== undefined
+    ? canEditSchedule
+    : (user?.role === UserRole.ADMIN || checkEditPerm('schedule'));
+  const {
+    canDispatch,
+    getDispatchState,
+    resolveRecipients,
+    sendFuelAlert,
+    cancelFuelAlert,
+    handleCrewReassignment
+  } = useFuelDispatch(user);
 
   const cleanDisplayReg = (reg?: string) => {
     if (!reg || reg === '8Q-TBA' || reg === 'TBA' || reg.startsWith('8Q-DOM')) return '';
@@ -157,6 +66,83 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
   const cleanDisplayType = (type?: string) => {
     if (!type) return '';
     return cleanAircraftTypeName(type);
+  };
+
+  const renderDispatchTimingBadge = (ds?: ReturnType<typeof getDispatchState>) => {
+    if (!ds || !ds.dispatchStatus) return null;
+    const { dispatchStatus, isDispatchAcknowledged, dispatchRequestedTime, dispatchAcknowledgedTime, dispatchAcknowledgedBy } = ds;
+
+    if (dispatchStatus === 'REQUEST_FUELING') {
+      return (
+        <div 
+          className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black tracking-wider uppercase shrink-0 select-none border shadow-sm ${
+            isDispatchAcknowledged
+              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40'
+              : 'bg-rose-500/15 text-rose-400 border-rose-500/40'
+          }`}
+          title={
+            isDispatchAcknowledged 
+              ? `Fuel Requested at ${dispatchRequestedTime || '--:--'} • Acknowledged at ${dispatchAcknowledgedTime || '--:--'}${dispatchAcknowledgedBy ? ` by ${dispatchAcknowledgedBy}` : ''}`
+              : `Fuel Requested at ${dispatchRequestedTime || '--:--'} • Pending Crew Acknowledgment`
+          }
+        >
+          {isDispatchAcknowledged ? (
+            <>
+              <CheckCheck className="w-3 h-3 text-emerald-400" />
+              <span>FUEL REQ</span>
+              {dispatchAcknowledgedTime ? (
+                <span className="opacity-90 font-mono text-[9px]">✓ {dispatchAcknowledgedTime}</span>
+              ) : (
+                <span className="opacity-90 font-mono text-[9px]">✓ ACK</span>
+              )}
+            </>
+          ) : (
+            <>
+              <Fuel className="w-3 h-3 text-rose-400" />
+              <span>FUEL REQ</span>
+              {dispatchRequestedTime && <span className="opacity-80 font-mono text-[9px]">{dispatchRequestedTime}</span>}
+            </>
+          )}
+        </div>
+      );
+    }
+
+    if (dispatchStatus === 'NO_FUEL') {
+      return (
+        <div 
+          className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black tracking-wider uppercase shrink-0 select-none border shadow-sm ${
+            isDispatchAcknowledged
+              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40'
+              : 'bg-amber-500/15 text-amber-400 border-amber-500/40'
+          }`}
+          title={
+            isDispatchAcknowledged 
+              ? `No Fuel confirmed at ${dispatchRequestedTime || '--:--'} • Acknowledged at ${dispatchAcknowledgedTime || '--:--'}${dispatchAcknowledgedBy ? ` by ${dispatchAcknowledgedBy}` : ''}`
+              : `No Fuel confirmed at ${dispatchRequestedTime || '--:--'} • Pending Crew Acknowledgment`
+          }
+        >
+          {isDispatchAcknowledged ? (
+            <>
+              <CheckCheck className="w-3 h-3 text-emerald-400" />
+              <span>NO FUEL</span>
+              {dispatchAcknowledgedTime ? (
+                <span className="opacity-90 font-mono text-[9px]">✓ {dispatchAcknowledgedTime}</span>
+              ) : (
+                <span className="opacity-90 font-mono text-[9px]">✓ ACK</span>
+              )}
+            </>
+          ) : (
+            <>
+              <Ban className="w-3 h-3 text-amber-400" />
+              <span>NO FUEL</span>
+              {dispatchRequestedTime && <span className="opacity-80 font-mono text-[9px]">{dispatchRequestedTime}</span>}
+            </>
+          )}
+        </div>
+      );
+    }
+
+    return null;
   };
 
   const {
@@ -549,12 +535,12 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
           : (existing?.status || ff.status || 'PENDING');
 
         const eqUsage = rawDbJob?.equipmentUsage || liveJob?.equipmentUsage || existing?.equipmentUsage || ff.equipmentUsage || 'HYDRANT';
-        const rawOfficer = (rawDbJob && rawDbJob.assignedOfficer !== undefined && rawDbJob.assignedOfficer !== null)
-          ? rawDbJob.assignedOfficer
-          : (liveJob && liveJob.assignedOfficer !== undefined && liveJob.assignedOfficer !== null)
-          ? liveJob.assignedOfficer
-          : (existing && existing.assignedOfficer !== undefined && existing.assignedOfficer !== null)
-          ? existing.assignedOfficer
+        const rawOfficer = (rawDbJob && rawDbJob.assignedOfficer !== undefined)
+          ? (rawDbJob.assignedOfficer || '')
+          : (liveJob && !liveJob.isVirtual && liveJob.assignedOfficer !== undefined)
+          ? (liveJob.assignedOfficer || '')
+          : (existing && existing.assignedOfficer !== undefined)
+          ? (existing.assignedOfficer || '')
           : (ff.assignedOfficer || '');
         const isRefueller = eqUsage === 'REFUELLER';
         const isMockOfficer = /^u\d+b?$/i.test(rawOfficer);
@@ -574,15 +560,15 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
           frtAirline: rawDbJob?.frtAirline || liveJob?.frtAirline || existing?.frtAirline || ff.frtAirline,
           frtAocc: rawDbJob?.frtAocc || liveJob?.frtAocc || existing?.frtAocc || ff.frtAocc,
           frtFor: rawDbJob?.frtFor || liveJob?.frtFor || existing?.frtFor || ff.frtFor,
-          assignedTo: (rawDbJob && rawDbJob.assignedTo !== undefined && rawDbJob.assignedTo !== null)
-            ? rawDbJob.assignedTo
-            : (liveJob && liveJob.assignedTo !== undefined && liveJob.assignedTo !== null)
-            ? liveJob.assignedTo
-            : (existing && existing.assignedTo !== undefined && existing.assignedTo !== null)
-            ? existing.assignedTo
+          assignedTo: (rawDbJob && rawDbJob.assignedTo !== undefined)
+            ? (rawDbJob.assignedTo || '')
+            : (liveJob && !liveJob.isVirtual && liveJob.assignedTo !== undefined)
+            ? (liveJob.assignedTo || '')
+            : (existing && existing.assignedTo !== undefined)
+            ? (existing.assignedTo || '')
             : (ff.assignedTo || ''),
           assignedOfficer: sanitizedOfficer,
-          vehicleId: rawDbJob?.vehicleId !== undefined ? rawDbJob.vehicleId : (liveJob?.vehicleId !== undefined ? liveJob.vehicleId : (existing?.vehicleId || ff.vehicleId)),
+          vehicleId: rawDbJob?.vehicleId !== undefined ? (rawDbJob.vehicleId || '') : (liveJob?.vehicleId !== undefined ? (liveJob.vehicleId || '') : (existing?.vehicleId || ff.vehicleId || '')),
         });
       });
 
@@ -621,10 +607,10 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
         : (f.status || 'PENDING');
 
       const eqUsage = rawDbJob?.equipmentUsage || liveJob?.equipmentUsage || f.equipmentUsage || 'HYDRANT';
-      const rawOfficer = (rawDbJob && rawDbJob.assignedOfficer !== undefined && rawDbJob.assignedOfficer !== null)
-        ? rawDbJob.assignedOfficer
-        : (liveJob && liveJob.assignedOfficer !== undefined && liveJob.assignedOfficer !== null)
-        ? liveJob.assignedOfficer
+      const rawOfficer = (rawDbJob && rawDbJob.assignedOfficer !== undefined)
+        ? (rawDbJob.assignedOfficer || '')
+        : (liveJob && !liveJob.isVirtual && liveJob.assignedOfficer !== undefined)
+        ? (liveJob.assignedOfficer || '')
         : (f.assignedOfficer || '');
       const isRefueller = eqUsage === 'REFUELLER';
       const isMockOfficer = /^u\d+b?$/i.test(rawOfficer);
@@ -643,13 +629,13 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
           frtAirline: rawDbJob?.frtAirline || liveJob?.frtAirline || f.frtAirline,
           frtAocc: rawDbJob?.frtAocc || liveJob?.frtAocc || f.frtAocc,
           frtFor: rawDbJob?.frtFor || liveJob?.frtFor || f.frtFor,
-          assignedTo: (rawDbJob && rawDbJob.assignedTo !== undefined && rawDbJob.assignedTo !== null)
-            ? rawDbJob.assignedTo
-            : (liveJob && liveJob.assignedTo !== undefined && liveJob.assignedTo !== null)
-            ? liveJob.assignedTo
+          assignedTo: (rawDbJob && rawDbJob.assignedTo !== undefined)
+            ? (rawDbJob.assignedTo || '')
+            : (liveJob && !liveJob.isVirtual && liveJob.assignedTo !== undefined)
+            ? (liveJob.assignedTo || '')
             : (f.assignedTo || ''),
           assignedOfficer: sanitizedOfficer,
-          vehicleId: rawDbJob?.vehicleId !== undefined ? rawDbJob.vehicleId : (liveJob?.vehicleId !== undefined ? liveJob.vehicleId : f.vehicleId),
+          vehicleId: rawDbJob?.vehicleId !== undefined ? (rawDbJob.vehicleId || '') : (liveJob?.vehicleId !== undefined ? (liveJob.vehicleId || '') : (f.vehicleId || '')),
         };
       }
       return {
@@ -711,11 +697,19 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
         flightMap.set(cleanNo, {
           ...(existing || {}),
           ...ff,
+          isDomestic: true,
+          flightCategory: 'DOMESTIC',
+          category: 'domestic',
           aircraftType: rawDbJob?.aircraftType || liveJob?.aircraftType || existing?.aircraftType || ff.aircraftType,
           aircraftReg: rawDbJob?.aircraftReg || liveJob?.aircraftReg || existing?.aircraftReg || ff.aircraftReg,
           stand: rawDbJob?.stand || liveJob?.stand || existing?.stand || ff.stand,
           status: effectiveStatus,
-          vehicleId: rawDbJob?.vehicleId || liveJob?.vehicleId || existing?.vehicleId || ff.vehicleId,
+          vehicleId: rawDbJob?.vehicleId !== undefined ? (rawDbJob.vehicleId || '') : (liveJob?.vehicleId !== undefined ? (liveJob.vehicleId || '') : (existing?.vehicleId || ff.vehicleId || '')),
+          assignedTeam: (rawDbJob && rawDbJob.assignedTeam !== undefined)
+            ? (rawDbJob.assignedTeam || '')
+            : (liveJob && liveJob.assignedTeam !== undefined)
+            ? (liveJob.assignedTeam || '')
+            : (existing?.assignedTeam || ff.assignedTeam || ''),
         });
       });
 
@@ -754,10 +748,18 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
         : (f.status || 'PENDING');
       return {
         ...f,
+        isDomestic: true,
+        flightCategory: 'DOMESTIC',
+        category: 'domestic',
         aircraftType: rawDbJob?.aircraftType || liveJob?.aircraftType || f.aircraftType,
         aircraftReg: rawDbJob?.aircraftReg || liveJob?.aircraftReg || f.aircraftReg,
         status: effectiveStatus,
-        vehicleId: rawDbJob?.vehicleId || liveJob?.vehicleId || f.vehicleId
+        vehicleId: rawDbJob?.vehicleId !== undefined ? (rawDbJob.vehicleId || '') : (liveJob?.vehicleId !== undefined ? (liveJob.vehicleId || '') : (f.vehicleId || '')),
+        assignedTeam: (rawDbJob && rawDbJob.assignedTeam !== undefined)
+          ? (rawDbJob.assignedTeam || '')
+          : (liveJob && liveJob.assignedTeam !== undefined)
+          ? (liveJob.assignedTeam || '')
+          : (f.assignedTeam || ''),
       };
     }).filter(f => {
       if (!f.id) return false;
@@ -791,6 +793,9 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
       return {
         ...af,
         ...(matchJob || {}),
+        isAdhoc: true,
+        flightCategory: 'ADHOC',
+        category: 'adhoc',
         status: rawDbJob?.status || matchJob?.status || af.status || 'PENDING',
         vehicleId: rawDbJob?.vehicleId || matchJob?.vehicleId || af.vehicleId
       };
@@ -803,7 +808,12 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
     { id: 't3', name: 'Team 3', op1: '', op2: '' },
   ].map(team => {
     const dbTeam = (domesticAssignments || []).find(d => d.team_name === team.name);
-    return dbTeam ? { ...team, op1: dbTeam.operator1_id || dbTeam.op1 || '', op2: dbTeam.operator2_id || dbTeam.op2 || '' } : team;
+    const briefingTeam = (briefingInfo?.staffAssignments?.domesticTeams || []).find((t: any) => t.id === team.id || t.name === team.name);
+    return {
+      ...team,
+      op1: dbTeam?.operator1_id || dbTeam?.op1 || briefingTeam?.op1 || '',
+      op2: dbTeam?.operator2_id || dbTeam?.op2 || briefingTeam?.op2 || ''
+    };
   });
 
   const currentShiftLabel = selectedBriefingShift === 'Evening' ? 'DIESEL' : 'DAILY';
@@ -886,14 +896,22 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
       try {
         // Load Equipment Assignments
         const equipmentData = await supabaseService.getEquipmentAssignments(todayDate, currentShiftLabel);
+        const briefingEqs = currentShiftLabel === 'DIESEL'
+          ? briefingInfo?.staffAssignments?.dieselAssignments
+          : briefingInfo?.staffAssignments?.equipmentAssignments;
 
-        if (equipmentData && equipmentData.length > 0) {
+        if ((equipmentData && equipmentData.length > 0) || (briefingEqs && Object.keys(briefingEqs).length > 0)) {
           setEquipmentAssignments(prev => prev.map(eq => {
-            const dbEq = equipmentData.find(d => d.equipment_id === eq.eqNumber);
-            if (dbEq) {
-              return { ...eq, op1: dbEq.operator1_id || '', op2: dbEq.operator2_id || '', shift_type: dbEq.shift_type };
-            }
-            return { ...eq, op1: '', op2: '' };
+            const dbEq = equipmentData?.find(d => d.equipment_id === eq.eqNumber);
+            const bVal = briefingEqs?.[eq.eqNumber];
+            const op1 = dbEq?.operator1_id !== undefined ? (dbEq.operator1_id || '') : (bVal?.op1 || '');
+            const op2 = dbEq?.operator2_id !== undefined ? (dbEq.operator2_id || '') : (bVal?.op2 || '');
+            return {
+              ...eq,
+              op1,
+              op2,
+              shift_type: dbEq?.shift_type || currentShiftLabel
+            };
           }));
         } else {
           setEquipmentAssignments(prev => prev.map(eq => ({ ...eq, op1: '', op2: '' })));
@@ -903,13 +921,16 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
       }
     };
     loadAssignments();
-  }, [currentShiftLabel, todayDate, rfHdEquipment.length]);
+  }, [currentShiftLabel, todayDate, rfHdEquipment.length, briefingInfo?.staffAssignments]);
 
   const handleAssignFlight = (flightId: string, field: 'assignedTo' | 'assignedOfficer' | 'equipmentUsage', value: string, flightMeta?: any) => {
     if (isHistoricalView) return;
     const meta = flightMeta || (scheduledFlights || []).find((f: any) => f.id === flightId) || (flightJobs || []).find(f => f.id === flightId);
     const resolvedFlightNumber = meta?.flightNumber || (flightId.startsWith('departure-') || flightId.startsWith('arrival-') ? flightId.split('-')[1] : undefined);
     const resolvedDate = meta?.date ? meta.date.split('T')[0] : (flightId.startsWith('departure-') || flightId.startsWith('arrival-') ? flightId.split('-')[2] : todayDate);
+    const previousStaffId = (field === 'assignedTo' || field === 'assignedOfficer') ? (meta?.[field] || '') : '';
+    const newStaffId = value;
+
     const updates: any = { 
       [field]: value,
       flightNumber: resolvedFlightNumber,
@@ -928,45 +949,49 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
       isDomestic: meta?.isDomestic !== undefined ? meta.isDomestic : undefined,
       isAdhoc: meta?.isAdhoc !== undefined ? meta.isAdhoc : undefined,
     };
+
+    let removedOfficer = '';
     if (field === 'equipmentUsage' && value === 'HYDRANT') {
+      removedOfficer = meta?.assignedOfficer || '';
       updates.assignedOfficer = '';
     }
-    updateFlightJob(flightId, updates);
-  };
 
-  const handleSaveStand = async (newStand: string) => {
-    if (!editingStandFlight) return;
-    try {
-      await updateFlightJob(editingStandFlight.id, { 
-        stand: newStand,
-        std: editingStandFlight.std || undefined,
-        flightNumber: editingStandFlight.flightNumber || undefined
-      });
-      notify(`Flight ${editingStandFlight.flightNumber} stand changed to ${newStand}`, 'success');
-    } catch (err) {
-      console.error('Failed to update stand:', err);
-      notify('Failed to update flight stand. Please try again.', 'error');
+    updateFlightJob(flightId, updates);
+
+    // Notify previous and current crew (or auto-cancel & re-send if already dispatched)
+    const targetJob = { ...(meta || {}), ...updates };
+    if (field === 'assignedTo' || field === 'assignedOfficer') {
+      if (previousStaffId !== newStaffId) {
+        handleCrewReassignment(targetJob, field, previousStaffId, newStaffId);
+      }
+    } else if (removedOfficer) {
+      handleCrewReassignment(targetJob, 'assignedOfficer', removedOfficer, '');
     }
   };
 
-  const handleSaveAircraft = async (newType: string, newReg: string) => {
-    if (!editingAircraftFlight) return;
+  const handleSaveFlightDetails = async (newType: string, newReg: string, newStand?: string) => {
+    if (!editingFlight) return;
     try {
-      const flightNum = editingAircraftFlight.flightNumber;
-      await updateFlightJob(editingAircraftFlight.id, {
+      const flightNum = editingFlight.flightNumber;
+      const updatePayload: any = {
         aircraftType: newType,
         aircraftReg: newReg,
         flightNumber: flightNum || undefined,
-        std: editingAircraftFlight.std || undefined,
-        date: editingAircraftFlight.date ? editingAircraftFlight.date.split('T')[0] : selectedBriefingDate
-      });
+        std: editingFlight.std || undefined,
+        date: editingFlight.date ? editingFlight.date.split('T')[0] : selectedBriefingDate
+      };
+      if (newStand !== undefined) {
+        updatePayload.stand = newStand;
+      }
+
+      await updateFlightJob(editingFlight.id, updatePayload);
 
       // If adhoc flight, ensure briefingInfo adhoc flights are also synced
-      if (editingAircraftFlight.isAdhoc || (typeof editingAircraftFlight.id === 'string' && editingAircraftFlight.id.startsWith('ah-'))) {
+      if (editingFlight.isAdhoc || (typeof editingFlight.id === 'string' && editingFlight.id.startsWith('ah-'))) {
         const adhocList = briefingInfo?.staffAssignments?.adhocFlights || [];
         const normTarget = (flightNum || '').replace(/\s+/g, '').toLowerCase();
         const matchIdx = adhocList.findIndex((f: any) => 
-          (f.id && f.id === editingAircraftFlight.id) || 
+          (f.id && f.id === editingFlight.id) || 
           (f.flightNumber && (f.flightNumber || '').replace(/\s+/g, '').toLowerCase() === normTarget)
         );
         if (matchIdx !== -1) {
@@ -987,11 +1012,12 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
         }
       }
 
-      notify(`Flight ${flightNum} aircraft updated to ${newType}${newReg ? ` (${newReg})` : ''}`, 'success');
-      setEditingAircraftFlight(null);
+      const standMsg = newStand ? `, Stand ${newStand}` : '';
+      notify(`Flight ${flightNum} updated: ${newType}${newReg ? ` (${newReg})` : ''}${standMsg}`, 'success');
+      setEditingFlight(null);
     } catch (err) {
-      console.error('Failed to update aircraft:', err);
-      notify('Failed to update aircraft details. Please try again.', 'error');
+      console.error('Failed to update flight details:', err);
+      notify('Failed to update flight details. Please try again.', 'error');
     }
   };
 
@@ -1123,6 +1149,23 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
       const newOp2 = opIndex === 2 ? userId : team.op2;
       try {
         await updateDomesticAssignment(team.name, newOp1, newOp2);
+
+        if (updateBriefingInfo) {
+          const currentStaff = briefingInfo?.staffAssignments || {};
+          const currentTeams = (currentStaff.domesticTeams && currentStaff.domesticTeams.length > 0)
+            ? currentStaff.domesticTeams
+            : domesticTeams;
+          const updatedTeams = currentTeams.map((t: any) => {
+            if (t.name === team.name || t.id === teamId) {
+              return { ...t, op1: newOp1, op2: newOp2 };
+            }
+            return t;
+          });
+          await updateBriefingInfo(briefingInfo?.info || [], briefingInfo?.dieselNeeds || [], {
+            ...currentStaff,
+            domesticTeams: updatedTeams
+          });
+        }
       } catch (error) {
         console.error("Failed to save domestic assignment:", error);
       }
@@ -1143,6 +1186,22 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
     if (eq) {
       try {
         await supabaseService.upsertEquipmentAssignment(todayDate, eq.eqNumber, currentShiftLabel, eq.op1, eq.op2);
+
+        if (updateBriefingInfo) {
+          const isDiesel = currentShiftLabel === 'DIESEL';
+          const currentStaff = briefingInfo?.staffAssignments || {};
+          const currentMap = isDiesel
+            ? { ...(currentStaff.dieselAssignments || {}) }
+            : { ...(currentStaff.equipmentAssignments || {}) };
+          
+          currentMap[eq.eqNumber] = { op1: eq.op1, op2: eq.op2 };
+
+          await updateBriefingInfo(briefingInfo?.info || [], briefingInfo?.dieselNeeds || [], {
+            ...currentStaff,
+            equipmentAssignments: isDiesel ? (currentStaff.equipmentAssignments || {}) : currentMap,
+            dieselAssignments: isDiesel ? currentMap : (currentStaff.dieselAssignments || {})
+          });
+        }
       } catch (error) {
         console.error("Failed to save equipment assignment:", error);
       }
@@ -1151,10 +1210,13 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
 
 
 
-  const renderOperatorSelect = (value: string, onChange: (val: string) => void, disabled?: boolean) => {
-    const isDisabled = disabled || isHistoricalView;
-    const isAssigned = Boolean(value && (operators.some(op => op.id === value) || allStaff.some(s => s.id === value)));
-    const extraStaff = (value && !operators.some(op => op.id === value)) ? allStaff.find(s => s.id === value) : null;
+  const renderOperatorSelect = (value: string, onChange: (val: string) => void, disabled?: boolean, excludeIds?: string[]) => {
+    const isDisabled = disabled || isHistoricalView || !isItpManagerOrAdmin;
+    const filteredOperators = excludeIds && excludeIds.length > 0
+      ? operators.filter(op => op.id === value || !excludeIds.includes(op.id))
+      : operators;
+    const isAssigned = Boolean(value && (filteredOperators.some(op => op.id === value) || allStaff.some(s => s.id === value)));
+    const extraStaff = (value && !filteredOperators.some(op => op.id === value)) ? allStaff.find(s => s.id === value) : null;
 
     return (
       <div className="relative group/select">
@@ -1171,9 +1233,9 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
           }`}
         >
           <option value="" className="bg-surface-dim text-error font-bold">
-            {operators.length === 0 ? '-- NO STAFF IN BRIEFING --' : '-- UNASSIGNED --'}
+            {filteredOperators.length === 0 ? '-- NO STAFF IN BRIEFING --' : '-- UNASSIGNED --'}
           </option>
-          {operators.map(op => (
+          {filteredOperators.map(op => (
             <option key={op.id} value={op.id} className="bg-surface-dim text-on-surface">{op.name.toUpperCase()}</option>
           ))}
           {extraStaff && (
@@ -1451,14 +1513,14 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                             <div className="flex items-center gap-3">
                               {/* Yellow gradient stand badge */}
                               <div 
-                                onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingStandFlight(item); } : undefined}
-                                className={`bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center gap-1 ${
+                                onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFlight(item); } : undefined}
+                                className={`group/stand bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center gap-1 ${
                                   isItpManagerOrAdmin ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500 shadow-md' : ''
                                 }`}
-                                title={isItpManagerOrAdmin ? "Click to change stand" : undefined}
+                                title={isItpManagerOrAdmin ? "Click to edit aircraft & stand" : undefined}
                               >
                                 <span>{item.stand}</span>
-                                {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-60" />}
+                                {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/stand:opacity-100 transition-opacity" />}
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <span className="text-xl font-[900] tracking-tighter italic">{item.flightNumber}</span>
@@ -1473,21 +1535,22 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                                     />
                                   </div>
                                 )}
+                                {renderDispatchTimingBadge(getDispatchState(item))}
                               </div>
                             </div>
                           </td>
                           <td className="px-4 py-6 whitespace-nowrap">
                             <div className="flex items-center gap-6">
                               <div
-                                onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingAircraftFlight(item); } : undefined}
+                                onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFlight(item); } : undefined}
                                 className={`group/ac flex flex-col rounded-lg px-2 py-1 -mx-2 -my-1 transition-all ${
                                   isItpManagerOrAdmin ? 'cursor-pointer hover:bg-surface-dim/70 hover:border-primary/40 border border-transparent' : ''
                                 }`}
-                                title={isItpManagerOrAdmin ? "Click to edit aircraft reg and type" : undefined}
+                                title={isItpManagerOrAdmin ? "Click to edit aircraft & stand" : undefined}
                               >
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-sm font-black tracking-tight">{cleanDisplayReg(item.aircraftReg) || '---'}</span>
-                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/ac:opacity-60 text-primary transition-opacity" />}
+                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/ac:opacity-100 text-primary transition-opacity" />}
                                 </div>
                                 <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">{cleanDisplayType(item.aircraftType) || '---'}</div>
                               </div>
@@ -1556,6 +1619,17 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                           <td className="px-4 py-6 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex justify-end items-center gap-3">
                               {renderStatusBadge(item.status)}
+                              <FuelDispatchControl
+                                job={item}
+                                dispatchState={getDispatchState(item)}
+                                recipients={resolveRecipients(item)}
+                                canDispatch={canDispatch}
+                                disabled={isHistoricalView || isDeparted}
+                                disabledReason={isHistoricalView ? 'Historical date' : isDeparted ? 'Flight departed' : undefined}
+                                align="right"
+                                onSend={sendFuelAlert}
+                                onCancel={cancelFuelAlert}
+                              />
                               <button 
                                 onClick={() => handleAssignFlight(item.id, 'equipmentUsage', activeEquipmentUsage === 'HYDRANT' ? 'REFUELLER' : 'HYDRANT', item)} 
                                 className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all shrink-0 cursor-pointer ${
@@ -1589,17 +1663,17 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                           <div className="flex items-center gap-3">
                             {/* Yellow gradient stand badge */}
                             <div 
-                              onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingStandFlight(item); } : undefined}
-                              className={`bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center gap-1 ${
+                              onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFlight(item); } : undefined}
+                              className={`group/stand bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center gap-1 ${
                                 isItpManagerOrAdmin ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500' : ''
                               }`}
-                              title={isItpManagerOrAdmin ? "Click to change stand" : undefined}
+                              title={isItpManagerOrAdmin ? "Click to edit aircraft & stand" : undefined}
                             >
                               <span>{item.stand}</span>
-                              {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-60" />}
+                              {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/stand:opacity-100 transition-opacity" />}
                             </div>
                             <div>
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">{item.flightNumber}</h3>
                                 {logoUrl && (
                                   <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
@@ -1612,17 +1686,18 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                                     />
                                   </div>
                                 )}
+                                {renderDispatchTimingBadge(getDispatchState(item))}
                               </div>
                               <div className="flex items-center gap-1.5 text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-0.5 flex-wrap">
                                 <div
-                                  onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingAircraftFlight(item); } : undefined}
-                                  className={`inline-flex items-center gap-1 ${
+                                  onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFlight(item); } : undefined}
+                                  className={`group/ac inline-flex items-center gap-1 ${
                                     isItpManagerOrAdmin ? 'cursor-pointer hover:text-primary active:scale-95 transition-all' : ''
                                   }`}
-                                  title={isItpManagerOrAdmin ? "Click to edit aircraft reg and type" : undefined}
+                                  title={isItpManagerOrAdmin ? "Click to edit aircraft & stand" : undefined}
                                 >
                                   <span>{cleanDisplayReg(item.aircraftReg) ? `${cleanDisplayReg(item.aircraftReg)} • ${cleanDisplayType(item.aircraftType)}` : cleanDisplayType(item.aircraftType)}</span>
-                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 text-primary opacity-60" />}
+                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 text-primary opacity-0 group-hover/ac:opacity-100 transition-opacity" />}
                                 </div>
                                 {item.route && (
                                   <>
@@ -1696,7 +1771,17 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                         )}
                       </div>
                       <div className="flex justify-between items-center mt-4 pt-4 border-t border-outline/30">
-                        <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Status</span>
+                        <FuelDispatchControl
+                          job={item}
+                          dispatchState={getDispatchState(item)}
+                          recipients={resolveRecipients(item)}
+                          canDispatch={canDispatch}
+                          disabled={isHistoricalView || isDeparted}
+                          disabledReason={isHistoricalView ? 'Historical date' : isDeparted ? 'Flight departed' : undefined}
+                          align="left"
+                          onSend={sendFuelAlert}
+                          onCancel={cancelFuelAlert}
+                        />
                         <div className="flex items-center gap-2">
                           {renderStatusBadge(item.status)}
                         </div>
@@ -1716,26 +1801,35 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                 Squadron Assignments
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-12">
-                {domesticTeams.map((team, idx) => (
-                  <div key={team.id} className="card-premium p-4 sm:p-6 group hover:border-primary/20 transition-colors w-full">
-                    <div className="flex items-center mb-8">
-                      <div className="p-3 bg-surface-dim rounded-2xl border border-outline mr-4 group-hover:border-primary/30 transition-all">
-                        <Users className="w-5 h-5 text-on-surface" />
+                {domesticTeams.map((team, idx) => {
+                  const otherAssignedForOp1 = domesticTeams
+                    .flatMap(t => (t.id === team.id ? [t.op2] : [t.op1, t.op2]))
+                    .filter(Boolean);
+                  const otherAssignedForOp2 = domesticTeams
+                    .flatMap(t => (t.id === team.id ? [t.op1] : [t.op1, t.op2]))
+                    .filter(Boolean);
+
+                  return (
+                    <div key={team.id} className="card-premium p-4 sm:p-6 group hover:border-primary/20 transition-colors w-full">
+                      <div className="flex items-center mb-8">
+                        <div className="p-3 bg-surface-dim rounded-2xl border border-outline mr-4 group-hover:border-primary/30 transition-all">
+                          <Users className="w-5 h-5 text-on-surface" />
+                        </div>
+                        <h4 className="text-xl font-[900] text-on-surface italic uppercase tracking-tighter">{team.name}</h4>
                       </div>
-                      <h4 className="text-xl font-[900] text-on-surface italic uppercase tracking-tighter">{team.name}</h4>
+                      <div className="space-y-6">
+                        <div>
+                          <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">RF OPERATOR</label>
+                          {renderOperatorSelect(team.op1, (val) => handleAssignDomestic(team.id, 1, val), false, otherAssignedForOp1)}
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">OFFICER</label>
+                          {renderOperatorSelect(team.op2, (val) => handleAssignDomestic(team.id, 2, val), false, otherAssignedForOp2)}
+                        </div>
+                      </div>
                     </div>
-                    <div className="space-y-6">
-                      <div>
-                        <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">RF OPERATOR</label>
-                        {renderOperatorSelect(team.op1, (val) => handleAssignDomestic(team.id, 1, val))}
-                      </div>
-                      <div>
-                        <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">OFFICER</label>
-                        {renderOperatorSelect(team.op2, (val) => handleAssignDomestic(team.id, 2, val))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Desktop View */}
@@ -1756,45 +1850,33 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                         return (
                           <tr key={flight.id} className={`hover:bg-primary/[0.01] transition-colors group animate-in fade-in slide-in-from-left-4 duration-300 stagger-${Math.min(idx + 1, 5)}`}>
                             <td className="px-4 py-6 whitespace-nowrap">
-                              <div className="flex items-center gap-3">
-                                {/* Yellow gradient stand badge */}
-                                <div 
-                                  onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingStandFlight(flight); } : undefined}
-                                  className={`bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center gap-1 ${
-                                    isItpManagerOrAdmin ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500' : ''
-                                  }`}
-                                  title={isItpManagerOrAdmin ? "Click to change stand" : undefined}
-                                >
-                                  <span>{flight.stand}</span>
-                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-60" />}
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-lg font-[900] italic tracking-tighter">{flight.flightNumber}</span>
-                                  {logoUrl && (
-                                    <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
-                                      <img
-                                        src={logoUrl}
-                                        alt=""
-                                        aria-hidden="true"
-                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                        className="w-full h-full object-contain select-none flex-shrink-0"
-                                      />
-                                    </div>
-                                  )}
-                                </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-lg font-[900] italic tracking-tighter">{flight.flightNumber}</span>
+                                {logoUrl && (
+                                  <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                                    <img
+                                      src={logoUrl}
+                                      alt=""
+                                      aria-hidden="true"
+                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                      className="w-full h-full object-contain select-none flex-shrink-0"
+                                    />
+                                  </div>
+                                )}
+                                {renderDispatchTimingBadge(getDispatchState(flight))}
                               </div>
                             </td>
                             <td className="px-4 py-6 whitespace-nowrap">
                               <div
-                                onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingAircraftFlight(flight); } : undefined}
+                                onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFlight(flight); } : undefined}
                                 className={`group/ac flex flex-col rounded-lg px-2 py-1 -mx-2 -my-1 transition-all ${
                                   isItpManagerOrAdmin ? 'cursor-pointer hover:bg-surface-dim/70 hover:border-primary/40 border border-transparent' : ''
                                 }`}
-                                title={isItpManagerOrAdmin ? "Click to edit aircraft reg and type" : undefined}
+                                title={isItpManagerOrAdmin ? "Click to edit aircraft details" : undefined}
                               >
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-sm font-black tracking-tight">{cleanDisplayType(flight.aircraftType) || 'ATR'}</span>
-                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/ac:opacity-60 text-primary transition-opacity" />}
+                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/ac:opacity-100 text-primary transition-opacity" />}
                                 </div>
                                 <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1 flex items-center gap-1.5">
                                   <span>{cleanDisplayReg(flight.aircraftReg) || '---'}</span>
@@ -1817,6 +1899,17 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                             <td className="px-4 py-6 whitespace-nowrap">
                               <div className="flex items-center gap-2">
                                 {renderStatusBadge(flight.status)}
+                                <FuelDispatchControl
+                                  job={flight}
+                                  dispatchState={getDispatchState(flight)}
+                                  recipients={resolveRecipients(flight)}
+                                  canDispatch={canDispatch}
+                                  disabled={isHistoricalView || (flight.status || '').toUpperCase() === 'DEPARTED'}
+                                  disabledReason={isHistoricalView ? 'Historical date' : (flight.status || '').toUpperCase() === 'DEPARTED' ? 'Flight departed' : undefined}
+                                  align="right"
+                                  onSend={sendFuelAlert}
+                                  onCancel={cancelFuelAlert}
+                                />
                               </div>
                             </td>
                           </tr>
@@ -1836,49 +1929,39 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                     <div key={flight.id} className="bg-surface-container-lowest p-5 sm:p-6 rounded-2xl border border-outline group transition-all w-full shadow-sm">
                       <div className="flex justify-between items-start mb-6">
                         <div className="flex items-center min-w-0">
-                          <div className="flex items-center gap-3">
-                            <div 
-                              onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingStandFlight(flight); } : undefined}
-                              className={`bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center gap-1 ${
-                                isItpManagerOrAdmin ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500' : ''
-                              }`}
-                              title={isItpManagerOrAdmin ? "Click to change stand" : undefined}
-                            >
-                              <span>{flight.stand}</span>
-                              {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-60" />}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">{flight.flightNumber}</h3>
-                                {logoUrl && (
-                                  <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
-                                    <img
-                                      src={logoUrl}
-                                      alt=""
-                                      aria-hidden="true"
-                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                      className="w-full h-full object-contain select-none flex-shrink-0"
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                              <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest flex items-center gap-1.5 flex-wrap">
-                                <div
-                                  onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingAircraftFlight(flight); } : undefined}
-                                  className={`inline-flex items-center gap-1 ${
-                                    isItpManagerOrAdmin ? 'cursor-pointer hover:text-primary active:scale-95 transition-all' : ''
-                                  }`}
-                                  title={isItpManagerOrAdmin ? "Click to edit aircraft reg and type" : undefined}
-                                >
-                                  {cleanDisplayReg(flight.aircraftReg) && (
-                                    <>
-                                      <span>{cleanDisplayReg(flight.aircraftReg)}</span>
-                                      <span>•</span>
-                                    </>
-                                  )}
-                                  <span>{cleanDisplayType(flight.aircraftType) || 'ATR'}</span>
-                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 text-primary opacity-60" />}
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">{flight.flightNumber}</h3>
+                              {logoUrl && (
+                                <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                                  <img
+                                    src={logoUrl}
+                                    alt=""
+                                    aria-hidden="true"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    className="w-full h-full object-contain select-none flex-shrink-0"
+                                  />
                                 </div>
+                              )}
+                              {renderDispatchTimingBadge(getDispatchState(flight))}
+                            </div>
+                            <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest flex items-center gap-1.5 flex-wrap">
+                              <div
+                                onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFlight(flight); } : undefined}
+                                className={`group/ac inline-flex items-center gap-1 ${
+                                  isItpManagerOrAdmin ? 'cursor-pointer hover:text-primary active:scale-95 transition-all' : ''
+                                }`}
+                                title={isItpManagerOrAdmin ? "Click to edit aircraft details" : undefined}
+                              >
+                                {cleanDisplayReg(flight.aircraftReg) && (
+                                  <>
+                                    <span>{cleanDisplayReg(flight.aircraftReg)}</span>
+                                    <span>•</span>
+                                  </>
+                                )}
+                                <span>{cleanDisplayType(flight.aircraftType) || 'ATR'}</span>
+                                {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 text-primary opacity-0 group-hover/ac:opacity-100 transition-opacity" />}
+                              </div>
                                 {flight.route && (
                                   <>
                                     <span>•</span>
@@ -1889,7 +1972,6 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                             </div>
                           </div>
                         </div>
-                      </div>
 
                       <div className="flex justify-center items-center p-3 bg-surface-dim rounded-xl border border-outline">
                         <div className="text-center">
@@ -1899,7 +1981,17 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                       </div>
 
                       <div className="flex justify-between items-center mt-4 pt-4 border-t border-outline/30">
-                        <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Status</span>
+                        <FuelDispatchControl
+                          job={flight}
+                          dispatchState={getDispatchState(flight)}
+                          recipients={resolveRecipients(flight)}
+                          canDispatch={canDispatch}
+                          disabled={isHistoricalView || (flight.status || '').toUpperCase() === 'DEPARTED'}
+                          disabledReason={isHistoricalView ? 'Historical date' : (flight.status || '').toUpperCase() === 'DEPARTED' ? 'Flight departed' : undefined}
+                          align="left"
+                          onSend={sendFuelAlert}
+                          onCancel={cancelFuelAlert}
+                        />
                         <div className="flex items-center gap-2">
                           {renderStatusBadge(flight.status)}
                         </div>
@@ -1950,48 +2042,36 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                         return (
                           <tr key={flight.id} className={`hover:bg-primary/[0.01] transition-colors group animate-in fade-in slide-in-from-left-4 duration-300 stagger-${Math.min(idx + 1, 5)}`}>
                             <td className="px-4 py-6 whitespace-nowrap">
-                              <div className="flex items-center gap-3">
-                                {/* Yellow gradient stand badge */}
-                                <div 
-                                  onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingStandFlight(flight); } : undefined}
-                                  className={`bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center gap-1 ${
-                                    isItpManagerOrAdmin ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500' : ''
-                                  }`}
-                                  title={isItpManagerOrAdmin ? "Click to change stand" : undefined}
-                                >
-                                  <span>{flight.stand}</span>
-                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-60" />}
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-lg font-[900] italic tracking-tighter">{flight.flightNumber}</span>
-                                  {logoUrl && (
-                                    <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
-                                      <img
-                                        src={logoUrl}
-                                        alt=""
-                                        aria-hidden="true"
-                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                        className="w-full h-full object-contain select-none flex-shrink-0"
-                                      />
-                                    </div>
-                                  )}
-                                  <span className="ml-2 bg-amber-500/10 text-amber-500 text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider border border-amber-500/20">
-                                    Ad-Hoc
-                                  </span>
-                                </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-lg font-[900] italic tracking-tighter">{flight.flightNumber}</span>
+                                {logoUrl && (
+                                  <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                                    <img
+                                      src={logoUrl}
+                                      alt=""
+                                      aria-hidden="true"
+                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                      className="w-full h-full object-contain select-none flex-shrink-0"
+                                    />
+                                  </div>
+                                )}
+                                <span className="ml-2 bg-amber-500/10 text-amber-500 text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider border border-amber-500/20">
+                                  Ad-Hoc
+                                </span>
+                                {renderDispatchTimingBadge(getDispatchState(flight))}
                               </div>
                             </td>
                             <td className="px-4 py-6 whitespace-nowrap">
                               <div
-                                onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingAircraftFlight(flight); } : undefined}
+                                onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFlight(flight); } : undefined}
                                 className={`group/ac flex flex-col rounded-lg px-2 py-1 -mx-2 -my-1 transition-all ${
                                   isItpManagerOrAdmin ? 'cursor-pointer hover:bg-surface-dim/70 hover:border-primary/40 border border-transparent' : ''
                                 }`}
-                                title={isItpManagerOrAdmin ? "Click to edit aircraft reg and type" : undefined}
+                                title={isItpManagerOrAdmin ? "Click to edit aircraft details" : undefined}
                               >
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-sm font-black tracking-tight text-on-surface">{cleanDisplayReg(flight.aircraftReg) || '---'}</span>
-                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/ac:opacity-60 text-primary transition-opacity" />}
+                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/ac:opacity-100 text-primary transition-opacity" />}
                                 </div>
                                 <div className="text-[10px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest mt-1 flex items-center gap-1.5">
                                   <span>{cleanDisplayType(flight.aircraftType)}</span>
@@ -2014,6 +2094,17 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                             <td className="px-4 py-6 whitespace-nowrap">
                               <div className="flex items-center gap-2">
                                 {renderStatusBadge(flight.status)}
+                                <FuelDispatchControl
+                                  job={flight}
+                                  dispatchState={getDispatchState(flight)}
+                                  recipients={resolveRecipients(flight)}
+                                  canDispatch={canDispatch}
+                                  disabled={isHistoricalView || (flight.status || '').toUpperCase() === 'DEPARTED'}
+                                  disabledReason={isHistoricalView ? 'Historical date' : (flight.status || '').toUpperCase() === 'DEPARTED' ? 'Flight departed' : undefined}
+                                  align="right"
+                                  onSend={sendFuelAlert}
+                                  onCancel={cancelFuelAlert}
+                                />
                               </div>
                             </td>
                           </tr>
@@ -2037,48 +2128,38 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                     <div key={flight.id} className="bg-surface-container-lowest p-5 sm:p-6 rounded-2xl border border-outline group transition-all w-full shadow-sm">
                       <div className="flex justify-between items-start mb-6">
                         <div className="flex items-center min-w-0">
-                          <div className="flex items-center gap-3">
-                            <div 
-                              onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingStandFlight(flight); } : undefined}
-                              className={`bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center gap-1 ${
-                                isItpManagerOrAdmin ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500' : ''
-                              }`}
-                              title={isItpManagerOrAdmin ? "Click to change stand" : undefined}
-                            >
-                              <span>{flight.stand}</span>
-                              {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-60" />}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">{flight.flightNumber}</h3>
-                                {logoUrl && (
-                                  <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
-                                    <img
-                                      src={logoUrl}
-                                      alt=""
-                                      aria-hidden="true"
-                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                      className="w-full h-full object-contain select-none flex-shrink-0"
-                                    />
-                                  </div>
-                                )}
-                                <span className="bg-amber-500/10 text-amber-500 text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider border border-amber-500/20">
-                                  Ad-Hoc
-                                </span>
-                              </div>
-                              <div className="text-[10px] font-black uppercase tracking-widest mt-1 flex items-center gap-1.5 flex-wrap">
-                                <div
-                                  onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingAircraftFlight(flight); } : undefined}
-                                  className={`inline-flex items-center gap-1 ${
-                                    isItpManagerOrAdmin ? 'cursor-pointer hover:text-primary active:scale-95 transition-all' : ''
-                                  }`}
-                                  title={isItpManagerOrAdmin ? "Click to edit aircraft reg and type" : undefined}
-                                >
-                                  <span className="text-on-surface font-black">{cleanDisplayReg(flight.aircraftReg) || '---'}</span>
-                                  <span className="text-on-surface-dim opacity-40">•</span>
-                                  <span className="text-on-surface-dim opacity-40 font-bold">{cleanDisplayType(flight.aircraftType)}</span>
-                                  {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 text-primary opacity-60" />}
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h3 className="text-2xl font-[900] text-on-surface tracking-tighter italic uppercase">{flight.flightNumber}</h3>
+                              {logoUrl && (
+                                <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                                  <img
+                                    src={logoUrl}
+                                    alt=""
+                                    aria-hidden="true"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    className="w-full h-full object-contain select-none flex-shrink-0"
+                                  />
                                 </div>
+                              )}
+                              <span className="bg-amber-500/10 text-amber-500 text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider border border-amber-500/20">
+                                Ad-Hoc
+                              </span>
+                              {renderDispatchTimingBadge(getDispatchState(flight))}
+                            </div>
+                            <div className="text-[10px] font-black uppercase tracking-widest mt-1 flex items-center gap-1.5 flex-wrap">
+                              <div
+                                onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFlight(flight); } : undefined}
+                                className={`group/ac inline-flex items-center gap-1 ${
+                                  isItpManagerOrAdmin ? 'cursor-pointer hover:text-primary active:scale-95 transition-all' : ''
+                                }`}
+                                title={isItpManagerOrAdmin ? "Click to edit aircraft details" : undefined}
+                              >
+                                <span className="text-on-surface font-black">{cleanDisplayReg(flight.aircraftReg) || '---'}</span>
+                                <span className="text-on-surface-dim opacity-40">•</span>
+                                <span className="text-on-surface-dim opacity-40 font-bold">{cleanDisplayType(flight.aircraftType)}</span>
+                                {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 text-primary opacity-0 group-hover/ac:opacity-100 transition-opacity" />}
+                              </div>
                                 {flight.route && (
                                   <>
                                     <span className="text-on-surface-dim opacity-40">•</span>
@@ -2089,7 +2170,6 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                             </div>
                           </div>
                         </div>
-                      </div>
 
                       <div 
                         onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFrtFlight(flight); } : undefined}
@@ -2111,7 +2191,17 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                       </div>
 
                       <div className="flex justify-between items-center mt-4 pt-4 border-t border-outline/30">
-                        <span className="text-[9px] font-black text-on-surface-dim opacity-40 uppercase tracking-widest">Status</span>
+                        <FuelDispatchControl
+                          job={flight}
+                          dispatchState={getDispatchState(flight)}
+                          recipients={resolveRecipients(flight)}
+                          canDispatch={canDispatch}
+                          disabled={isHistoricalView || (flight.status || '').toUpperCase() === 'DEPARTED'}
+                          disabledReason={isHistoricalView ? 'Historical date' : (flight.status || '').toUpperCase() === 'DEPARTED' ? 'Flight departed' : undefined}
+                          align="left"
+                          onSend={sendFuelAlert}
+                          onCancel={cancelFuelAlert}
+                        />
                         <div className="flex items-center gap-2">
                           {renderStatusBadge(flight.status)}
                         </div>
@@ -2164,7 +2254,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
                                 <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Operator</label>
                                 {renderOperatorSelect(eq.op1, (val) => handleAssignEquipment(eq.id, 1, val))}
                               </div>
-                              {type === 'Refueller' && currentShiftLabel !== 'DIESEL' && (
+                              {type === 'Refueller' && (
                                 <div>
                                   <label className="block text-[9px] font-black text-on-surface-dim uppercase mb-3 tracking-widest opacity-40">Officer</label>
                                   {renderOperatorSelect(eq.op2, (val) => handleAssignEquipment(eq.id, 2, val))}
@@ -2746,12 +2836,16 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
         document.body
       )}
 
-      {editingStandFlight && (
-        <EditStandModal
-          flightNumber={editingStandFlight.flightNumber}
-          currentStand={editingStandFlight.stand}
-          onClose={() => setEditingStandFlight(null)}
-          onSave={handleSaveStand}
+      {editingFlight && (
+        <EditAircraftModal
+          flightNumber={editingFlight.flightNumber}
+          initialType={cleanDisplayType(editingFlight.aircraftType)}
+          initialReg={cleanDisplayReg(editingFlight.aircraftReg)}
+          initialStand={editingFlight.stand}
+          isDomestic={isDomesticFlight(editingFlight)}
+          isAdhoc={isAdhocFlight(editingFlight)}
+          onClose={() => setEditingFlight(null)}
+          onSave={handleSaveFlightDetails}
         />
       )}
 
@@ -2760,16 +2854,6 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob }) => {
           flight={editingFrtFlight}
           onClose={() => setEditingFrtFlight(null)}
           onSave={handleSaveFrt}
-        />
-      )}
-
-      {editingAircraftFlight && (
-        <EditAircraftModal
-          flightNumber={editingAircraftFlight.flightNumber}
-          initialType={cleanDisplayType(editingAircraftFlight.aircraftType)}
-          initialReg={cleanDisplayReg(editingAircraftFlight.aircraftReg)}
-          onClose={() => setEditingAircraftFlight(null)}
-          onSave={handleSaveAircraft}
         />
       )}
 

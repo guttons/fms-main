@@ -36,6 +36,7 @@ import { Logo } from './Logo';
 import { StockIcon } from './StockIcon';
 import { haptic } from '../utils/haptics';
 import { getRoleMenuItems } from '../utils/navigation';
+import { useRolePermissions } from '../hooks/useRolePermissions';
 
 interface SidebarProps {
   user: User;
@@ -63,6 +64,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isSpinning, setIsSpinning] = React.useState(false);
   const [hoveredTooltip, setHoveredTooltip] = React.useState<{ top: number; label: string; left?: string; isError?: boolean } | null>(null);
 
+  const { permissions, canView } = useRolePermissions(user?.role);
+  const menuItems = getRoleMenuItems(user?.role, permissions);
+
   React.useEffect(() => {
     if (isMobileMenuOpen) {
       setIsSpinning(true);
@@ -70,8 +74,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       return () => clearTimeout(timer);
     }
   }, [isMobileMenuOpen]);
-
-  const menuItems = getRoleMenuItems(user?.role);
 
   return (
     <aside className={`
@@ -185,35 +187,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             {/* System Settings */}
-            <div className="relative group w-full flex justify-center">
-              <button 
-                onClick={() => {
-                  haptic('NAV_TAP');
-                  onSettingsClick();
-                }}
-                onMouseEnter={(e) => {
-                  if (!isCollapsed) return;
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  setHoveredTooltip({
-                    top: rect.top + rect.height / 2,
-                    label: 'System Settings',
-                    left: '66px'
-                  });
-                }}
-                onMouseLeave={() => setHoveredTooltip(null)}
-                className={`w-full flex items-center rounded-xl transition-all duration-300 px-2 py-2 text-[13.5px] font-bold
-                  ${isCollapsed ? 'lg:w-11 lg:h-11 lg:p-0 lg:justify-center' : ''}
-                  ${activeView === 'admin' 
-                    ? 'bg-primary/10 text-primary font-black' 
-                    : 'text-on-surface-dim hover:bg-surface-dim hover:text-on-surface'
-                  }`}
-              >
-                <Settings className={`w-4 h-4 ${isCollapsed ? 'lg:mr-0' : 'lg:mr-3'} mr-3 transition-all duration-300 shrink-0 ${activeView === 'admin' ? 'text-primary' : 'opacity-40 hover:opacity-100'}`} />
-                <span className={`whitespace-nowrap transition-all duration-300 inline-block ${activeView === 'admin' ? 'font-black' : ''} ${isCollapsed ? 'lg:opacity-0 lg:max-w-0 lg:overflow-hidden lg:pointer-events-none' : 'lg:opacity-100 lg:max-w-[150px]'}`}>
-                  System Settings
-                </span>
-              </button>
-            </div>
+            {(user?.role === UserRole.ADMIN || canView('system-admin')) && (
+              <div className="relative group w-full flex justify-center">
+                <button 
+                  onClick={() => {
+                    haptic('NAV_TAP');
+                    onSettingsClick();
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isCollapsed) return;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setHoveredTooltip({
+                      top: rect.top + rect.height / 2,
+                      label: 'System Settings',
+                      left: '66px'
+                    });
+                  }}
+                  onMouseLeave={() => setHoveredTooltip(null)}
+                  className={`w-full flex items-center rounded-xl transition-all duration-300 px-2 py-2 text-[13.5px] font-bold
+                    ${isCollapsed ? 'lg:w-11 lg:h-11 lg:p-0 lg:justify-center' : ''}
+                    ${activeView === 'admin' 
+                      ? 'bg-primary/10 text-primary font-black' 
+                      : 'text-on-surface-dim hover:bg-surface-dim hover:text-on-surface'
+                    }`}
+                >
+                  <Settings className={`w-4 h-4 ${isCollapsed ? 'lg:mr-0' : 'lg:mr-3'} mr-3 transition-all duration-300 shrink-0 ${activeView === 'admin' ? 'text-primary' : 'opacity-40 hover:opacity-100'}`} />
+                  <span className={`whitespace-nowrap transition-all duration-300 inline-block ${activeView === 'admin' ? 'font-black' : ''} ${isCollapsed ? 'lg:opacity-0 lg:max-w-0 lg:overflow-hidden lg:pointer-events-none' : 'lg:opacity-100 lg:max-w-[150px]'}`}>
+                    System Settings
+                  </span>
+                </button>
+              </div>
+            )}
 
             {/* Sign Out */}
             <div className="relative group w-full flex justify-center">

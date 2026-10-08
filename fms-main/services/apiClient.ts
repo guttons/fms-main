@@ -5,6 +5,23 @@ import { CustomerAccount, UpcomingPayment, Invoice, Receipt, ProformaRecord, Fue
 // Deduplication map for concurrent GET requests
 const inFlightRequests = new Map<string, Promise<any>>();
 
+// Circuit breaker state for external Cloud Run BigQuery API
+let isApiOffline = false;
+let apiOfflineUntil = 0;
+const CIRCUIT_BREAKER_COOLDOWN_MS = 60 * 1000; // 60s cooldown if offline
+
+export function isBigQueryApiAvailable(): boolean {
+  if (isApiOffline && Date.now() < apiOfflineUntil) {
+    return false;
+  }
+  return true;
+}
+
+export function resetApiCircuitBreaker(): void {
+  isApiOffline = false;
+  apiOfflineUntil = 0;
+}
+
 export function getApiBaseUrl(): string {
   const envUrl = import.meta.env.VITE_BIGQUERY_API_URL;
   const isLocalhost = typeof window !== 'undefined' && 
@@ -45,6 +62,11 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  // Fast fail when circuit breaker is active to eliminate console network spam
+  if (isApiOffline && Date.now() < apiOfflineUntil) {
+    throw new Error('BigQuery API is currently offline (circuit breaker active)');
+  }
+
   const method = (options.method || 'GET').toUpperCase();
   const url = `${getApiBaseUrl()}${path.startsWith('/') ? path : '/' + path}`;
 
@@ -62,7 +84,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     };
 
     const controller = new AbortController();
-    const timeoutMs = method === 'GET' ? 4000 : 3500;
+    const timeoutMs = method === 'GET' ? 3000 : 2500;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
@@ -73,14 +95,27 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
       });
       clearTimeout(timeoutId);
 
+      // Reset circuit breaker on successful response
+      isApiOffline = false;
+      apiOfflineUntil = 0;
+
       if (!res.ok) {
         const errorBody = await res.json().catch(() => ({ error: res.statusText }));
         throw new Error(errorBody.error || `HTTP error ${res.status}`);
       }
 
       return res.json() as Promise<T>;
-    } catch (err) {
+    } catch (err: any) {
       clearTimeout(timeoutId);
+      // Trip circuit breaker on connection issues or aborts
+      const isNetworkIssue = err?.name === 'AbortError' || 
+        err?.message?.includes('Failed to fetch') || 
+        err?.message?.includes('NetworkError') ||
+        err?.message?.includes('ERR_CONNECTION_CLOSED');
+      if (isNetworkIssue) {
+        isApiOffline = true;
+        apiOfflineUntil = Date.now() + CIRCUIT_BREAKER_COOLDOWN_MS;
+      }
       throw err;
     }
   };

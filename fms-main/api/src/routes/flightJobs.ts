@@ -205,7 +205,16 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
       row.remarks = metaString;
     }
 
-    const { data, error } = await supabase.from('flight_jobs').update(row).eq('id', id).select().maybeSingle();
+    let { data, error } = await supabase.from('flight_jobs').update(row).eq('id', id).select().maybeSingle();
+    if (!data && !error && row.flight_number) {
+      const { data: byFlight, error: flightErr } = await supabase.from('flight_jobs').update(row).ilike('flight_number', row.flight_number).select();
+      if (byFlight && byFlight.length > 0) {
+        data = byFlight[0];
+      }
+      if (flightErr) {
+        error = flightErr;
+      }
+    }
     if (error) {
       console.error('[API] PATCH /flight-jobs/:id error:', error);
       return res.status(500).json({ error: error.message });

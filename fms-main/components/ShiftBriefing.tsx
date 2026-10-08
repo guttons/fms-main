@@ -29,7 +29,14 @@ import {
   Lock,
   Ban,
   Play,
-  CheckCircle
+  CheckCircle,
+  Table,
+  LayoutGrid,
+  Layers,
+  Fuel,
+  Package,
+  ArrowUpDown,
+  Sliders
 } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { MOCK_USERS, EQUIPMENT } from '../constants';
@@ -37,6 +44,23 @@ import { User, UserRole, EquipmentType, EquipmentStatus, isDomesticFlight } from
 import { useNotification } from '../context/NotificationContext';
 import { useOperationalData, BriefingShift } from '../context/OperationalDataContext';
 import { AddAdhocFlightModal, AdhocFlightData } from './AddAdhocFlightModal';
+import { haptic } from '../utils/haptics';
+import {
+  fetchStaffAssignmentHistory,
+  runAutoAssignDomestic,
+  runAutoAssignDaily,
+  runAutoAssignDiesel,
+  runAutoAssignJetTransfer,
+  runAutoAssignStock,
+  sortDomesticCandidates,
+  sortDailyCandidates,
+  sortDieselCandidates,
+  sortJetTransferCandidates,
+  sortStockCandidates,
+  StaffAssignmentHistory,
+  DomesticTeamAssignment,
+  isStaffEligible
+} from '../services/assignmentEngine';
 
 const STAFF_STATUS_PRESETS = [
   { id: 'SL', label: 'SL', color: 'bg-amber-500/10 text-amber-500 border border-amber-500/30' },
@@ -67,65 +91,53 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
     selectedBriefingDate,
     setSelectedBriefingDate,
     flightJobs,
-    domesticFlights
+    domesticFlights,
+    domesticAssignments,
+    updateDomesticAssignment
   } = useOperationalData();
   const activeStaff = staff && staff.length > 0 ? staff : MOCK_USERS;
   const todayStr = new Date().toISOString().split('T')[0];
   const isHistoricalView = selectedBriefingDate < todayStr;
 
-  const staffHistory = [
-    { staffId: 'u3', lastDomestic: { date: '2026-06-09', shift: 'Morning', team: 'Team 1' }, lastDaily: { date: '2026-06-09', shift: 'Morning' }},
-    { staffId: 'u3b', lastDomestic: { date: '2026-06-08', shift: 'Evening', team: 'Team 2' }, lastDaily: { date: '2026-06-09', shift: 'Morning' }},
-    { staffId: 'u7', lastDomestic: { date: '2026-06-08', shift: 'Morning', team: 'Team 1' }, lastDaily: { date: '2026-06-08', shift: 'Night' }},
-    { staffId: 'u1', lastDomestic: { date: '2026-06-07', shift: 'Night', team: 'Team 3' }, lastDaily: { date: '2026-06-08', shift: 'Evening' }},
-    { staffId: 'u2', lastDomestic: { date: '2026-06-07', shift: 'Morning', team: 'Team 2' }, lastDaily: { date: '2026-06-07', shift: 'Morning' }},
-  ];
+  const [historyMap, setHistoryMap] = useState<Map<string, StaffAssignmentHistory>>(new Map());
 
-  const sortHistory = (a: any, b: any) => {
-    // 1. Date ascending (oldest date first / ranked 1)
-    const dateComp = a.lastDomestic.date.localeCompare(b.lastDomestic.date);
-    if (dateComp !== 0) return dateComp;
-    
-    // 2. Shift weight ascending (Morning=1 < Evening=2 < Night=3)
-    const shiftWeight = (s: string) => s === 'Morning' ? 1 : s === 'Evening' ? 2 : 3;
-    const shiftComp = shiftWeight(a.lastDomestic.shift) - shiftWeight(b.lastDomestic.shift);
-    if (shiftComp !== 0) return shiftComp;
+  useEffect(() => {
+    let isMounted = true;
+    const loadHistory = async () => {
+      const allStaffIds = activeStaff.map(s => s.id);
+      const map = await fetchStaffAssignmentHistory(allStaffIds);
+      if (isMounted) {
+        setHistoryMap(map);
+      }
+    };
+    loadHistory();
+    return () => { isMounted = false; };
+  }, [activeStaff, selectedBriefingDate]);
 
-    // 3. Team weight ascending (Team 1=1 < Team 2=2 < Team 3=3)
-    const teamWeight = (t: string) => t === 'Team 1' ? 1 : t === 'Team 2' ? 2 : 3;
-    return teamWeight(a.lastDomestic.team || '') - teamWeight(b.lastDomestic.team || '');
-  };
-
-  const sortDailyHistory = (a: any, b: any) => {
-    // 1. Date ascending (oldest date first / ranked 1)
-    const dateComp = a.lastDaily.date.localeCompare(b.lastDaily.date);
-    if (dateComp !== 0) return dateComp;
-    
-    // 2. Shift weight ascending (Morning=1 < Evening=2 < Night=3)
-    const shiftWeight = (s: string) => s === 'Morning' ? 1 : s === 'Evening' ? 2 : 3;
-    return shiftWeight(a.lastDaily.shift) - shiftWeight(b.lastDaily.shift);
-  };
-
-  const rankedStaffList = [...staffHistory].sort(sortHistory);
-  const rankedDailyStaffList = [...staffHistory].sort(sortDailyHistory);
-
-  const getRankInRoles = (staffId: string, roles: UserRole[], type: 'DOM' | 'DAILY') => {
-    // 1. Get all staff members who have one of the compatible roles
+  const getRankInRoles = (staffId: string, roles: UserRole[], type: 'DOM' | 'DAILY' | 'DIESEL' | 'JET' | 'STOCK') => {
     const compatibleStaffIds = activeStaff
       .filter(u => roles.includes(u.role))
       .map(u => u.id);
 
-    // 2. Filter staffHistory to only include these compatible staff
-    const filteredHistory = staffHistory.filter(h => compatibleStaffIds.includes(h.staffId));
-
-    // 3. Sort them using the appropriate sorting function
     if (type === 'DOM') {
-      const sorted = [...filteredHistory].sort(sortHistory);
-      const rankIdx = sorted.findIndex(h => h.staffId === staffId);
+      const sorted = sortDomesticCandidates(compatibleStaffIds, historyMap);
+      const rankIdx = sorted.findIndex(id => id === staffId);
+      return rankIdx !== -1 ? rankIdx + 1 : '-';
+    } else if (type === 'DAILY') {
+      const sorted = sortDailyCandidates(compatibleStaffIds, historyMap);
+      const rankIdx = sorted.findIndex(id => id === staffId);
+      return rankIdx !== -1 ? rankIdx + 1 : '-';
+    } else if (type === 'DIESEL') {
+      const sorted = sortDieselCandidates(compatibleStaffIds, historyMap);
+      const rankIdx = sorted.findIndex(id => id === staffId);
+      return rankIdx !== -1 ? rankIdx + 1 : '-';
+    } else if (type === 'STOCK') {
+      const sorted = sortStockCandidates(compatibleStaffIds, historyMap);
+      const rankIdx = sorted.findIndex(id => id === staffId);
       return rankIdx !== -1 ? rankIdx + 1 : '-';
     } else {
-      const sorted = [...filteredHistory].sort(sortDailyHistory);
-      const rankIdx = sorted.findIndex(h => h.staffId === staffId);
+      const sorted = sortJetTransferCandidates(compatibleStaffIds, historyMap);
+      const rankIdx = sorted.findIndex(id => id === staffId);
       return rankIdx !== -1 ? rankIdx + 1 : '-';
     }
   };
@@ -411,6 +423,11 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
     } | null;
     adhocFlights?: any[];
     staffStatuses?: Record<string, string>;
+    domesticTeams?: DomesticTeamAssignment[];
+    equipmentAssignments?: Record<string, { op1: string; op2: string }>;
+    dieselAssignments?: Record<string, { op1: string; op2: string }>;
+    stockAssignment?: { staffId: string };
+    jetTransfer?: { op1: string; op2: string; enabled: boolean };
   }
 
   const getInitialStaffAssignments = (): StaffAssignments => {
@@ -449,6 +466,38 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
   const [attendees, setAttendees] = useState<string[]>(briefingInfo?.staffAssignments?.attendees || []);
   const [staffStatuses, setStaffStatuses] = useState<Record<string, string>>(briefingInfo?.staffAssignments?.staffStatuses || {});
   const [activeDropdownStaffId, setActiveDropdownStaffId] = useState<string | null>(null);
+
+  const getDefaultDomesticTeams = () => {
+    const defaultCount = selectedBriefingShift === 'Night' ? 1 : selectedBriefingShift === 'Evening' ? 2 : 3;
+    return [
+      { id: 't1', name: 'Team 1', op1: '', op2: '' },
+      { id: 't2', name: 'Team 2', op1: '', op2: '' },
+      { id: 't3', name: 'Team 3', op1: '', op2: '' }
+    ].slice(0, defaultCount);
+  };
+
+  const [domesticTeams, setDomesticTeams] = useState<DomesticTeamAssignment[]>(
+    briefingInfo?.staffAssignments?.domesticTeams || getDefaultDomesticTeams()
+  );
+  const [equipmentAssignments, setEquipmentAssignments] = useState<Record<string, { op1: string; op2: string }>>(
+    briefingInfo?.staffAssignments?.equipmentAssignments || {}
+  );
+  const [dieselAssignments, setDieselAssignments] = useState<Record<string, { op1: string; op2: string }>>(
+    briefingInfo?.staffAssignments?.dieselAssignments || {}
+  );
+  const [stockAssignment, setStockAssignment] = useState<{ staffId: string }>(
+    briefingInfo?.staffAssignments?.stockAssignment || { staffId: '' }
+  );
+  const [nightCarriedDailyAssignments, setNightCarriedDailyAssignments] = useState<Record<string, { op1: string; op2: string }>>({});
+  const [jetTransfer, setJetTransfer] = useState<{ op1: string; op2: string; enabled: boolean }>(
+    briefingInfo?.staffAssignments?.jetTransfer || { op1: '', op2: '', enabled: false }
+  );
+  const [isAutoAssigningDomestic, setIsAutoAssigningDomestic] = useState(false);
+  const [isAutoAssigningFleet, setIsAutoAssigningFleet] = useState(false);
+  const [isAutoAssigningJetTransfer, setIsAutoAssigningJetTransfer] = useState(false);
+  const [isAutoAssigningStock, setIsAutoAssigningStock] = useState(false);
+  const [assignmentTableTab, setAssignmentTableTab] = useState<'domestic' | 'jet' | 'daily' | 'diesel' | 'stock' | 'all'>('domestic');
+  const [assignmentViewMode, setAssignmentViewMode] = useState<'table' | 'card'>('table');
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -519,6 +568,45 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
           const next = s.staffStatuses || {};
           return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
         });
+
+        const defaultTeams = getDefaultDomesticTeams();
+        const baseTeams = (s.domesticTeams && Array.isArray(s.domesticTeams) && s.domesticTeams.length > 0)
+          ? s.domesticTeams
+          : defaultTeams;
+
+        const mergedTeams = baseTeams.map(team => {
+          const dbTeam = (domesticAssignments || []).find(d => d.team_name === team.name);
+          return {
+            ...team,
+            op1: dbTeam?.operator1_id !== undefined ? (dbTeam.operator1_id || dbTeam.op1 || '') : team.op1,
+            op2: dbTeam?.operator2_id !== undefined ? (dbTeam.operator2_id || dbTeam.op2 || '') : team.op2,
+          };
+        });
+        setDomesticTeams(mergedTeams);
+
+        if (s.equipmentAssignments && typeof s.equipmentAssignments === 'object') {
+          setEquipmentAssignments(s.equipmentAssignments);
+        } else {
+          setEquipmentAssignments({});
+        }
+
+        if (s.dieselAssignments && typeof s.dieselAssignments === 'object') {
+          setDieselAssignments(s.dieselAssignments);
+        } else {
+          setDieselAssignments({});
+        }
+
+        if (s.stockAssignment) {
+          setStockAssignment(s.stockAssignment);
+        } else {
+          setStockAssignment({ staffId: '' });
+        }
+
+        if (s.jetTransfer) {
+          setJetTransfer(s.jetTransfer);
+        } else {
+          setJetTransfer({ op1: '', op2: '', enabled: false });
+        }
       } else {
         setStaffAssignments(prev => {
           const empty = { activeOperators: [], activeOfficers: [], hydrantOpsOfficers: [], dutySupervisors: [], shiftInCharges: [] };
@@ -527,9 +615,142 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
         setAttendees([]);
         setDailyCompleted([]);
         setStaffStatuses({});
+
+        const fallback = getDefaultDomesticTeams().map(team => {
+          const dbTeam = (domesticAssignments || []).find(d => d.team_name === team.name);
+          return dbTeam ? { ...team, op1: dbTeam.operator1_id || dbTeam.op1 || '', op2: dbTeam.operator2_id || dbTeam.op2 || '' } : team;
+        });
+        setDomesticTeams(fallback);
+        setEquipmentAssignments({});
+        setDieselAssignments({});
+        setStockAssignment({ staffId: '' });
+        setJetTransfer({ op1: '', op2: '', enabled: false });
       }
     }
-  }, [briefingInfo]);
+  }, [briefingInfo, domesticAssignments, selectedBriefingShift]);
+
+  // Effect to sync equipment assignments from DB (equipment_assignments table)
+  useEffect(() => {
+    let isMounted = true;
+    const loadDbEquipmentAssignments = async () => {
+      try {
+        const isEvening = selectedBriefingShift === 'Evening';
+        const shiftType = isEvening ? 'DIESEL' : 'DAILY';
+        const dbAssignments = await supabaseService.getEquipmentAssignments(selectedBriefingDate, shiftType);
+        if (isMounted && dbAssignments && dbAssignments.length > 0) {
+          const map: Record<string, { op1: string; op2: string }> = {};
+          dbAssignments.forEach(d => {
+            if (d.operator1_id || d.operator2_id) {
+              map[d.equipment_id] = { op1: d.operator1_id || '', op2: d.operator2_id || '' };
+            }
+          });
+          if (Object.keys(map).length > 0) {
+            if (isEvening) {
+              setDieselAssignments(prev => {
+                const next = { ...prev };
+                Object.entries(map).forEach(([k, v]) => {
+                  if (v.op1 || v.op2) next[k] = v;
+                });
+                return next;
+              });
+            } else {
+              setEquipmentAssignments(prev => {
+                const next = { ...prev };
+                Object.entries(map).forEach(([k, v]) => {
+                  if (v.op1 || v.op2) next[k] = v;
+                });
+                return next;
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[ShiftBriefing] Error loading equipment assignments from DB:', err);
+      }
+    };
+    loadDbEquipmentAssignments();
+    return () => { isMounted = false; };
+  }, [selectedBriefingShift, selectedBriefingDate]);
+
+  // Effect to carry forward Night shift's DAILY inspection assignments and completion to Morning shift
+  useEffect(() => {
+    if (selectedBriefingShift === 'Morning') {
+      let isMounted = true;
+      (async () => {
+        try {
+          // Check today's night shift and previous day's night shift
+          const nightBriefing = await supabaseService.getShiftBriefingInfo(selectedBriefingDate, 'Night');
+          const nightEq = nightBriefing?.staffAssignments?.equipmentAssignments;
+          const nightCompleted = nightBriefing?.staffAssignments?.dailyCompleted;
+
+          const curDate = new Date(selectedBriefingDate + 'T00:00:00');
+          curDate.setDate(curDate.getDate() - 1);
+          const prevDateStr = curDate.toISOString().split('T')[0];
+          const prevNight = await supabaseService.getShiftBriefingInfo(prevDateStr, 'Night');
+          const prevNightEq = prevNight?.staffAssignments?.equipmentAssignments;
+          const prevNightCompleted = prevNight?.staffAssignments?.dailyCompleted;
+
+          const combinedNightEq: Record<string, { op1: string; op2: string }> = {};
+          if (prevNightEq) {
+            Object.entries(prevNightEq).forEach(([k, v]) => {
+              const val = v as { op1?: string; op2?: string } | null | undefined;
+              if (val && (val.op1 || val.op2)) {
+                combinedNightEq[k] = { op1: val.op1 || '', op2: val.op2 || '' };
+              }
+            });
+          }
+          if (nightEq) {
+            Object.entries(nightEq).forEach(([k, v]) => {
+              const val = v as { op1?: string; op2?: string } | null | undefined;
+              if (val && (val.op1 || val.op2)) {
+                combinedNightEq[k] = { op1: val.op1 || '', op2: val.op2 || '' };
+              }
+            });
+          }
+
+          if (isMounted && Object.keys(combinedNightEq).length > 0) {
+            setNightCarriedDailyAssignments(combinedNightEq);
+            setEquipmentAssignments(prev => {
+              const merged = { ...prev };
+              Object.entries(combinedNightEq).forEach(([k, v]) => {
+                if (v.op1 || v.op2) {
+                  merged[k] = v;
+                }
+              });
+              return merged;
+            });
+
+            // Mark all equipment assigned in night shift as COMPLETED in morning shift
+            const nightEqIds = Object.keys(combinedNightEq);
+            const allCompleted = Array.from(new Set([
+              ...(nightCompleted || []),
+              ...(prevNightCompleted || []),
+              ...nightEqIds
+            ]));
+            setDailyCompleted(prev => Array.from(new Set([...prev, ...allCompleted])));
+          }
+        } catch (err) {
+          console.warn('[ShiftBriefing] Error combining Night shift DAILY assignments:', err);
+        }
+      })();
+      return () => { isMounted = false; };
+    } else {
+      setNightCarriedDailyAssignments({});
+    }
+  }, [selectedBriefingShift, selectedBriefingDate]);
+
+  // Tab validation per shift
+  useEffect(() => {
+    const allowed = selectedBriefingShift === 'Night'
+      ? ['domestic', 'daily', 'stock', 'all']
+      : selectedBriefingShift === 'Evening'
+      ? ['domestic', 'diesel', 'jet', 'all']
+      : ['domestic', 'daily', 'all'];
+
+    if (!allowed.includes(assignmentTableTab)) {
+      setAssignmentTableTab('domestic');
+    }
+  }, [selectedBriefingShift, assignmentTableTab]);
 
   const handleStaffAssignmentsUpdate = (updater: (prev: StaffAssignments) => StaffAssignments) => {
     const updated = updater(staffAssignments);
@@ -539,6 +760,8 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
       attendees,
       staffStatuses,
       dailyCompleted,
+      domesticTeams,
+      equipmentAssignments,
       frozenFlights: briefingInfo?.staffAssignments?.frozenFlights || null,
       adhocFlights: briefingInfo?.staffAssignments?.adhocFlights || []
     });
@@ -563,6 +786,8 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
         attendees,
         staffStatuses,
         dailyCompleted,
+        domesticTeams,
+        equipmentAssignments,
         frozenFlights: frozenToSave,
         adhocFlights: adhocFlightsToRender
       });
@@ -586,7 +811,10 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
       await updateBriefingInfo(additionalInfo, dieselNeeds, {
         ...staffAssignments,
         attendees,
+        staffStatuses,
         dailyCompleted,
+        domesticTeams,
+        equipmentAssignments,
         frozenFlights: null
       });
       notify('Flights successfully reset to live feed!', 'success');
@@ -624,14 +852,20 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
         await updateBriefingInfo(additionalInfo, dieselNeeds, {
           ...staffAssignments,
           attendees,
+          staffStatuses,
           dailyCompleted,
+          domesticTeams,
+          equipmentAssignments,
           adhocFlights: updatedAdhoc
         });
       } else {
         await updateBriefingInfo(additionalInfo, dieselNeeds, {
           ...staffAssignments,
           attendees,
+          staffStatuses,
           dailyCompleted,
+          domesticTeams,
+          equipmentAssignments,
           frozenFlights: {
             intl: updatedIntl,
             domestic: updatedDomestic,
@@ -673,7 +907,10 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
       await updateBriefingInfo(additionalInfo, dieselNeeds, {
         ...staffAssignments,
         attendees,
+        staffStatuses,
         dailyCompleted,
+        domesticTeams,
+        equipmentAssignments,
         adhocFlights: updatedAdhoc
       });
       notify('Ad-hoc flight added successfully!', 'success');
@@ -689,6 +926,2616 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
   const rfHdEquipment = (equipment || []).filter(eq => 
     eq && (eq.type === EquipmentType.REFUELLER || eq.type === EquipmentType.HYDRANT_DISPENSER)
   );
+
+  const handleAutoAssignDomestic = async () => {
+    if (isHistoricalView || !canEdit) return;
+    setIsAutoAssigningDomestic(true);
+    try {
+      const targetTeamNames = domesticTeams.map(t => t.name);
+      const newTeams = runAutoAssignDomestic({
+        activeOperators: staffAssignments.activeOperators || [],
+        activeOfficers: staffAssignments.activeOfficers || [],
+        staffStatuses,
+        attendees,
+        historyMap,
+        targetTeamNames
+      });
+
+      setDomesticTeams(newTeams);
+
+      const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+      await updateBriefingInfo(additionalInfo, dieselNeeds, {
+        ...staffAssignments,
+        attendees,
+        staffStatuses,
+        dailyCompleted,
+        domesticTeams: newTeams,
+        equipmentAssignments,
+        jetTransfer,
+        frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+          intl: intlFlightsToRender,
+          domestic: domesticFlightsToRender,
+          adhoc: adhocFlightsToRender
+        }
+      });
+
+      for (const t of newTeams) {
+        await updateDomesticAssignment(t.name, t.op1, t.op2);
+      }
+
+      notify('Domestic teams auto-assigned successfully based on fair rotation!', 'success');
+    } catch (err) {
+      console.error('Auto-assign domestic failed:', err);
+      notify('Failed to auto-assign domestic teams.', 'error');
+    } finally {
+      setIsAutoAssigningDomestic(false);
+    }
+  };
+
+  const handleAddOptionalDomesticTeam = async () => {
+    if (isHistoricalView || !canEdit) return;
+    let nextTeamName = '';
+    let nextTeamId = '';
+    if (selectedBriefingShift === 'Evening') {
+      if (domesticTeams.some(t => t.name === 'Team 3')) return;
+      nextTeamName = 'Team 3';
+      nextTeamId = 't3';
+    } else if (selectedBriefingShift === 'Night') {
+      if (domesticTeams.some(t => t.name === 'Team 2')) return;
+      nextTeamName = 'Team 2';
+      nextTeamId = 't2';
+    } else {
+      if (domesticTeams.length >= 3) return;
+      const nextNum = domesticTeams.length + 1;
+      nextTeamName = `Team ${nextNum}`;
+      nextTeamId = `t${nextNum}`;
+    }
+
+    const updated = [...domesticTeams, { id: nextTeamId, name: nextTeamName, op1: '', op2: '' }];
+    setDomesticTeams(updated);
+
+    const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+    await updateBriefingInfo(additionalInfo, dieselNeeds, {
+      ...staffAssignments,
+      attendees,
+      staffStatuses,
+      dailyCompleted,
+      domesticTeams: updated,
+      equipmentAssignments,
+      jetTransfer,
+      frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+        intl: intlFlightsToRender,
+        domestic: domesticFlightsToRender,
+        adhoc: adhocFlightsToRender
+      }
+    });
+    notify(`${nextTeamName} added to Domestic Squadron!`, 'success');
+  };
+
+  const handleRemoveOptionalDomesticTeam = async (teamName: string) => {
+    if (isHistoricalView || !canEdit) return;
+    const updated = domesticTeams.filter(t => t.name !== teamName);
+    setDomesticTeams(updated);
+    await updateDomesticAssignment(teamName, '', '');
+
+    const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+    await updateBriefingInfo(additionalInfo, dieselNeeds, {
+      ...staffAssignments,
+      attendees,
+      staffStatuses,
+      dailyCompleted,
+      domesticTeams: updated,
+      equipmentAssignments,
+      jetTransfer,
+      frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+        intl: intlFlightsToRender,
+        domestic: domesticFlightsToRender,
+        adhoc: adhocFlightsToRender
+      }
+    });
+    notify(`${teamName} removed from Domestic Squadron.`, 'info');
+  };
+
+  const handleAutoAssignJetTransfer = async () => {
+    if (isHistoricalView || !canEdit) return;
+    setIsAutoAssigningJetTransfer(true);
+    try {
+      const domesticAssignees = new Set<string>();
+      domesticTeams.forEach(t => {
+        if (t.op1) domesticAssignees.add(t.op1);
+        if (t.op2) domesticAssignees.add(t.op2);
+      });
+
+      const assigned = runAutoAssignJetTransfer({
+        activeOperators: staffAssignments.activeOperators || [],
+        activeOfficers: staffAssignments.activeOfficers || [],
+        domesticAssignees,
+        staffStatuses,
+        attendees,
+        historyMap
+      });
+
+      const updatedJet = {
+        op1: assigned.op1,
+        op2: assigned.op2,
+        enabled: true
+      };
+      setJetTransfer(updatedJet);
+
+      const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+      await updateBriefingInfo(additionalInfo, dieselNeeds, {
+        ...staffAssignments,
+        attendees,
+        staffStatuses,
+        dailyCompleted,
+        domesticTeams,
+        equipmentAssignments,
+        jetTransfer: updatedJet,
+        frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+          intl: intlFlightsToRender,
+          domestic: domesticFlightsToRender,
+          adhoc: adhocFlightsToRender
+        }
+      });
+
+      notify('Jet Transfer personnel auto-assigned successfully based on fair rotation!', 'success');
+    } catch (err) {
+      console.error('Jet Transfer auto-assignment failed:', err);
+      notify('Failed to auto-assign Jet Transfer.', 'error');
+    } finally {
+      setIsAutoAssigningJetTransfer(false);
+    }
+  };
+
+  const handleJetTransferAssignmentChange = async (roleSlot: 'op1' | 'op2', staffId: string) => {
+    if (isHistoricalView || !canEdit) return;
+    const updated = {
+      ...jetTransfer,
+      [roleSlot]: staffId,
+      enabled: true
+    };
+    setJetTransfer(updated);
+
+    const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+    await updateBriefingInfo(additionalInfo, dieselNeeds, {
+      ...staffAssignments,
+      attendees,
+      staffStatuses,
+      dailyCompleted,
+      domesticTeams,
+      equipmentAssignments,
+      jetTransfer: updated,
+      frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+        intl: intlFlightsToRender,
+        domestic: domesticFlightsToRender,
+        adhoc: adhocFlightsToRender
+      }
+    });
+  };
+
+  const handleToggleJetTransferEnabled = async () => {
+    if (isHistoricalView || !canEdit) return;
+    const updated = {
+      ...jetTransfer,
+      enabled: !jetTransfer.enabled
+    };
+    setJetTransfer(updated);
+
+    const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+    await updateBriefingInfo(additionalInfo, dieselNeeds, {
+      ...staffAssignments,
+      attendees,
+      staffStatuses,
+      dailyCompleted,
+      domesticTeams,
+      equipmentAssignments,
+      jetTransfer: updated,
+      frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+        intl: intlFlightsToRender,
+        domestic: domesticFlightsToRender,
+        adhoc: adhocFlightsToRender
+      }
+    });
+  };
+
+  const handleDomesticAssignmentChange = async (teamId: string, roleSlot: 'op1' | 'op2', staffId: string) => {
+    if (isHistoricalView || !canEdit) return;
+    const updated = domesticTeams.map(t => {
+      if (t.id === teamId) {
+        return { ...t, [roleSlot]: staffId };
+      }
+      return t;
+    });
+
+    setDomesticTeams(updated);
+
+    const changedTeam = updated.find(t => t.id === teamId);
+    if (changedTeam) {
+      await updateDomesticAssignment(changedTeam.name, changedTeam.op1, changedTeam.op2);
+    }
+
+    const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+    await updateBriefingInfo(additionalInfo, dieselNeeds, {
+      ...staffAssignments,
+      attendees,
+      staffStatuses,
+      dailyCompleted,
+      domesticTeams: updated,
+      equipmentAssignments,
+      jetTransfer,
+      frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+        intl: intlFlightsToRender,
+        domestic: domesticFlightsToRender,
+        adhoc: adhocFlightsToRender
+      }
+    });
+  };
+
+  const handleClearDomesticTeam = async (teamId: string) => {
+    if (isHistoricalView || !canEdit) return;
+    const updated = domesticTeams.map(t => t.id === teamId ? { ...t, op1: '', op2: '' } : t);
+    setDomesticTeams(updated);
+
+    const team = domesticTeams.find(t => t.id === teamId);
+    if (team) {
+      await updateDomesticAssignment(team.name, '', '');
+    }
+
+    const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+    await updateBriefingInfo(additionalInfo, dieselNeeds, {
+      ...staffAssignments,
+      attendees,
+      staffStatuses,
+      dailyCompleted,
+      domesticTeams: updated,
+      equipmentAssignments,
+      jetTransfer,
+      frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+        intl: intlFlightsToRender,
+        domestic: domesticFlightsToRender,
+        adhoc: adhocFlightsToRender
+      }
+    });
+  };
+
+  const handleClearAllDomestic = async () => {
+    if (isHistoricalView || !canEdit) return;
+    const updated = domesticTeams.map(t => ({ ...t, op1: '', op2: '' }));
+    setDomesticTeams(updated);
+
+    for (const t of domesticTeams) {
+      await updateDomesticAssignment(t.name, '', '');
+    }
+
+    const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+    await updateBriefingInfo(additionalInfo, dieselNeeds, {
+      ...staffAssignments,
+      attendees,
+      staffStatuses,
+      dailyCompleted,
+      domesticTeams: updated,
+      equipmentAssignments,
+      jetTransfer,
+      frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+        intl: intlFlightsToRender,
+        domestic: domesticFlightsToRender,
+        adhoc: adhocFlightsToRender
+      }
+    });
+    notify('All domestic team assignments cleared.', 'info');
+  };
+
+  const handleClearJetTransfer = async () => {
+    if (isHistoricalView || !canEdit) return;
+    const updated = { ...jetTransfer, op1: '', op2: '' };
+    setJetTransfer(updated);
+
+    const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+    await updateBriefingInfo(additionalInfo, dieselNeeds, {
+      ...staffAssignments,
+      attendees,
+      staffStatuses,
+      dailyCompleted,
+      domesticTeams,
+      equipmentAssignments,
+      jetTransfer: updated,
+      frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+        intl: intlFlightsToRender,
+        domestic: domesticFlightsToRender,
+        adhoc: adhocFlightsToRender
+      }
+    });
+    notify('Jet Transfer assignments cleared.', 'info');
+  };
+
+  const handleToggleDailyCompleted = async (eqId: string) => {
+    if (isHistoricalView || !canEdit) return;
+    const newDailyCompleted = dailyCompleted.includes(eqId)
+      ? dailyCompleted.filter(id => id !== eqId)
+      : [...dailyCompleted, eqId];
+
+    setDailyCompleted(newDailyCompleted);
+    const existingFrozenDaily = briefingInfo?.staffAssignments?.frozenFlights;
+    await updateBriefingInfo(additionalInfo, dieselNeeds, {
+      ...staffAssignments,
+      attendees,
+      staffStatuses,
+      dailyCompleted: newDailyCompleted,
+      domesticTeams,
+      equipmentAssignments,
+      jetTransfer,
+      frozenFlights: existingFrozenDaily !== undefined ? existingFrozenDaily : {
+        intl: intlFlightsToRender,
+        domestic: domesticFlightsToRender,
+        adhoc: adhocFlightsToRender
+      }
+    });
+  };
+
+  const handleToggleDieselNeed = async (eqId: string) => {
+    if (isHistoricalView || !canEdit) return;
+    const newDieselNeeds = dieselNeeds.includes(eqId)
+      ? dieselNeeds.filter(id => id !== eqId)
+      : [...dieselNeeds, eqId];
+
+    setDieselNeeds(newDieselNeeds);
+    const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+    await updateBriefingInfo(additionalInfo, newDieselNeeds, {
+      ...staffAssignments,
+      attendees,
+      staffStatuses,
+      dailyCompleted,
+      domesticTeams,
+      equipmentAssignments,
+      jetTransfer,
+      frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+        intl: intlFlightsToRender,
+        domestic: domesticFlightsToRender,
+        adhoc: adhocFlightsToRender
+      }
+    });
+  };
+
+  const handleClearDailyAssignment = async (eqId: string) => {
+    if (isHistoricalView || !canEdit) return;
+    const updated = { ...equipmentAssignments };
+    delete updated[eqId];
+    setEquipmentAssignments(updated);
+
+    await supabaseService.upsertEquipmentAssignment(
+      selectedBriefingDate,
+      eqId,
+      'DAILY',
+      '',
+      ''
+    );
+
+    const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+    await updateBriefingInfo(additionalInfo, dieselNeeds, {
+      ...staffAssignments,
+      attendees,
+      staffStatuses,
+      dailyCompleted,
+      domesticTeams,
+      equipmentAssignments: updated,
+      dieselAssignments,
+      stockAssignment,
+      jetTransfer,
+      frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+        intl: intlFlightsToRender,
+        domestic: domesticFlightsToRender,
+        adhoc: adhocFlightsToRender
+      }
+    });
+  };
+
+  const handleClearDieselAssignment = async (eqId: string) => {
+    if (isHistoricalView || !canEdit) return;
+    const updated = { ...dieselAssignments };
+    delete updated[eqId];
+    setDieselAssignments(updated);
+
+    await supabaseService.upsertEquipmentAssignment(
+      selectedBriefingDate,
+      eqId,
+      'DIESEL',
+      '',
+      ''
+    );
+
+    const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+    await updateBriefingInfo(additionalInfo, dieselNeeds, {
+      ...staffAssignments,
+      attendees,
+      staffStatuses,
+      dailyCompleted,
+      domesticTeams,
+      equipmentAssignments,
+      dieselAssignments: updated,
+      stockAssignment,
+      jetTransfer,
+      frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+        intl: intlFlightsToRender,
+        domestic: domesticFlightsToRender,
+        adhoc: adhocFlightsToRender
+      }
+    });
+  };
+
+  const handleAutoAssignFleet = async (targetType?: 'DAILY' | 'DIESEL') => {
+    if (isHistoricalView || !canEdit) return;
+    setIsAutoAssigningFleet(true);
+    try {
+      const domesticAssignees = new Set<string>();
+      domesticTeams.forEach(t => {
+        if (t.op1) domesticAssignees.add(t.op1);
+        if (t.op2) domesticAssignees.add(t.op2);
+      });
+      if (jetTransfer.enabled) {
+        if (jetTransfer.op1) domesticAssignees.add(jetTransfer.op1);
+        if (jetTransfer.op2) domesticAssignees.add(jetTransfer.op2);
+      }
+      if (stockAssignment.staffId) {
+        domesticAssignees.add(stockAssignment.staffId);
+      }
+
+      const shiftType = targetType || (selectedBriefingShift === 'Evening' ? 'DIESEL' : 'DAILY');
+
+      if (shiftType === 'DIESEL') {
+        const updatedDiesel = runAutoAssignDiesel({
+          equipment: rfHdEquipment,
+          dieselNeeds,
+          activeOperators: staffAssignments.activeOperators || [],
+          activeOfficers: staffAssignments.activeOfficers || [],
+          hydrantOpsOfficers: staffAssignments.hydrantOpsOfficers || [],
+          domesticAssignees,
+          staffStatuses,
+          attendees,
+          historyMap
+        });
+
+        setDieselAssignments(updatedDiesel);
+
+        for (const [eqId, val] of Object.entries(updatedDiesel)) {
+          await supabaseService.upsertEquipmentAssignment(
+            selectedBriefingDate,
+            eqId,
+            'DIESEL',
+            val.op1 || '',
+            val.op2 || ''
+          );
+        }
+
+        const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+        await updateBriefingInfo(additionalInfo, dieselNeeds, {
+          ...staffAssignments,
+          attendees,
+          staffStatuses,
+          dailyCompleted,
+          domesticTeams,
+          equipmentAssignments,
+          dieselAssignments: updatedDiesel,
+          stockAssignment,
+          jetTransfer,
+          frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+            intl: intlFlightsToRender,
+            domestic: domesticFlightsToRender,
+            adhoc: adhocFlightsToRender
+          }
+        });
+
+        notify('Evening shift diesel operators auto-assigned successfully!', 'success');
+      } else {
+        // Daily auto-assign: preserve night carried forward assignments if in morning shift
+        const existingToPreserve = selectedBriefingShift === 'Morning'
+          ? { ...nightCarriedDailyAssignments, ...equipmentAssignments }
+          : undefined;
+
+        const updatedDaily = runAutoAssignDaily({
+          equipment: rfHdEquipment,
+          activeOperators: staffAssignments.activeOperators || [],
+          activeOfficers: staffAssignments.activeOfficers || [],
+          hydrantOpsOfficers: staffAssignments.hydrantOpsOfficers || [],
+          domesticAssignees,
+          staffStatuses,
+          attendees,
+          historyMap,
+          existingAssignments: existingToPreserve
+        });
+
+        setEquipmentAssignments(updatedDaily);
+
+        for (const [eqId, val] of Object.entries(updatedDaily)) {
+          await supabaseService.upsertEquipmentAssignment(
+            selectedBriefingDate,
+            eqId,
+            'DAILY',
+            val.op1 || '',
+            val.op2 || ''
+          );
+        }
+
+        const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+        await updateBriefingInfo(additionalInfo, dieselNeeds, {
+          ...staffAssignments,
+          attendees,
+          staffStatuses,
+          dailyCompleted,
+          domesticTeams,
+          equipmentAssignments: updatedDaily,
+          dieselAssignments,
+          stockAssignment,
+          jetTransfer,
+          frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+            intl: intlFlightsToRender,
+            domestic: domesticFlightsToRender,
+            adhoc: adhocFlightsToRender
+          }
+        });
+
+        notify('Equipment daily check inspectors auto-assigned successfully!', 'success');
+      }
+    } catch (err) {
+      console.error('Fleet auto-assignment failed:', err);
+      notify('Failed to auto-assign fleet equipment.', 'error');
+    } finally {
+      setIsAutoAssigningFleet(false);
+    }
+  };
+
+  const handleDailyAssignmentChange = async (eqId: string, roleSlot: 'op1' | 'op2', staffId: string) => {
+    if (isHistoricalView || !canEdit) return;
+    const current = equipmentAssignments[eqId] || { op1: '', op2: '' };
+    const updatedSlot = { ...current, [roleSlot]: staffId };
+    const updated = {
+      ...equipmentAssignments,
+      [eqId]: updatedSlot
+    };
+    setEquipmentAssignments(updated);
+
+    await supabaseService.upsertEquipmentAssignment(
+      selectedBriefingDate,
+      eqId,
+      'DAILY',
+      updatedSlot.op1 || '',
+      updatedSlot.op2 || ''
+    );
+
+    const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+    await updateBriefingInfo(additionalInfo, dieselNeeds, {
+      ...staffAssignments,
+      attendees,
+      staffStatuses,
+      dailyCompleted,
+      domesticTeams,
+      equipmentAssignments: updated,
+      dieselAssignments,
+      stockAssignment,
+      jetTransfer,
+      frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+        intl: intlFlightsToRender,
+        domestic: domesticFlightsToRender,
+        adhoc: adhocFlightsToRender
+      }
+    });
+  };
+
+  const handleDieselAssignmentChange = async (eqId: string, staffId: string) => {
+    if (isHistoricalView || !canEdit) return;
+    const updated = {
+      ...dieselAssignments,
+      [eqId]: { op1: staffId, op2: '' }
+    };
+    setDieselAssignments(updated);
+
+    await supabaseService.upsertEquipmentAssignment(
+      selectedBriefingDate,
+      eqId,
+      'DIESEL',
+      staffId,
+      ''
+    );
+
+    const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+    await updateBriefingInfo(additionalInfo, dieselNeeds, {
+      ...staffAssignments,
+      attendees,
+      staffStatuses,
+      dailyCompleted,
+      domesticTeams,
+      equipmentAssignments,
+      dieselAssignments: updated,
+      stockAssignment,
+      jetTransfer,
+      frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+        intl: intlFlightsToRender,
+        domestic: domesticFlightsToRender,
+        adhoc: adhocFlightsToRender
+      }
+    });
+  };
+
+  const handleEquipmentAssignmentChange = async (eqId: string, roleSlot: 'op1' | 'op2', staffId: string, type?: 'DAILY' | 'DIESEL') => {
+    if (type === 'DIESEL' || (type === undefined && selectedBriefingShift === 'Evening')) {
+      await handleDieselAssignmentChange(eqId, staffId);
+    } else {
+      await handleDailyAssignmentChange(eqId, roleSlot, staffId);
+    }
+  };
+
+  const handleClearEquipmentAssignment = async (eqId: string) => {
+    if (selectedBriefingShift === 'Evening') {
+      await handleClearDieselAssignment(eqId);
+    } else {
+      await handleClearDailyAssignment(eqId);
+    }
+  };
+
+  const handleAutoAssignStock = async () => {
+    if (isHistoricalView || !canEdit) return;
+    setIsAutoAssigningStock(true);
+    try {
+      const domesticAssignees = new Set<string>();
+      domesticTeams.forEach(t => {
+        if (t.op1) domesticAssignees.add(t.op1);
+        if (t.op2) domesticAssignees.add(t.op2);
+      });
+
+      const assignedStaffId = runAutoAssignStock({
+        activeOfficers: staffAssignments.activeOfficers || [],
+        hydrantOpsOfficers: staffAssignments.hydrantOpsOfficers || [],
+        domesticAssignees,
+        staffStatuses,
+        attendees,
+        historyMap
+      });
+
+      const updatedStock = { staffId: assignedStaffId };
+      setStockAssignment(updatedStock);
+
+      const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+      await updateBriefingInfo(additionalInfo, dieselNeeds, {
+        ...staffAssignments,
+        attendees,
+        staffStatuses,
+        dailyCompleted,
+        domesticTeams,
+        equipmentAssignments,
+        dieselAssignments,
+        stockAssignment: updatedStock,
+        jetTransfer,
+        frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+          intl: intlFlightsToRender,
+          domestic: domesticFlightsToRender,
+          adhoc: adhocFlightsToRender
+        }
+      });
+
+      if (assignedStaffId) {
+        notify('Stock duty officer auto-assigned successfully!', 'success');
+      } else {
+        notify('No eligible officers available for stock duty.', 'info');
+      }
+    } catch (err) {
+      console.error('Stock auto-assignment failed:', err);
+      notify('Failed to auto-assign stock duty.', 'error');
+    } finally {
+      setIsAutoAssigningStock(false);
+    }
+  };
+
+  const handleStockAssignmentChange = async (staffId: string) => {
+    if (isHistoricalView || !canEdit) return;
+    const updatedStock = { staffId };
+    setStockAssignment(updatedStock);
+
+    const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+    await updateBriefingInfo(additionalInfo, dieselNeeds, {
+      ...staffAssignments,
+      attendees,
+      staffStatuses,
+      dailyCompleted,
+      domesticTeams,
+      equipmentAssignments,
+      dieselAssignments,
+      stockAssignment: updatedStock,
+      jetTransfer,
+      frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+        intl: intlFlightsToRender,
+        domestic: domesticFlightsToRender,
+        adhoc: adhocFlightsToRender
+      }
+    });
+  };
+
+  const handleClearStockAssignment = async () => {
+    if (isHistoricalView || !canEdit) return;
+    const updatedStock = { staffId: '' };
+    setStockAssignment(updatedStock);
+
+    const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+    await updateBriefingInfo(additionalInfo, dieselNeeds, {
+      ...staffAssignments,
+      attendees,
+      staffStatuses,
+      dailyCompleted,
+      domesticTeams,
+      equipmentAssignments,
+      dieselAssignments,
+      stockAssignment: updatedStock,
+      jetTransfer,
+      frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+        intl: intlFlightsToRender,
+        domestic: domesticFlightsToRender,
+        adhoc: adhocFlightsToRender
+      }
+    });
+  };
+
+  const renderOptionalTeamButton = () => {
+    if (isHistoricalView || !canEdit) return null;
+    if (selectedBriefingShift === 'Evening') {
+      if (domesticTeams.some(t => t.name === 'Team 3')) {
+        return (
+          <button
+            onClick={() => handleRemoveOptionalDomesticTeam('Team 3')}
+            className="px-3 py-1.5 bg-error/10 text-error hover:bg-error hover:text-white border border-error/30 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center space-x-1.5 cursor-pointer shadow-none shrink-0"
+            title="Remove optional Team 3 from Evening Domestic Squadron"
+          >
+            <Trash2 className="w-3 h-3" />
+            <span>Remove Team 3</span>
+          </button>
+        );
+      } else {
+        return (
+          <button
+            onClick={handleAddOptionalDomesticTeam}
+            className="px-3 py-1.5 bg-amber-500/10 text-amber-400 hover:bg-amber-500 hover:text-black border border-amber-500/30 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center space-x-1.5 cursor-pointer shadow-none shrink-0"
+            title="Add optional 3rd team for Evening shift"
+          >
+            <Plus className="w-3 h-3" />
+            <span>+ Add Team 3 (Optional)</span>
+          </button>
+        );
+      }
+    }
+
+    if (selectedBriefingShift === 'Night') {
+      if (domesticTeams.some(t => t.name === 'Team 2')) {
+        return (
+          <button
+            onClick={() => handleRemoveOptionalDomesticTeam('Team 2')}
+            className="px-3 py-1.5 bg-error/10 text-error hover:bg-error hover:text-white border border-error/30 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center space-x-1.5 cursor-pointer shadow-none shrink-0"
+            title="Remove optional Team 2 from Night Domestic Squadron"
+          >
+            <Trash2 className="w-3 h-3" />
+            <span>Remove Team 2</span>
+          </button>
+        );
+      } else {
+        return (
+          <button
+            onClick={handleAddOptionalDomesticTeam}
+            className="px-3 py-1.5 bg-purple-500/10 text-purple-400 hover:bg-purple-500 hover:text-white border border-purple-500/30 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center space-x-1.5 cursor-pointer shadow-none shrink-0"
+            title="Add optional 2nd team for Night shift"
+          >
+            <Plus className="w-3 h-3" />
+            <span>+ Add Team 2 (Optional)</span>
+          </button>
+        );
+      }
+    }
+
+    if (selectedBriefingShift === 'Morning' && domesticTeams.length < 3) {
+      return (
+        <button
+          onClick={handleAddOptionalDomesticTeam}
+          className="px-3 py-1.5 bg-sky-500/10 text-sky-400 hover:bg-sky-500 hover:text-white border border-sky-500/30 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center space-x-1.5 cursor-pointer shadow-none shrink-0"
+          title="Add Team to Morning Domestic Squadron"
+        >
+          <Plus className="w-3 h-3" />
+          <span>+ Add Team {domesticTeams.length + 1}</span>
+        </button>
+      );
+    }
+
+    return null;
+  };
+
+  const renderDomesticSquadron = () => {
+    return (
+      <div className="card-premium p-5 sm:p-8 space-y-6 sm:space-y-8 relative overflow-hidden group w-full hover-glow-primary">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10 w-full">
+          <div className="flex items-center space-x-4 sm:space-x-5">
+            <div className="p-4 badge-custom-primary rounded-2xl transition-all shadow-sm">
+              <Users className="w-7 h-7" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Domestic Squadron Assignments</h3>
+                <span className="badge-custom-primary px-2.5 py-0.5 rounded-full text-[9px] font-black tracking-wider">
+                  {domesticTeams.length} {domesticTeams.length === 1 ? 'TEAM' : 'TEAMS'}
+                </span>
+              </div>
+              <p className="text-[10px] text-on-surface-dim opacity-50 uppercase tracking-widest mt-1">
+                Fair shift rotation based on prior domestic date, shift &amp; cyclic team allocation
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+            {renderOptionalTeamButton()}
+            {!isHistoricalView && canEdit && (
+              <button
+                onClick={handleAutoAssignDomestic}
+                disabled={isAutoAssigningDomestic}
+                className="px-4 py-2.5 kinetic-gradient text-white rounded-xl active:scale-95 hover:scale-105 transition-all flex items-center justify-center space-x-2 border border-sky-400/30 cursor-pointer shrink-0 shadow-premium"
+                title="Automatically assign present Operators and Officers using fair rotation hierarchy"
+              >
+                <Zap className={`w-4 h-4 ${isAutoAssigningDomestic ? 'animate-spin' : ''}`} />
+                <span className="text-[10px] font-black uppercase tracking-wider">
+                  {isAutoAssigningDomestic ? 'Assigning...' : 'Auto-Assign Teams'}
+                </span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 relative z-10">
+          {domesticTeams.map((team, idx) => {
+            const op1Hist = team.op1 ? historyMap.get(team.op1)?.lastDomestic : undefined;
+            const op2Hist = team.op2 ? historyMap.get(team.op2)?.lastDomestic : undefined;
+
+            const op1Rank = team.op1 ? getRankInRoles(team.op1, [UserRole.ITP_OPERATOR], 'DOM') : null;
+            const op2Rank = team.op2 ? getRankInRoles(team.op2, [UserRole.ITP_OFFICER], 'DOM') : null;
+
+            const eligibleOps = activeStaff.filter(u => 
+              (staffAssignments.activeOperators || []).includes(u.id) && u.role === UserRole.ITP_OPERATOR
+            );
+            const eligibleOffs = activeStaff.filter(u => 
+              (staffAssignments.activeOfficers || []).includes(u.id) && u.role === UserRole.ITP_OFFICER
+            );
+
+            // Deduplicate: Exclude staff already assigned in any other domestic field
+            const otherAssignedForOp1 = new Set<string>();
+            domesticTeams.forEach(t => {
+              if (t.id === team.id) {
+                if (t.op2) otherAssignedForOp1.add(t.op2);
+              } else {
+                if (t.op1) otherAssignedForOp1.add(t.op1);
+                if (t.op2) otherAssignedForOp1.add(t.op2);
+              }
+            });
+            const availableOps = eligibleOps.filter(op => op.id === team.op1 || !otherAssignedForOp1.has(op.id));
+
+            const otherAssignedForOp2 = new Set<string>();
+            domesticTeams.forEach(t => {
+              if (t.id === team.id) {
+                if (t.op1) otherAssignedForOp2.add(t.op1);
+              } else {
+                if (t.op1) otherAssignedForOp2.add(t.op1);
+                if (t.op2) otherAssignedForOp2.add(t.op2);
+              }
+            });
+            const availableOffs = eligibleOffs.filter(off => off.id === team.op2 || !otherAssignedForOp2.has(off.id));
+
+            return (
+              <div 
+                key={team.id}
+                className="bg-surface-dim border border-white/10 rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-4 hover:border-primary/30 transition-all shadow-sm"
+              >
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_8px_rgba(14,165,233,0.5)]"></div>
+                    <span className="text-xs font-[900] text-on-surface uppercase tracking-wider">
+                      {team.name}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-[9px] font-mono text-on-surface-dim opacity-50 uppercase tracking-widest">
+                      Group {idx + 1}
+                    </span>
+                    {canEdit && (team.op1 || team.op2) && (
+                      <button
+                        onClick={() => handleClearDomesticTeam(team.id)}
+                        className="p-1 text-on-surface-dim hover:text-error hover:bg-error/10 rounded-lg transition-colors cursor-pointer"
+                        title="Clear team assignments"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60 flex items-center justify-between">
+                    <span>RF Operator</span>
+                    {op1Rank && op1Rank !== '-' && (
+                      <span className="text-primary font-mono text-[8.5px]">Rank #{op1Rank}</span>
+                    )}
+                  </label>
+                  <select
+                    value={team.op1}
+                    disabled={!canEdit}
+                    onChange={(e) => handleDomesticAssignmentChange(team.id, 'op1', e.target.value)}
+                    className={`bg-surface border border-white/10 rounded-xl p-2.5 text-[12px] font-bold text-on-surface outline-none w-full transition-colors ${
+                      !canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer focus:border-primary'
+                    }`}
+                  >
+                    <option value="" className="text-on-surface-dim italic">-- Select Operator --</option>
+                    {availableOps.map(op => {
+                      const tag = staffStatuses[op.id];
+                      const isTagLate = tag === 'LATE';
+                      const isIgnored = tag && !isTagLate;
+                      return (
+                        <option key={op.id} value={op.id}>
+                          {op.name} {isIgnored ? `(${tag} - Excluded)` : isTagLate ? '(LATE)' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  {team.op1 && (
+                    <div className="text-[8.5px] font-mono text-on-surface-dim opacity-75 pt-0.5 flex items-center gap-1.5 flex-wrap">
+                      {op1Hist ? (
+                        <>
+                          <span className="text-on-surface font-bold">Last: {formatDateShort(op1Hist.date)}</span>
+                          <span className="px-1 py-0.2 rounded bg-surface border border-white/10 uppercase">{op1Hist.shift}</span>
+                          <span className="px-1 py-0.2 rounded bg-primary/10 text-primary border border-primary/20 uppercase">{op1Hist.team}</span>
+                        </>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold uppercase tracking-wider">
+                          Never Assigned (Top Priority)
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-60 flex items-center justify-between">
+                    <span>Officer</span>
+                    {op2Rank && op2Rank !== '-' && (
+                      <span className="text-cyan-400 font-mono text-[8.5px]">Rank #{op2Rank}</span>
+                    )}
+                  </label>
+                  <select
+                    value={team.op2}
+                    disabled={!canEdit}
+                    onChange={(e) => handleDomesticAssignmentChange(team.id, 'op2', e.target.value)}
+                    className={`bg-surface border border-white/10 rounded-xl p-2.5 text-[12px] font-bold text-on-surface outline-none w-full transition-colors ${
+                      !canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer focus:border-cyan-400'
+                    }`}
+                  >
+                    <option value="" className="text-on-surface-dim italic">-- Select Officer --</option>
+                    {availableOffs.map(off => {
+                      const tag = staffStatuses[off.id];
+                      const isTagLate = tag === 'LATE';
+                      const isIgnored = tag && !isTagLate;
+                      return (
+                        <option key={off.id} value={off.id}>
+                          {off.name} {isIgnored ? `(${tag} - Excluded)` : isTagLate ? '(LATE)' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  {team.op2 && (
+                    <div className="text-[8.5px] font-mono text-on-surface-dim opacity-75 pt-0.5 flex items-center gap-1.5 flex-wrap">
+                      {op2Hist ? (
+                        <>
+                          <span className="text-on-surface font-bold">Last: {formatDateShort(op2Hist.date)}</span>
+                          <span className="px-1 py-0.2 rounded bg-surface border border-white/10 uppercase">{op2Hist.shift}</span>
+                          <span className="px-1 py-0.2 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 uppercase">{op2Hist.team}</span>
+                        </>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold uppercase tracking-wider">
+                          Never Assigned (Top Priority)
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderJetTransferCard = () => {
+    const op1Hist = jetTransfer.op1 ? historyMap.get(jetTransfer.op1)?.lastJetTransfer : undefined;
+    const op2Hist = jetTransfer.op2 ? historyMap.get(jetTransfer.op2)?.lastJetTransfer : undefined;
+
+    const op1Rank = jetTransfer.op1 ? getRankInRoles(jetTransfer.op1, [UserRole.ITP_OPERATOR], 'JET') : null;
+    const op2Rank = jetTransfer.op2 ? getRankInRoles(jetTransfer.op2, [UserRole.ITP_OFFICER], 'JET') : null;
+
+    const domesticAssignees = new Set<string>();
+    domesticTeams.forEach(t => {
+      if (t.op1) domesticAssignees.add(t.op1);
+      if (t.op2) domesticAssignees.add(t.op2);
+    });
+
+    const eligibleOps = activeStaff.filter(u => 
+      (staffAssignments.activeOperators || []).includes(u.id) && 
+      u.role === UserRole.ITP_OPERATOR && 
+      !domesticAssignees.has(u.id)
+    );
+    const eligibleOffs = activeStaff.filter(u => 
+      (staffAssignments.activeOfficers || []).includes(u.id) && 
+      u.role === UserRole.ITP_OFFICER && 
+      !domesticAssignees.has(u.id)
+    );
+
+    return (
+      <div className="card-premium p-5 sm:p-8 space-y-6 sm:space-y-8 relative overflow-hidden group w-full hover-glow-primary">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10 w-full">
+          <div className="flex items-center space-x-4 sm:space-x-5">
+            <div className="p-4 badge-custom-cyan rounded-2xl transition-all shadow-sm">
+              <Fuel className="w-7 h-7 text-cyan-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Jet Fuel Transfer Task</h3>
+                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black tracking-wider uppercase ${
+                  jetTransfer.enabled ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-surface border border-white/10 text-on-surface-dim'
+                }`}>
+                  {jetTransfer.enabled ? 'Active Task' : 'Optional Task'}
+                </span>
+              </div>
+              <p className="text-[10px] text-on-surface-dim opacity-50 uppercase tracking-widest mt-1">
+                Fair rotation between Active Operators &amp; Officers (Excluding Domestic Assignees)
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+            {!isHistoricalView && canEdit && (
+              <>
+                <button
+                  onClick={handleToggleJetTransferEnabled}
+                  className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border cursor-pointer ${
+                    jetTransfer.enabled 
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/30' 
+                      : 'bg-surface border-white/10 text-on-surface-dim hover:text-on-surface'
+                  }`}
+                >
+                  {jetTransfer.enabled ? '✓ Task Enabled' : '+ Enable Task'}
+                </button>
+                <button
+                  onClick={handleAutoAssignJetTransfer}
+                  disabled={isAutoAssigningJetTransfer}
+                  className="px-4 py-2 kinetic-gradient text-white rounded-xl active:scale-95 hover:scale-105 transition-all flex items-center justify-center space-x-2 border border-sky-400/30 cursor-pointer shrink-0 shadow-premium"
+                  title="Automatically assign Jet Transfer Operator & Officer"
+                >
+                  <Zap className={`w-3.5 h-3.5 ${isAutoAssigningJetTransfer ? 'animate-spin' : ''}`} />
+                  <span className="text-[10px] font-black uppercase tracking-wider">
+                    {isAutoAssigningJetTransfer ? 'Assigning...' : 'Auto-Assign Jet'}
+                  </span>
+                </button>
+                {(jetTransfer.op1 || jetTransfer.op2) && (
+                  <button
+                    onClick={handleClearJetTransfer}
+                    className="p-2 text-on-surface-dim hover:text-error hover:bg-error/10 rounded-xl transition-all cursor-pointer"
+                    title="Clear Jet Transfer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 relative z-10">
+          {/* Operator Slot */}
+          <div className="bg-surface-dim border border-white/10 rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-4 hover:border-cyan-400/30 transition-all shadow-sm">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]"></div>
+                <span className="text-xs font-[900] text-on-surface uppercase tracking-wider">
+                  Transfer Operator
+                </span>
+              </div>
+              {op1Rank && op1Rank !== '-' && (
+                <span className="text-cyan-400 font-mono text-[9px] font-bold">Rank #{op1Rank}</span>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <select
+                value={jetTransfer.op1}
+                disabled={!canEdit}
+                onChange={(e) => handleJetTransferAssignmentChange('op1', e.target.value)}
+                className={`bg-surface border border-white/10 rounded-xl p-2.5 text-[12px] font-bold text-on-surface outline-none w-full transition-colors ${
+                  !canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer focus:border-cyan-400'
+                }`}
+              >
+                <option value="" className="text-on-surface-dim italic">-- Select Transfer Operator --</option>
+                {eligibleOps.map(op => {
+                  const tag = staffStatuses[op.id];
+                  const isTagLate = tag === 'LATE';
+                  const isIgnored = tag && !isTagLate;
+                  return (
+                    <option key={op.id} value={op.id} disabled={op.id === jetTransfer.op2}>
+                      {op.name} {isIgnored ? `(${tag} - Excluded)` : isTagLate ? '(LATE)' : ''}
+                    </option>
+                  );
+                })}
+              </select>
+
+              {jetTransfer.op1 && (
+                <div className="text-[8.5px] font-mono text-on-surface-dim opacity-75 pt-0.5 flex items-center gap-1.5 flex-wrap">
+                  {op1Hist ? (
+                    <>
+                      <span className="text-on-surface font-bold">Last: {formatDateShort(op1Hist.date)}</span>
+                      {op1Hist.shift && (
+                        <span className="px-1 py-0.2 rounded bg-surface border border-white/10 uppercase">{op1Hist.shift}</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold uppercase tracking-wider">
+                      Never Assigned (Top Priority)
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Officer Slot */}
+          <div className="bg-surface-dim border border-white/10 rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-4 hover:border-cyan-400/30 transition-all shadow-sm">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]"></div>
+                <span className="text-xs font-[900] text-on-surface uppercase tracking-wider">
+                  Transfer Officer
+                </span>
+              </div>
+              {op2Rank && op2Rank !== '-' && (
+                <span className="text-cyan-400 font-mono text-[9px] font-bold">Rank #{op2Rank}</span>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <select
+                value={jetTransfer.op2}
+                disabled={!canEdit}
+                onChange={(e) => handleJetTransferAssignmentChange('op2', e.target.value)}
+                className={`bg-surface border border-white/10 rounded-xl p-2.5 text-[12px] font-bold text-on-surface outline-none w-full transition-colors ${
+                  !canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer focus:border-cyan-400'
+                }`}
+              >
+                <option value="" className="text-on-surface-dim italic">-- Select Transfer Officer --</option>
+                {eligibleOffs.map(off => {
+                  const tag = staffStatuses[off.id];
+                  const isTagLate = tag === 'LATE';
+                  const isIgnored = tag && !isTagLate;
+                  return (
+                    <option key={off.id} value={off.id} disabled={off.id === jetTransfer.op1}>
+                      {off.name} {isIgnored ? `(${tag} - Excluded)` : isTagLate ? '(LATE)' : ''}
+                    </option>
+                  );
+                })}
+              </select>
+
+              {jetTransfer.op2 && (
+                <div className="text-[8.5px] font-mono text-on-surface-dim opacity-75 pt-0.5 flex items-center gap-1.5 flex-wrap">
+                  {op2Hist ? (
+                    <>
+                      <span className="text-on-surface font-bold">Last: {formatDateShort(op2Hist.date)}</span>
+                      {op2Hist.shift && (
+                        <span className="px-1 py-0.2 rounded bg-surface border border-white/10 uppercase">{op2Hist.shift}</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold uppercase tracking-wider">
+                      Never Assigned (Top Priority)
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderDomesticTable = () => {
+    return (
+      <div className="space-y-4">
+        {/* Table Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface-dim/60 p-3.5 rounded-2xl border border-white/10">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 badge-custom-primary rounded-xl">
+              <Users className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-[900] text-on-surface uppercase tracking-wider">
+                  Domestic Squadron Roster
+                </span>
+                <span className="badge-custom-primary px-2 py-0.5 rounded-full text-[9px] font-black">
+                  {domesticTeams.length} {domesticTeams.length === 1 ? 'Team' : 'Teams'} Active
+                </span>
+              </div>
+              <p className="text-[9.5px] text-on-surface-dim font-bold opacity-60 uppercase tracking-wider">
+                Fair cyclic rotation based on prior domestic date &amp; shift tie-breaker
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {renderOptionalTeamButton()}
+            {!isHistoricalView && canEdit && (
+              <>
+                <button
+                  onClick={handleAutoAssignDomestic}
+                  disabled={isAutoAssigningDomestic}
+                  className="px-3.5 py-2 kinetic-gradient text-white rounded-xl active:scale-95 hover:scale-105 transition-all flex items-center space-x-2 border border-sky-400/30 cursor-pointer shadow-premium shrink-0"
+                  title="Auto-Assign active domestic teams"
+                >
+                  <Zap className={`w-3.5 h-3.5 ${isAutoAssigningDomestic ? 'animate-spin' : ''}`} />
+                  <span className="text-[10px] font-black uppercase tracking-wider">
+                    {isAutoAssigningDomestic ? 'Assigning...' : 'Auto-Assign Domestic'}
+                  </span>
+                </button>
+                {domesticTeams.some(t => t.op1 || t.op2) && (
+                  <button
+                    onClick={handleClearAllDomestic}
+                    className="px-3 py-2 bg-surface hover:bg-error/10 text-on-surface-dim hover:text-error border border-white/10 hover:border-error/30 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
+                    title="Clear all domestic team assignments"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Responsive Table */}
+        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-surface-dim/40 shadow-sm">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-surface-lowest/80 text-[10px] font-black uppercase tracking-wider text-on-surface-dim border-b border-white/10">
+                <th className="py-3.5 px-4 font-black">Squadron Team</th>
+                <th className="py-3.5 px-4 font-black">RF Operator</th>
+                <th className="py-3.5 px-4 font-black">Officer</th>
+                <th className="py-3.5 px-4 font-black text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {domesticTeams.map((team, idx) => {
+                const op1Hist = team.op1 ? historyMap.get(team.op1)?.lastDomestic : undefined;
+                const op2Hist = team.op2 ? historyMap.get(team.op2)?.lastDomestic : undefined;
+                const op1Rank = team.op1 ? getRankInRoles(team.op1, [UserRole.ITP_OPERATOR], 'DOM') : null;
+                const op2Rank = team.op2 ? getRankInRoles(team.op2, [UserRole.ITP_OFFICER], 'DOM') : null;
+
+                const eligibleOps = activeStaff.filter(u => 
+                  (staffAssignments.activeOperators || []).includes(u.id) && u.role === UserRole.ITP_OPERATOR
+                );
+                const eligibleOffs = activeStaff.filter(u => 
+                  (staffAssignments.activeOfficers || []).includes(u.id) && u.role === UserRole.ITP_OFFICER
+                );
+
+                // Deduplicate: Exclude staff already assigned in other domestic slots
+                const otherAssignedForOp1 = new Set<string>();
+                domesticTeams.forEach(t => {
+                  if (t.id === team.id) {
+                    if (t.op2) otherAssignedForOp1.add(t.op2);
+                  } else {
+                    if (t.op1) otherAssignedForOp1.add(t.op1);
+                    if (t.op2) otherAssignedForOp1.add(t.op2);
+                  }
+                });
+                const availableOps = eligibleOps.filter(op => op.id === team.op1 || !otherAssignedForOp1.has(op.id));
+
+                const otherAssignedForOp2 = new Set<string>();
+                domesticTeams.forEach(t => {
+                  if (t.id === team.id) {
+                    if (t.op1) otherAssignedForOp2.add(t.op1);
+                  } else {
+                    if (t.op1) otherAssignedForOp2.add(t.op1);
+                    if (t.op2) otherAssignedForOp2.add(t.op2);
+                  }
+                });
+                const availableOffs = eligibleOffs.filter(off => off.id === team.op2 || !otherAssignedForOp2.has(off.id));
+
+                return (
+                  <tr key={team.id} className="hover:bg-surface-container/50 transition-colors">
+                    <td className="py-3.5 px-4 align-top">
+                      <div className="flex items-center space-x-2.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_8px_rgba(14,165,233,0.5)]"></div>
+                        <span className="font-[900] text-[13px] text-on-surface">{team.name}</span>
+                      </div>
+                      <div className="text-[9.5px] font-mono text-on-surface-dim opacity-60 uppercase pl-5">
+                        Group {idx + 1}
+                      </div>
+                    </td>
+
+                    <td className="py-3.5 px-4 align-top max-w-xs">
+                      <select
+                        value={team.op1}
+                        disabled={!canEdit}
+                        onChange={(e) => handleDomesticAssignmentChange(team.id, 'op1', e.target.value)}
+                        className={`w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-[12px] font-bold text-on-surface outline-none transition-colors ${
+                          !canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer focus:border-primary'
+                        }`}
+                      >
+                        <option value="" className="text-on-surface-dim italic">-- Unassigned Operator --</option>
+                        {availableOps.map(op => {
+                          const tag = staffStatuses[op.id];
+                          const isTagLate = tag === 'LATE';
+                          const isIgnored = tag && !isTagLate;
+                          return (
+                            <option key={op.id} value={op.id}>
+                              {op.name} {isIgnored ? `(${tag} - Excluded)` : isTagLate ? '(LATE)' : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      {team.op1 && (
+                        <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[9px] font-mono">
+                          {op1Rank && op1Rank !== '-' && (
+                            <span className="text-primary font-bold">Rank #{op1Rank}</span>
+                          )}
+                          {op1Hist ? (
+                            <span className="text-on-surface-dim opacity-75">
+                              Last: {formatDateShort(op1Hist.date)} ({op1Hist.shift}) [{op1Hist.team}]
+                            </span>
+                          ) : (
+                            <span className="text-emerald-400 font-bold">Never Assigned</span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
+                    <td className="py-3.5 px-4 align-top max-w-xs">
+                      <select
+                        value={team.op2}
+                        disabled={!canEdit}
+                        onChange={(e) => handleDomesticAssignmentChange(team.id, 'op2', e.target.value)}
+                        className={`w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-[12px] font-bold text-on-surface outline-none transition-colors ${
+                          !canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer focus:border-cyan-400'
+                        }`}
+                      >
+                        <option value="" className="text-on-surface-dim italic">-- Unassigned Officer --</option>
+                        {availableOffs.map(off => {
+                          const tag = staffStatuses[off.id];
+                          const isTagLate = tag === 'LATE';
+                          const isIgnored = tag && !isTagLate;
+                          return (
+                            <option key={off.id} value={off.id}>
+                              {off.name} {isIgnored ? `(${tag} - Excluded)` : isTagLate ? '(LATE)' : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      {team.op2 && (
+                        <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[9px] font-mono">
+                          {op2Rank && op2Rank !== '-' && (
+                            <span className="text-cyan-400 font-bold">Rank #{op2Rank}</span>
+                          )}
+                          {op2Hist ? (
+                            <span className="text-on-surface-dim opacity-75">
+                              Last: {formatDateShort(op2Hist.date)} ({op2Hist.shift}) [{op2Hist.team}]
+                            </span>
+                          ) : (
+                            <span className="text-emerald-400 font-bold">Never Assigned</span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
+                    <td className="py-3.5 px-4 align-top text-right">
+                      {canEdit && (team.op1 || team.op2) && (
+                        <button
+                          onClick={() => handleClearDomesticTeam(team.id)}
+                          className="p-2 text-on-surface-dim hover:text-error hover:bg-error/10 rounded-xl transition-all cursor-pointer inline-flex items-center"
+                          title="Clear this team assignment"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const renderJetTransferTable = () => {
+    const domesticAssignees = new Set<string>();
+    domesticTeams.forEach(t => {
+      if (t.op1) domesticAssignees.add(t.op1);
+      if (t.op2) domesticAssignees.add(t.op2);
+    });
+
+    const eligibleOps = activeStaff.filter(u => 
+      (staffAssignments.activeOperators || []).includes(u.id) && 
+      u.role === UserRole.ITP_OPERATOR && 
+      !domesticAssignees.has(u.id)
+    );
+    const eligibleOffs = activeStaff.filter(u => 
+      (staffAssignments.activeOfficers || []).includes(u.id) && 
+      u.role === UserRole.ITP_OFFICER && 
+      !domesticAssignees.has(u.id)
+    );
+
+    const op1Hist = jetTransfer.op1 ? historyMap.get(jetTransfer.op1)?.lastJetTransfer : undefined;
+    const op2Hist = jetTransfer.op2 ? historyMap.get(jetTransfer.op2)?.lastJetTransfer : undefined;
+    const op1Rank = jetTransfer.op1 ? getRankInRoles(jetTransfer.op1, [UserRole.ITP_OPERATOR], 'JET') : null;
+    const op2Rank = jetTransfer.op2 ? getRankInRoles(jetTransfer.op2, [UserRole.ITP_OFFICER], 'JET') : null;
+
+    return (
+      <div className="space-y-4">
+        {/* Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface-dim/60 p-3.5 rounded-2xl border border-white/10">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 badge-custom-cyan rounded-xl">
+              <Fuel className="w-4 h-4 text-cyan-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-[900] text-on-surface uppercase tracking-wider">
+                  Jet Fuel Transfer Task
+                </span>
+                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                  jetTransfer.enabled ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-surface border border-white/10 text-on-surface-dim'
+                }`}>
+                  {jetTransfer.enabled ? 'Active Task' : 'Optional / Standby'}
+                </span>
+              </div>
+              <p className="text-[9.5px] text-on-surface-dim font-bold opacity-60 uppercase tracking-wider">
+                Excludes staff assigned to Domestic Squadron • Fair rotation by date &amp; shift
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {!isHistoricalView && canEdit && (
+              <>
+                <button
+                  onClick={handleToggleJetTransferEnabled}
+                  className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border cursor-pointer ${
+                    jetTransfer.enabled 
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/30' 
+                      : 'bg-surface border-white/10 text-on-surface-dim hover:text-on-surface'
+                  }`}
+                >
+                  {jetTransfer.enabled ? '✓ Task Enabled' : '+ Enable Task'}
+                </button>
+                <button
+                  onClick={handleAutoAssignJetTransfer}
+                  disabled={isAutoAssigningJetTransfer}
+                  className="px-3.5 py-2 kinetic-gradient text-white rounded-xl active:scale-95 hover:scale-105 transition-all flex items-center space-x-2 border border-sky-400/30 cursor-pointer shadow-premium shrink-0"
+                  title="Auto-Assign Jet Transfer personnel"
+                >
+                  <Zap className={`w-3.5 h-3.5 ${isAutoAssigningJetTransfer ? 'animate-spin' : ''}`} />
+                  <span className="text-[10px] font-black uppercase tracking-wider">
+                    {isAutoAssigningJetTransfer ? 'Assigning...' : 'Auto-Assign Jet'}
+                  </span>
+                </button>
+                {(jetTransfer.op1 || jetTransfer.op2) && (
+                  <button
+                    onClick={handleClearJetTransfer}
+                    className="px-3 py-2 bg-surface hover:bg-error/10 text-on-surface-dim hover:text-error border border-white/10 hover:border-error/30 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
+                    title="Clear Jet Transfer assignment"
+                  >
+                    Clear
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-surface-dim/40 shadow-sm">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-surface-lowest/80 text-[10px] font-black uppercase tracking-wider text-on-surface-dim border-b border-white/10">
+                <th className="py-3.5 px-4 font-black">Operation / Task</th>
+                <th className="py-3.5 px-4 font-black">Transfer Operator</th>
+                <th className="py-3.5 px-4 font-black">Transfer Officer</th>
+                <th className="py-3.5 px-4 font-black text-right">Task Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              <tr className="hover:bg-surface-container/50 transition-colors">
+                <td className="py-3.5 px-4 align-top">
+                  <div className="flex items-center space-x-2.5">
+                    <div className={`w-2.5 h-2.5 rounded-full ${jetTransfer.enabled ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]' : 'bg-on-surface-dim opacity-40'}`}></div>
+                    <span className="font-[900] text-[13px] text-on-surface">JET TRANSFER</span>
+                  </div>
+                  <div className="text-[9.5px] font-mono text-on-surface-dim opacity-60 uppercase pl-5">
+                    NFF to OFF Transfer
+                  </div>
+                </td>
+
+                <td className="py-3.5 px-4 align-top max-w-xs">
+                  <select
+                    value={jetTransfer.op1}
+                    disabled={!canEdit}
+                    onChange={(e) => handleJetTransferAssignmentChange('op1', e.target.value)}
+                    className={`w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-[12px] font-bold text-on-surface outline-none transition-colors ${
+                      !canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer focus:border-cyan-400'
+                    }`}
+                  >
+                    <option value="" className="text-on-surface-dim italic">-- Unassigned Operator --</option>
+                    {eligibleOps.map(op => {
+                      const tag = staffStatuses[op.id];
+                      const isTagLate = tag === 'LATE';
+                      const isIgnored = tag && !isTagLate;
+                      return (
+                        <option key={op.id} value={op.id} disabled={op.id === jetTransfer.op2}>
+                          {op.name} {isIgnored ? `(${tag} - Excluded)` : isTagLate ? '(LATE)' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  {jetTransfer.op1 && (
+                    <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[9px] font-mono">
+                      {op1Rank && op1Rank !== '-' && (
+                        <span className="text-cyan-400 font-bold">Rank #{op1Rank}</span>
+                      )}
+                      {op1Hist ? (
+                        <span className="text-on-surface-dim opacity-75">
+                          Last: {formatDateShort(op1Hist.date)} ({op1Hist.shift || '—'})
+                        </span>
+                      ) : (
+                        <span className="text-emerald-400 font-bold">Never Assigned</span>
+                      )}
+                    </div>
+                  )}
+                </td>
+
+                <td className="py-3.5 px-4 align-top max-w-xs">
+                  <select
+                    value={jetTransfer.op2}
+                    disabled={!canEdit}
+                    onChange={(e) => handleJetTransferAssignmentChange('op2', e.target.value)}
+                    className={`w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-[12px] font-bold text-on-surface outline-none transition-colors ${
+                      !canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer focus:border-cyan-400'
+                    }`}
+                  >
+                    <option value="" className="text-on-surface-dim italic">-- Unassigned Officer --</option>
+                    {eligibleOffs.map(off => {
+                      const tag = staffStatuses[off.id];
+                      const isTagLate = tag === 'LATE';
+                      const isIgnored = tag && !isTagLate;
+                      return (
+                        <option key={off.id} value={off.id} disabled={off.id === jetTransfer.op1}>
+                          {off.name} {isIgnored ? `(${tag} - Excluded)` : isTagLate ? '(LATE)' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  {jetTransfer.op2 && (
+                    <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[9px] font-mono">
+                      {op2Rank && op2Rank !== '-' && (
+                        <span className="text-cyan-400 font-bold">Rank #{op2Rank}</span>
+                      )}
+                      {op2Hist ? (
+                        <span className="text-on-surface-dim opacity-75">
+                          Last: {formatDateShort(op2Hist.date)} ({op2Hist.shift || '—'})
+                        </span>
+                      ) : (
+                        <span className="text-emerald-400 font-bold">Never Assigned</span>
+                      )}
+                    </div>
+                  )}
+                </td>
+
+                <td className="py-3.5 px-4 align-top text-right">
+                  <span className={`inline-block px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider ${
+                    jetTransfer.enabled 
+                      ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' 
+                      : 'bg-surface border border-white/10 text-on-surface-dim opacity-60'
+                  }`}>
+                    {jetTransfer.enabled ? 'ACTIVE' : 'STANDBY'}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const renderDailyTable = () => {
+    const domesticAssignees = new Set<string>();
+    domesticTeams.forEach(t => {
+      if (t.op1) domesticAssignees.add(t.op1);
+      if (t.op2) domesticAssignees.add(t.op2);
+    });
+
+    const eligibleOpsStaff = activeStaff.filter(u => 
+      (staffAssignments.activeOperators || []).includes(u.id) && u.role === UserRole.ITP_OPERATOR
+    );
+    const eligibleOffsStaff = activeStaff.filter(u => 
+      (staffAssignments.activeOfficers || []).includes(u.id) && u.role === UserRole.ITP_OFFICER
+    );
+    const eligibleHydrantStaff = activeStaff.filter(u => 
+      (staffAssignments.hydrantOpsOfficers || []).includes(u.id)
+    );
+
+    const completedCount = rfHdEquipment.filter(eq => dailyCompleted.includes(eq.id)).length;
+
+    return (
+      <div className="space-y-4">
+        {/* Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface-dim/60 p-3.5 rounded-2xl border border-outline">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 badge-custom-success rounded-xl">
+              <UserCheck className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-[900] text-on-surface uppercase tracking-wider">
+                  Equipment Daily Safety Checks
+                </span>
+                <span className="badge-custom-success px-2 py-0.5 rounded-full text-[9px] font-black">
+                  {completedCount} / {rfHdEquipment.length} Checked
+                </span>
+              </div>
+              <p className="text-[9.5px] text-on-surface-dim font-bold opacity-60 uppercase tracking-wider">
+                RF: Operator &amp; Officer • HD: Hydrant Ops Officer • Excludes Domestic staff
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {!isHistoricalView && canEdit && (
+              <>
+                <button
+                  onClick={() => handleAutoAssignFleet('DAILY')}
+                  disabled={isAutoAssigningFleet}
+                  className="px-3.5 py-2 kinetic-gradient text-white rounded-xl active:scale-95 hover:scale-105 transition-all flex items-center space-x-2 border border-sky-400/30 cursor-pointer shadow-premium shrink-0"
+                  title="Auto-Assign equipment safety check inspectors"
+                >
+                  <Zap className={`w-3.5 h-3.5 ${isAutoAssigningFleet ? 'animate-spin' : ''}`} />
+                  <span className="text-[10px] font-black uppercase tracking-wider">
+                    {isAutoAssigningFleet ? 'Assigning...' : 'Auto-Assign Daily'}
+                  </span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-surface-dim/40 shadow-sm">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-surface-lowest/80 text-[10px] font-black uppercase tracking-wider text-on-surface-dim border-b border-white/10">
+                <th className="py-3.5 px-4 font-black">Equipment</th>
+                <th className="py-3.5 px-4 font-black">Daily Check</th>
+                <th className="py-3.5 px-4 font-black">Inspector / Operator</th>
+                <th className="py-3.5 px-4 font-black">Officer / Hydrant Officer</th>
+                <th className="py-3.5 px-4 font-black text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {rfHdEquipment.map((eq) => {
+                const isHd = eq.type === EquipmentType.HYDRANT_DISPENSER;
+                const isOutOfService = eq.status === EquipmentStatus.OUT_OF_SERVICE;
+                const isFromNight = Boolean(nightCarriedDailyAssignments[eq.id]?.op1 || nightCarriedDailyAssignments[eq.id]?.op2);
+                const isDailyDone = dailyCompleted.includes(eq.id) || isFromNight;
+                const assignedOp1 = equipmentAssignments[eq.id]?.op1 || '';
+                const assignedOp2 = equipmentAssignments[eq.id]?.op2 || '';
+
+                const op1Hist = assignedOp1 ? historyMap.get(assignedOp1)?.lastDaily : undefined;
+                const op2Hist = assignedOp2 ? historyMap.get(assignedOp2)?.lastDaily : undefined;
+                const op1Rank = assignedOp1 ? getRankInRoles(assignedOp1, isHd ? [UserRole.ITP_OFFICER] : [UserRole.ITP_OPERATOR], 'DAILY') : null;
+                const op2Rank = assignedOp2 ? getRankInRoles(assignedOp2, [UserRole.ITP_OFFICER], 'DAILY') : null;
+
+                return (
+                  <tr key={eq.id} className="hover:bg-surface-container/50 transition-colors">
+                    <td className="py-3 px-4 align-middle">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-[900] text-[13px] text-on-surface">{eq.id}</span>
+                        <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase ${
+                          isHd ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'badge-custom-primary'
+                        }`}>
+                          {isHd ? 'HD' : 'RF'}
+                        </span>
+                        {isFromNight && (
+                          <span className="px-1.5 py-0.5 rounded text-[7.5px] font-black uppercase bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                            Night Shift
+                          </span>
+                        )}
+                      </div>
+                      <div className={`text-[9px] font-mono ${isOutOfService ? 'text-error font-bold' : 'text-on-surface-dim opacity-60'}`}>
+                        {eq.status}
+                      </div>
+                    </td>
+
+                    <td className="py-3 px-4 align-middle">
+                      {isOutOfService ? (
+                        <span className="px-2.5 py-1 rounded-xl text-[9px] font-black uppercase tracking-wider bg-error/10 text-error border border-white/10 inline-block">
+                          Out of Service
+                        </span>
+                      ) : isFromNight ? (
+                        <div
+                          className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border flex items-center space-x-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30 cursor-default select-none shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                          title="Daily check completed on Night Shift (Carry-Forward)"
+                        >
+                          <UserCheck className="w-3.5 h-3.5 shrink-0" />
+                          <span>COMPLETED</span>
+                        </div>
+                      ) : (
+                        <button
+                          disabled={!canEdit}
+                          onClick={() => handleToggleDailyCompleted(eq.id)}
+                          className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border flex items-center space-x-1.5 ${
+                            !canEdit ? 'cursor-default' : 'cursor-pointer hover:scale-105 active:scale-95'
+                          } ${
+                            isDailyDone
+                              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                              : 'bg-surface border-white/10 text-on-surface-dim opacity-50 hover:opacity-100'
+                          }`}
+                          title="Click to toggle check completion"
+                        >
+                          <UserCheck className="w-3.5 h-3.5 shrink-0" />
+                          <span>{isDailyDone ? 'COMPLETED' : 'PENDING'}</span>
+                        </button>
+                      )}
+                    </td>
+
+                    <td className="py-3 px-4 align-middle max-w-xs">
+                      {isOutOfService ? (
+                        <span className="text-[10px] font-bold text-error/60 italic">No slot (Out of service)</span>
+                      ) : isHd ? (
+                        <div className="text-[10px] font-bold text-on-surface-dim opacity-40 italic">
+                          — (HD Inspected by Officer)
+                        </div>
+                      ) : isFromNight ? (
+                        <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-surface border border-white/10 text-on-surface text-[11px] font-bold">
+                          <span className="truncate">{activeStaff.find(s => s.id === assignedOp1)?.name || assignedOp1 || 'Night Operator'}</span>
+                          <span className="text-[8px] font-black uppercase tracking-wider text-indigo-300 bg-indigo-500/20 border border-indigo-500/30 px-1.5 py-0.5 rounded ml-2 shrink-0">
+                            Night Shift
+                          </span>
+                        </div>
+                      ) : (
+                        <div>
+                          <select
+                            value={assignedOp1}
+                            disabled={!canEdit}
+                            onChange={(e) => handleDailyAssignmentChange(eq.id, 'op1', e.target.value)}
+                            className={`w-full bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-on-surface outline-none transition-colors ${
+                              !canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer focus:border-primary'
+                            }`}
+                          >
+                            <option value="" className="text-on-surface-dim italic">-- Operator --</option>
+                            {eligibleOpsStaff.map(op => {
+                              const isDom = domesticAssignees.has(op.id);
+                              const tag = staffStatuses[op.id];
+                              const isLate = tag === 'LATE';
+                              return (
+                                <option key={op.id} value={op.id}>
+                                  {op.name} {isDom ? '(Domestic)' : tag && !isLate ? `(${tag})` : isLate ? '(LATE)' : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+                          {assignedOp1 && (
+                            <div className="mt-0.5 flex items-center gap-1.5 flex-wrap text-[8.5px] font-mono">
+                              {op1Rank && op1Rank !== '-' && (
+                                <span className="text-primary font-bold">Rank #{op1Rank}</span>
+                              )}
+                              {op1Hist ? (
+                                <span className="text-on-surface-dim opacity-75">Last: {formatDateShort(op1Hist.date)}</span>
+                              ) : (
+                                <span className="text-emerald-400 font-bold">Never Assigned</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
+                    <td className="py-3 px-4 align-middle max-w-xs">
+                      {isOutOfService ? (
+                        <span className="text-[10px] font-bold text-error/60 italic">No slot (Out of service)</span>
+                      ) : isHd ? (
+                        isFromNight ? (
+                          <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-surface border border-white/10 text-on-surface text-[11px] font-bold">
+                            <span className="truncate">{activeStaff.find(s => s.id === assignedOp1)?.name || assignedOp1 || 'Night Hydrant Officer'}</span>
+                            <span className="text-[8px] font-black uppercase tracking-wider text-indigo-300 bg-indigo-500/20 border border-indigo-500/30 px-1.5 py-0.5 rounded ml-2 shrink-0">
+                              Night Shift
+                            </span>
+                          </div>
+                        ) : (
+                          <div>
+                            <select
+                              value={assignedOp1}
+                              disabled={!canEdit}
+                              onChange={(e) => handleDailyAssignmentChange(eq.id, 'op1', e.target.value)}
+                              className={`w-full bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-on-surface outline-none transition-colors ${
+                                !canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer focus:border-amber-500'
+                              }`}
+                            >
+                              <option value="" className="text-on-surface-dim italic">-- Hydrant Officer --</option>
+                              {eligibleHydrantStaff.map(st => {
+                                const isDom = domesticAssignees.has(st.id);
+                                const tag = staffStatuses[st.id];
+                                const isLate = tag === 'LATE';
+                                return (
+                                  <option key={st.id} value={st.id}>
+                                    {st.name} {isDom ? '(Domestic)' : tag && !isLate ? `(${tag})` : isLate ? '(LATE)' : ''}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            {assignedOp1 && (
+                              <div className="mt-0.5 flex items-center gap-1.5 flex-wrap text-[8.5px] font-mono">
+                                {op1Rank && op1Rank !== '-' && (
+                                  <span className="text-amber-400 font-bold">Rank #{op1Rank}</span>
+                                )}
+                                {op1Hist ? (
+                                  <span className="text-on-surface-dim opacity-75">Last: {formatDateShort(op1Hist.date)}</span>
+                                ) : (
+                                  <span className="text-emerald-400 font-bold">Never Assigned</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      ) : isFromNight ? (
+                        <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-surface border border-white/10 text-on-surface text-[11px] font-bold">
+                          <span className="truncate">{activeStaff.find(s => s.id === assignedOp2)?.name || assignedOp2 || 'Night Officer'}</span>
+                          <span className="text-[8px] font-black uppercase tracking-wider text-indigo-300 bg-indigo-500/20 border border-indigo-500/30 px-1.5 py-0.5 rounded ml-2 shrink-0">
+                            Night Shift
+                          </span>
+                        </div>
+                      ) : (
+                        <div>
+                          <select
+                            value={assignedOp2}
+                            disabled={!canEdit}
+                            onChange={(e) => handleDailyAssignmentChange(eq.id, 'op2', e.target.value)}
+                            className={`w-full bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-on-surface outline-none transition-colors ${
+                              !canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer focus:border-cyan-400'
+                            }`}
+                          >
+                            <option value="" className="text-on-surface-dim italic">-- Officer --</option>
+                            {eligibleOffsStaff.map(off => {
+                              const isDom = domesticAssignees.has(off.id);
+                              const tag = staffStatuses[off.id];
+                              const isLate = tag === 'LATE';
+                              return (
+                                <option key={off.id} value={off.id}>
+                                  {off.name} {isDom ? '(Domestic)' : tag && !isLate ? `(${tag})` : isLate ? '(LATE)' : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+                          {assignedOp2 && (
+                            <div className="mt-0.5 flex items-center gap-1.5 flex-wrap text-[8.5px] font-mono">
+                              {op2Rank && op2Rank !== '-' && (
+                                <span className="text-cyan-400 font-bold">Rank #{op2Rank}</span>
+                              )}
+                              {op2Hist ? (
+                                <span className="text-on-surface-dim opacity-75">Last: {formatDateShort(op2Hist.date)}</span>
+                              ) : (
+                                <span className="text-emerald-400 font-bold">Never Assigned</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
+                    <td className="py-3 px-4 align-middle text-right">
+                      {canEdit && !isOutOfService && !isFromNight && (assignedOp1 || assignedOp2) && (
+                        <button
+                          onClick={() => handleClearDailyAssignment(eq.id)}
+                          className="p-1.5 text-on-surface-dim hover:text-error hover:bg-error/10 rounded-lg transition-colors cursor-pointer"
+                          title="Clear assignment"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const renderDieselTable = () => {
+    const domesticAssignees = new Set<string>();
+    domesticTeams.forEach(t => {
+      if (t.op1) domesticAssignees.add(t.op1);
+      if (t.op2) domesticAssignees.add(t.op2);
+    });
+
+    const eligibleOpsStaff = activeStaff.filter(u => 
+      (staffAssignments.activeOperators || []).includes(u.id) && u.role === UserRole.ITP_OPERATOR
+    );
+    const eligibleHydrantStaff = activeStaff.filter(u => 
+      (staffAssignments.hydrantOpsOfficers || []).includes(u.id)
+    );
+
+    // Filter strictly to equipment requiring diesel that are NOT out of service
+    const dieselEquipment = rfHdEquipment.filter(eq => 
+      dieselNeeds.includes(eq.id) && eq.status !== EquipmentStatus.OUT_OF_SERVICE
+    );
+
+    const neededCount = dieselEquipment.length;
+
+    // Track assigned staff across diesel slots to prevent duplicate selection
+    const alreadyAssignedDiesel = new Set<string>();
+    Object.entries(dieselAssignments).forEach(([eqId, assign]) => {
+      if (assign?.op1) alreadyAssignedDiesel.add(assign.op1);
+    });
+
+    return (
+      <div className="space-y-4">
+        {/* Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface-dim/60 p-3.5 rounded-2xl border border-outline">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 badge-custom-warning rounded-xl">
+              <Droplet className="w-4 h-4 text-amber-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-[900] text-on-surface uppercase tracking-wider">
+                  Equipment Diesel Refuelling
+                </span>
+                <span className="badge-custom-warning px-2 py-0.5 rounded-full text-[9px] font-black">
+                  {neededCount} Requiring Diesel
+                </span>
+              </div>
+              <p className="text-[9.5px] text-on-surface-dim font-bold opacity-60 uppercase tracking-wider">
+                Evening Refuelling • RF: 1 Operator • HD: 1 Hydrant Ops Officer • Excludes Domestic staff
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {!isHistoricalView && canEdit && (
+              <>
+                <button
+                  onClick={() => handleAutoAssignFleet('DIESEL')}
+                  disabled={isAutoAssigningFleet || neededCount === 0}
+                  className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl active:scale-95 transition-all flex items-center space-x-2 border border-amber-500/30 cursor-pointer shadow-none shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Auto-Assign diesel refuelling personnel"
+                >
+                  <Zap className={`w-3.5 h-3.5 ${isAutoAssigningFleet ? 'animate-spin' : ''}`} />
+                  <span className="text-[10px] font-black uppercase tracking-wider">
+                    {isAutoAssigningFleet ? 'Assigning...' : 'Auto-Assign Diesel'}
+                  </span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-surface-dim/40 shadow-sm">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-surface-lowest/80 text-[10px] font-black uppercase tracking-wider text-on-surface-dim border-b border-white/10">
+                <th className="py-3.5 px-4 font-black">Equipment</th>
+                <th className="py-3.5 px-4 font-black">Diesel Requirement</th>
+                <th className="py-3.5 px-4 font-black">Assigned Diesel Staff</th>
+                <th className="py-3.5 px-4 font-black text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {dieselEquipment.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-2">
+                      <Droplet className="w-8 h-8 text-amber-400/40" />
+                      <span className="text-xs font-black uppercase tracking-wider text-on-surface">No Equipment Marked for Diesel</span>
+                      <span className="text-[10px] text-on-surface-dim font-bold opacity-60">
+                        Mark equipment requiring diesel in Fleet Status using the DIESEL button.
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                dieselEquipment.map((eq) => {
+                  const isHd = eq.type === EquipmentType.HYDRANT_DISPENSER;
+                  const assignedStaffId = dieselAssignments[eq.id]?.op1 || '';
+                  const staffHist = assignedStaffId ? historyMap.get(assignedStaffId)?.lastDiesel : undefined;
+                  const staffRank = assignedStaffId ? getRankInRoles(assignedStaffId, isHd ? [UserRole.ITP_HD_OPERATOR] : [UserRole.ITP_OPERATOR], 'DIESEL') : null;
+
+                  return (
+                    <tr key={eq.id} className="hover:bg-surface-container/50 transition-colors">
+                      <td className="py-3 px-4 align-middle">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-[900] text-[13px] text-on-surface">{eq.id}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase ${
+                            isHd ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'badge-custom-primary'
+                          }`}>
+                            {isHd ? 'HD' : 'RF'}
+                          </span>
+                        </div>
+                        <div className="text-[9px] font-mono text-on-surface-dim opacity-60">
+                          {eq.status}
+                        </div>
+                      </td>
+
+                      <td className="py-3 px-4 align-middle">
+                        <button
+                          disabled={!canEdit}
+                          onClick={() => handleToggleDieselNeed(eq.id)}
+                          className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border flex items-center space-x-1.5 ${
+                            !canEdit ? 'cursor-default' : 'cursor-pointer hover:scale-105 active:scale-95'
+                          } bg-amber-500/20 text-amber-400 border-amber-500/40`}
+                          title="Click to toggle diesel requirement"
+                        >
+                          <Droplet className="w-3.5 h-3.5 shrink-0" />
+                          <span>DIESEL REQUIRED</span>
+                        </button>
+                      </td>
+
+                      <td className="py-3 px-4 align-middle max-w-sm">
+                        {isHd ? (
+                          <div>
+                            <label className="text-[8.5px] font-black uppercase tracking-widest text-amber-400/80 mb-0.5 block">
+                              HD Hydrant Ops Officer
+                            </label>
+                            <select
+                              value={assignedStaffId}
+                              disabled={!canEdit}
+                              onChange={(e) => handleDieselAssignmentChange(eq.id, e.target.value)}
+                              className={`w-full bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-on-surface outline-none transition-colors ${
+                                !canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer focus:border-amber-500'
+                              }`}
+                            >
+                              <option value="" className="text-on-surface-dim italic">-- Hydrant Ops Officer --</option>
+                              {eligibleHydrantStaff
+                                .filter(st => (!alreadyAssignedDiesel.has(st.id) || st.id === assignedStaffId) && !domesticAssignees.has(st.id))
+                                .map(st => {
+                                  const tag = staffStatuses[st.id];
+                                  const isLate = tag === 'LATE';
+                                  return (
+                                    <option key={st.id} value={st.id}>
+                                      {st.name} {tag && !isLate ? `(${tag})` : isLate ? '(LATE)' : ''}
+                                    </option>
+                                  );
+                                })}
+                            </select>
+                            {assignedStaffId && (
+                              <div className="mt-0.5 flex items-center gap-1.5 flex-wrap text-[8.5px] font-mono">
+                                {staffRank && staffRank !== '-' && (
+                                  <span className="text-amber-400 font-bold">Rank #{staffRank}</span>
+                                )}
+                                {staffHist ? (
+                                  <span className="text-on-surface-dim opacity-75">Last: {formatDateShort(staffHist.date)}</span>
+                                ) : (
+                                  <span className="text-emerald-400 font-bold">Never Assigned</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div>
+                            <label className="text-[8.5px] font-black uppercase tracking-widest text-primary/80 mb-0.5 block">
+                              RF Operator
+                            </label>
+                            <select
+                              value={assignedStaffId}
+                              disabled={!canEdit}
+                              onChange={(e) => handleDieselAssignmentChange(eq.id, e.target.value)}
+                              className={`w-full bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-on-surface outline-none transition-colors ${
+                                !canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer focus:border-primary'
+                              }`}
+                            >
+                              <option value="" className="text-on-surface-dim italic">-- Active Operator --</option>
+                              {eligibleOpsStaff
+                                .filter(op => (!alreadyAssignedDiesel.has(op.id) || op.id === assignedStaffId) && !domesticAssignees.has(op.id))
+                                .map(op => {
+                                  const tag = staffStatuses[op.id];
+                                  const isLate = tag === 'LATE';
+                                  return (
+                                    <option key={op.id} value={op.id}>
+                                      {op.name} {tag && !isLate ? `(${tag})` : isLate ? '(LATE)' : ''}
+                                    </option>
+                                  );
+                                })}
+                            </select>
+                            {assignedStaffId && (
+                              <div className="mt-0.5 flex items-center gap-1.5 flex-wrap text-[8.5px] font-mono">
+                                {staffRank && staffRank !== '-' && (
+                                  <span className="text-primary font-bold">Rank #{staffRank}</span>
+                                )}
+                                {staffHist ? (
+                                  <span className="text-on-surface-dim opacity-75">Last: {formatDateShort(staffHist.date)}</span>
+                                ) : (
+                                  <span className="text-emerald-400 font-bold">Never Assigned</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4 align-middle text-right">
+                        {canEdit && assignedStaffId && (
+                          <button
+                            onClick={() => handleClearDieselAssignment(eq.id)}
+                            className="p-1.5 text-on-surface-dim hover:text-error hover:bg-error/10 rounded-lg transition-colors cursor-pointer"
+                            title="Clear assignment"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const renderStockCard = () => {
+    const assignedStaffId = stockAssignment.staffId || '';
+    const staffHist = assignedStaffId ? historyMap.get(assignedStaffId)?.lastStock : undefined;
+    const staffRank = assignedStaffId ? getRankInRoles(assignedStaffId, [UserRole.ITP_OFFICER, UserRole.ITP_HD_OPERATOR], 'STOCK') : null;
+
+    const domesticAssignees = new Set<string>();
+    domesticTeams.forEach(t => {
+      if (t.op1) domesticAssignees.add(t.op1);
+      if (t.op2) domesticAssignees.add(t.op2);
+    });
+
+    const eligibleOfficers = activeStaff.filter(u => 
+      ((staffAssignments.activeOfficers || []).includes(u.id) || (staffAssignments.hydrantOpsOfficers || []).includes(u.id)) &&
+      (u.role === UserRole.ITP_OFFICER || u.role === UserRole.ITP_HD_OPERATOR) &&
+      !domesticAssignees.has(u.id)
+    );
+
+    return (
+      <div className="card-premium p-5 sm:p-8 space-y-6 sm:space-y-8 relative overflow-hidden group w-full hover-glow-primary">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10 w-full">
+          <div className="flex items-center space-x-4 sm:space-x-5">
+            <div className="p-4 badge-custom-purple rounded-2xl transition-all shadow-sm">
+              <Package className="w-7 h-7 text-purple-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Stock Duty</h3>
+                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black tracking-wider uppercase ${
+                  assignedStaffId ? 'badge-custom-primary' : 'bg-surface border border-outline text-on-surface-dim'
+                }`}>
+                  {assignedStaffId ? 'Assigned' : '1 Slot Available'}
+                </span>
+              </div>
+              <p className="text-[10px] text-on-surface-dim opacity-50 uppercase tracking-widest mt-1">
+                Night Shift • 1 Officer or Hydrant Ops Officer slot (Excludes Domestic Assignees)
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+            {!isHistoricalView && canEdit && (
+              <>
+                <button
+                  onClick={handleAutoAssignStock}
+                  disabled={isAutoAssigningStock}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl active:scale-95 transition-all flex items-center justify-center space-x-2 border border-purple-500/30 cursor-pointer shrink-0 shadow-none"
+                  title="Automatically assign Stock Duty Officer using fair rotation"
+                >
+                  <Zap className={`w-3.5 h-3.5 ${isAutoAssigningStock ? 'animate-spin' : ''}`} />
+                  <span className="text-[10px] font-black uppercase tracking-wider">
+                    {isAutoAssigningStock ? 'Assigning...' : 'Auto-Assign Stock'}
+                  </span>
+                </button>
+                {assignedStaffId && (
+                  <button
+                    onClick={handleClearStockAssignment}
+                    className="p-2 text-on-surface-dim hover:text-error hover:bg-error/10 rounded-xl transition-all cursor-pointer"
+                    title="Clear Stock Duty assignment"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="max-w-md relative z-10">
+          <div className="bg-surface-dim border border-white/10 rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-4 hover:border-purple-400/30 transition-all shadow-sm">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.5)]"></div>
+                <span className="text-xs font-[900] text-on-surface uppercase tracking-wider">
+                  Stock Officer
+                </span>
+              </div>
+              {staffRank && staffRank !== '-' && (
+                <span className="text-purple-400 font-mono text-[9px] font-bold">Rank #{staffRank}</span>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <select
+                value={assignedStaffId}
+                disabled={!canEdit}
+                onChange={(e) => handleStockAssignmentChange(e.target.value)}
+                className={`bg-surface border border-white/10 rounded-xl p-2.5 text-[12px] font-bold text-on-surface outline-none w-full transition-colors ${
+                  !canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer focus:border-purple-400'
+                }`}
+              >
+                <option value="" className="text-on-surface-dim italic">-- Select Stock Officer / HD Officer --</option>
+                {eligibleOfficers.map(st => {
+                  const tag = staffStatuses[st.id];
+                  const isTagLate = tag === 'LATE';
+                  const isIgnored = tag && !isTagLate;
+                  return (
+                    <option key={st.id} value={st.id}>
+                      {st.name} ({st.role === UserRole.ITP_HD_OPERATOR ? 'HD Officer' : 'Officer'}) {isIgnored ? `(${tag} - Excluded)` : isTagLate ? '(LATE)' : ''}
+                    </option>
+                  );
+                })}
+              </select>
+
+              {assignedStaffId && (
+                <div className="text-[8.5px] font-mono text-on-surface-dim opacity-75 pt-0.5 flex items-center gap-1.5 flex-wrap">
+                  {staffHist ? (
+                    <>
+                      <span className="text-on-surface font-bold">Last Stock: {formatDateShort(staffHist.date)}</span>
+                      {staffHist.shift && (
+                        <span className="px-1 py-0.2 rounded bg-surface border border-white/10 uppercase">{staffHist.shift}</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold uppercase tracking-wider">
+                      Never Assigned (Top Priority)
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderStockTable = () => {
+    const domesticAssignees = new Set<string>();
+    domesticTeams.forEach(t => {
+      if (t.op1) domesticAssignees.add(t.op1);
+      if (t.op2) domesticAssignees.add(t.op2);
+    });
+
+    const eligibleOfficers = activeStaff.filter(u => 
+      ((staffAssignments.activeOfficers || []).includes(u.id) || (staffAssignments.hydrantOpsOfficers || []).includes(u.id)) &&
+      (u.role === UserRole.ITP_OFFICER || u.role === UserRole.ITP_HD_OPERATOR) &&
+      !domesticAssignees.has(u.id)
+    );
+
+    const assignedStaffId = stockAssignment.staffId || '';
+    const staffHist = assignedStaffId ? historyMap.get(assignedStaffId)?.lastStock : undefined;
+    const staffRank = assignedStaffId ? getRankInRoles(assignedStaffId, [UserRole.ITP_OFFICER, UserRole.ITP_HD_OPERATOR], 'STOCK') : null;
+
+    return (
+      <div className="space-y-4">
+        {/* Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface-dim/60 p-3.5 rounded-2xl border border-white/10">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 badge-custom-purple rounded-xl">
+              <Package className="w-4 h-4 text-purple-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-[900] text-on-surface uppercase tracking-wider">
+                  Stock Duty Allocation
+                </span>
+                <span className="badge-custom-purple px-2 py-0.5 rounded-full text-[9px] font-black">
+                  1 Slot
+                </span>
+              </div>
+              <p className="text-[9.5px] text-on-surface-dim font-bold opacity-60 uppercase tracking-wider">
+                Night Shift • Officer or Hydrant Ops Officer • Fair rotation based on last stock duty date &amp; shift
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {!isHistoricalView && canEdit && (
+              <>
+                <button
+                  onClick={handleAutoAssignStock}
+                  disabled={isAutoAssigningStock}
+                  className="px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl active:scale-95 transition-all flex items-center space-x-2 border border-purple-500/30 cursor-pointer shadow-none shrink-0"
+                  title="Auto-Assign stock duty officer"
+                >
+                  <Zap className={`w-3.5 h-3.5 ${isAutoAssigningStock ? 'animate-spin' : ''}`} />
+                  <span className="text-[10px] font-black uppercase tracking-wider">
+                    {isAutoAssigningStock ? 'Assigning...' : 'Auto-Assign Stock'}
+                  </span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-surface-dim/40 shadow-sm">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-surface-lowest/80 text-[10px] font-black uppercase tracking-wider text-on-surface-dim border-b border-white/10">
+                <th className="py-3.5 px-4 font-black">Duty Name</th>
+                <th className="py-3.5 px-4 font-black">Shift</th>
+                <th className="py-3.5 px-4 font-black">Assigned Officer / Hydrant Ops Officer</th>
+                <th className="py-3.5 px-4 font-black text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              <tr className="hover:bg-surface-container/50 transition-colors">
+                <td className="py-3 px-4 align-middle">
+                  <div className="flex items-center space-x-2">
+                    <span className="font-[900] text-[13px] text-on-surface">STOCK</span>
+                    <span className="badge-custom-purple px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase">
+                      Night Duty
+                    </span>
+                  </div>
+                  <div className="text-[9px] font-mono text-on-surface-dim opacity-60">
+                    Stock Inventory / Verification
+                  </div>
+                </td>
+
+                <td className="py-3 px-4 align-middle">
+                  <span className="px-2.5 py-1 rounded-xl text-[9px] font-black uppercase tracking-wider bg-purple-500/10 text-purple-400 border border-purple-500/20 inline-block">
+                    Night Shift
+                  </span>
+                </td>
+
+                <td className="py-3 px-4 align-middle max-w-sm">
+                  <div>
+                    <label className="text-[8.5px] font-black uppercase tracking-widest text-purple-400/80 mb-0.5 block">
+                      Officer or HD Officer
+                    </label>
+                    <select
+                      value={assignedStaffId}
+                      disabled={!canEdit}
+                      onChange={(e) => handleStockAssignmentChange(e.target.value)}
+                      className={`w-full bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-on-surface outline-none transition-colors ${
+                        !canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer focus:border-purple-400'
+                      }`}
+                    >
+                      <option value="" className="text-on-surface-dim italic">-- Select Officer / HD Officer --</option>
+                      {eligibleOfficers.map(st => {
+                        const tag = staffStatuses[st.id];
+                        const isLate = tag === 'LATE';
+                        return (
+                          <option key={st.id} value={st.id}>
+                            {st.name} ({st.role === UserRole.ITP_HD_OPERATOR ? 'HD Officer' : 'Officer'}) {tag && !isLate ? `(${tag})` : isLate ? '(LATE)' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    {assignedStaffId && (
+                      <div className="mt-0.5 flex items-center gap-1.5 flex-wrap text-[8.5px] font-mono">
+                        {staffRank && staffRank !== '-' && (
+                          <span className="text-purple-400 font-bold">Rank #{staffRank}</span>
+                        )}
+                        {staffHist ? (
+                          <span className="text-on-surface-dim opacity-75">
+                            Last: {formatDateShort(staffHist.date)} ({staffHist.shift || '—'})
+                          </span>
+                        ) : (
+                          <span className="text-emerald-400 font-bold">Never Assigned</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </td>
+
+                <td className="py-3 px-4 align-middle text-right">
+                  {canEdit && assignedStaffId && (
+                    <button
+                      onClick={handleClearStockAssignment}
+                      className="p-1.5 text-on-surface-dim hover:text-error hover:bg-error/10 rounded-lg transition-colors cursor-pointer"
+                      title="Clear assignment"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const renderOperationalAssignmentsSection = () => {
+    // Determine shift-specific tabs per user requirements:
+    // - Night shift: DOMESTIC, DAILY, STOCK, ALL TABLES
+    // - Morning shift: DOMESTIC, DAILY, ALL TABLES
+    // - Evening shift: DOMESTIC, DIESEL, JET TRANSFER, ALL TABLES
+    const tabs = (() => {
+      if (selectedBriefingShift === 'Night') {
+        return [
+          { id: 'domestic', label: 'DOMESTIC', count: `${domesticTeams.length} Teams`, icon: Users },
+          { id: 'daily', label: 'DAILY', count: `${dailyCompleted.length}/${rfHdEquipment.length}`, icon: UserCheck },
+          { id: 'stock', label: 'STOCK', count: stockAssignment.staffId ? '1 Assigned' : '1 Slot', icon: Package },
+          { id: 'all', label: 'ALL TABLES', count: 'Executive', icon: Layers }
+        ];
+      }
+      if (selectedBriefingShift === 'Evening') {
+        const dieselCount = rfHdEquipment.filter(e => dieselNeeds.includes(e.id) && e.status !== EquipmentStatus.OUT_OF_SERVICE).length;
+        return [
+          { id: 'domestic', label: 'DOMESTIC', count: `${domesticTeams.length} Teams`, icon: Users },
+          { id: 'diesel', label: 'DIESEL', count: `${dieselCount} Needed`, icon: Droplet },
+          { id: 'jet', label: 'JET TRANSFER', count: jetTransfer.enabled ? 'Active' : 'Optional', icon: Fuel },
+          { id: 'all', label: 'ALL TABLES', count: 'Executive', icon: Layers }
+        ];
+      }
+      // Morning Shift default:
+      return [
+        { id: 'domestic', label: 'DOMESTIC', count: `${domesticTeams.length} Teams`, icon: Users },
+        { id: 'daily', label: 'DAILY', count: `${dailyCompleted.length}/${rfHdEquipment.length}`, icon: UserCheck },
+        { id: 'all', label: 'ALL TABLES', count: 'Executive', icon: Layers }
+      ];
+    })();
+
+    return (
+      <div className="card-premium p-5 sm:p-8 space-y-6 relative overflow-hidden group w-full hover-glow-primary">
+        {/* Hub Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-5">
+          <div className="flex items-center space-x-4">
+            <div className="p-3.5 badge-custom-primary rounded-2xl shadow-sm">
+              <ClipboardList className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h3 className="text-xs font-black uppercase tracking-[0.25em] text-on-surface">
+                  OPERATIONAL TASK ASSIGNMENTS
+                </h3>
+                <span className="badge-custom-primary px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase">
+                  {selectedBriefingShift} Shift
+                </span>
+              </div>
+              <p className="text-[10px] text-on-surface-dim opacity-60 uppercase tracking-widest mt-1">
+                {assignmentViewMode === 'table'
+                  ? selectedBriefingShift === 'Night'
+                    ? 'Interactive editable spreadsheets for Domestic, Daily Checks & Stock Duty'
+                    : selectedBriefingShift === 'Evening'
+                    ? 'Interactive editable spreadsheets for Domestic, Diesel & Jet Transfer'
+                    : 'Interactive editable spreadsheets for Domestic & Daily Equipment Checks'
+                  : 'Tactical operational cards with automated fair rotation allocation'}
+              </p>
+            </div>
+          </div>
+
+          {/* View Mode Toggle: [ Table View | Card View ] */}
+          <div className="relative grid grid-cols-2 bg-surface-dim p-1 rounded-xl border border-white/10 shrink-0 self-start md:self-auto shadow-xs">
+            <div 
+              className="absolute top-1 bottom-1 rounded-lg kinetic-gradient transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium will-change-transform pointer-events-none"
+              style={{
+                width: 'calc(50% - 4px)',
+                left: '4px',
+                transform: `translateX(${assignmentViewMode === 'table' ? '0%' : '100%'})`
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => { haptic('TAP'); setAssignmentViewMode('table'); }}
+              className={`relative z-10 flex items-center justify-center space-x-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-colors duration-200 cursor-pointer select-none active:scale-95 ${
+                assignmentViewMode === 'table'
+                  ? 'text-white'
+                  : 'text-on-surface-dim hover:text-on-surface'
+              }`}
+            >
+              <Table className="w-3.5 h-3.5 shrink-0" />
+              <span>Table View</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { haptic('TAP'); setAssignmentViewMode('card'); }}
+              className={`relative z-10 flex items-center justify-center space-x-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-colors duration-200 cursor-pointer select-none active:scale-95 ${
+                assignmentViewMode === 'card'
+                  ? 'text-white'
+                  : 'text-on-surface-dim hover:text-on-surface'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
+              <span>Card View</span>
+            </button>
+          </div>
+        </div>
+
+        {/* If Table View, show Task Tabs */}
+        {assignmentViewMode === 'table' && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = assignmentTableTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setAssignmentTableTab(tab.id as any)}
+                  className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-[10.5px] font-black uppercase tracking-wider whitespace-nowrap transition-all border ${
+                    isActive
+                      ? 'bg-surface-lowest text-primary border-sky-400/40 shadow-sm'
+                      : 'bg-surface-dim/60 text-on-surface-dim border-white/10 hover:border-white/20 hover:text-on-surface'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <span>{tab.label}</span>
+                  <span className={`px-1.5 py-0.5 rounded-md text-[8.5px] font-black ${
+                    isActive ? 'bg-primary/20 text-primary border border-sky-400/30' : 'bg-surface/80 border border-white/10 text-on-surface-dim'
+                  }`}>
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Content rendering based on View Mode */}
+        {assignmentViewMode === 'table' ? (
+          <div className="space-y-8 animate-in fade-in duration-200">
+            {assignmentTableTab === 'domestic' && renderDomesticTable()}
+            {assignmentTableTab === 'jet' && selectedBriefingShift === 'Evening' && renderJetTransferTable()}
+            {assignmentTableTab === 'daily' && (selectedBriefingShift === 'Morning' || selectedBriefingShift === 'Night') && renderDailyTable()}
+            {assignmentTableTab === 'diesel' && selectedBriefingShift === 'Evening' && renderDieselTable()}
+            {assignmentTableTab === 'stock' && selectedBriefingShift === 'Night' && renderStockTable()}
+            {assignmentTableTab === 'all' && (
+              <div className="space-y-8">
+                {renderDomesticTable()}
+                {selectedBriefingShift === 'Evening' && (
+                  <>
+                    <div className="border-t border-white/10 pt-6">
+                      {renderDieselTable()}
+                    </div>
+                    <div className="border-t border-white/10 pt-6">
+                      {renderJetTransferTable()}
+                    </div>
+                  </>
+                )}
+                {(selectedBriefingShift === 'Morning' || selectedBriefingShift === 'Night') && (
+                  <div className="border-t border-white/10 pt-6">
+                    {renderDailyTable()}
+                  </div>
+                )}
+                {selectedBriefingShift === 'Night' && (
+                  <div className="border-t border-white/10 pt-6">
+                    {renderStockTable()}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-8 animate-in fade-in duration-200">
+            {renderDomesticSquadron()}
+            {selectedBriefingShift === 'Evening' && renderJetTransferCard()}
+            {selectedBriefingShift === 'Night' && renderStockCard()}
+          </div>
+        )}
+      </div>
+    );
+  };
 
 
   const renderStaffSelect = (value: string, roles: UserRole[], label: string, onSelect: (id: string) => void) => {
@@ -824,12 +3671,12 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
               )}
             </div>
             {val && roleUsers.some(u => u.id === val) && staffStatuses[val] === 'LATE' && (() => {
-              const hist = staffHistory.find(h => h.staffId === val);
+              const hist = historyMap.get(val);
               if (hist) {
                 const domRank = getRankInRoles(val, roles, 'DOM');
                 const dailyRank = getRankInRoles(val, roles, 'DAILY');
-                const formattedDomDate = formatDateShort(hist.lastDomestic.date);
-                const formattedDailyDate = formatDateShort(hist.lastDaily.date);
+                const formattedDomDate = formatDateShort(hist.lastDomestic?.date);
+                const formattedDailyDate = formatDateShort(hist.lastDaily?.date);
                 const isHydrant = label === "Hydrant Officers";
                 return (
                   <div className="text-[10px] font-black text-on-surface-dim opacity-75 mt-2 pl-5 border-t border-outline/20 pt-2 tracking-wider uppercase flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -1448,8 +4295,9 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
             </div>
           </div>
 
-          <div className="hidden lg:block w-full">
+          <div className="hidden lg:block w-full space-y-6 sm:space-y-8">
             {renderStrategicBriefingPoints()}
+            {renderOperationalAssignmentsSection()}
           </div>
         </div>
 
@@ -1458,113 +4306,151 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
           
           {/* Equipment Readiness (Fleet Status) */}
           <div className="card-premium p-5 sm:p-10 space-y-6 sm:space-y-10 group max-w-md mx-auto lg:max-w-none w-full hover-glow-primary">
-            <div className="flex items-center space-x-5">
-              <button 
-                onClick={() => setIsFleetCollapsed(!isFleetCollapsed)}
-                className="p-4 badge-custom-primary rounded-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center shrink-0"
-                title={isFleetCollapsed ? "Expand" : "Collapse"}
-              >
-                <Truck className="w-7 h-7" />
-              </button>
-              <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Fleet Status (RF/HD)</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full">
+              <div className="flex items-center space-x-5">
+                <button 
+                  onClick={() => setIsFleetCollapsed(!isFleetCollapsed)}
+                  className="p-4 badge-custom-primary rounded-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center shrink-0"
+                  title={isFleetCollapsed ? "Expand" : "Collapse"}
+                >
+                  <Truck className="w-7 h-7" />
+                </button>
+                <div>
+                  <h3 className="text-xs font-black opacity-40 uppercase tracking-[0.3em]">Fleet Status (RF/HD)</h3>
+                  <p className="text-[9px] text-on-surface-dim opacity-50 uppercase tracking-widest mt-0.5">
+                    {selectedBriefingShift === 'Evening' ? 'Diesel Refueling Duty' : 'Daily Safety Inspections'}
+                  </p>
+                </div>
+              </div>
+
+              {!isHistoricalView && canEdit && (
+                <button
+                  onClick={() => handleAutoAssignFleet()}
+                  disabled={isAutoAssigningFleet}
+                  className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl active:scale-95 transition-all flex items-center space-x-1.5 border border-amber-500/30 cursor-pointer shrink-0 shadow-none"
+                  title={selectedBriefingShift === 'Evening' ? 'Auto-assign evening diesel refueling personnel' : 'Auto-assign daily equipment safety inspectors'}
+                >
+                  <Zap className={`w-3.5 h-3.5 ${isAutoAssigningFleet ? 'animate-spin' : ''}`} />
+                  <span className="text-[9px] font-black uppercase tracking-wider">
+                    {isAutoAssigningFleet ? 'Assigning...' : selectedBriefingShift === 'Evening' ? 'Auto Diesel' : 'Auto Daily'}
+                  </span>
+                </button>
+              )}
             </div>
+
             {!isFleetCollapsed && (
               <div className="grid grid-cols-2 gap-5 animate-in fade-in slide-in-from-top-2 duration-200">
                 {rfHdEquipment.map((eq) => {
                   const needsDiesel = dieselNeeds.includes(eq.id);
+
                   return (
-                    <div key={eq.id} className="bg-surface-dim border border-outline rounded-2xl p-4 sm:p-5 flex flex-col space-y-4 group/eq hover:bg-surface-container hover:border-sky-400/30 transition-all cursor-default shadow-sm hover:shadow-md">
-                      <div className="flex justify-between items-center">
-                        <div className="flex flex-col">
-                          <span className="text-[14px] font-[900] text-on-surface">{eq.id}</span>
-                          <div className={`text-[10px] font-black uppercase tracking-widest opacity-80 ${
-                            eq.status === EquipmentStatus.AVAILABLE   ? 'text-success' :
-                            eq.status === EquipmentStatus.IN_USE       ? 'text-primary' :
-                            eq.status === EquipmentStatus.REFUELLING   ? 'text-warning' :
-                            'text-error'
-                          }`}>{eq.status}</div>
+                    <div key={eq.id} className="bg-surface-dim border border-white/10 rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-4 group/eq hover:bg-surface-container hover:border-sky-400/30 transition-all cursor-default shadow-sm hover:shadow-md">
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <div className="flex flex-col">
+                            <span className="text-[14px] font-[900] text-on-surface">{eq.id}</span>
+                            <div className={`text-[10px] font-black uppercase tracking-widest opacity-80 ${
+                              eq.status === EquipmentStatus.AVAILABLE   ? 'text-success' :
+                              eq.status === EquipmentStatus.IN_USE       ? 'text-primary' :
+                              eq.status === EquipmentStatus.REFUELLING   ? 'text-warning' :
+                              'text-error'
+                            }`}>{eq.status}</div>
+                          </div>
+                          <div className={`w-2.5 h-2.5 rounded-full ${
+                            eq.status === EquipmentStatus.AVAILABLE
+                              ? 'bg-success animate-pulse-subtle shadow-[0_0_10px_rgba(34,197,94,0.4)]'
+                              : eq.status === EquipmentStatus.IN_USE
+                              ? 'bg-primary animate-pulse-subtle shadow-[0_0_10px_rgba(86,200,235,0.4)]'
+                              : eq.status === EquipmentStatus.REFUELLING
+                              ? 'bg-warning animate-pulse-subtle shadow-[0_0_10px_rgba(245,158,11,0.4)]'
+                              : 'bg-error shadow-[0_0_10px_rgba(239,68,68,0.4)]'
+                          }`}></div>
                         </div>
-                        <div className={`w-2.5 h-2.5 rounded-full ${
-                          eq.status === EquipmentStatus.AVAILABLE
-                            ? 'bg-success animate-pulse-subtle shadow-[0_0_10px_rgba(34,197,94,0.4)]'
-                            : eq.status === EquipmentStatus.IN_USE
-                            ? 'bg-primary animate-pulse-subtle shadow-[0_0_10px_rgba(86,200,235,0.4)]'
-                            : eq.status === EquipmentStatus.REFUELLING
-                            ? 'bg-warning animate-pulse-subtle shadow-[0_0_10px_rgba(245,158,11,0.4)]'
-                            : 'bg-error shadow-[0_0_10px_rgba(239,68,68,0.4)]'
-                        }`}></div>
+                        
+                        {selectedBriefingShift === 'Evening' ? (
+                          <button 
+                            disabled={!canEdit}
+                            onClick={() => {
+                              if (!canEdit) return;
+                              const newDieselNeeds = dieselNeeds.includes(eq.id) 
+                                ? dieselNeeds.filter(id => id !== eq.id) 
+                                : [...dieselNeeds, eq.id];
+                              
+                              setDieselNeeds(newDieselNeeds);
+                              const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
+                              updateBriefingInfo(additionalInfo, newDieselNeeds, {
+                                ...staffAssignments,
+                                attendees,
+                                staffStatuses,
+                                dailyCompleted,
+                                domesticTeams,
+                                equipmentAssignments,
+                                dieselAssignments,
+                                stockAssignment,
+                                jetTransfer,
+                                frozenFlights: existingFrozen !== undefined ? existingFrozen : {
+                                  intl: intlFlightsToRender,
+                                  domestic: domesticFlightsToRender,
+                                  adhoc: adhocFlightsToRender
+                                }
+                              });
+                            }}
+                            className={`w-full flex items-center justify-center space-x-2 py-2 rounded-xl border transition-all ${
+                              needsDiesel 
+                              ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white border-transparent' 
+                              : 'bg-surface border-white/10 text-on-surface-dim opacity-50 ' + (canEdit ? 'hover:opacity-100 hover:border-amber-500/30' : 'cursor-default')
+                            }`}
+                          >
+                            <Droplet className={`w-3 h-3 ${needsDiesel ? 'animate-bounce' : ''}`} />
+                            <span className="text-[10px] font-black uppercase tracking-widest">DIESEL</span>
+                          </button>
+                        ) : (
+                          (() => {
+                            const isDailyCompleted = dailyCompleted.includes(eq.id) || (selectedBriefingShift === 'Morning' && Boolean(nightCarriedDailyAssignments[eq.id]?.op1 || nightCarriedDailyAssignments[eq.id]?.op2));
+                            const isLockedFromNight = selectedBriefingShift === 'Morning' && Boolean(nightCarriedDailyAssignments[eq.id]?.op1 || nightCarriedDailyAssignments[eq.id]?.op2);
+                            return (
+                              <button 
+                                disabled={!canEdit || isLockedFromNight}
+                                onClick={() => {
+                                  if (!canEdit || isLockedFromNight) return;
+                                  const newDailyCompleted = dailyCompleted.includes(eq.id) 
+                                    ? dailyCompleted.filter(id => id !== eq.id) 
+                                    : [...dailyCompleted, eq.id];
+                                  
+                                  setDailyCompleted(newDailyCompleted);
+                                  const existingFrozenDaily = briefingInfo?.staffAssignments?.frozenFlights;
+                                  updateBriefingInfo(additionalInfo, dieselNeeds, {
+                                    ...staffAssignments,
+                                    attendees,
+                                    staffStatuses,
+                                    dailyCompleted: newDailyCompleted,
+                                    domesticTeams,
+                                    equipmentAssignments,
+                                    dieselAssignments,
+                                    stockAssignment,
+                                    jetTransfer,
+                                    frozenFlights: existingFrozenDaily !== undefined ? existingFrozenDaily : {
+                                      intl: intlFlightsToRender,
+                                      domestic: domesticFlightsToRender,
+                                      adhoc: adhocFlightsToRender
+                                    }
+                                  });
+                                }}
+                                className={`w-full flex items-center justify-center space-x-2 py-2 rounded-xl border transition-all ${
+                                  isDailyCompleted 
+                                  ? 'bg-gradient-to-r from-green-500 to-green-600 text-white border-transparent' 
+                                  : 'bg-surface border-white/10 text-on-surface-dim opacity-50 ' + (canEdit ? 'hover:opacity-100 hover:border-warning/30' : 'cursor-default')
+                                }`}
+                              >
+                                <UserCheck className="w-3 h-3 shrink-0" />
+                                <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider truncate">
+                                  DAILY: {isDailyCompleted ? 'COMPLETED' : 'PENDING'}
+                                </span>
+                              </button>
+                            );
+                          })()
+                        )}
                       </div>
-                      
-                      {selectedBriefingShift === 'Evening' ? (
-                        <button 
-                          disabled={!canEdit}
-                          onClick={() => {
-                            if (!canEdit) return;
-                            const newDieselNeeds = dieselNeeds.includes(eq.id) 
-                              ? dieselNeeds.filter(id => id !== eq.id) 
-                              : [...dieselNeeds, eq.id];
-                            
-                            setDieselNeeds(newDieselNeeds);
-                            const existingFrozen = briefingInfo?.staffAssignments?.frozenFlights;
-                            updateBriefingInfo(additionalInfo, newDieselNeeds, {
-                              ...staffAssignments,
-                              attendees,
-                              dailyCompleted,
-                              frozenFlights: existingFrozen !== undefined ? existingFrozen : {
-                                intl: intlFlightsToRender,
-                                domestic: domesticFlightsToRender,
-                                adhoc: adhocFlightsToRender
-                              }
-                            });
-                          }}
-                          className={`flex items-center justify-center space-x-2 py-2 rounded-xl border transition-all ${
-                            needsDiesel 
-                            ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white border-transparent' 
-                            : 'bg-surface border-outline text-on-surface-dim opacity-40 ' + (canEdit ? 'hover:opacity-100 hover:border-amber-500/30' : 'cursor-default')
-                          }`}
-                        >
-                          <Droplet className={`w-3 h-3 ${needsDiesel ? 'animate-bounce' : ''}`} />
-                          <span className="text-[10px] font-black uppercase tracking-widest">DIESEL</span>
-                        </button>
-                      ) : (
-                        (() => {
-                          const isDailyCompleted = dailyCompleted.includes(eq.id);
-                          return (
-                            <button 
-                              disabled={!canEdit}
-                              onClick={() => {
-                                if (!canEdit) return;
-                                const newDailyCompleted = dailyCompleted.includes(eq.id) 
-                                  ? dailyCompleted.filter(id => id !== eq.id) 
-                                  : [...dailyCompleted, eq.id];
-                                
-                                setDailyCompleted(newDailyCompleted);
-                                const existingFrozenDaily = briefingInfo?.staffAssignments?.frozenFlights;
-                                updateBriefingInfo(additionalInfo, dieselNeeds, {
-                                  ...staffAssignments,
-                                  attendees,
-                                  dailyCompleted: newDailyCompleted,
-                                  frozenFlights: existingFrozenDaily !== undefined ? existingFrozenDaily : {
-                                    intl: intlFlightsToRender,
-                                    domestic: domesticFlightsToRender,
-                                    adhoc: adhocFlightsToRender
-                                  }
-                                });
-                              }}
-                              className={`flex items-center justify-center space-x-2 py-2 rounded-xl border transition-all ${
-                                isDailyCompleted 
-                                ? 'bg-gradient-to-r from-green-500 to-green-600 text-white border-transparent' 
-                                : 'bg-surface border-outline text-on-surface-dim opacity-40 ' + (canEdit ? 'hover:opacity-100 hover:border-warning/30' : 'cursor-default')
-                              }`}
-                            >
-                              <UserCheck className="w-3 h-3 shrink-0" />
-                              <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider truncate">
-                                DAILY: {isDailyCompleted ? 'COMPLETED' : 'PENDING'}
-                              </span>
-                            </button>
-                          );
-                        })()
-                      )}
                     </div>
                   );
                 })}
@@ -1572,9 +4458,10 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
             )}
           </div>
 
-          {/* Strategic Briefing Points (Mobile Only) */}
-          <div className="block lg:hidden w-full">
+          {/* Strategic Briefing Points & Operational Assignments (Mobile Only) */}
+          <div className="block lg:hidden w-full space-y-6 sm:space-y-8">
             {renderStrategicBriefingPoints()}
+            {renderOperationalAssignmentsSection()}
           </div>
 
           {/* Ongoing Tasks & Remarks (Separated into its own space) */}
@@ -1744,6 +4631,8 @@ export const ShiftBriefing: React.FC<ShiftBriefingProps> = ({ user, isSidebarCol
                     attendees,
                     staffStatuses,
                     dailyCompleted,
+                    domesticTeams,
+                    equipmentAssignments,
                     frozenFlights: frozenToSave,
                     adhocFlights: adhocFlightsToRender
                   });

@@ -8,7 +8,7 @@ import { syncEngine } from './syncEngine';
 import masterDbData from './masterDbData.json';
 import { INITIAL_MOCK_SCHEDULES, scheduleImportService } from './scheduleImportService';
 import { activityLogService, LogModule, LogAction } from './activityLogService';
-import { api } from './apiClient';
+import { api, isBigQueryApiAvailable } from './apiClient';
 
 const localBridgingLogs: BridgingLog[] = [
   {
@@ -1462,7 +1462,9 @@ export const supabaseService = {
       }
 
       // If flightNumber is provided, look up flight jobs to include both operator & officer
-      if (alert.flightNumber) {
+      // (Only for flight-wide alerts, NOT for individual crew assignment notifications)
+      const isPersonalAlert = alert.alertType === 'CREW_ASSIGNED' || alert.alertType === 'CREW_UNASSIGNED';
+      if (alert.flightNumber && !isPersonalAlert) {
         try {
           const jobs = await supabaseService.getFlightJobs();
           const cleanFlt = alert.flightNumber.replace(/\s+/g, '').toUpperCase();
@@ -1487,6 +1489,8 @@ export const supabaseService = {
       if (alert.alertType === 'REQUEST_FUELING') title = '⛽ HIGH ALERT: Request Fueling';
       else if (alert.alertType === 'NO_FUEL') title = '🚫 NOTICE: No Fuel Required';
       else if (alert.alertType === 'ALERT_CANCELLED') title = '✅ Alert Cancelled';
+      else if (alert.alertType === 'CREW_ASSIGNED') title = '📋 FLIGHT ASSIGNED';
+      else if (alert.alertType === 'CREW_UNASSIGNED') title = 'ℹ️ FLIGHT UNASSIGNED';
       else if (alert.alertType === 'ETA_15MIN') title = '⏰ ETA WARNING: ~15 Minutes';
       else if (alert.alertType === 'ETA_5MIN') title = '🚨 ETA CRITICAL: ~5 Minutes';
       else if (alert.alertType === 'LANDED') title = '✈️ FLIGHT LANDED';
@@ -1918,19 +1922,22 @@ export const supabaseService = {
 
     // Step 2: Fetch remote database records via API with fallback to Supabase
     try {
-      const apiStaff = await api.staff.getAll();
-      if (apiStaff && apiStaff.length > 0) {
-        apiStaff.forEach(s => {
-          const existing = mergedMap.get(s.id);
-          if (existing) {
-            mergedMap.set(s.id, { ...existing, ...s });
-          } else {
-            mergedMap.set(s.id, s);
-          }
-        });
+      if (isBigQueryApiAvailable()) {
+        const apiStaff = await api.staff.getAll();
+        if (apiStaff && apiStaff.length > 0) {
+          apiStaff.forEach(s => {
+            const existing = mergedMap.get(s.id);
+            if (existing) {
+              mergedMap.set(s.id, { ...existing, ...s });
+            } else {
+              mergedMap.set(s.id, s);
+            }
+          });
+        }
       }
-    } catch (apiErr) {
-      console.warn('[API] api.staff.getAll failed, checking direct Supabase query:', apiErr);
+    } catch {
+      // BigQuery API offline, fallback directly to Supabase
+    }
       try {
         const { data, error } = await supabase.from('staff').select('*').order('name');
         if (!error && data && data.length > 0) {
@@ -1963,7 +1970,6 @@ export const supabaseService = {
       } catch (e) {
         console.warn('[Supabase] Remote staff fetch warning:', e);
       }
-    }
 
     // Step 3: ABSOLUTE TOP PRIORITY: User UI Edits (fms_staff_user_edits)
     // Edits made in the Staff Management UI overwrite static attributes

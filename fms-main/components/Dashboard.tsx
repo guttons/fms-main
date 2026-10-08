@@ -5,7 +5,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend, BarChart, Bar, ComposedChart
 } from 'recharts';
-import { MOCK_ALERTS, MOCK_USERS } from '../constants';
+import { MOCK_USERS } from '../constants';
 import { FuelType, Tank, User, UserRole, FlightJob, Equipment, EquipmentStatus as EqStatus, EquipmentType, isDomesticFlight } from '../types';
 import { AlertTriangle, AlertOctagon, TrendingDown, TrendingUp, Activity, Droplet, Users, Clock, Plane, LayoutDashboard, MapPin, CheckCircle, Truck, Play, Thermometer, CloudSun, Wind, RefreshCw, Send, Globe, Anchor, ShoppingBag, Database, Eye, ChevronRight, ChevronDown, X, Calendar } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
@@ -42,42 +42,33 @@ const formatRequestedDateTime = (raw?: string): string => {
   return raw;
 };
 
-// Mock Data for Charts
-const HOURLY_DATA_INT = [
-  { hour: '06:00', flights: 2, volume: 15000 },
-  { hour: '08:00', flights: 5, volume: 45000 },
-  { hour: '10:00', flights: 8, volume: 72000 },
-  { hour: '12:00', flights: 6, volume: 54000 },
-  { hour: '14:00', flights: 10, volume: 90000 },
-  { hour: '16:00', flights: 12, volume: 108000 },
-  { hour: '18:00', flights: 9, volume: 81000 },
-];
+// Helper functions for real-time chart calculations
+const parseToLocalMinutes = (timeVal?: string): number | null => {
+  if (!timeVal || timeVal === '--:--' || timeVal === 'N/A' || timeVal === '-') return null;
+  if (typeof timeVal === 'string' && timeVal.includes('T')) {
+    const d = new Date(timeVal);
+    if (!isNaN(d.getTime())) {
+      return d.getHours() * 60 + d.getMinutes();
+    }
+  }
+  const match = String(timeVal).trim().match(/^(\d{1,2}):(\d{2})/);
+  if (match) {
+    return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+  }
+  return null;
+};
 
-const HOURLY_DATA_DOM = [
-  { hour: '06:00', flights: 4, volume: 12000 },
-  { hour: '08:00', flights: 7, volume: 21000 },
-  { hour: '10:00', flights: 12, volume: 36000 },
-  { hour: '12:00', flights: 10, volume: 30000 },
-  { hour: '14:00', flights: 15, volume: 45000 },
-  { hour: '16:00', flights: 13, volume: 39000 },
-  { hour: '18:00', flights: 8, volume: 24000 },
-];
-
-const HOURLY_DATA = [
-  { hour: '06:00', jetA1: 4000, diesel: 200, flights: 2 },
-  { hour: '08:00', jetA1: 12000, diesel: 500, flights: 5 },
-  { hour: '10:00', jetA1: 25000, diesel: 300, flights: 8 },
-  { hour: '12:00', jetA1: 18000, diesel: 400, flights: 6 },
-  { hour: '14:00', jetA1: 32000, diesel: 600, flights: 10 },
-  { hour: '16:00', jetA1: 45000, diesel: 500, flights: 12 },
-  { hour: '18:00', jetA1: 28000, diesel: 300, flights: 9 },
-];
-
-const FLIGHT_PERFORMANCE = [
-  { name: 'On Time', value: 85, color: '#22c55e' },
-  { name: 'Delayed', value: 10, color: '#f59e0b' },
-  { name: 'Critical', value: 5, color: '#ef4444' },
-];
+const getShiftHours = (shiftName?: string): string[] => {
+  switch (shiftName) {
+    case 'Evening':
+      return ['15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00', '22:00', '23:00', '00:00'];
+    case 'Night':
+      return ['22:00', '23:00', '00:00', '01:00', '02:00', '03:00', '04:00', '05:00', '06:00', '07:00', '08:00'];
+    case 'Morning':
+    default:
+      return ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
+  }
+};
 
 const getFuelColorClass = (volume: number | undefined, maxCapacity: number): string => {
   if (volume === undefined) return 'text-primary';
@@ -122,7 +113,7 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onStartJob, onSelectEquipment }) => {
-  const { tanks = [], equipment = [], briefingInfo, flightJobs = [], rawFlightJobs = [], externalFlights = [], domesticFlights = [], alerts = [], createAlert, acknowledgeAlert, staff = [], updateEquipmentStatus, domesticAssignments, selectedBriefingShift, serviceTankId, selectedBriefingDate, flightLogs = [] } = useOperationalData();
+  const { tanks = [], equipment = [], briefingInfo, flightJobs = [], rawFlightJobs = [], externalFlights = [], domesticFlights = [], alerts = [], createAlert, acknowledgeAlert, staff = [], updateEquipmentStatus, domesticAssignments, selectedBriefingShift, serviceTankId, selectedBriefingDate, flightLogs = [], delayLogs = [] } = useOperationalData();
   const { notify } = useNotification();
   // Logic to determine initial view and if switching is allowed
 
@@ -1387,36 +1378,161 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
   };
 
   const renderItpDashboard = () => {
-    // 1. Scheduled Flights calculation
+    // 1. Scheduled Flights calculation & category breakdown
     const allShiftJobs = [...intlJobs, ...domesticJobs, ...adhocJobs];
     const totalScheduledCount = allShiftJobs.length;
     const pendingCount = allShiftJobs.filter(j => j.status === 'PENDING' || j.status === 'SCHEDULED' || j.status === 'LANDED' || !j.status).length;
     const inProgressCount = allShiftJobs.filter(j => j.status === 'IN_PROGRESS' || j.status === 'ACTIVE').length;
     const completedCount = allShiftJobs.filter(j => j.status === 'COMPLETED').length;
 
-    // 2. Total Volume calculation (from flightLogs for selectedBriefingDate, with fallback to latest log date)
-    let logsForSelectedDate = (flightLogs || []).filter(log => {
+    // 2. Total Volume calculation strictly for selectedBriefingDate (NO fallback to historical dates)
+    const getLogDateStr = (log: any): string => {
+      if (!log) return '';
+      if (log.operationalDate) return log.operationalDate.split('T')[0];
+      if (log.timestampFinalEnd) return log.timestampFinalEnd.split('T')[0];
+      if (log.timestampStart) return log.timestampStart.split('T')[0];
+      if (log.timestampClearance) return log.timestampClearance.split('T')[0];
+      if (log.created_at) return String(log.created_at).split('T')[0];
+      return '';
+    };
+
+    const logsForSelectedDate = (flightLogs || []).filter(log => {
       if (!log || log.status !== 'COMPLETED' || !log.volume) return false;
-      const logDate = log.operationalDate || (log.timestampFinalEnd ? log.timestampFinalEnd.split('T')[0] : (log.timestampStart ? log.timestampStart.split('T')[0] : ''));
-      return logDate ? logDate === selectedBriefingDate : true;
+      const logDate = getLogDateStr(log);
+      return logDate === selectedBriefingDate;
     });
 
-    if (logsForSelectedDate.length === 0 && (flightLogs || []).length > 0) {
-      const dates = (flightLogs || [])
-        .filter(log => log && log.status === 'COMPLETED' && log.volume)
-        .map(log => log.operationalDate || (log.timestampFinalEnd ? log.timestampFinalEnd.split('T')[0] : (log.timestampStart ? log.timestampStart.split('T')[0] : '')))
-        .filter(Boolean)
-        .sort();
-      if (dates.length > 0) {
-        const latestDate = dates[dates.length - 1];
-        logsForSelectedDate = (flightLogs || []).filter(log => {
-          if (!log || log.status !== 'COMPLETED' || !log.volume) return false;
-          const logDate = log.operationalDate || (log.timestampFinalEnd ? log.timestampFinalEnd.split('T')[0] : (log.timestampStart ? log.timestampStart.split('T')[0] : ''));
-          return logDate === latestDate;
-        });
-      }
-    }
     const totalVolumeLiters = logsForSelectedDate.reduce((sum, log) => sum + (log.volume || 0), 0);
+
+    // Classification helpers for logs
+    const isLogDomestic = (log: any): boolean => {
+      if (log.isDomestic === true || log.intDom === 'DOM') return true;
+      if (isDomesticFlight(log)) return true;
+      const cleanNo = (log.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+      if (domesticJobs.some(j => (j.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo)) return true;
+      return false;
+    };
+
+    const getLogHourStr = (log: any): string | null => {
+      const raw = log.timestampFinalEnd || log.timestampStart || log.timestampClearance || log.timestampArrived;
+      if (raw) {
+        try {
+          const d = new Date(raw);
+          if (!isNaN(d.getTime())) {
+            return `${String(d.getHours()).padStart(2, '0')}:00`;
+          }
+        } catch {}
+        if (typeof raw === 'string' && raw.includes(':')) {
+          const timePart = raw.includes('T') ? raw.split('T')[1] : raw;
+          const h = parseInt(timePart.split(':')[0], 10);
+          if (!isNaN(h) && h >= 0 && h <= 23) {
+            return `${String(h).padStart(2, '0')}:00`;
+          }
+        }
+      }
+      if (log.std && typeof log.std === 'string' && log.std.includes(':')) {
+        const h = parseInt(log.std.split(':')[0], 10);
+        if (!isNaN(h) && h >= 0 && h <= 23) {
+          return `${String(h).padStart(2, '0')}:00`;
+        }
+      }
+      return null;
+    };
+
+    const intlLogs = logsForSelectedDate.filter(l => !isLogDomestic(l));
+    const domLogs = logsForSelectedDate.filter(l => isLogDomestic(l));
+
+    const hoursList = [...getShiftHours(selectedBriefingShift)];
+    logsForSelectedDate.forEach(l => {
+      const h = getLogHourStr(l);
+      if (h && !hoursList.includes(h)) {
+        hoursList.push(h);
+      }
+    });
+
+    if (selectedBriefingShift === 'Night') {
+      hoursList.sort((a, b) => {
+        const hA = parseInt(a.split(':')[0], 10);
+        const hB = parseInt(b.split(':')[0], 10);
+        const adjA = hA >= 20 ? hA - 24 : hA;
+        const adjB = hB >= 20 ? hB - 24 : hB;
+        return adjA - adjB;
+      });
+    } else {
+      hoursList.sort((a, b) => a.localeCompare(b));
+    }
+
+    const intlHourlyData = hoursList.map(hour => {
+      const matching = intlLogs.filter(l => getLogHourStr(l) === hour);
+      const volume = matching.reduce((sum, l) => sum + (l.volume || 0), 0);
+      return {
+        hour,
+        flights: matching.length,
+        volume
+      };
+    });
+
+    const domHourlyData = hoursList.map(hour => {
+      const matching = domLogs.filter(l => getLogHourStr(l) === hour);
+      const volume = matching.reduce((sum, l) => sum + (l.volume || 0), 0);
+      return {
+        hour,
+        flights: matching.length,
+        volume
+      };
+    });
+
+    // Real-time On-Time Performance calculation
+    let onTimeCount = 0;
+    let delayedCount = 0;
+    let criticalCount = 0;
+
+    logsForSelectedDate.forEach(log => {
+      const targetTime = log.tobt || log.std;
+      const clearanceTime = log.timestampClearance || log.timestampFinalEnd;
+      
+      const cleanNo = (log.flightNumber || '').replace(/\s+/g, '').toUpperCase();
+      const hasAoccDelay = (delayLogs || []).some(d => 
+        d && (d.flightNumber || '').replace(/\s+/g, '').toUpperCase() === cleanNo
+      );
+
+      if (hasAoccDelay) {
+        criticalCount++;
+        return;
+      }
+
+      if (targetTime && clearanceTime) {
+        const targetMin = parseToLocalMinutes(targetTime);
+        const clearMin = parseToLocalMinutes(clearanceTime);
+        if (targetMin !== null && clearMin !== null) {
+          let diff = targetMin - clearMin;
+          if (diff < -720) diff += 1440;
+          else if (diff > 720) diff -= 1440;
+
+          if (diff >= 0) {
+            onTimeCount++;
+          } else if (diff >= -15) {
+            delayedCount++;
+          } else {
+            criticalCount++;
+          }
+          return;
+        }
+      }
+      
+      onTimeCount++;
+    });
+
+    const totalEvaluated = onTimeCount + delayedCount + criticalCount;
+    const onTimeRate = totalEvaluated > 0 ? Math.round((onTimeCount / totalEvaluated) * 100) : null;
+
+    const flightPerformanceData = totalEvaluated > 0 ? [
+      { name: 'On Time', value: onTimeCount, color: '#22c55e' },
+      { name: 'Delayed', value: delayedCount, color: '#f59e0b' },
+      { name: 'Critical', value: criticalCount, color: '#ef4444' },
+    ] : [
+      { name: 'No Completed Flights', value: 1, color: 'var(--color-outline)' }
+    ];
 
     // 3. Active Staff calculation (from Briefing module staffAssignments)
     const assignments = briefingInfo?.staffAssignments;
@@ -1459,9 +1575,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
       return (mins > 0 && mins < 480) ? mins : null;
     }).filter((m): m is number => m !== null);
 
-    const avgTurnaroundMins = durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 32;
-    const diffVsTarget = avgTurnaroundMins - 35;
-    const diffString = diffVsTarget <= 0 ? `${diffVsTarget}m vs Target` : `+${diffVsTarget}m vs Target`;
+    const avgTurnaroundMins = durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : null;
+    const diffVsTarget = avgTurnaroundMins !== null ? avgTurnaroundMins - 35 : null;
+    const diffString = avgTurnaroundMins !== null 
+      ? (diffVsTarget! <= 0 ? `${diffVsTarget}m vs Target` : `+${diffVsTarget}m vs Target`)
+      : 'Target: 35m';
 
     return (
       <div className="space-y-10 animate-in fade-in slide-in-from-left-4 duration-500 ease-out">
@@ -1479,7 +1597,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
         {/* ITP Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {/* Card 1: Scheduled Flights */}
+          {/* Card 1: Scheduled Flights with INT / DOM / AD-HOC breakdown */}
           <div className="card-premium p-8 group hover:border-primary/30 animate-in fade-in slide-in-from-bottom-2 duration-500 stagger-1">
              <div className="flex justify-between items-start">
                 <div>
@@ -1488,7 +1606,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                 </div>
                 <div className="p-3 bg-primary/10 rounded-xl group-hover:scale-110 transition-transform"><Plane className="w-6 h-6 text-primary" /></div>
              </div>
-             <div className="mt-4 text-[10px] font-bold opacity-60 uppercase tracking-widest text-on-surface">
+             <div className="mt-3 flex items-center flex-wrap gap-1.5 text-[11px] font-black uppercase tracking-wider">
+               <span className="text-primary font-bold">{intlJobs.length} INT</span>
+               <span className="opacity-30 text-on-surface-dim">•</span>
+               <span className="text-success font-bold">{domesticJobs.length} DOM</span>
+               {adhocJobs.length > 0 && (
+                 <>
+                   <span className="opacity-30 text-on-surface-dim">•</span>
+                   <span className="text-warning font-bold">{adhocJobs.length} AD-HOC</span>
+                 </>
+               )}
+             </div>
+             <div className="mt-1.5 text-[9px] font-bold opacity-60 uppercase tracking-widest text-on-surface">
                {pendingCount} Pending / {inProgressCount} In-Progress / {completedCount} Done
              </div>
           </div>
@@ -1531,11 +1660,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
              <div className="flex justify-between items-start">
                 <div>
                    <p className="label-sm text-on-surface-dim font-bold opacity-60">Avg. Turnaround</p>
-                   <h3 className="text-4xl font-[900] text-on-surface mt-2 tracking-tighter">{avgTurnaroundMins}m</h3>
+                   <h3 className="text-4xl font-[900] text-on-surface mt-2 tracking-tighter">
+                     {avgTurnaroundMins !== null ? `${avgTurnaroundMins}m` : '--'}
+                   </h3>
                 </div>
                 <div className="p-3 bg-warning/10 rounded-xl group-hover:scale-110 transition-transform"><Clock className="w-6 h-6 text-warning" /></div>
              </div>
-             <div className={`mt-4 text-[10px] font-black uppercase tracking-widest ${diffVsTarget <= 0 ? 'text-success' : 'text-error'}`}>
+             <div className={`mt-4 text-[10px] font-black uppercase tracking-widest ${diffVsTarget !== null ? (diffVsTarget <= 0 ? 'text-success' : 'text-error') : 'text-on-surface-dim opacity-50'}`}>
                {diffString}
              </div>
           </div>
@@ -1708,14 +1839,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
            {/* International Flight Volume Chart */}
            <div className="card-premium p-8">
-              <h3 className="headline-lg text-on-surface mb-8 tracking-tighter">International Hourly Activity</h3>
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h3 className="headline-lg text-on-surface tracking-tighter">International Hourly Activity</h3>
+                  <p className="text-[10px] font-bold text-on-surface-dim uppercase tracking-widest mt-1 opacity-60">Real-time flight uplift & volume pattern</p>
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+                  {intlLogs.length} Completed
+                </span>
+              </div>
               <div className="h-72">
                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={HOURLY_DATA_INT}>
+                    <ComposedChart data={intlHourlyData}>
                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline)" />
                        <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{fill: 'var(--color-on-surface-dim)', fontSize: 10, fontWeight: 700}} />
-                       <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{fill: 'var(--color-on-surface-dim)', fontSize: 10, fontWeight: 700}} />
-                       <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{fill: 'var(--color-primary)', fontSize: 10, fontWeight: 700}} />
+                       <YAxis yAxisId="left" axisLine={false} tickLine={false} allowDecimals={false} domain={[0, (dataMax: number) => Math.max(dataMax, 5)]} tick={{fill: 'var(--color-on-surface-dim)', fontSize: 10, fontWeight: 700}} />
+                       <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} domain={[0, (dataMax: number) => Math.max(dataMax, 10000)]} tick={{fill: 'var(--color-primary)', fontSize: 10, fontWeight: 700}} tickFormatter={(v) => v >= 1000 ? `${Math.round(v / 1000)}k` : `${v}`} />
                        <Tooltip cursor={{fill: 'var(--color-surface-dim)'}} contentStyle={{backgroundColor: 'var(--color-surface-container)', borderRadius: '12px', border: '1px solid var(--color-outline)', color: 'var(--color-on-surface)'}} />
                        <Legend verticalAlign="top" height={36}/>
                        <Bar yAxisId="left" dataKey="flights" fill="var(--color-on-surface-dim)" opacity={0.4} radius={[4, 4, 0, 0]} name="Flights Served" />
@@ -1727,14 +1866,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
            {/* Domestic Flight Volume Chart */}
            <div className="card-premium p-8">
-              <h3 className="headline-lg text-on-surface mb-8 tracking-tighter">Domestic Hourly Activity</h3>
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h3 className="headline-lg text-on-surface tracking-tighter">Domestic Hourly Activity</h3>
+                  <p className="text-[10px] font-bold text-on-surface-dim uppercase tracking-widest mt-1 opacity-60">Real-time flight uplift & volume pattern</p>
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-success/10 text-success border border-success/20">
+                  {domLogs.length} Completed
+                </span>
+              </div>
               <div className="h-72">
                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={HOURLY_DATA_DOM}>
+                    <ComposedChart data={domHourlyData}>
                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline)" />
                        <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{fill: 'var(--color-on-surface-dim)', fontSize: 10, fontWeight: 700}} />
-                       <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{fill: 'var(--color-on-surface-dim)', fontSize: 10, fontWeight: 700}} />
-                       <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{fill: 'var(--color-success)', fontSize: 10, fontWeight: 700}} />
+                       <YAxis yAxisId="left" axisLine={false} tickLine={false} allowDecimals={false} domain={[0, (dataMax: number) => Math.max(dataMax, 5)]} tick={{fill: 'var(--color-on-surface-dim)', fontSize: 10, fontWeight: 700}} />
+                       <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} domain={[0, (dataMax: number) => Math.max(dataMax, 5000)]} tick={{fill: 'var(--color-success)', fontSize: 10, fontWeight: 700}} tickFormatter={(v) => v >= 1000 ? `${Math.round(v / 1000)}k` : `${v}`} />
                        <Tooltip cursor={{fill: 'var(--color-surface-dim)'}} contentStyle={{backgroundColor: 'var(--color-surface-container)', borderRadius: '12px', border: '1px solid var(--color-outline)', color: 'var(--color-on-surface)'}} />
                        <Legend verticalAlign="top" height={36}/>
                        <Bar yAxisId="left" dataKey="flights" fill="var(--color-on-surface-dim)" opacity={0.4} radius={[4, 4, 0, 0]} name="Flights Served" />
@@ -1748,20 +1895,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
            {/* Performance Donut */}
            <div className="card-premium p-8 lg:col-span-1">
-              <h3 className="headline-lg text-on-surface mb-8 tracking-tighter">On-Time Performance</h3>
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="headline-lg text-on-surface tracking-tighter">On-Time Performance</h3>
+                {totalEvaluated > 0 && (
+                  <span className="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-success/10 text-success border border-success/20">
+                    {onTimeCount}/{totalEvaluated} On-Time
+                  </span>
+                )}
+              </div>
               <div className="h-64 relative">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={FLIGHT_PERFORMANCE}
+                      data={flightPerformanceData}
                       cx="50%"
                       cy="50%"
                       innerRadius={60}
                       outerRadius={80}
-                      paddingAngle={5}
+                      paddingAngle={totalEvaluated > 0 ? 5 : 0}
                       dataKey="value"
                     >
-                      {FLIGHT_PERFORMANCE.map((entry, index) => (
+                      {flightPerformanceData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
@@ -1769,8 +1923,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-3xl font-black text-on-surface tracking-tighter">85%</span>
-                  <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">On Time</span>
+                  <span className="text-3xl font-black text-on-surface tracking-tighter">
+                    {onTimeRate !== null ? `${onTimeRate}%` : '--'}
+                  </span>
+                  <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">
+                    {totalEvaluated > 0 ? 'On Time' : 'No Data Yet'}
+                  </span>
                 </div>
               </div>
            </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Alert } from '../types';
-import { Bell, BellRing, Fuel, Ban, Clock, AlertTriangle, ChevronRight, Check, PlaneLanding } from 'lucide-react';
+import { Bell, BellRing, Fuel, Ban, Clock, AlertTriangle, ChevronRight, Check, PlaneLanding, Users } from 'lucide-react';
 import { Logo } from './Logo';
 import { alertSoundEngine } from '../utils/alertSounds';
 import { serverTimeService } from '../services/serverTimeService';
@@ -32,6 +32,18 @@ export const FullScreenAlert: React.FC<FullScreenAlertProps> = ({ alert, onAckno
     window.addEventListener('resize', updateMaxSlide);
     return () => window.removeEventListener('resize', updateMaxSlide);
   }, []);
+
+  // Reset drag & acknowledge state whenever a new alert is received (prevents stuck slider on stacked alerts)
+  useEffect(() => {
+    isAcknowledgingRef.current = false;
+    currentDragXRef.current = 0;
+    setDragX(0);
+    setIsDragging(false);
+    setIsAcknowledged(false);
+    if (trackRef.current) {
+      maxSlideRef.current = Math.max(100, trackRef.current.clientWidth - 56 - 8);
+    }
+  }, [alert.id]);
 
   useEffect(() => {
     let vibrationInterval: ReturnType<typeof setInterval>;
@@ -218,6 +230,16 @@ export const FullScreenAlert: React.FC<FullScreenAlertProps> = ({ alert, onAckno
     themeBorderClass = 'border-amber-500/50';
     themeBgClass = 'bg-amber-500/10';
     Icon = Ban;
+  } else if (alert.alertType === 'CREW_ASSIGNED') {
+    themeColorClass = 'text-cyan-400';
+    themeBorderClass = 'border-cyan-500/50';
+    themeBgClass = 'bg-cyan-500/10';
+    Icon = Users;
+  } else if (alert.alertType === 'CREW_UNASSIGNED') {
+    themeColorClass = 'text-amber-400';
+    themeBorderClass = 'border-amber-500/50';
+    themeBgClass = 'bg-amber-500/10';
+    Icon = Users;
   } else if (alert.alertType === 'ETA_5MIN') {
     themeColorClass = 'text-error';
     themeBorderClass = 'border-error/50';
@@ -252,11 +274,25 @@ export const FullScreenAlert: React.FC<FullScreenAlertProps> = ({ alert, onAckno
         </div>
 
         <h2 className={`text-xl sm:text-2xl font-black uppercase tracking-widest ${themeColorClass} mb-2 relative z-10`}>
-          {alert.alertType === 'ALERT_CANCELLED' ? 'ALERT CANCELLED' : alert.alertType === 'NO_FUEL' ? 'NO FUEL REQUIRED' : (alert.alertType?.replace(/_/g, ' ') || 'ALERT')}
+          {alert.alertType === 'ALERT_CANCELLED'
+            ? 'ALERT CANCELLED'
+            : alert.alertType === 'NO_FUEL'
+            ? 'NO FUEL REQUIRED'
+            : alert.alertType === 'CREW_ASSIGNED'
+            ? 'FLIGHT ASSIGNED'
+            : alert.alertType === 'CREW_UNASSIGNED'
+            ? 'FLIGHT UNASSIGNED'
+            : (alert.alertType?.replace(/_/g, ' ') || 'ALERT')}
         </h2>
 
-        {alert.message && alert.alertType === 'ALERT_CANCELLED' && (
-          <p className="text-xs sm:text-sm font-bold text-rose-300 max-w-sm mb-4 relative z-10 bg-rose-500/10 border border-rose-500/30 px-3.5 py-2 rounded-xl">
+        {alert.message && (alert.alertType === 'ALERT_CANCELLED' || alert.alertType === 'CREW_ASSIGNED' || alert.alertType === 'CREW_UNASSIGNED') && (
+          <p className={`text-xs sm:text-sm font-bold max-w-sm mb-4 relative z-10 border px-3.5 py-2 rounded-xl ${
+            alert.alertType === 'ALERT_CANCELLED'
+              ? 'text-rose-300 bg-rose-500/10 border-rose-500/30'
+              : alert.alertType === 'CREW_ASSIGNED'
+              ? 'text-cyan-300 bg-cyan-500/10 border-cyan-500/30'
+              : 'text-amber-300 bg-amber-500/10 border-amber-500/30'
+          }`}>
             {alert.message}
           </p>
         )}

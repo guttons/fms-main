@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect, useImperativeHandle } from 'react';
 import { User, DelayLog, DelaySource, FlightLog, FlightJob, isDomesticFlight } from '../types';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { haptic } from '../utils/haptics';
@@ -6,7 +6,6 @@ import { serverTimeService } from '../services/serverTimeService';
 import { 
   Clock, 
   Search, 
-  Download, 
   Plus, 
   Edit3, 
   Trash2, 
@@ -27,8 +26,15 @@ import {
   ChevronRight,
   User as UserIcon,
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  Download
 } from 'lucide-react';
+
+export interface DelayRecordsLogHandle {
+  exportCSV: () => void;
+  openAddModal: () => void;
+  filteredCount: number;
+}
 
 interface DelayRecordsLogProps {
   user: User;
@@ -53,7 +59,16 @@ export const COMMON_DELAY_CODES = [
 
 type DatePreset = 'ALL' | 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'THIS_MONTH' | 'CUSTOM';
 
-export const DelayRecordsLog: React.FC<DelayRecordsLogProps> = ({ user, onInspectFlightInMatrix }) => {
+const DATE_PRESET_OPTIONS: { id: DatePreset; label: string; shortLabel: string }[] = [
+  { id: 'TODAY', label: 'TODAY', shortLabel: 'TODAY' },
+  { id: 'YESTERDAY', label: 'YESTERDAY', shortLabel: 'YEST' },
+  { id: 'LAST_7_DAYS', label: 'LAST 7 DAYS', shortLabel: '7D' },
+  { id: 'THIS_MONTH', label: 'THIS MONTH', shortLabel: 'MONTH' },
+  { id: 'ALL', label: 'ALL', shortLabel: 'ALL' },
+  { id: 'CUSTOM', label: 'CUSTOM', shortLabel: 'CUSTOM' },
+];
+
+export const DelayRecordsLog = React.forwardRef<DelayRecordsLogHandle, DelayRecordsLogProps>(({ user, onInspectFlightInMatrix }, ref) => {
   const { delayLogs, createDelayLog, updateDelayLog, deleteDelayLog, flightLogs, flightJobs, staff } = useOperationalData();
 
   // Filters
@@ -63,6 +78,40 @@ export const DelayRecordsLog: React.FC<DelayRecordsLogProps> = ({ user, onInspec
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'RESPONDED'>('ALL');
+
+  // Animated Radio Slider for Date Presets (Matching Image 2)
+  const dateBtnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [dateSlider, setDateSlider] = useState<{ left: number; width: number; ready: boolean }>({
+    left: 0,
+    width: 0,
+    ready: false,
+  });
+
+  const updateDateSlider = useCallback(() => {
+    const idx = DATE_PRESET_OPTIONS.findIndex(p => p.id === datePreset);
+    const btn = dateBtnRefs.current[idx];
+    if (btn) {
+      setDateSlider({
+        left: btn.offsetLeft,
+        width: btn.offsetWidth,
+        ready: true,
+      });
+    }
+  }, [datePreset]);
+
+  useEffect(() => {
+    updateDateSlider();
+    const frame = requestAnimationFrame(updateDateSlider);
+    const timer1 = setTimeout(updateDateSlider, 60);
+    const timer2 = setTimeout(updateDateSlider, 200);
+    window.addEventListener('resize', updateDateSlider);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      window.removeEventListener('resize', updateDateSlider);
+    };
+  }, [updateDateSlider]);
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
@@ -289,8 +338,9 @@ export const DelayRecordsLog: React.FC<DelayRecordsLogProps> = ({ user, onInspec
   const responseRate = totalCount > 0 ? Math.round((respondedCount / totalCount) * 100) : 100;
 
   // Export CSV
-  const handleExportCSV = () => {
+  const handleExportCSV = useCallback(() => {
     if (filteredData.length === 0) return;
+    haptic('SUCCESS');
 
     const headers = [
       'DATE',
@@ -332,97 +382,104 @@ export const DelayRecordsLog: React.FC<DelayRecordsLogProps> = ({ user, onInspec
     link.download = `MACL_AOCC_Delay_Log_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-  };
+  }, [filteredData]);
+
+  // Expose imperative handle to parent (RefuelingPerformance) for top-banner CSV export
+  useImperativeHandle(ref, () => ({
+    exportCSV: handleExportCSV,
+    openAddModal: handleOpenAdd,
+    filteredCount: filteredData.length
+  }), [handleExportCSV, handleOpenAdd, filteredData.length]);
 
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Delays */}
-        <div className="card-premium p-5 border-outline flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-60">
+        <div className="card-premium p-3.5 sm:p-5 border-outline flex items-center justify-between">
+          <div className="space-y-0.5 sm:space-y-1">
+            <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] text-on-surface-dim opacity-60">
               Total Delays Logged
             </span>
             <div className="text-2xl sm:text-3xl font-[900] text-on-surface font-mono tracking-tight">
               {totalCount}
             </div>
-            <span className="text-[10px] font-bold text-on-surface-dim opacity-70">
-              Reported from AOCC & Airlines
+            <span className="text-[9px] sm:text-[10px] font-bold text-on-surface-dim opacity-70 line-clamp-1">
+              AOCC & Airlines
             </span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
-            <Clock className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20 shrink-0">
+            <Clock className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Fuel Attributed */}
-        <div className="card-premium p-5 border-outline flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-60">
+        <div className="card-premium p-3.5 sm:p-5 border-outline flex items-center justify-between">
+          <div className="space-y-0.5 sm:space-y-1">
+            <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] text-on-surface-dim opacity-60">
               Fuel Attributed (Code 31)
             </span>
             <div className="text-2xl sm:text-3xl font-[900] font-mono tracking-tight text-amber-500">
               {fuelAttributedCount}
             </div>
-            <span className="text-[10px] font-bold text-on-surface-dim opacity-70">
-              {totalCount > 0 ? `${Math.round((fuelAttributedCount / totalCount) * 100)}% of reported delays` : '0%'}
+            <span className="text-[9px] sm:text-[10px] font-bold text-on-surface-dim opacity-70 line-clamp-1">
+              {totalCount > 0 ? `${Math.round((fuelAttributedCount / totalCount) * 100)}% of delays` : '0%'}
             </span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/20">
-            <AlertTriangle className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/20 shrink-0">
+            <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Pending Response */}
-        <div className="card-premium p-5 border-outline flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-60">
+        <div className="card-premium p-3.5 sm:p-5 border-outline flex items-center justify-between">
+          <div className="space-y-0.5 sm:space-y-1">
+            <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] text-on-surface-dim opacity-60">
               Pending Fuel Comment
             </span>
             <div className={`text-2xl sm:text-3xl font-[900] font-mono tracking-tight ${pendingCount > 0 ? 'text-error' : 'text-success'}`}>
               {pendingCount}
             </div>
-            <span className="text-[10px] font-bold text-on-surface-dim opacity-70">
-              {pendingCount > 0 ? 'Requires investigation' : 'All delays responded'}
+            <span className="text-[9px] sm:text-[10px] font-bold text-on-surface-dim opacity-70 line-clamp-1">
+              {pendingCount > 0 ? 'Requires reply' : 'All responded'}
             </span>
           </div>
-          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${pendingCount > 0 ? 'bg-error/10 text-error border-error/20' : 'bg-success/10 text-success border-success/20'}`}>
-            <MessageSquare className="w-6 h-6" />
+          <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center border shrink-0 ${pendingCount > 0 ? 'bg-error/10 text-error border-error/20' : 'bg-success/10 text-success border-success/20'}`}>
+            <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Response Rate */}
-        <div className="card-premium p-5 border-outline flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-60">
+        <div className="card-premium p-3.5 sm:p-5 border-outline flex items-center justify-between">
+          <div className="space-y-0.5 sm:space-y-1">
+            <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] text-on-surface-dim opacity-60">
               Investigation Rate
             </span>
             <div className="text-2xl sm:text-3xl font-[900] font-mono tracking-tight text-success">
               {responseRate}%
             </div>
-            <span className="text-[10px] font-bold text-on-surface-dim opacity-70">
+            <span className="text-[9px] sm:text-[10px] font-bold text-on-surface-dim opacity-70 line-clamp-1">
               {respondedCount} of {totalCount} investigated
             </span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-success/10 text-success flex items-center justify-center border border-success/20">
-            <ShieldCheck className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-success/10 text-success flex items-center justify-center border border-success/20 shrink-0">
+            <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
       </div>
 
       {/* Control Bar: Filters & Actions */}
-      <div className="card-premium p-4 sm:p-5 border-outline space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="card-premium p-4 sm:p-5 border-outline space-y-3 sm:space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
           {/* Search Input */}
-          <div className="relative flex-1 min-w-[260px]">
+          <div className="relative flex-1 w-full min-w-0 sm:min-w-[260px]">
             <Search className="w-4 h-4 text-on-surface-dim opacity-40 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Search flight, operator, code, remarks, or team..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-surface-dim border border-outline rounded-xl text-xs font-bold text-on-surface placeholder:text-on-surface-dim placeholder:opacity-40 outline-none focus:border-primary transition-all"
+              className="w-full pl-10 pr-4 py-2.5 sm:py-2 bg-surface-dim border border-outline rounded-xl text-xs font-bold text-on-surface placeholder:text-on-surface-dim placeholder:opacity-40 outline-none focus:border-primary transition-all"
             />
             {searchQuery && (
               <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-dim hover:text-on-surface">
@@ -431,37 +488,28 @@ export const DelayRecordsLog: React.FC<DelayRecordsLogProps> = ({ user, onInspec
             )}
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <button
-              onClick={handleOpenAdd}
-              className="px-4 py-2 kinetic-gradient text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-premium hover:scale-105 active:scale-95 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Log Delay Record</span>
-            </button>
-
-            <button
-              onClick={handleExportCSV}
-              disabled={filteredData.length === 0}
-              className="px-4 py-2 bg-surface-dim hover:bg-surface-container border border-outline rounded-xl text-xs font-black uppercase tracking-wider text-on-surface flex items-center gap-2 transition-all active:scale-95 disabled:opacity-40"
-            >
-              <Download className="w-4 h-4" />
-              <span>Export CSV</span>
-            </button>
-          </div>
+          {/* Action Button: Log Delay Record (Full width on mobile, inline on desktop) */}
+          <button
+            onClick={handleOpenAdd}
+            className="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-2 kinetic-gradient text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-premium hover:scale-105 active:scale-95 transition-all whitespace-nowrap cursor-pointer shrink-0"
+          >
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>Log Delay Record</span>
+          </button>
         </div>
 
         {/* Source Dropdown & Date Bar */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-3 border-t border-outline/50">
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="grid grid-cols-2 gap-2 w-full md:flex md:items-center md:gap-3 md:w-auto">
             {/* Delay Source Filter */}
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase tracking-wider text-on-surface-dim opacity-70">Source:</span>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-on-surface-dim opacity-70 shrink-0">
+                Source:
+              </span>
               <select
                 value={sourceFilter}
                 onChange={(e) => setSourceFilter(e.target.value)}
-                className="px-3 py-1.5 bg-surface-dim border border-outline rounded-xl text-xs font-bold text-on-surface outline-none focus:border-primary cursor-pointer"
+                className="w-full sm:w-auto px-2.5 sm:px-3 py-2 sm:py-1.5 bg-surface-dim border border-outline rounded-xl text-[11px] sm:text-xs font-bold text-on-surface outline-none focus:border-primary cursor-pointer truncate"
               >
                 <option value="ALL">ALL SOURCES</option>
                 {DELAY_FROM_OPTIONS.map(opt => (
@@ -471,66 +519,91 @@ export const DelayRecordsLog: React.FC<DelayRecordsLogProps> = ({ user, onInspec
             </div>
 
             {/* Status Filter */}
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase tracking-wider text-on-surface-dim opacity-70">Status:</span>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-on-surface-dim opacity-70 shrink-0">
+                Status:
+              </span>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="px-3 py-1.5 bg-surface-dim border border-outline rounded-xl text-xs font-bold text-on-surface outline-none focus:border-primary cursor-pointer"
+                className="w-full sm:w-auto px-2.5 sm:px-3 py-2 sm:py-1.5 bg-surface-dim border border-outline rounded-xl text-[11px] sm:text-xs font-bold text-on-surface outline-none focus:border-primary cursor-pointer truncate"
               >
                 <option value="ALL">ALL STATUSES</option>
-                <option value="PENDING">PENDING FUEL COMMENT</option>
-                <option value="RESPONDED">INVESTIGATED & ANSWERED</option>
+                <option value="PENDING">PENDING COMMENT</option>
+                <option value="RESPONDED">INVESTIGATED</option>
               </select>
             </div>
           </div>
 
-          {/* Date Presets */}
-          <div className="flex items-center gap-1.5 p-1 bg-surface-dim border border-outline rounded-xl self-start md:self-auto overflow-x-auto max-w-full">
-            {(['TODAY', 'YESTERDAY', 'LAST_7_DAYS', 'THIS_MONTH', 'ALL', 'CUSTOM'] as DatePreset[]).map(preset => (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => setDatePreset(preset)}
-                className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap ${
-                  datePreset === preset
-                    ? 'kinetic-gradient text-white shadow-sm'
-                    : 'text-on-surface-dim hover:text-on-surface font-bold'
-                }`}
-              >
-                {preset === 'LAST_7_DAYS' ? '7D' : preset === 'THIS_MONTH' ? 'MONTH' : preset}
-              </button>
-            ))}
+          {/* Date Presets with Animated Radio Kinetic Slider (Image 2 style) */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 w-full md:w-auto">
+            <div 
+              className="relative flex items-center bg-surface-dim/90 p-1 rounded-2xl border border-outline shadow-inner select-none w-full sm:w-auto"
+            >
+              {/* Animated Kinetic Gradient Radio Slider with White Ring */}
+              {dateSlider.ready && (
+                <div 
+                  className="absolute top-1 bottom-1 rounded-xl kinetic-gradient shadow-premium ring-2 ring-white/90 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] will-change-transform pointer-events-none"
+                  style={{
+                    left: `${dateSlider.left}px`,
+                    width: `${dateSlider.width}px`,
+                  }}
+                />
+              )}
+
+              {DATE_PRESET_OPTIONS.map((preset, idx) => {
+                const isSelected = datePreset === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    ref={el => { dateBtnRefs.current[idx] = el; }}
+                    type="button"
+                    onClick={() => {
+                      haptic('TAP');
+                      setDatePreset(preset.id);
+                    }}
+                    className={`relative z-10 flex-1 sm:flex-initial px-1.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-center transition-colors duration-200 whitespace-nowrap cursor-pointer active:scale-95 select-none ${
+                      isSelected
+                        ? 'text-white font-black'
+                        : 'text-on-surface-dim hover:text-on-surface font-bold'
+                    }`}
+                  >
+                    <span className="sm:hidden">{preset.shortLabel}</span>
+                    <span className="hidden sm:inline">{preset.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
         {/* Custom Date Pickers */}
         {datePreset === 'CUSTOM' && (
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3 pt-2 w-full sm:w-auto animate-in fade-in duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
               <span className="text-[10px] font-black uppercase tracking-wider text-on-surface-dim">From:</span>
               <input
                 type="date"
                 value={customStartDate}
                 onChange={(e) => setCustomStartDate(e.target.value)}
-                className="px-3 py-1.5 bg-surface-dim border border-outline rounded-xl text-xs font-mono font-bold text-on-surface outline-none focus:border-primary"
+                className="w-full sm:w-auto px-2.5 py-1.5 bg-surface-dim border border-outline rounded-xl text-xs font-mono font-bold text-on-surface outline-none focus:border-primary"
               />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
               <span className="text-[10px] font-black uppercase tracking-wider text-on-surface-dim">To:</span>
               <input
                 type="date"
                 value={customEndDate}
                 onChange={(e) => setCustomEndDate(e.target.value)}
-                className="px-3 py-1.5 bg-surface-dim border border-outline rounded-xl text-xs font-mono font-bold text-on-surface outline-none focus:border-primary"
+                className="w-full sm:w-auto px-2.5 py-1.5 bg-surface-dim border border-outline rounded-xl text-xs font-mono font-bold text-on-surface outline-none focus:border-primary"
               />
             </div>
             {(customStartDate || customEndDate) && (
               <button
                 onClick={() => { setCustomStartDate(''); setCustomEndDate(''); }}
-                className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline"
+                className="col-span-2 sm:col-span-1 text-[10px] font-black uppercase tracking-wider text-primary hover:underline text-left sm:text-center pt-1 sm:pt-0"
               >
-                Clear
+                Clear Dates
               </button>
             )}
           </div>
@@ -539,19 +612,29 @@ export const DelayRecordsLog: React.FC<DelayRecordsLogProps> = ({ user, onInspec
 
       {/* Main Delay Records Table (Matching exactly the 9 columns of user attachment) */}
       <div className="card-premium border-outline overflow-hidden shadow-premium">
-        <div className="p-4 bg-surface-dim/40 border-b border-outline flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <FileSpreadsheet className="w-4 h-4 text-primary" />
-            <span className="text-xs font-black uppercase tracking-wider text-on-surface">
-              AOCC Delay Records Matrix
-            </span>
-            <span className="px-2 py-0.5 rounded-full bg-surface-dim text-[10px] font-mono font-bold text-on-surface-dim border border-outline">
+        <div className="p-3 sm:p-4 bg-surface-dim/40 border-b border-outline flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center justify-between sm:justify-start gap-2">
+            <div className="flex items-center gap-2">
+              <FileSpreadsheet className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-xs font-black uppercase tracking-wider text-on-surface">
+                AOCC Delay Records Matrix
+              </span>
+            </div>
+            <span className="px-2 py-0.5 rounded-full bg-surface-dim text-[10px] font-mono font-bold text-on-surface-dim border border-outline shrink-0">
               {filteredData.length} records
             </span>
           </div>
           <span className="text-[10px] font-bold text-on-surface-dim opacity-60 uppercase tracking-widest hidden sm:inline">
             Click flight or eye icon to inspect fueling turnaround telemetry
           </span>
+        </div>
+
+        {/* Mobile horizontal scroll hint */}
+        <div className="sm:hidden px-3 py-1.5 bg-surface-dim/70 text-[10px] font-bold text-on-surface-dim flex items-center justify-between border-b border-outline/30">
+          <span className="flex items-center gap-1 text-primary">
+            <span>⇄</span> Swipe table horizontally for all delay columns
+          </span>
+          <span className="font-mono text-[9px] text-on-surface-dim/70">10 Columns</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -1198,4 +1281,6 @@ export const DelayRecordsLog: React.FC<DelayRecordsLogProps> = ({ user, onInspec
       )}
     </div>
   );
-};
+});
+
+DelayRecordsLog.displayName = 'DelayRecordsLog';

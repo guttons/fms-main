@@ -42,12 +42,14 @@ import { serverTimeService } from './services/serverTimeService';
 import { useStaffActivityTracker } from './hooks/useStaffActivityTracker';
 import { PredictiveBackWrapper } from './components/PredictiveBackWrapper';
 import { UnauthorizedPage } from './components/UnauthorizedPage';
+import { useRolePermissions } from './hooks/useRolePermissions';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('fms_logged_in_user');
     return saved ? JSON.parse(saved) : null;
   });
+  const { permissions: rolePerms, canView, canEdit } = useRolePermissions(currentUser?.role);
   const [activeView, setActiveView] = useState(() => {
     const savedUser = localStorage.getItem('fms_logged_in_user');
     if (savedUser) {
@@ -98,6 +100,15 @@ const App: React.FC = () => {
   useEffect(() => {
     serverTimeService.init();
   }, []);
+
+  // Dynamic Route Protection: Redirect to dashboard if activeView becomes unauthorized
+  useEffect(() => {
+    if (!currentUser || currentUser.role === UserRole.ADMIN) return;
+    const permKey = activeView === 'admin' ? 'system-admin' : (activeView === 'reports' ? 'depot-reports' : activeView);
+    if (activeView !== 'dashboard' && !canView(permKey)) {
+      setActiveView('dashboard');
+    }
+  }, [currentUser, activeView, canView]);
 
   // RBAC Session Validation: Verify stored session against authoritative staff registry
   useEffect(() => {
@@ -360,8 +371,9 @@ const AppContextContent: React.FC<any> = ({
   showAlertsPanel, setShowAlertsPanel, isSettingsOpen, setIsSettingsOpen, handleLogout,
   isSidebarCollapsed, toggleSidebarCollapse
 }) => {
-  const { alerts, acknowledgeAlert, acknowledgeAllAlerts, clearAllAlerts, equipment, flightJobs, refreshData, domesticFlights, domesticAssignments, updateEquipmentStatus, updateFlightJob } = useOperationalData();
+  const { alerts, acknowledgeAlert, acknowledgeAllAlerts, clearAllAlerts, equipment, flightJobs, refreshData, domesticFlights, domesticAssignments, updateEquipmentStatus, updateFlightJob, briefingInfo } = useOperationalData();
   const { notify, notifyWithAction, dismiss, clear } = useNotification();
+  const { permissions: rolePerms, canView, canEdit } = useRolePermissions(currentUser?.role);
 
   // Automatic staff activity tracking, heartbeat, and location sharing prompt for logged-in user
   const {
@@ -965,9 +977,50 @@ const AppContextContent: React.FC<any> = ({
     const msgLower = (a.message || '').toLowerCase();
     const isRequestAlert = msgLower.includes('alert requested') || msgLower.includes('no fuel') || a.alertType === 'REQUEST_FUELING' || a.alertType === 'NO_FUEL' || a.alertType === 'LANDED';
     if (isRequestAlert && ![UserRole.ADMIN, UserRole.ITP_MANAGER, UserRole.FUEL_MANAGEMENT].includes(currentUser.role)) {
+      const isDirectlyAssigned = Boolean(
+        a.assignedStaffId === currentUser.id ||
+        (a.assignedStaffId && a.assignedStaffId.toLowerCase() === currentUser.name.toLowerCase()) ||
+        msgLower.includes(currentUser.name.toLowerCase())
+      );
+
       const isDomestic = (domesticFlights || []).some(df => msgLower.includes((df.flightNumber || '').toLowerCase()));
-      if (isDomestic) {
-        const isUserInDomesticTeam = (domesticAssignments || []).some(da => da.op1 === currentUser.id || da.op2 === currentUser.id);
+      const isAdhoc = (briefingInfo?.staffAssignments?.adhocFlights || []).some((af: any) => msgLower.includes((af.flightNumber || '').toLowerCase()));
+
+      if (isDomestic || isAdhoc) {
+        // If alert was directly addressed to this user, always deliver
+        if (isDirectlyAssigned) return true;
+
+        // Check if user is in any domestic squadron team
+        const isUserInDomesticTeam = Boolean(
+          (domesticAssignments || []).some(da => 
+            da.op1 === currentUser.id || da.op2 === currentUser.id ||
+            da.operator1_id === currentUser.id || da.operator2_id === currentUser.id ||
+            (da.op1 && String(da.op1).toLowerCase() === currentUser.name.toLowerCase()) ||
+            (da.op2 && String(da.op2).toLowerCase() === currentUser.name.toLowerCase()) ||
+            (da.operator1_id && String(da.operator1_id).toLowerCase() === currentUser.name.toLowerCase()) ||
+            (da.operator2_id && String(da.operator2_id).toLowerCase() === currentUser.name.toLowerCase())
+          ) ||
+          (briefingInfo?.staffAssignments?.domesticTeams || []).some((bt: any) =>
+            bt.op1 === currentUser.id || bt.op2 === currentUser.id ||
+            (bt.op1 && String(bt.op1).toLowerCase() === currentUser.name.toLowerCase()) ||
+            (bt.op2 && String(bt.op2).toLowerCase() === currentUser.name.toLowerCase())
+          ) ||
+          (() => {
+            try {
+              const raw = localStorage.getItem('fms_domestic_assignments');
+              const parsed = raw ? JSON.parse(raw) : [];
+              return Array.isArray(parsed) && parsed.some((da: any) =>
+                da.op1 === currentUser.id || da.op2 === currentUser.id ||
+                da.operator1_id === currentUser.id || da.operator2_id === currentUser.id ||
+                (da.op1 && String(da.op1).toLowerCase() === currentUser.name.toLowerCase()) ||
+                (da.op2 && String(da.op2).toLowerCase() === currentUser.name.toLowerCase())
+              );
+            } catch {
+              return false;
+            }
+          })()
+        );
+
         if (!isUserInDomesticTeam) return false;
       } else {
         const hasOperator = msgLower.includes('(operator:');
@@ -995,7 +1048,7 @@ const AppContextContent: React.FC<any> = ({
   // Priority Full Screen Alert for currently assigned staff
   const fullScreenAlert = useMemo(() => {
     if (!currentUser || !alerts || alerts.length === 0) return null;
-    const alertTypesToTrigger = ['REQUEST_FUELING', 'NO_FUEL', 'ALERT_CANCELLED', 'ETA_5MIN', 'ETA_15MIN', 'LANDED'];
+    const alertTypesToTrigger = ['REQUEST_FUELING', 'NO_FUEL', 'ALERT_CANCELLED', 'CREW_ASSIGNED', 'CREW_UNASSIGNED', 'ETA_5MIN', 'ETA_15MIN', 'LANDED'];
 
     return alerts.find(a => {
       if (!a || a.acknowledged) return false;
@@ -1014,12 +1067,24 @@ const AppContextContent: React.FC<any> = ({
   }, [alerts, currentUser]);
 
   const renderContent = (viewToRender = activeView) => {
+    // Dynamic Role-Based Access Control: ensure user has view permissions
+    const permKey = viewToRender === 'admin' ? 'system-admin' : (viewToRender === 'reports' ? 'depot-reports' : viewToRender);
+    if (currentUser?.role && currentUser.role !== UserRole.ADMIN && viewToRender !== 'dashboard' && !canView(permKey)) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-300">
+          <div className="w-24 h-24 bg-error/10 rounded-[32px] flex items-center justify-center mb-6 border border-error/20 shadow-premium">
+            <AlertCircle className="w-10 h-10 text-error shadow-glow" />
+          </div>
+          <h2 className="text-xl sm:text-2xl font-[900] text-on-surface mb-2 tracking-tighter uppercase italic">ACCESS RESTRICTED</h2>
+          <p className="text-on-surface-dim max-w-sm uppercase tracking-widest text-[9px] font-black opacity-60">
+            You do not have administrative authorization to view this module. If you require access, please contact your System Administrator.
+          </p>
+        </div>
+      );
+    }
+
     switch (viewToRender) {
       case 'staff-tracker':
-        if (currentUser?.role !== UserRole.ITP_MANAGER && currentUser?.role !== UserRole.ADMIN) {
-          setActiveView('dashboard');
-          return null;
-        }
         return <StaffTracker user={currentUser!} />;
       case 'tracker':
         setActiveView('intoplane');
@@ -1054,19 +1119,6 @@ const AppContextContent: React.FC<any> = ({
           />
         );
       case 'forecasting':
-        if (currentUser?.role === UserRole.DEPOT_OPERATOR) {
-          return (
-            <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-300">
-              <div className="w-24 h-24 bg-error/10 rounded-[32px] flex items-center justify-center mb-6 border border-error/20 shadow-premium">
-                <AlertCircle className="w-10 h-10 text-error shadow-glow" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-[900] text-on-surface mb-2 tracking-tighter uppercase italic">ACCESS DENIED</h2>
-              <p className="text-on-surface-dim max-w-sm uppercase tracking-widest text-[9px] font-black opacity-60">
-                You do not have administrative authorization to view stock forecasting. Security log updated.
-              </p>
-            </div>
-          );
-        }
         return <Forecasting />;
       case 'bridging':
         return <Bridging user={currentUser} setActiveView={setActiveView} />;
@@ -1081,24 +1133,12 @@ const AppContextContent: React.FC<any> = ({
       case 'history':
         return <LogHistory user={currentUser} />;
       case 'performance':
-        if (![UserRole.ITP_MANAGER, UserRole.ADMIN, UserRole.FUEL_MANAGEMENT, UserRole.MACL_MANAGEMENT, UserRole.FUEL_ADMINISTRATION].includes(currentUser?.role as UserRole)) {
-          return (
-            <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-300">
-              <div className="w-24 h-24 bg-error/10 rounded-[32px] flex items-center justify-center mb-6 border border-error/20 shadow-premium">
-                <AlertCircle className="w-10 h-10 text-error shadow-glow" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-[900] text-on-surface mb-2 tracking-tighter uppercase italic">ACCESS DENIED</h2>
-              <p className="text-on-surface-dim max-w-sm uppercase tracking-widest text-[9px] font-black opacity-60">
-                You do not have administrative authorization to view refueling performance analytics. Security log updated.
-              </p>
-            </div>
-          );
-        }
         return <RefuelingPerformance user={currentUser!} />;
       case 'schedule':
         return (
           <Schedule 
             user={currentUser} 
+            canEditSchedule={canEdit('schedule')}
             onStartJob={(job: FlightJob) => {
               setPendingJob(job);
               if (job.vehicleId) {
@@ -1111,55 +1151,18 @@ const AppContextContent: React.FC<any> = ({
       case 'briefing':
         return <ShiftBriefing user={currentUser} isSidebarCollapsed={isSidebarCollapsed} />;
       case 'admin':
-        return currentUser.role === UserRole.ADMIN ? <SystemAdmin currentUser={currentUser} /> : <Dashboard user={currentUser} setActiveView={setActiveView} onStartJob={() => {}} onSelectEquipment={(eqId: string) => { setPendingVehicleId(eqId); setActiveView('intoplane'); }} />;
+        return (currentUser.role === UserRole.ADMIN || canView('system-admin')) 
+          ? <SystemAdmin currentUser={currentUser} /> 
+          : <Dashboard user={currentUser} setActiveView={setActiveView} onStartJob={() => {}} onSelectEquipment={(eqId: string) => { setPendingVehicleId(eqId); setActiveView('intoplane'); }} />;
       case 'depot-reports':
       case 'reports':
-        if (currentUser?.role === UserRole.DEPOT_OPERATOR) {
-          return (
-            <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-300">
-              <div className="w-24 h-24 bg-error/10 rounded-[32px] flex items-center justify-center mb-6 border border-error/20 shadow-premium">
-                <AlertCircle className="w-10 h-10 text-error shadow-glow" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-[900] text-on-surface mb-2 tracking-tighter uppercase italic">ACCESS DENIED</h2>
-              <p className="text-on-surface-dim max-w-sm uppercase tracking-widest text-[9px] font-black opacity-60">
-                You do not have administrative authorization to view fuel and transaction summaries. Security log updated.
-              </p>
-            </div>
-          );
-        }
         if (activeView === 'reports' && ![UserRole.DEPOT_MANAGER, UserRole.ADMIN].includes(currentUser?.role as UserRole)) {
           return <CommercialReports />;
         }
         return <FuelReports user={currentUser} />;
       case 'commercial-reports':
-        if (currentUser?.role && [UserRole.DEPOT_OPERATOR, UserRole.DEPOT_MANAGER, UserRole.ITP_OPERATOR, UserRole.ITP_HD_OPERATOR, UserRole.ITP_SUPERVISOR, UserRole.ITP_MANAGER, UserRole.ITP_OFFICER].includes(currentUser?.role)) {
-          return (
-            <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-300">
-              <div className="w-24 h-24 bg-error/10 rounded-[32px] flex items-center justify-center mb-6 border border-error/20 shadow-premium">
-                <AlertCircle className="w-10 h-10 text-error shadow-glow" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-[900] text-on-surface mb-2 tracking-tighter uppercase italic">ACCESS DENIED</h2>
-              <p className="text-on-surface-dim max-w-sm uppercase tracking-widest text-[9px] font-black opacity-60">
-                You do not have administrative authorization to view commercial contracts and route statistics. Security log updated.
-              </p>
-            </div>
-          );
-        }
         return <CommercialReports />;
       case 'executive':
-        if (currentUser?.role && ![UserRole.ADMIN, UserRole.EXECUTIVE, UserRole.FUEL_MANAGEMENT, UserRole.MACL_MANAGEMENT].includes(currentUser.role)) {
-          return (
-            <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-300">
-              <div className="w-24 h-24 bg-error/10 rounded-[32px] flex items-center justify-center mb-6 border border-error/20 shadow-premium">
-                <AlertCircle className="w-10 h-10 text-error shadow-glow" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-[900] text-on-surface mb-2 tracking-tighter uppercase italic">ACCESS DENIED</h2>
-              <p className="text-on-surface-dim max-w-sm uppercase tracking-widest text-[9px] font-black opacity-60">
-                You do not have administrative authorization to view executive daily summaries. Security log updated.
-              </p>
-            </div>
-          );
-        }
         return <ExecutiveModule user={currentUser} />;
       case 'equipment':
         return <EquipmentStatus user={currentUser!} />;
@@ -1825,7 +1828,7 @@ const AppContextContent: React.FC<any> = ({
                     type="button"
                     onClick={handleEnablePushFromBanner}
                     disabled={isPushLoading}
-                    className="px-3 py-1.5 rounded-xl bg-primary text-primary-content text-[10px] font-black uppercase tracking-wider shadow-sm hover:opacity-95 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                    className="px-3.5 py-1.5 rounded-xl kinetic-gradient text-white text-[10px] font-black uppercase tracking-wider shadow-premium hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
                   >
                     {isPushLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
                     <span>Enable</span>
@@ -2045,6 +2048,7 @@ const AppContextContent: React.FC<any> = ({
         {/* Priority Full-Screen Beeping Alert Overlay */}
         {fullScreenAlert && (
           <FullScreenAlert 
+            key={fullScreenAlert.id}
             alert={fullScreenAlert} 
             onAcknowledge={(alertId) => acknowledgeAlert(alertId, currentUser?.name)} 
           />

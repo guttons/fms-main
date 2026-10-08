@@ -104,6 +104,7 @@ export interface FlightJob {
   std?: string;
   assignedTo?: string; // User ID
   assignedOfficer?: string; // Officer User ID for Refueller
+  assignedTeam?: string; // Team ID for Domestic/Refueller
   equipmentUsage?: 'HYDRANT' | 'REFUELLER';
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | string;
   vehicleId?: string;
@@ -374,9 +375,26 @@ export interface StaffActivityEntry {
 export const isDomesticFlight = (flight: any): boolean => {
   if (!flight) return false;
   const no = (flight.flightNumber || '').replace(/\s+/g, '').toUpperCase();
-  if (no.startsWith('VP') || no.startsWith('NR')) return true;
+  if (no.startsWith('VP') || no.startsWith('NR') || no.startsWith('Q2')) return true;
   if (flight.isDomestic === true) return true;
+  if (flight.flightCategory && String(flight.flightCategory).toLowerCase() === 'domestic') return true;
   if (flight.category && String(flight.category).toLowerCase() === 'domestic') return true;
+  if (typeof flight.id === 'string' && (flight.id.startsWith('dom-') || flight.id.startsWith('d-'))) return true;
+  return false;
+};
+
+export const isAdhocFlight = (flight: any, briefingInfo?: any): boolean => {
+  if (!flight) return false;
+  if (flight.isAdhoc === true) return true;
+  if (flight.flightCategory && String(flight.flightCategory).toLowerCase() === 'adhoc') return true;
+  if (flight.category && String(flight.category).toLowerCase() === 'adhoc') return true;
+  if (typeof flight.id === 'string' && (flight.id.startsWith('ah-') || flight.id.startsWith('ah'))) return true;
+  const cleanNo = (flight.flightNumber || '').replace(/\s+/g, '').toLowerCase();
+  if (cleanNo && briefingInfo?.staffAssignments?.adhocFlights) {
+    return (briefingInfo.staffAssignments.adhocFlights || []).some(
+      (af: any) => (af?.flightNumber || '').replace(/\s+/g, '').toLowerCase() === cleanNo
+    );
+  }
   return false;
 };
 

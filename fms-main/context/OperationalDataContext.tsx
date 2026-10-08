@@ -31,6 +31,11 @@ interface ShiftBriefingInfo {
     } | null;
     adhocFlights?: any[];
     staffStatuses?: Record<string, string>;
+    domesticTeams?: any[];
+    equipmentAssignments?: Record<string, { op1: string; op2: string }>;
+    dieselAssignments?: Record<string, { op1: string; op2: string }>;
+    stockAssignment?: { staffId: string };
+    jetTransfer?: { op1: string; op2: string; enabled: boolean };
   };
 }
 
@@ -617,10 +622,12 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
     // Deduplicate by normalized flight number and date so duplicate records (e.g. DB job + live FIDS virtual entry) never both exist!
     const seenFlightKeys = new Set<string>();
-    // Sort so DB jobs (non-virtual or jobs with assignments / user edits) come first
+    // Sort so DB jobs for the selected briefing date come first
     const sortedMerged = [...merged].sort((a, b) => {
-      const aScore = (a.isVirtual ? 0 : 2) + (a.userEditedAircraftType ? 2 : 0) + (a.assignedTo ? 1 : 0);
-      const bScore = (b.isVirtual ? 0 : 2) + (b.userEditedAircraftType ? 2 : 0) + (b.assignedTo ? 1 : 0);
+      const aDateMatch = (a.date ? a.date.split('T')[0] : '') === selectedBriefingDate ? 1 : 0;
+      const bDateMatch = (b.date ? b.date.split('T')[0] : '') === selectedBriefingDate ? 1 : 0;
+      const aScore = (a.isVirtual ? 0 : 4) + (aDateMatch ? 2 : 0) + (a.userEditedAircraftType ? 1 : 0);
+      const bScore = (b.isVirtual ? 0 : 4) + (bDateMatch ? 2 : 0) + (b.userEditedAircraftType ? 1 : 0);
       return bScore - aScore;
     });
 
@@ -1959,6 +1966,15 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   };
 
   const createAlert = async (alertData: Omit<Alert, 'id'>): Promise<boolean> => {
+    // ROLE AUTHORIZATION GUARD: Only ITP Manager and Admin can dispatch or cancel crew fuel alerts
+    if (alertData.alertType && ['REQUEST_FUELING', 'NO_FUEL', 'ALERT_CANCELLED'].includes(alertData.alertType)) {
+      const callerRole = appUser?.role;
+      if (callerRole !== UserRole.ITP_MANAGER && callerRole !== UserRole.ADMIN) {
+        console.warn(`[Security] Blocked unauthorized attempt to create ${alertData.alertType} by user with role: ${callerRole}`);
+        return false;
+      }
+    }
+
     // Generate a unique hash for general duplicate prevention
     const alertHash = `${alertData.message}-${alertData.targetRole || ''}-${alertData.assignedStaffId || ''}`;
     

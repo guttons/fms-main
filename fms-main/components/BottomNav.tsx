@@ -12,6 +12,8 @@ import {
 import { BottomSheet, SheetAction, SheetDivider, SheetSectionHeader } from './BottomSheet';
 import { haptic } from '../utils/haptics';
 import { getRoleNavItems, getRoleOverflowItems } from '../utils/navigation';
+import { useRolePermissions } from '../hooks/useRolePermissions';
+import { UserRole } from '../types';
 
 interface BottomNavProps {
   user: User;
@@ -43,12 +45,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   unreadAlerts = 0,
 }) => {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const { permissions, canView } = useRolePermissions(user?.role);
 
-  // ── Primary Nav Items (derived from authoritative role config) ──────────────
-  const navItems = getRoleNavItems(user?.role, { pendingTasks, activeJobs, unreadAlerts });
+  // ── Primary Nav Items (derived from authoritative role config & dynamic permissions) ──────────────
+  const navItems = getRoleNavItems(user?.role, { pendingTasks, activeJobs, unreadAlerts }, permissions);
 
   // ── Overflow Sheet Items (all role modules not in bottom bar) ──────────────
-  const overflowItems = getRoleOverflowItems(user?.role, navItems);
+  const overflowItems = getRoleOverflowItems(user?.role, navItems, permissions);
 
   const activeIndex = navItems.findIndex(item => item.id === activeView);
   // Check if activeView is in overflow items (to highlight the "more" button)
@@ -177,7 +180,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               }}
             />
           )}
-          {onSettingsClick && (
+          {onSettingsClick && (user?.role === UserRole.ADMIN || canView('system-admin')) && (
             <SheetAction
               icon={Settings}
               label="Settings"
