@@ -1151,8 +1151,8 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
         await updateDomesticAssignment(team.name, newOp1, newOp2);
 
         if (updateBriefingInfo) {
-          const currentStaff = briefingInfo?.staffAssignments || {};
-          const currentTeams = (currentStaff.domesticTeams && currentStaff.domesticTeams.length > 0)
+          const currentStaff = briefingInfo?.staffAssignments;
+          const currentTeams = (currentStaff?.domesticTeams && currentStaff.domesticTeams.length > 0)
             ? currentStaff.domesticTeams
             : domesticTeams;
           const updatedTeams = currentTeams.map((t: any) => {
@@ -1162,7 +1162,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
             return t;
           });
           await updateBriefingInfo(briefingInfo?.info || [], briefingInfo?.dieselNeeds || [], {
-            ...currentStaff,
+            ...(currentStaff || {}),
             domesticTeams: updatedTeams
           });
         }
@@ -1189,17 +1189,17 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
 
         if (updateBriefingInfo) {
           const isDiesel = currentShiftLabel === 'DIESEL';
-          const currentStaff = briefingInfo?.staffAssignments || {};
+          const currentStaff = briefingInfo?.staffAssignments;
           const currentMap = isDiesel
-            ? { ...(currentStaff.dieselAssignments || {}) }
-            : { ...(currentStaff.equipmentAssignments || {}) };
+            ? { ...(currentStaff?.dieselAssignments || {}) }
+            : { ...(currentStaff?.equipmentAssignments || {}) };
           
           currentMap[eq.eqNumber] = { op1: eq.op1, op2: eq.op2 };
 
           await updateBriefingInfo(briefingInfo?.info || [], briefingInfo?.dieselNeeds || [], {
-            ...currentStaff,
-            equipmentAssignments: isDiesel ? (currentStaff.equipmentAssignments || {}) : currentMap,
-            dieselAssignments: isDiesel ? currentMap : (currentStaff.dieselAssignments || {})
+            ...(currentStaff || {}),
+            equipmentAssignments: isDiesel ? (currentStaff?.equipmentAssignments || {}) : currentMap,
+            dieselAssignments: isDiesel ? currentMap : (currentStaff?.dieselAssignments || {})
           });
         }
       } catch (error) {
