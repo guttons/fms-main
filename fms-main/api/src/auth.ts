@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { requireAuth } from './middleware/auth';
 
 const router = Router();
 
@@ -32,7 +33,7 @@ const verifyPin = async (pin: string, hash: string): Promise<boolean> => {
 
 // POST /auth/set-pin
 // Body: { staffId: string, pin: string, isFirstTime?: boolean }
-router.post('/set-pin', async (req, res) => {
+router.post('/set-pin', requireAuth, async (req, res) => {
   try {
     const { staffId, pin } = req.body;
     if (!staffId || !pin) {
@@ -171,7 +172,7 @@ router.post('/check-auth-status', async (req, res) => {
 
 // POST /auth/reset-pin (admin action)
 // Body: { staffId: string }
-router.post('/reset-pin', async (req, res) => {
+router.post('/reset-pin', requireAuth, async (req, res) => {
   try {
     const { staffId } = req.body;
     if (!staffId) {
@@ -250,7 +251,7 @@ router.post('/reset-with-token', async (req, res) => {
       return res.status(400).json({ error: 'Invalid reset request' });
     }
 
-    if (authRecord.reset_token !== token) {
+    if (!authRecord.reset_token || authRecord.reset_token !== token) {
       return res.status(400).json({ error: 'Invalid token' });
     }
 

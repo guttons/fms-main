@@ -15,9 +15,14 @@ CREATE TABLE IF NOT EXISTS public.fin_customers (
     outstanding_receipts NUMERIC NOT NULL DEFAULT 0,
     opening_balance_liters NUMERIC,
     balance_liters NUMERIC,
-    associated_airlines TEXT[]
+    associated_airlines TEXT[],
+    associated_regs TEXT[] DEFAULT '{}',
+    account_emails TEXT[] DEFAULT '{}',
+    airline_holdings JSONB DEFAULT '[]'::jsonb,
+    default_price_per_liter NUMERIC(10, 5) DEFAULT 1.19197,
+    auto_deduct_on_uplift BOOLEAN DEFAULT true
 );
-ALTER TABLE public.fin_customers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.fin_customers ENABLE ROW LEVEL SECURITY;
 
 -- 2. Create fin_upcoming_payments Table
 CREATE TABLE IF NOT EXISTS public.fin_upcoming_payments (

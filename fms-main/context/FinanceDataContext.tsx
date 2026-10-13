@@ -6,19 +6,33 @@ import { fmsDb } from '../services/db';
 
 export type CustomerClassification = 'ADVANCE' | 'CREDIT' | 'CASH';
 
+export interface AirlineHolding {
+  code: string;               // Airline IATA/ICAO prefix e.g. 'EK', 'SQ', 'Q2', 'BA', 'EY'
+  name: string;               // Full airline name e.g. 'Emirates', 'British Airways'
+  flightJobEmails: string[];  // Emails to receive flight job dispatches
+  billingEmails: string[];    // Emails to receive signed fuel delivery tickets & invoices
+  aircraftRegs?: string[];    // Dedicated aircraft registrations for this airline
+  autoSendFlightJob?: boolean;
+  autoSendInvoice?: boolean;
+}
+
 export interface CustomerAccount {
   id: string;
   name: string;
   classification: CustomerClassification;
-  openingBalance: number;      // USD
-  paymentsReceived: number;    // USD
-  advanceBalance: number;      // USD (Current running balance for pre-pay)
-  creditLimit: number;         // USD
-  estimated5DaysSales: number;  // USD
+  openingBalance: number;       // USD
+  paymentsReceived: number;     // USD
+  advanceBalance: number;       // USD (Current running balance for pre-pay)
+  creditLimit: number;          // USD
+  estimated5DaysSales: number;   // USD
   associatedAirlines?: string[]; // Third-party agent links or flight prefixes (e.g. EK, SQ, Q2)
-  associatedRegs?: string[];    // Aircraft registrations (e.g. A6-EEO, 8Q-IAI)
-  outstandingReceipts: number;  // USD
-  runningBalance: number;      // USD
+  associatedRegs?: string[];     // Aircraft registrations (e.g. A6-EEO, 8Q-IAI)
+  accountEmails?: string[];      // Primary account-level billing/ops emails
+  airlineHoldings?: AirlineHolding[]; // Structured airlines held by this account + per-airline emails
+  defaultPricePerLiter?: number; // Default circular rate USD/L
+  autoDeductOnUplift?: boolean;  // Real-time deduction enabled when flight jobs / logs are entered
+  outstandingReceipts: number;   // USD
+  runningBalance: number;       // USD
   openingBalanceLiters?: number;
   balanceLiters?: number;
 }
@@ -168,6 +182,22 @@ export interface CustomsShipment {
   royaltyAmount: number;
 }
 
+export interface RealTimeDeductionEvent {
+  id: string;
+  timestamp: string;
+  deliveryNumber: string;
+  flightNumber: string;
+  airlineName: string;
+  customerId: string;
+  customerName: string;
+  classification: CustomerClassification;
+  volumeLiters: number;
+  amountDeducted: number;
+  previousBalance: number;
+  newBalance: number;
+  emailsNotified: string[];
+}
+
 interface FinanceDataContextType {
   customers: CustomerAccount[];
   upcomingPayments: UpcomingPayment[];
@@ -180,12 +210,44 @@ interface FinanceDataContextType {
   surcharges: SurchargeRecord[];
   mpdSales: MpdSale[];
   customsShipments: CustomsShipment[];
+  realtimeDeductions: RealTimeDeductionEvent[];
   
   // Actions
   uploadSwiftCopy: (customerId: string, referenceNumber: string, amount: number) => void;
   reviewSwiftCopy: (paymentId: string, action: 'APPROVE' | 'REJECT') => void;
   syncOracleReceipt: (customerId: string, referenceNumber: string, amount: number) => void;
   submitFuelRequest: (customerId: string, quantityLiters: number, aircraftReg: string, options?: Partial<FuelRequest>) => { success: boolean; message: string };
+  upsertCustomerAccount: (account: CustomerAccount) => void;
+  deleteCustomerAccount: (customerId: string) => void;
+  resolveCustomerByFlightOrAirline: (
+    flightNumber?: string,
+    airlineNameOrCode?: string,
+    aircraftReg?: string,
+    coAgent?: string
+  ) => { customer: CustomerAccount | null; airlineHolding: AirlineHolding | null; emails: string[] };
+  deductFlightUpliftRealtime: (payload: {
+    id?: string;
+    deliveryNumber: string;
+    flightNumber: string;
+    airline?: string;
+    co?: string;
+    aircraftReg: string;
+    aircraftType?: string;
+    volumeLiters: number;
+    date?: string;
+    timePosition?: string;
+    timeCommence?: string;
+    timeComplete?: string;
+    categorySector?: 'INT' | 'DOM' | 'SEA' | 'OWN' | 'RACL';
+    source?: string;
+  }) => {
+    deducted: boolean;
+    customer?: CustomerAccount;
+    airlineHolding?: AirlineHolding | null;
+    amountDeducted?: number;
+    newBalance?: number;
+    message: string;
+  };
   runBillingProcess: (classification: CustomerClassification) => void;
   applyFIFOLogic: () => void;
   generateProforma: (customerId: string, period: string, amount: number) => void;
@@ -198,41 +260,511 @@ interface FinanceDataContextType {
   resetAllFinanceMockData: () => void;
 }
 
+const DEFAULT_CUSTOMER_ACCOUNTS: CustomerAccount[] = [
+  {
+    id: 'c1',
+    name: 'Emirates Airlines',
+    classification: 'ADVANCE',
+    openingBalance: 280000,
+    paymentsReceived: 150000,
+    advanceBalance: 430000,
+    creditLimit: 0,
+    estimated5DaysSales: 150000,
+    runningBalance: 430000,
+    outstandingReceipts: 0,
+    openingBalanceLiters: 100000,
+    balanceLiters: 153571,
+    defaultPricePerLiter: 1.19197,
+    autoDeductOnUplift: true,
+    associatedAirlines: ['EK', 'EK650', 'EK651', 'EK652', 'EK653', 'FZ', 'FZ1569', 'FZ1570'],
+    associatedRegs: ['A6-EEO', 'A6-EUV', 'A6-EOC', 'A6-FMA'],
+    accountEmails: ['fuel.mle@emirates.com', 'ek.ops@emirates.com'],
+    airlineHoldings: [
+      {
+        code: 'EK',
+        name: 'Emirates',
+        flightJobEmails: ['ek.ops@emirates.com', 'dispatch.mle@emirates.com'],
+        billingEmails: ['fuel.mle@emirates.com', 'fuel.accounting@emirates.com'],
+        aircraftRegs: ['A6-EEO', 'A6-EUV', 'A6-EOC'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      },
+      {
+        code: 'FZ',
+        name: 'flydubai',
+        flightJobEmails: ['ops.mle@flydubai.com'],
+        billingEmails: ['fuel.billing@flydubai.com', 'fuel.mle@emirates.com'],
+        aircraftRegs: ['A6-FMA', 'A6-FMB'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      }
+    ]
+  },
+  {
+    id: 'c2',
+    name: 'Singapore Airlines',
+    classification: 'ADVANCE',
+    openingBalance: 175712,
+    paymentsReceived: 220000,
+    advanceBalance: 395712,
+    creditLimit: 0,
+    estimated5DaysSales: 80000,
+    runningBalance: 395712,
+    outstandingReceipts: 0,
+    openingBalanceLiters: 62754,
+    balanceLiters: 141325,
+    defaultPricePerLiter: 1.19197,
+    autoDeductOnUplift: true,
+    associatedAirlines: ['SQ', 'SQ431', 'SQ432', 'SQ451', 'SQ452', 'TR'],
+    associatedRegs: ['9V-SMA', '9V-SMB', '9V-SHM'],
+    accountEmails: ['sq.mle@singaporeair.com.sg', 'fuel.ops@singaporeair.com.sg'],
+    airlineHoldings: [
+      {
+        code: 'SQ',
+        name: 'Singapore Airlines',
+        flightJobEmails: ['sq.mle@singaporeair.com.sg', 'dispatch@singaporeair.com.sg'],
+        billingEmails: ['fuel.ops@singaporeair.com.sg'],
+        aircraftRegs: ['9V-SMA', '9V-SMB', '9V-SHM'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      },
+      {
+        code: 'TR',
+        name: 'Scoot',
+        flightJobEmails: ['tr.ops@flyscoot.com', 'sq.mle@singaporeair.com.sg'],
+        billingEmails: ['fuel.ops@singaporeair.com.sg'],
+        aircraftRegs: [],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      }
+    ]
+  },
+  {
+    id: 'c3',
+    name: 'Maldivian (IAS)',
+    classification: 'CREDIT',
+    openingBalance: -28200000,
+    paymentsReceived: 10000000,
+    advanceBalance: 0,
+    creditLimit: 50000000,
+    estimated5DaysSales: 500000,
+    runningBalance: -18200000,
+    outstandingReceipts: 18200000,
+    defaultPricePerLiter: 1.19197,
+    autoDeductOnUplift: true,
+    associatedAirlines: ['Q2', 'Q2700', 'Q2701', 'Q2702', 'Q2104', 'MALDIVIAN', 'IAS'],
+    associatedRegs: ['8Q-IAI', '8Q-IAJ', '8Q-ISD', '8Q-IAN', '8Q-IAS'],
+    accountEmails: ['occ@iasl.aero', 'fuel.billing@iasl.aero'],
+    airlineHoldings: [
+      {
+        code: 'Q2',
+        name: 'Maldivian (Island Aviation Services)',
+        flightJobEmails: ['occ@iasl.aero', 'dispatch@iasl.aero'],
+        billingEmails: ['fuel.billing@iasl.aero', 'accounts@iasl.aero'],
+        aircraftRegs: ['8Q-IAI', '8Q-IAJ', '8Q-ISD', '8Q-IAN', '8Q-IAS'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      }
+    ]
+  },
+  {
+    id: 'c4',
+    name: 'Manta Aviation Pvt Ltd',
+    classification: 'CREDIT',
+    openingBalance: -150790,
+    paymentsReceived: 10000000,
+    advanceBalance: 0,
+    creditLimit: 20000000,
+    estimated5DaysSales: 200000,
+    runningBalance: -150790,
+    outstandingReceipts: 150790,
+    defaultPricePerLiter: 1.19197,
+    autoDeductOnUplift: true,
+    associatedAirlines: ['NR', 'NR101', 'NR102', 'MANTA'],
+    associatedRegs: ['8Q-RAA', '8Q-RAB', '8Q-RAC'],
+    accountEmails: ['occ@mantaair.mv', 'finance@mantaair.mv'],
+    airlineHoldings: [
+      {
+        code: 'NR',
+        name: 'Manta Air',
+        flightJobEmails: ['occ@mantaair.mv', 'dispatch@mantaair.mv'],
+        billingEmails: ['finance@mantaair.mv'],
+        aircraftRegs: ['8Q-RAA', '8Q-RAB', '8Q-RAC'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      }
+    ]
+  },
+  {
+    id: 'c5',
+    name: 'Flyme (Villa Air)',
+    classification: 'CREDIT',
+    openingBalance: 477188,
+    paymentsReceived: 10000000,
+    advanceBalance: 0,
+    creditLimit: 15000000,
+    estimated5DaysSales: 150000,
+    runningBalance: 477188,
+    outstandingReceipts: 0,
+    defaultPricePerLiter: 1.19197,
+    autoDeductOnUplift: true,
+    associatedAirlines: ['VP', 'VP201', 'VP202', 'FLYME', 'VILLA AIR'],
+    associatedRegs: ['8Q-VAH', '8Q-VAI', '8Q-VAJ'],
+    accountEmails: ['occ@flyme.mv', 'accounts@flyme.mv'],
+    airlineHoldings: [
+      {
+        code: 'VP',
+        name: 'Flyme (Villa Air)',
+        flightJobEmails: ['occ@flyme.mv', 'dispatch@flyme.mv'],
+        billingEmails: ['accounts@flyme.mv'],
+        aircraftRegs: ['8Q-VAH', '8Q-VAI', '8Q-VAJ'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      }
+    ]
+  },
+  {
+    id: 'c6',
+    name: 'Qatar Airways',
+    classification: 'ADVANCE',
+    openingBalance: 151575,
+    paymentsReceived: 500000,
+    advanceBalance: 651575,
+    creditLimit: 0,
+    estimated5DaysSales: 120000,
+    runningBalance: 651575,
+    outstandingReceipts: 0,
+    openingBalanceLiters: 54134,
+    balanceLiters: 232705,
+    defaultPricePerLiter: 1.19197,
+    autoDeductOnUplift: true,
+    associatedAirlines: ['QR', 'QR672', 'QR673', 'QR674', 'QR675'],
+    associatedRegs: ['A7-BCA', 'A7-BCB', 'A7-BEO'],
+    accountEmails: ['qrops.mle@qatarairways.com.qa', 'fuel@qatarairways.com.qa'],
+    airlineHoldings: [
+      {
+        code: 'QR',
+        name: 'Qatar Airways',
+        flightJobEmails: ['qrops.mle@qatarairways.com.qa', 'dispatch.mle@qatarairways.com.qa'],
+        billingEmails: ['fuel@qatarairways.com.qa'],
+        aircraftRegs: ['A7-BCA', 'A7-BCB', 'A7-BEO'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      }
+    ]
+  },
+  {
+    id: 'c7',
+    name: 'Access Flight Support',
+    classification: 'ADVANCE',
+    openingBalance: 26485,
+    paymentsReceived: 15000,
+    advanceBalance: 41485,
+    creditLimit: 0,
+    estimated5DaysSales: 30000,
+    runningBalance: 41485,
+    outstandingReceipts: 0,
+    openingBalanceLiters: 22220,
+    balanceLiters: 34804,
+    defaultPricePerLiter: 1.19197,
+    autoDeductOnUplift: true,
+    associatedAirlines: ['AFS', 'BA', 'VS', 'DE', 'WK', 'AZ'],
+    associatedRegs: ['G-ZBJA', 'D-ABOM', 'HB-JMG'],
+    accountEmails: ['ops@accessflightsupport.com', 'fuel@accessflightsupport.com'],
+    airlineHoldings: [
+      {
+        code: 'BA',
+        name: 'British Airways',
+        flightJobEmails: ['ba.mle@ba.com', 'ops@accessflightsupport.com'],
+        billingEmails: ['fuel@accessflightsupport.com', 'fuel.invoices@ba.com'],
+        aircraftRegs: ['G-ZBJA', 'G-ZBJF'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      },
+      {
+        code: 'DE',
+        name: 'Condor',
+        flightJobEmails: ['occ@condor.com', 'ops@accessflightsupport.com'],
+        billingEmails: ['fuel@accessflightsupport.com'],
+        aircraftRegs: ['D-ABOM'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      },
+      {
+        code: 'WK',
+        name: 'Edelweiss Air',
+        flightJobEmails: ['dispatch@flyedelweiss.com', 'ops@accessflightsupport.com'],
+        billingEmails: ['fuel@accessflightsupport.com'],
+        aircraftRegs: ['HB-JMG'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      },
+      {
+        code: 'VS',
+        name: 'Virgin Atlantic',
+        flightJobEmails: ['mle.ops@fly.virgin.com', 'ops@accessflightsupport.com'],
+        billingEmails: ['fuel@accessflightsupport.com'],
+        aircraftRegs: [],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      },
+      {
+        code: 'AZ',
+        name: 'ITA Airways',
+        flightJobEmails: ['occ@ita-airways.com', 'ops@accessflightsupport.com'],
+        billingEmails: ['fuel@accessflightsupport.com'],
+        aircraftRegs: [],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      }
+    ]
+  },
+  {
+    id: 'c8',
+    name: 'AML Global Ltd',
+    classification: 'ADVANCE',
+    openingBalance: 311853,
+    paymentsReceived: 0,
+    advanceBalance: 311853,
+    creditLimit: 0,
+    estimated5DaysSales: 50000,
+    runningBalance: 311853,
+    outstandingReceipts: 0,
+    openingBalanceLiters: 261628,
+    balanceLiters: 261628,
+    defaultPricePerLiter: 1.19197,
+    autoDeductOnUplift: true,
+    associatedAirlines: ['AML', 'EY', 'G9', 'UL', '6E', 'WY'],
+    associatedRegs: ['A6-BMJ', 'A6-ANY', 'A6-ARA', '4R-ALM', 'VT-IIO'],
+    accountEmails: ['ops@amlglobal.aero', 'billing@amlglobal.aero'],
+    airlineHoldings: [
+      {
+        code: 'EY',
+        name: 'Etihad Airways',
+        flightJobEmails: ['ey.mle@etihad.ae', 'ops@amlglobal.aero'],
+        billingEmails: ['billing@amlglobal.aero', 'fuel@etihad.ae'],
+        aircraftRegs: ['A6-BMJ', 'A6-BLV'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      },
+      {
+        code: 'G9',
+        name: 'Air Arabia',
+        flightJobEmails: ['g9.ops@airarabia.com', 'ops@amlglobal.aero'],
+        billingEmails: ['billing@amlglobal.aero'],
+        aircraftRegs: ['A6-ANY', 'A6-ARA'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      },
+      {
+        code: 'UL',
+        name: 'SriLankan Airlines',
+        flightJobEmails: ['ul.mle@srilankan.com', 'ops@amlglobal.aero'],
+        billingEmails: ['billing@amlglobal.aero', 'fuel@srilankan.com'],
+        aircraftRegs: ['4R-ALM', '4R-ALN'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      },
+      {
+        code: '6E',
+        name: 'IndiGo',
+        flightJobEmails: ['occ.intl@goindigo.in', 'ops@amlglobal.aero'],
+        billingEmails: ['billing@amlglobal.aero'],
+        aircraftRegs: ['VT-IIO'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      },
+      {
+        code: 'WY',
+        name: 'Oman Air',
+        flightJobEmails: ['wy.mle@omanair.com', 'ops@amlglobal.aero'],
+        billingEmails: ['billing@amlglobal.aero'],
+        aircraftRegs: [],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      }
+    ]
+  },
+  {
+    id: 'c9',
+    name: 'Aviation Services Management',
+    classification: 'CREDIT',
+    openingBalance: -326370,
+    paymentsReceived: 1215191,
+    advanceBalance: 0,
+    creditLimit: 5000000,
+    estimated5DaysSales: 100000,
+    runningBalance: 888821,
+    outstandingReceipts: 0,
+    defaultPricePerLiter: 1.19197,
+    autoDeductOnUplift: true,
+    associatedAirlines: ['ASM', 'SU', 'TK', 'SV', 'KU', 'GF'],
+    associatedRegs: ['RA-73100', 'TC-LJA', 'HZ-AK36'],
+    accountEmails: ['fuel@asm.aero', 'ops@asm.aero'],
+    airlineHoldings: [
+      {
+        code: 'SU',
+        name: 'Aeroflot',
+        flightJobEmails: ['su.mle@aeroflot.ru', 'ops@asm.aero'],
+        billingEmails: ['fuel@asm.aero'],
+        aircraftRegs: ['RA-73100'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      },
+      {
+        code: 'TK',
+        name: 'Turkish Airlines',
+        flightJobEmails: ['tk.mle@thy.com', 'ops@asm.aero'],
+        billingEmails: ['fuel@asm.aero', 'fuel@thy.com'],
+        aircraftRegs: ['TC-LJA'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      },
+      {
+        code: 'SV',
+        name: 'Saudia',
+        flightJobEmails: ['sv.mle@saudia.com', 'ops@asm.aero'],
+        billingEmails: ['fuel@asm.aero'],
+        aircraftRegs: ['HZ-AK36'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      },
+      {
+        code: 'GF',
+        name: 'Gulf Air',
+        flightJobEmails: ['gf.mle@gulfair.com', 'ops@asm.aero'],
+        billingEmails: ['fuel@asm.aero'],
+        aircraftRegs: [],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      }
+    ]
+  },
+  {
+    id: 'c10',
+    name: 'Mega Airport Services (Cash Agent)',
+    classification: 'CASH',
+    openingBalance: 0,
+    paymentsReceived: 0,
+    advanceBalance: 0,
+    creditLimit: 0,
+    estimated5DaysSales: 0,
+    runningBalance: 0,
+    outstandingReceipts: 0,
+    defaultPricePerLiter: 1.19197,
+    autoDeductOnUplift: true,
+    associatedAirlines: ['MAS', 'CASH', 'MH', 'AK', 'FD', 'JD', 'MU'],
+    associatedRegs: ['9M-MVD', '9M-MVG', '9M-AFO'],
+    accountEmails: ['ops@megaairportservices.mv', 'cashdesk@macl.aero'],
+    airlineHoldings: [
+      {
+        code: 'MH',
+        name: 'Malaysia Airlines',
+        flightJobEmails: ['mh.mle@malaysiaairlines.com', 'ops@megaairportservices.mv'],
+        billingEmails: ['ops@megaairportservices.mv', 'cashdesk@macl.aero'],
+        aircraftRegs: ['9M-MVD', '9M-MVG'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      },
+      {
+        code: 'AK',
+        name: 'AirAsia',
+        flightJobEmails: ['ak.mle@airasia.com', 'ops@megaairportservices.mv'],
+        billingEmails: ['ops@megaairportservices.mv'],
+        aircraftRegs: ['9M-AFO'],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      },
+      {
+        code: 'MU',
+        name: 'China Eastern Airlines',
+        flightJobEmails: ['mu.mle@ceair.com', 'ops@megaairportservices.mv'],
+        billingEmails: ['ops@megaairportservices.mv'],
+        aircraftRegs: [],
+        autoSendFlightJob: true,
+        autoSendInvoice: true
+      }
+    ]
+  }
+];
+
+function enrichCustomersWithDefaultHoldings(list: CustomerAccount[]): CustomerAccount[] {
+  return list.map(cust => {
+    const def = DEFAULT_CUSTOMER_ACCOUNTS.find(
+      d => d.id === cust.id || d.name.toLowerCase() === cust.name.toLowerCase()
+    );
+    if (!def) {
+      return {
+        ...cust,
+        associatedAirlines: cust.associatedAirlines || [],
+        associatedRegs: cust.associatedRegs || [],
+        accountEmails: cust.accountEmails || [],
+        airlineHoldings: cust.airlineHoldings || [],
+        defaultPricePerLiter: cust.defaultPricePerLiter ?? 1.19197,
+        autoDeductOnUplift: cust.autoDeductOnUplift ?? true
+      };
+    }
+    return {
+      ...cust,
+      associatedAirlines:
+        cust.associatedAirlines && cust.associatedAirlines.length > 0
+          ? cust.associatedAirlines
+          : def.associatedAirlines,
+      associatedRegs:
+        cust.associatedRegs && cust.associatedRegs.length > 0
+          ? cust.associatedRegs
+          : def.associatedRegs,
+      accountEmails:
+        cust.accountEmails && cust.accountEmails.length > 0
+          ? cust.accountEmails
+          : def.accountEmails,
+      airlineHoldings:
+        cust.airlineHoldings && cust.airlineHoldings.length > 0
+          ? cust.airlineHoldings
+          : def.airlineHoldings,
+      defaultPricePerLiter: cust.defaultPricePerLiter ?? def.defaultPricePerLiter ?? 1.19197,
+      autoDeductOnUplift: cust.autoDeductOnUplift ?? true
+    };
+  });
+}
+
 const FinanceDataContext = createContext<FinanceDataContextType | undefined>(undefined);
 
 export const FinanceDataProvider: React.FC<{ children: React.ReactNode; user?: User | null }> = ({ children, user }) => {
-  // Initialize mock customer list matching MACL actual worksheets
+  // Initialize customer list matching MACL actual worksheets + airline holdings & email directory
   const [customers, setCustomers] = useState<CustomerAccount[]>(() => {
     const saved = localStorage.getItem('fms_fin_customers');
-    if (saved) return JSON.parse(saved);
-    return [
-      { id: 'c1', name: 'Emirates Airlines', classification: 'ADVANCE', openingBalance: 280000, paymentsReceived: 150000, advanceBalance: 430000, creditLimit: 0, estimated5DaysSales: 150000, runningBalance: 430000, outstandingReceipts: 0, openingBalanceLiters: 100000, balanceLiters: 153571, associatedAirlines: ['EK', 'EK650', 'EK651', 'EK652', 'EK653'], associatedRegs: ['A6-EEO', 'A6-EUV', 'A6-EOC'] },
-      { id: 'c2', name: 'Singapore Airlines', classification: 'ADVANCE', openingBalance: 175712, paymentsReceived: 220000, advanceBalance: 395712, creditLimit: 0, estimated5DaysSales: 80000, runningBalance: 395712, outstandingReceipts: 0, openingBalanceLiters: 62754, balanceLiters: 141325, associatedAirlines: ['SQ', 'SQ451', 'SQ452'], associatedRegs: ['9V-SMA', '9V-SMB'] },
-      { id: 'c3', name: 'Maldivian (IAS)', classification: 'CREDIT', openingBalance: -28200000, paymentsReceived: 10000000, advanceBalance: 0, creditLimit: 50000000, estimated5DaysSales: 500000, runningBalance: -18200000, outstandingReceipts: 18200000, associatedAirlines: ['Q2', 'Q2700', 'Q2701', 'Q2702'], associatedRegs: ['8Q-IAI', '8Q-IAJ', '8Q-ISD'] },
-      { id: 'c4', name: 'Manta Aviation Pvt Ltd', classification: 'CREDIT', openingBalance: -150790, paymentsReceived: 10000000, advanceBalance: 0, creditLimit: 20000000, estimated5DaysSales: 200000, runningBalance: -150790, outstandingReceipts: 150790, associatedAirlines: ['NR', 'NR101', 'NR102'], associatedRegs: ['8Q-RAA', '8Q-RAB'] },
-      { id: 'c5', name: 'Flyme (Villa Air)', classification: 'CREDIT', openingBalance: 477188, paymentsReceived: 10000000, advanceBalance: 0, creditLimit: 15000000, estimated5DaysSales: 150000, runningBalance: 477188, outstandingReceipts: 0, associatedAirlines: ['VP', 'VP201', 'VP202'], associatedRegs: ['8Q-VAH', '8Q-VAI'] },
-      { id: 'c6', name: 'Qatar Airways', classification: 'ADVANCE', openingBalance: 151575, paymentsReceived: 500000, advanceBalance: 651575, creditLimit: 0, estimated5DaysSales: 120000, runningBalance: 651575, outstandingReceipts: 0, openingBalanceLiters: 54134, balanceLiters: 232705, associatedAirlines: ['QR', 'QR672', 'QR673'], associatedRegs: ['A7-BCA', 'A7-BCB'] },
-      { id: 'c7', name: 'Access Flight Support', classification: 'ADVANCE', openingBalance: 26485, paymentsReceived: 15000, advanceBalance: 41485, creditLimit: 0, estimated5DaysSales: 30000, runningBalance: 41485, outstandingReceipts: 0, associatedAirlines: ['AFS'] },
-      { id: 'c8', name: 'AML Global Ltd', classification: 'ADVANCE', openingBalance: 311853, paymentsReceived: 0, advanceBalance: 311853, creditLimit: 0, estimated5DaysSales: 50000, runningBalance: 311853, outstandingReceipts: 0, associatedAirlines: ['AML'] },
-      { id: 'c9', name: 'Aviation Services Management', classification: 'CREDIT', openingBalance: -326370, paymentsReceived: 1215191, advanceBalance: 0, creditLimit: 5000000, estimated5DaysSales: 100000, runningBalance: 888821, outstandingReceipts: 0, associatedAirlines: ['ASM'] },
-      { id: 'c10', name: 'Mega Airport Services (Cash Agent)', classification: 'CASH', openingBalance: 0, paymentsReceived: 0, advanceBalance: 0, creditLimit: 0, estimated5DaysSales: 0, runningBalance: 0, outstandingReceipts: 0, associatedAirlines: ['MAS', 'CASH'] },
-    ];
+    if (saved) {
+      try {
+        return enrichCustomersWithDefaultHoldings(JSON.parse(saved));
+      } catch {
+        return DEFAULT_CUSTOMER_ACCOUNTS;
+      }
+    }
+    return DEFAULT_CUSTOMER_ACCOUNTS;
   });
+
+  const [realtimeDeductions, setRealtimeDeductions] = useState<RealTimeDeductionEvent[]>(() => {
+    const saved = localStorage.getItem('fms_fin_realtime_deductions');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('fms_fin_realtime_deductions', JSON.stringify(realtimeDeductions.slice(0, 100)));
+  }, [realtimeDeductions]);
 
   // Index customer master database into IndexedDB for offline flight number & aircraft reg resolution
   useEffect(() => {
     fmsDb.indexCustomerMappings(customers).catch(err => {
       console.warn('[MasterDB] Failed to index customer flight/reg mappings:', err);
     });
-
-    // Also map specific aircraft tail numbers to customers
-    for (const cust of customers) {
-      if (cust.associatedRegs) {
-        for (const reg of cust.associatedRegs) {
-          fmsDb.mapFlightOrRegToCustomer(reg, cust.id, cust.name, cust.classification, 'AIRCRAFT_REG');
-        }
-      }
-    }
   }, [customers]);
 
   const [upcomingPayments, setUpcomingPayments] = useState<UpcomingPayment[]>(() => {
@@ -564,7 +1096,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode; user?: U
         supabaseService.getFinCustomsShipments()
       ]);
 
-      if (fetchedCusts && fetchedCusts.length > 0) setCustomers(fetchedCusts);
+      if (fetchedCusts && fetchedCusts.length > 0) setCustomers(enrichCustomersWithDefaultHoldings(fetchedCusts));
       if (fetchedUpcoming && fetchedUpcoming.length > 0) setUpcomingPayments(fetchedUpcoming);
       if (fetchedInvoices && fetchedInvoices.length > 0) setInvoices(fetchedInvoices);
       if (fetchedReceipts && fetchedReceipts.length > 0) setReceipts(fetchedReceipts);
@@ -1121,6 +1653,394 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode; user?: U
     }
   };
 
+  // Create or update a CustomerAccount (including held airlines & email routing)
+  const upsertCustomerAccount = useCallback((account: CustomerAccount) => {
+    // Keep associatedAirlines and associatedRegs synchronized with airlineHoldings
+    const holdingCodes = (account.airlineHoldings || [])
+      .flatMap(h => [h.code?.toUpperCase().trim(), h.name?.toUpperCase().trim()])
+      .filter(Boolean) as string[];
+    const mergedAirlines = Array.from(
+      new Set([...(account.associatedAirlines || []).map(a => a.toUpperCase().trim()), ...holdingCodes].filter(Boolean))
+    );
+    const holdingRegs = (account.airlineHoldings || [])
+      .flatMap(h => h.aircraftRegs || [])
+      .map(r => r.toUpperCase().trim())
+      .filter(Boolean);
+    const mergedRegs = Array.from(
+      new Set([...(account.associatedRegs || []).map(r => r.toUpperCase().trim()), ...holdingRegs].filter(Boolean))
+    );
+
+    const normalized: CustomerAccount = {
+      ...account,
+      associatedAirlines: mergedAirlines,
+      associatedRegs: mergedRegs,
+      accountEmails: (account.accountEmails || []).map(e => e.trim()).filter(Boolean),
+      airlineHoldings: (account.airlineHoldings || []).map(h => ({
+        ...h,
+        code: h.code.toUpperCase().trim(),
+        name: h.name.trim(),
+        flightJobEmails: (h.flightJobEmails || []).map(e => e.trim()).filter(Boolean),
+        billingEmails: (h.billingEmails || []).map(e => e.trim()).filter(Boolean),
+        aircraftRegs: (h.aircraftRegs || []).map(r => r.toUpperCase().trim()).filter(Boolean)
+      })),
+      defaultPricePerLiter: account.defaultPricePerLiter ?? 1.19197,
+      autoDeductOnUplift: account.autoDeductOnUplift ?? true
+    };
+
+    setCustomers(prev => {
+      const exists = prev.some(c => c.id === normalized.id);
+      const next = exists ? prev.map(c => (c.id === normalized.id ? normalized : c)) : [normalized, ...prev];
+      return next;
+    });
+
+    supabaseService.upsertFinCustomers([normalized]).catch(err => {
+      console.warn('[Finance] Failed to upsert customer to Supabase, queueing offline outbox:', err);
+      fmsDb.enqueueOutbox({
+        idempotencyKey: `customer-upsert-${normalized.id}-${Date.now()}`,
+        entityType: 'customer',
+        entityId: normalized.id,
+        action: 'UPDATE',
+        payload: {
+          id: normalized.id,
+          name: normalized.name,
+          classification: normalized.classification,
+          opening_balance: normalized.openingBalance,
+          payments_received: normalized.paymentsReceived,
+          advance_balance: normalized.advanceBalance,
+          credit_limit: normalized.creditLimit,
+          estimated_5_days_sales: normalized.estimated5DaysSales,
+          running_balance: normalized.runningBalance,
+          outstanding_receipts: normalized.outstandingReceipts,
+          opening_balance_liters: normalized.openingBalanceLiters ?? null,
+          balance_liters: normalized.balanceLiters ?? null,
+          associated_airlines: normalized.associatedAirlines || []
+        }
+      });
+    });
+  }, []);
+
+  const deleteCustomerAccount = useCallback((customerId: string) => {
+    setCustomers(prev => prev.filter(c => c.id !== customerId));
+    supabaseService.deleteFinCustomer(customerId).catch(err => {
+      console.warn('[Finance] Failed to delete customer from Supabase:', err);
+    });
+  }, []);
+
+  // Resolve owning CustomerAccount, specific AirlineHolding, and target email addresses
+  // from flightNumber (e.g. "EK653", "BA2043"), airline name/code, aircraftReg, or C/O agent
+  const resolveCustomerByFlightOrAirline = useCallback(
+    (
+      flightNumber?: string,
+      airlineNameOrCode?: string,
+      aircraftReg?: string,
+      coAgent?: string
+    ): { customer: CustomerAccount | null; airlineHolding: AirlineHolding | null; emails: string[] } => {
+      const cleanFlight = (flightNumber || '').toUpperCase().trim();
+      const prefixMatch = cleanFlight.match(/^([A-Z0-9]{2,3})\s*-?\s*\d+/);
+      const flightPrefix = prefixMatch ? prefixMatch[1] : cleanFlight;
+      const cleanAirline = (airlineNameOrCode || '').toUpperCase().trim();
+      const cleanReg = (aircraftReg || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const cleanRegWithDash = (aircraftReg || '').toUpperCase().trim();
+      const cleanCo = (coAgent || '').toUpperCase().trim();
+
+      // 1. Check exact AirlineHolding match across all customer accounts
+      for (const cust of customers) {
+        const holdings = cust.airlineHoldings || [];
+        for (const h of holdings) {
+          const hCode = (h.code || '').toUpperCase().trim();
+          const hName = (h.name || '').toUpperCase().trim();
+          const codeMatches =
+            (hCode && (flightPrefix === hCode || cleanFlight.startsWith(hCode) || cleanAirline === hCode)) ||
+            (hName && (cleanAirline === hName || cleanAirline.includes(hName) || hName.includes(cleanAirline && cleanAirline.length >= 3 ? cleanAirline : '___NONE___')));
+          const regMatches =
+            cleanReg.length >= 3 &&
+            (h.aircraftRegs || []).some(
+              r => r.toUpperCase().replace(/[^A-Z0-9]/g, '') === cleanReg || r.toUpperCase().trim() === cleanRegWithDash
+            );
+
+          if (codeMatches || regMatches) {
+            const emails = Array.from(
+              new Set([...(h.flightJobEmails || []), ...(h.billingEmails || []), ...(cust.accountEmails || [])].filter(Boolean))
+            );
+            return { customer: cust, airlineHolding: h, emails };
+          }
+        }
+      }
+
+      // 2. Check customer-level associatedAirlines, associatedRegs, or C/O agent name
+      for (const cust of customers) {
+        const custNameUpper = cust.name.toUpperCase().trim();
+        const assocAirlines = (cust.associatedAirlines || []).map(a => a.toUpperCase().trim());
+        const assocRegs = (cust.associatedRegs || []).map(r => r.toUpperCase().replace(/[^A-Z0-9]/g, ''));
+
+        const matchesFlightOrPrefix =
+          (cleanFlight && assocAirlines.includes(cleanFlight)) ||
+          (flightPrefix && assocAirlines.includes(flightPrefix)) ||
+          (cleanAirline && assocAirlines.includes(cleanAirline));
+
+        const matchesReg = cleanReg.length >= 3 && assocRegs.includes(cleanReg);
+
+        const matchesNameOrCo =
+          (cleanCo && (custNameUpper.includes(cleanCo) || assocAirlines.includes(cleanCo))) ||
+          (cleanAirline && cleanAirline.length >= 3 && (custNameUpper.includes(cleanAirline) || cleanAirline.includes(custNameUpper)));
+
+        if (matchesFlightOrPrefix || matchesReg || matchesNameOrCo) {
+          const matchedHolding =
+            (cust.airlineHoldings || []).find(
+              h =>
+                h.code.toUpperCase() === flightPrefix ||
+                h.code.toUpperCase() === cleanAirline ||
+                (cleanAirline && h.name.toUpperCase().includes(cleanAirline))
+            ) || (cust.airlineHoldings && cust.airlineHoldings[0]) || null;
+
+          const emails = Array.from(
+            new Set([
+              ...(matchedHolding?.flightJobEmails || []),
+              ...(matchedHolding?.billingEmails || []),
+              ...(cust.accountEmails || [])
+            ].filter(Boolean))
+          );
+          return { customer: cust, airlineHolding: matchedHolding, emails };
+        }
+      }
+
+      return { customer: null, airlineHolding: null, emails: [] };
+    },
+    [customers]
+  );
+
+  // Real-time balance deduction when a flight job / fueling log is entered
+  const deductFlightUpliftRealtime = useCallback(
+    (payload: {
+      id?: string;
+      deliveryNumber: string;
+      flightNumber: string;
+      airline?: string;
+      co?: string;
+      aircraftReg: string;
+      aircraftType?: string;
+      volumeLiters: number;
+      date?: string;
+      timePosition?: string;
+      timeCommence?: string;
+      timeComplete?: string;
+      categorySector?: 'INT' | 'DOM' | 'SEA' | 'OWN' | 'RACL';
+      source?: string;
+    }) => {
+      const volume = Number(payload.volumeLiters) || 0;
+      if (volume <= 0) {
+        return { deducted: false, message: 'Zero volume uplift; no deduction required.' };
+      }
+
+      const ticketKey = (payload.deliveryNumber || payload.id || '').trim();
+      if (ticketKey) {
+        try {
+          const deductedSetRaw = localStorage.getItem('fms_fin_deducted_tickets');
+          const deductedList: string[] = deductedSetRaw ? JSON.parse(deductedSetRaw) : [];
+          if (deductedList.includes(ticketKey)) {
+            return { deducted: false, message: `Delivery Ticket #${ticketKey} already deducted.` };
+          }
+        } catch {}
+      }
+
+      const { customer, airlineHolding, emails } = resolveCustomerByFlightOrAirline(
+        payload.flightNumber,
+        payload.airline,
+        payload.aircraftReg,
+        payload.co
+      );
+
+      if (!customer) {
+        return {
+          deducted: false,
+          message: `No linked Customer Account found for ${payload.flightNumber || payload.airline || payload.aircraftReg}.`
+        };
+      }
+
+      if (customer.autoDeductOnUplift === false) {
+        return {
+          deducted: false,
+          customer,
+          airlineHolding,
+          message: `Auto-deduction is disabled for ${customer.name}.`
+        };
+      }
+
+      const pricePerLiter = customer.defaultPricePerLiter || 1.19197;
+      const amount = Number((volume * pricePerLiter).toFixed(2));
+      const prevBal = customer.classification === 'ADVANCE' ? customer.advanceBalance : customer.runningBalance;
+      const nextAdvance =
+        customer.classification === 'ADVANCE' ? Number((customer.advanceBalance - amount).toFixed(2)) : customer.advanceBalance;
+      const nextRunning = Number((customer.runningBalance - amount).toFixed(2));
+      const nextLiters =
+        customer.balanceLiters !== undefined
+          ? Math.max(0, Math.round(customer.balanceLiters - volume))
+          : customer.classification === 'ADVANCE'
+          ? Math.max(0, Math.round(nextAdvance / pricePerLiter))
+          : undefined;
+
+      const updatedCustomer: CustomerAccount = {
+        ...customer,
+        advanceBalance: nextAdvance,
+        runningBalance: nextRunning,
+        balanceLiters: nextLiters,
+        outstandingReceipts:
+          customer.classification === 'CREDIT' && nextRunning < 0 ? Math.abs(nextRunning) : customer.outstandingReceipts
+      };
+
+      setCustomers(prev => prev.map(c => (c.id === customer.id ? updatedCustomer : c)));
+
+      // Persist updated customer balance to Supabase
+      supabaseService.upsertFinCustomers([updatedCustomer]).catch(err => {
+        console.warn('[Finance] Failed to sync real-time balance deduction to Supabase:', err);
+      });
+
+      const isDomestic =
+        customer.id === 'c3' ||
+        customer.id === 'c4' ||
+        customer.id === 'c5' ||
+        (payload.flightNumber || '').toUpperCase().startsWith('Q2') ||
+        (payload.flightNumber || '').toUpperCase().startsWith('NR') ||
+        (payload.flightNumber || '').toUpperCase().startsWith('VP');
+
+      const newReq: FuelRequest = {
+        id: payload.id ? `fr-${payload.id}` : `fr-${Date.now()}`,
+        deliveryNumber: payload.deliveryNumber || `${Math.floor(312000 + Math.random() * 9000)}`,
+        customerId: customer.id,
+        customerName: customer.name,
+        date: payload.date || new Date().toISOString().split('T')[0],
+        quantityLiters: volume,
+        pricePerLiter,
+        amount,
+        aircraftReg: payload.aircraftReg || 'TBA',
+        status:
+          customer.classification === 'ADVANCE' && prevBal < amount
+            ? 'BLOCKED_INSUFFICIENT_FUNDS'
+            : 'APPROVED',
+        categorySector: payload.categorySector || (isDomestic ? 'DOM' : 'INT'),
+        operator: (airlineHolding?.name || payload.airline || customer.name).toUpperCase(),
+        flightNumber: (payload.flightNumber || 'FLIGHT').toUpperCase(),
+        aircraftType: payload.aircraftType || 'JET',
+        refuelTimePosition: payload.timePosition || '00:00',
+        refuelTimeCommence: payload.timeCommence || '00:00',
+        refuelTimeComplete: payload.timeComplete || '00:00',
+        memoLine: isDomestic ? 'JET FUEL SALES DOMESTIC (REALTIME)' : 'JET FUEL SALES INTL (REALTIME)',
+        currency: 'USD',
+        circularRate: pricePerLiter,
+        discounts: 0,
+        gst: Number((amount * 0.08).toFixed(2)),
+        transactionType: 'ISSUES',
+        cogsAccount: 'ISSUES',
+        invoiceNumber: `FFF/2026/${Math.floor(2600001000 + Math.random() * 8999)}`
+      };
+
+      setFuelRequests(prev => {
+        const exists = prev.some(r => r.deliveryNumber === newReq.deliveryNumber);
+        if (exists) {
+          return prev.map(r => (r.deliveryNumber === newReq.deliveryNumber ? newReq : r));
+        }
+        return [newReq, ...prev];
+      });
+
+      supabaseService.createFinFuelRequest(newReq).catch(err => {
+        console.warn('[Finance] Failed to sync real-time FuelRequest to Supabase:', err);
+      });
+
+      if (ticketKey) {
+        try {
+          const deductedSetRaw = localStorage.getItem('fms_fin_deducted_tickets');
+          const deductedList: string[] = deductedSetRaw ? JSON.parse(deductedSetRaw) : [];
+          if (!deductedList.includes(ticketKey)) {
+            deductedList.unshift(ticketKey);
+            localStorage.setItem('fms_fin_deducted_tickets', JSON.stringify(deductedList.slice(0, 500)));
+          }
+        } catch {}
+      }
+
+      const newBalance = customer.classification === 'ADVANCE' ? nextAdvance : nextRunning;
+      const eventRecord: RealTimeDeductionEvent = {
+        id: `ded-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        deliveryNumber: newReq.deliveryNumber,
+        flightNumber: newReq.flightNumber,
+        airlineName: airlineHolding?.name || payload.airline || customer.name,
+        customerId: customer.id,
+        customerName: customer.name,
+        classification: customer.classification,
+        volumeLiters: volume,
+        amountDeducted: amount,
+        previousBalance: prevBal,
+        newBalance,
+        emailsNotified: emails
+      };
+
+      setRealtimeDeductions(prev => [eventRecord, ...prev.slice(0, 99)]);
+
+      return {
+        deducted: true,
+        customer: updatedCustomer,
+        airlineHolding,
+        amountDeducted: amount,
+        newBalance,
+        message: `Deducted $${amount.toLocaleString()} (${volume.toLocaleString()} L) from ${customer.name} in real time.`
+      };
+    },
+    [resolveCustomerByFlightOrAirline]
+  );
+
+  // Listen globally for flight logs created in IntoPlane, Seaplane, or Schedule
+  // and automatically deduct from the matched Customer Account balance in real time!
+  useEffect(() => {
+    const handleFlightLogCreated = (evt: Event) => {
+      const customEvt = evt as CustomEvent<any>;
+      const log = customEvt.detail;
+      if (!log) return;
+      const volume = Number(log.volume) || 0;
+      if (volume <= 0) return;
+
+      const formatHHMM = (iso?: string) => {
+        if (!iso) return '00:00';
+        if (/^\d{2}:\d{2}/.test(iso)) return iso.slice(0, 5);
+        try {
+          const d = new Date(iso);
+          if (!isNaN(d.getTime())) {
+            return d.toTimeString().slice(0, 5);
+          }
+        } catch {}
+        return '00:00';
+      };
+
+      const sector =
+        log.logType === 'SEAPLANE'
+          ? 'SEA'
+          : log.category === 'DOMESTIC' || log.isDomestic
+          ? 'DOM'
+          : 'INT';
+
+      deductFlightUpliftRealtime({
+        id: log.id,
+        deliveryNumber: log.deliveryNumber || `TKT-${Date.now()}`,
+        flightNumber: log.flightNumber || '',
+        airline: log.airline || log.operatorName || '',
+        co: log.co || '',
+        aircraftReg: log.aircraftReg || '',
+        aircraftType: log.aircraftType || '',
+        volumeLiters: volume,
+        date: log.operationalDate || (log.timestampStart ? String(log.timestampStart).split('T')[0] : undefined),
+        timePosition: formatHHMM(log.timestampPosition || log.timestampStart),
+        timeCommence: formatHHMM(log.timestampStart),
+        timeComplete: formatHHMM(log.timestampEnd),
+        categorySector: sector,
+        source: log.logType || 'INTO_PLANE'
+      });
+    };
+
+    window.addEventListener('fms:flight-log-created', handleFlightLogCreated);
+    return () => {
+      window.removeEventListener('fms:flight-log-created', handleFlightLogCreated);
+    };
+  }, [deductFlightUpliftRealtime]);
+
   const resetAllFinanceMockData = () => {
     localStorage.removeItem('fms_fin_customers');
     localStorage.removeItem('fms_fin_upcoming');
@@ -1133,20 +2053,12 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode; user?: U
     localStorage.removeItem('fms_fin_surcharges');
     localStorage.removeItem('fms_fin_mpd');
     localStorage.removeItem('fms_fin_customs');
+    localStorage.removeItem('fms_fin_deducted_tickets');
+    localStorage.removeItem('fms_fin_realtime_deductions');
     
-    // Hard Reload mock lists
-    setCustomers([
-      { id: 'c1', name: 'Emirates Airlines', classification: 'ADVANCE', openingBalance: 280000, paymentsReceived: 150000, advanceBalance: 430000, creditLimit: 0, estimated5DaysSales: 150000, runningBalance: 430000, outstandingReceipts: 0, openingBalanceLiters: 100000, balanceLiters: 153571 },
-      { id: 'c2', name: 'Singapore Airlines', classification: 'ADVANCE', openingBalance: 175712, paymentsReceived: 220000, advanceBalance: 395712, creditLimit: 0, estimated5DaysSales: 80000, runningBalance: 395712, outstandingReceipts: 0, openingBalanceLiters: 62754, balanceLiters: 141325 },
-      { id: 'c3', name: 'Maldivian (IAS)', classification: 'CREDIT', openingBalance: -28200000, paymentsReceived: 10000000, advanceBalance: 0, creditLimit: 50000000, estimated5DaysSales: 500000, runningBalance: -18200000, outstandingReceipts: 18200000 },
-      { id: 'c4', name: 'Manta Aviation Pvt Ltd', classification: 'CREDIT', openingBalance: -150790, paymentsReceived: 10000000, advanceBalance: 0, creditLimit: 20000000, estimated5DaysSales: 200000, runningBalance: -150790, outstandingReceipts: 150790 },
-      { id: 'c5', name: 'Flyme (Villa Air)', classification: 'CREDIT', openingBalance: 477188, paymentsReceived: 10000000, advanceBalance: 0, creditLimit: 15000000, estimated5DaysSales: 150000, runningBalance: 477188, outstandingReceipts: 0 },
-      { id: 'c6', name: 'Qatar Airways', classification: 'ADVANCE', openingBalance: 151575, paymentsReceived: 500000, advanceBalance: 651575, creditLimit: 0, estimated5DaysSales: 120000, runningBalance: 651575, outstandingReceipts: 0, openingBalanceLiters: 54134, balanceLiters: 232705 },
-      { id: 'c7', name: 'Access Flight Support', classification: 'ADVANCE', openingBalance: 26485, paymentsReceived: 15000, advanceBalance: 41485, creditLimit: 0, estimated5DaysSales: 30000, runningBalance: 41485, outstandingReceipts: 0 },
-      { id: 'c8', name: 'AML Global Ltd', classification: 'ADVANCE', openingBalance: 311853, paymentsReceived: 0, advanceBalance: 311853, creditLimit: 0, estimated5DaysSales: 50000, runningBalance: 311853, outstandingReceipts: 0 },
-      { id: 'c9', name: 'Aviation Services Management', classification: 'CREDIT', openingBalance: -326370, paymentsReceived: 1215191, advanceBalance: 0, creditLimit: 5000000, estimated5DaysSales: 100000, runningBalance: 888821, outstandingReceipts: 0 },
-      { id: 'c10', name: 'Mega Airport Services (Cash Agent)', classification: 'CASH', openingBalance: 0, paymentsReceived: 0, advanceBalance: 0, creditLimit: 0, estimated5DaysSales: 0, runningBalance: 0, outstandingReceipts: 0 },
-    ]);
+    // Hard Reload mock lists with full airline holdings & email directory
+    setCustomers(DEFAULT_CUSTOMER_ACCOUNTS);
+    setRealtimeDeductions([]);
     setUpcomingPayments([
       { id: 'sw1', customerId: 'c1', customerName: 'Emirates Airlines', referenceNumber: 'SW-EMI-998', amount: 150000, uploadDate: '2026-06-01', status: 'PENDING_REVIEW' },
       { id: 'sw2', customerId: 'c6', customerName: 'Qatar Airways', referenceNumber: 'SW-QTR-102', amount: 300000, uploadDate: '2026-06-02', status: 'PENDING_REVIEW' }
@@ -1282,12 +2194,17 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode; user?: U
       surcharges,
       mpdSales,
       customsShipments,
+      realtimeDeductions,
       
       // Actions
       uploadSwiftCopy,
       reviewSwiftCopy,
       syncOracleReceipt,
       submitFuelRequest,
+      upsertCustomerAccount,
+      deleteCustomerAccount,
+      resolveCustomerByFlightOrAirline,
+      deductFlightUpliftRealtime,
       runBillingProcess,
       applyFIFOLogic,
       generateProforma,

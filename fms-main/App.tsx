@@ -798,11 +798,15 @@ const AppContextContent: React.FC<any> = ({
         haptic('PULL_REFRESH');
         setIsRefreshing(true);
         setPullDistance(60);
-        // Wait 800ms to allow the spinner animation to play, then trigger a page reload
-        // to cleanly refresh and reset all React contexts and states
-        setTimeout(() => {
-          window.location.reload();
-        }, 800);
+        // Refresh operational data without a destructive hard page reload (safe when apron connectivity fluctuates)
+        Promise.resolve(refreshData?.())
+          .catch(() => {})
+          .finally(() => {
+            setTimeout(() => {
+              setIsRefreshing(false);
+              setPullDistance(0);
+            }, 600);
+          });
       } else {
         setPullDistance(0);
       }
@@ -817,7 +821,7 @@ const AppContextContent: React.FC<any> = ({
       mainEl.removeEventListener('touchmove', handleTouchMove);
       mainEl.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [mainElement]);
+  }, [mainElement, refreshData]);
 
   // --- Native Mobile Gesture & History Synchronization ---
   // Push view to real window.history so native iOS/Android swipe back gestures preview returning page
@@ -1468,7 +1472,7 @@ const AppContextContent: React.FC<any> = ({
                                     await acknowledgeAllAlerts(unreadIds);
                                     notify('All notifications marked as read.', 'success');
                                   }}
-                                  className="flex items-center justify-center p-2 rounded-lg kinetic-gradient text-white transition-all active:scale-95 shadow-sm hover:opacity-90"
+                                  className="flex items-center justify-center p-2 rounded-lg bg-primary/10 text-primary hover-kinetic-gradient transition-all active:scale-95"
                                   title="Mark all as read"
                                 >
                                   <CheckCircle className="w-3.5 h-3.5" />
@@ -1513,7 +1517,7 @@ const AppContextContent: React.FC<any> = ({
                                     </div>
                                     <span className="text-[9px] font-bold opacity-30">{alert.timestamp}</span>
                                   </div>
-                                  <p className="text-[11px] font-bold text-on-surface leading-normal pr-8">{alert.message}</p>
+                                  <p className="text-[11px] font-bold text-on-surface leading-normal pr-10">{alert.message}</p>
                                   
                                   {(() => {
                                     const isReplenishRequest = alert.message.toLowerCase().includes('request') && (
@@ -1522,13 +1526,18 @@ const AppContextContent: React.FC<any> = ({
                                     );
                                     const canInitiate = isReplenishRequest && [UserRole.DEPOT_OPERATOR, UserRole.DEPOT_MANAGER, UserRole.ADMIN].includes(currentUser?.role);
                                     if (canInitiate) {
-                                      const match = alert.message.match(/unit\s+(RF-\d+)/i);
+                                      const match = alert.message.match(/(?:unit|from|refueller)\s+(RF-\d+)/i) || alert.message.match(/\b(RF-\d+)\b/i);
                                       const vehicleId = match ? match[1].toUpperCase() : null;
                                       if (vehicleId) {
                                         return (
                                           <button
-                                            onClick={() => {
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              if (!alert.acknowledged) {
+                                                await acknowledgeAlert(alert.id);
+                                              }
                                               localStorage.setItem('fms_initiate_loading_vehicle', vehicleId);
+                                              window.dispatchEvent(new CustomEvent('fms-initiate-loading', { detail: { vehicleId } }));
                                               setActiveView('bridging');
                                               setShowAlertsPanel(false);
                                               notify(`Redirecting to Refueler Loading for unit ${vehicleId}`, 'success');
@@ -1549,9 +1558,10 @@ const AppContextContent: React.FC<any> = ({
                                         e.stopPropagation();
                                         acknowledgeAlert(alert.id);
                                       }}
-                                      className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-primary/10 text-primary opacity-0 group-hover:opacity-100 transition-all hover:bg-primary hover:text-white"
+                                      className="absolute right-4 bottom-3.5 flex items-center justify-center p-2 rounded-lg bg-primary/10 text-primary opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all hover-kinetic-gradient active:scale-95"
+                                      title="Acknowledge alert"
                                     >
-                                      <CheckCircle className="w-4 h-4" />
+                                      <CheckCircle className="w-3.5 h-3.5" />
                                     </button>
                                   )}
                                 </div>
@@ -1562,7 +1572,7 @@ const AppContextContent: React.FC<any> = ({
                         
                         {userAlerts.length > 0 && (
                           <div className="p-3 bg-surface-dim/40 border-t border-outline">
-                             <p className="text-[8px] font-bold text-center text-on-surface-dim uppercase tracking-[0.2em] opacity-40 italic">Hover items to acknowledge individually</p>
+                             <p className="text-[8px] font-bold text-center text-on-surface-dim uppercase tracking-[0.2em] opacity-40 italic">Tap checkmark to acknowledge individually</p>
                           </div>
                         )}
                       </div>

@@ -21,8 +21,13 @@ router.get('/customers', requireAuth, async (_req: Request, res: Response) => {
       runningBalance: Number(row.running_balance) || 0,
       outstandingReceipts: Number(row.outstanding_receipts) || 0,
       openingBalanceLiters: row.opening_balance_liters ? Number(row.opening_balance_liters) : undefined,
-      balanceLiters: row.balance_liters ? Number(row.balance_liters) : undefined,
-      associatedAirlines: row.associated_airlines || []
+      balanceLiters: row.balance_liters !== null && row.balance_liters !== undefined ? Number(row.balance_liters) : undefined,
+      associatedAirlines: row.associated_airlines || [],
+      associatedRegs: row.associated_regs || [],
+      accountEmails: row.account_emails || [],
+      airlineHoldings: Array.isArray(row.airline_holdings) ? row.airline_holdings : [],
+      defaultPricePerLiter: row.default_price_per_liter ? Number(row.default_price_per_liter) : 1.19197,
+      autoDeductOnUplift: row.auto_deduct_on_uplift !== undefined ? Boolean(row.auto_deduct_on_uplift) : true
     }));
     return res.json({ customers });
   } catch (err: any) {
@@ -36,7 +41,7 @@ router.post('/customers/upsert', requireAuth, async (req: Request, res: Response
     if (!Array.isArray(customers) || customers.length === 0) {
       return res.status(400).json({ error: 'customers array is required' });
     }
-    const rows = customers.map(c => ({
+    const baseRows = customers.map(c => ({
       id: c.id,
       name: c.name,
       classification: c.classification,
@@ -51,9 +56,35 @@ router.post('/customers/upsert', requireAuth, async (req: Request, res: Response
       balance_liters: c.balanceLiters ?? null,
       associated_airlines: c.associatedAirlines || null
     }));
-    const { error } = await supabase.from('fin_customers').upsert(rows);
+
+    const extendedRows = customers.map((c, idx) => ({
+      ...baseRows[idx],
+      associated_regs: c.associatedRegs || [],
+      account_emails: c.accountEmails || [],
+      airline_holdings: c.airlineHoldings || [],
+      default_price_per_liter: c.defaultPricePerLiter ?? 1.19197,
+      auto_deduct_on_uplift: c.autoDeductOnUplift ?? true
+    }));
+
+    let { error } = await supabase.from('fin_customers').upsert(extendedRows);
+    if (error) {
+      // Fallback to base columns if migration hasn't been applied yet
+      const fallback = await supabase.from('fin_customers').upsert(baseRows);
+      error = fallback.error;
+    }
     if (error) return res.status(500).json({ error: error.message });
-    return res.json({ success: true, count: rows.length });
+    return res.json({ success: true, count: baseRows.length });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+router.delete('/customers/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { error } = await supabase.from('fin_customers').delete().eq('id', id);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ success: true, id });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'Internal server error' });
   }

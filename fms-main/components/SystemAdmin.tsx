@@ -128,10 +128,10 @@ const ConfirmDialog: React.FC<{ state: ConfirmState; onClose: () => void }> = ({
           overflow: hidden !important;
           height: 100% !important;
         }
-        .modal-open #bottom-nav,
-        .modal-open header,
-        .modal-open #sidebar {
-          display: none !important;
+        @media (max-width: 767px) {
+          .modal-open #bottom-nav {
+            display: none !important;
+          }
         }
       `}</style>
     </div>,
@@ -162,10 +162,10 @@ const Modal: React.FC<{ title: string; onClose: () => void; children: React.Reac
           overflow: hidden !important;
           height: 100% !important;
         }
-        .modal-open #bottom-nav,
-        .modal-open header,
-        .modal-open #sidebar {
-          display: none !important;
+        @media (max-width: 767px) {
+          .modal-open #bottom-nav {
+            display: none !important;
+          }
         }
       `}</style>
     </div>,

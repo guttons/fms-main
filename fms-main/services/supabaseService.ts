@@ -745,46 +745,74 @@ export const supabaseService = {
     }
   },
 
+  async _compactSignatureIfNeeded(dataUrl?: string): Promise<string | undefined> {
+    if (!dataUrl || dataUrl.length <= 35000 || typeof document === 'undefined') {
+      return dataUrl;
+    }
+    return new Promise((resolve) => {
+      try {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const targetWidth = 420;
+            const targetHeight = Math.round((img.height / (img.width || 420)) * targetWidth) || 105;
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+              resolve(canvas.toDataURL('image/png'));
+              return;
+            }
+          } catch {}
+          resolve(dataUrl);
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+      } catch {
+        resolve(dataUrl);
+      }
+    });
+  },
+
   async createFlightLog(log: Omit<FlightLog, 'id'> & { id?: string }): Promise<FlightLog> {
     console.log('[BigQuery API] POST /operations-log');
     const generatedId = log.id || `op-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const fullLog: FlightLog = { ...log, id: generatedId };
+    const compactedSig = await this._compactSignatureIfNeeded(log.signatureDataUrl);
+    const fullLog: FlightLog = { ...log, id: generatedId, signatureDataUrl: compactedSig };
 
-    // 1. Instantly cache in localStorage so new entries appear immediately and survive page reloads
-    try {
-      const raw = localStorage.getItem('fms_recent_flight_logs');
-      const recent: FlightLog[] = raw ? JSON.parse(raw) : [];
-      const deduped = recent.filter(l => l.id !== fullLog.id && (!fullLog.deliveryNumber || l.deliveryNumber !== fullLog.deliveryNumber));
-      deduped.unshift(fullLog);
-      localStorage.setItem('fms_recent_flight_logs', JSON.stringify(deduped.slice(0, 100)));
-      // Dispatch custom event for real-time reactivity in active tabs (deferred to avoid render phase setState conflicts)
-      if (typeof window !== 'undefined') {
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('fms:flight-log-created', { detail: fullLog }));
-        }, 0);
-      }
-    } catch (storageErr) {
-      console.warn('[Storage] Failed to cache recent flight log:', storageErr);
-    }
+    // Strip invoiceHtml from network/storage payload (it embeds ~80KB base64 logos & is generated on-demand)
+    const networkPayload: Record<string, any> = { ...fullLog };
+    delete networkPayload.invoiceHtml;
 
     try {
       const headers = await this._bqAuthHeaders();
       let res = await fetch(`${this._bqBase()}/operations-log`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(fullLog),
+        body: JSON.stringify(networkPayload),
       });
 
       if (!res.ok) {
         const errText = await res.text();
-        if (errText.includes('is not present in table') || errText.includes('Column std')) {
+        if (res.status === 413) {
+          console.warn('[BigQuery] Payload hit 413 limit, retrying without inline signatureDataUrl (cached locally)...');
+          const slimPayload = { ...networkPayload };
+          delete slimPayload.signatureDataUrl;
+          res = await fetch(`${this._bqBase()}/operations-log`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(slimPayload),
+          });
+        } else if (errText.includes('is not present in table') || errText.includes('Column std')) {
           console.warn('[BigQuery] Server missing optional columns, retrying without optional timing fields...');
-          const stripped = { ...fullLog };
-          delete (stripped as any).std;
-          delete (stripped as any).tobt;
-          delete (stripped as any).frtAirline;
-          delete (stripped as any).frtAocc;
-          delete (stripped as any).frtFor;
+          const stripped = { ...networkPayload };
+          delete stripped.std;
+          delete stripped.tobt;
+          delete stripped.frtAirline;
+          delete stripped.frtAocc;
+          delete stripped.frtFor;
           res = await fetch(`${this._bqBase()}/operations-log`, {
             method: 'POST',
             headers,
@@ -800,6 +828,27 @@ export const supabaseService = {
       if (data && data.id && data.id !== fullLog.id) {
         fullLog.id = data.id;
       }
+
+      // Cache in localStorage & broadcast ONLY after save succeeds so failed saves never leave ghost ticket numbers
+      try {
+        const storageEntry = { ...fullLog };
+        delete (storageEntry as any).invoiceHtml;
+        const raw = localStorage.getItem('fms_recent_flight_logs');
+        const recent: FlightLog[] = raw ? JSON.parse(raw) : [];
+        const deduped = recent.filter(l => l.id !== storageEntry.id && (!storageEntry.deliveryNumber || l.deliveryNumber !== storageEntry.deliveryNumber));
+        deduped.unshift(storageEntry);
+        localStorage.setItem('fms_recent_flight_logs', JSON.stringify(deduped.slice(0, 100)));
+        if (typeof window !== 'undefined') {
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('fms:flight-log-created', { detail: fullLog }));
+          }, 0);
+        }
+      } catch (storageErr) {
+        console.warn('[Storage] Failed to cache recent flight log:', storageErr);
+      }
+
+      const auditState: Record<string, any> = { ...networkPayload };
+      delete auditState.signatureDataUrl;
       activityLogService.logAction(null, {
         module: LogModule.FLIGHT_LOG,
         action: LogAction.CREATE,
@@ -807,12 +856,12 @@ export const supabaseService = {
         entity_id: fullLog.id,
         entity_label: `${fullLog.flightNumber || 'FLIGHT'} (TKT: ${fullLog.deliveryNumber || 'N/A'})`,
         description: `Logged refueling operation: flight ${fullLog.flightNumber}, volume ${fullLog.volume}L by ${fullLog.operatorName || 'Operator'}`,
-        after_state: fullLog
+        after_state: auditState
       });
       return fullLog;
     } catch (error) {
       console.error('[BigQuery] createFlightLog error:', error);
-      // Clean up optimistic cache if persistent save failed
+      // Clean up any stale optimistic cache entry if present
       try {
         const raw = localStorage.getItem('fms_recent_flight_logs');
         if (raw) {
@@ -828,6 +877,12 @@ export const supabaseService = {
   async updateFlightLog(id: string, updates: Partial<FlightLog>, existingDeliveryNumber?: string): Promise<void> {
     console.log(`[BigQuery API] PATCH /operations-log/${id}`);
 
+    const cleanUpdates: Partial<FlightLog> = { ...updates };
+    delete (cleanUpdates as any).invoiceHtml;
+    if (cleanUpdates.signatureDataUrl) {
+      cleanUpdates.signatureDataUrl = await this._compactSignatureIfNeeded(cleanUpdates.signatureDataUrl);
+    }
+
     // Instantly update localStorage cache so changes persist and don't get reverted on refresh
     try {
       const raw = localStorage.getItem('fms_recent_flight_logs');
@@ -835,13 +890,13 @@ export const supabaseService = {
         const recent: FlightLog[] = JSON.parse(raw);
         const idx = recent.findIndex(l => l.id === id);
         if (idx > -1) {
-          recent[idx] = { ...recent[idx], ...updates };
+          recent[idx] = { ...recent[idx], ...cleanUpdates };
           localStorage.setItem('fms_recent_flight_logs', JSON.stringify(recent));
         }
       }
       if (typeof window !== 'undefined') {
         setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('fms:flight-log-updated', { detail: { id, updates } }));
+          window.dispatchEvent(new CustomEvent('fms:flight-log-updated', { detail: { id, updates: cleanUpdates } }));
         }, 0);
       }
     } catch (e) {}
@@ -850,7 +905,7 @@ export const supabaseService = {
       const headers = await this._bqAuthHeaders();
       // Include _existingDeliveryNumber so the API can skip the duplicate-check
       // SELECT query when the ticket number hasn't changed (prevents BQ DML rate limits).
-      const body: Record<string, any> = { ...updates };
+      const body: Record<string, any> = { ...cleanUpdates };
       if (existingDeliveryNumber !== undefined) {
         body._existingDeliveryNumber = existingDeliveryNumber;
       }
@@ -881,14 +936,16 @@ export const supabaseService = {
           throw fetchErr;
         }
       }
+      const auditUpdates: Record<string, any> = { ...cleanUpdates };
+      delete auditUpdates.signatureDataUrl;
       activityLogService.logAction(null, {
         module: LogModule.FLIGHT_LOG,
         action: LogAction.UPDATE,
         entity_type: 'operations_log',
         entity_id: id,
-        entity_label: updates.flightNumber || id,
-        description: `Updated refueling log record ${id} (volume: ${updates.volume !== undefined ? updates.volume + 'L' : 'unchanged'})`,
-        after_state: updates
+        entity_label: cleanUpdates.flightNumber || id,
+        description: `Updated refueling log record ${id} (volume: ${cleanUpdates.volume !== undefined ? cleanUpdates.volume + 'L' : 'unchanged'})`,
+        after_state: auditUpdates
       });
     } catch (error) {
       console.error('[BigQuery] updateFlightLog error:', error);
@@ -2181,8 +2238,13 @@ export const supabaseService = {
       runningBalance: Number(row.running_balance),
       outstandingReceipts: Number(row.outstanding_receipts),
       openingBalanceLiters: row.opening_balance_liters ? Number(row.opening_balance_liters) : undefined,
-      balanceLiters: row.balance_liters ? Number(row.balance_liters) : undefined,
-      associatedAirlines: row.associated_airlines || []
+      balanceLiters: row.balance_liters !== null && row.balance_liters !== undefined ? Number(row.balance_liters) : undefined,
+      associatedAirlines: row.associated_airlines || [],
+      associatedRegs: row.associated_regs || [],
+      accountEmails: row.account_emails || [],
+      airlineHoldings: Array.isArray(row.airline_holdings) ? row.airline_holdings : [],
+      defaultPricePerLiter: row.default_price_per_liter ? Number(row.default_price_per_liter) : 1.19197,
+      autoDeductOnUplift: row.auto_deduct_on_uplift !== undefined ? Boolean(row.auto_deduct_on_uplift) : true
     } as CustomerAccount));
   },
 
@@ -2194,7 +2256,7 @@ export const supabaseService = {
       console.warn('[API] api.finance.upsertCustomers failed, falling back to direct:', apiErr);
     }
 
-    const rows = custs.map(c => ({
+    const baseRows = custs.map(c => ({
       id: c.id,
       name: c.name,
       classification: c.classification,
@@ -2209,9 +2271,31 @@ export const supabaseService = {
       balance_liters: c.balanceLiters ?? null,
       associated_airlines: c.associatedAirlines || null
     }));
-    const { error } = await supabase.from('fin_customers').upsert(rows);
+
+    const extendedRows = custs.map((c, idx) => ({
+      ...baseRows[idx],
+      associated_regs: c.associatedRegs || [],
+      account_emails: c.accountEmails || [],
+      airline_holdings: c.airlineHoldings || [],
+      default_price_per_liter: c.defaultPricePerLiter ?? 1.19197,
+      auto_deduct_on_uplift: c.autoDeductOnUplift ?? true
+    }));
+
+    let { error } = await supabase.from('fin_customers').upsert(extendedRows);
+    if (error) {
+      const fallback = await supabase.from('fin_customers').upsert(baseRows);
+      error = fallback.error;
+    }
     if (error) {
       console.error('[Supabase] upsertFinCustomers failed:', error);
+      throw error;
+    }
+  },
+
+  async deleteFinCustomer(id: string): Promise<void> {
+    const { error } = await supabase.from('fin_customers').delete().eq('id', id);
+    if (error) {
+      console.error('[Supabase] deleteFinCustomer failed:', error);
       throw error;
     }
   },

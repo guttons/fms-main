@@ -228,13 +228,66 @@ class FMSDatabase {
       // Save customer record
       await this.put('customer_accounts', cust);
 
-      // Index associated flight numbers if present
+      // Index associated flight numbers / airline prefixes if present
       if (cust.associatedAirlines && cust.associatedAirlines.length > 0) {
         for (const code of cust.associatedAirlines) {
           const normKey = code.toUpperCase().trim();
+          if (!normKey) continue;
           mappings.push({
             key: normKey,
             type: 'FLIGHT',
+            customerId: cust.id,
+            customerName: cust.name,
+            classification: cust.classification
+          });
+        }
+      }
+
+      // Index structured airline holdings (IATA/ICAO code, airline name, and airline-specific regs)
+      if ((cust as any).airlineHoldings && Array.isArray((cust as any).airlineHoldings)) {
+        for (const holding of (cust as any).airlineHoldings) {
+          if (holding.code) {
+            mappings.push({
+              key: String(holding.code).toUpperCase().trim(),
+              type: 'FLIGHT',
+              customerId: cust.id,
+              customerName: cust.name,
+              classification: cust.classification
+            });
+          }
+          if (holding.name) {
+            mappings.push({
+              key: String(holding.name).toUpperCase().trim(),
+              type: 'FLIGHT',
+              customerId: cust.id,
+              customerName: cust.name,
+              classification: cust.classification
+            });
+          }
+          if (Array.isArray(holding.aircraftRegs)) {
+            for (const reg of holding.aircraftRegs) {
+              const normReg = String(reg).toUpperCase().trim();
+              if (!normReg) continue;
+              mappings.push({
+                key: normReg,
+                type: 'AIRCRAFT_REG',
+                customerId: cust.id,
+                customerName: cust.name,
+                classification: cust.classification
+              });
+            }
+          }
+        }
+      }
+
+      // Index customer-level associated aircraft registrations
+      if (cust.associatedRegs && cust.associatedRegs.length > 0) {
+        for (const reg of cust.associatedRegs) {
+          const normReg = reg.toUpperCase().trim();
+          if (!normReg) continue;
+          mappings.push({
+            key: normReg,
+            type: 'AIRCRAFT_REG',
             customerId: cust.id,
             customerName: cust.name,
             classification: cust.classification

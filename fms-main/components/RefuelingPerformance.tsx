@@ -1194,10 +1194,10 @@ export const RefuelingPerformance: React.FC<RefuelingPerformanceProps> = ({ user
                           {selectedCategory === 'ALL' && (
                             <span className={`px-1.5 py-0.2 rounded text-[8px] font-sans font-black tracking-wider uppercase ${
                               item.category === 'ADHOC'
-                                ? 'bg-purple-500/15 text-purple-400 border border-purple-500/25'
+                                ? 'bg-purple-500/15 text-purple-400'
                                 : item.category === 'DOMESTIC'
-                                  ? 'bg-success/15 text-success border border-success/25'
-                                  : 'bg-primary/15 text-primary border border-primary/25'
+                                  ? 'bg-success/15 text-success'
+                                  : 'bg-primary/15 text-primary'
                             }`}>
                               {item.category === 'ADHOC' ? 'ADHOC' : item.category === 'DOMESTIC' ? 'DOM' : 'INT'}
                             </span>

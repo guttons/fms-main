@@ -1997,24 +1997,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
 
     const refuelingRequests = refuelingVehicles.map(rf => {
       const matchingAlert = (alerts || [])
-        .filter(a => a && a.message.includes(rf.id))
+        .filter(a =>
+          a &&
+          a.message.toUpperCase().includes(rf.id.toUpperCase()) &&
+          a.message.toLowerCase().includes('request') &&
+          (a.message.toLowerCase().includes('replenish') || a.message.toLowerCase().includes('refuel'))
+        )
         .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
 
-      if (matchingAlert) {
-        return {
-          id: matchingAlert.id,
-          message: matchingAlert.message,
-          timestamp: matchingAlert.timestamp,
-          acknowledged: false
-        };
-      } else {
-        return {
-          id: `synth-${rf.id}`,
-          message: `Replenishment requested for unit ${rf.id} (Low fuel: ${rf.currentVolume?.toLocaleString() || 0}L)`,
-          timestamp: rf.lastUpdated || '--:--',
-          acknowledged: false
-        };
-      }
+      const currentVol = rf.currentVolume ?? 0;
+      const maxCap = rf.maxCapacity ?? 0;
+
+      return {
+        id: matchingAlert ? matchingAlert.id : `synth-${rf.id}`,
+        vehicleId: rf.id,
+        message: `Replenishment requested for unit ${rf.id} (Balance: ${currentVol.toLocaleString()}L / ${maxCap.toLocaleString()}L)`,
+        timestamp: matchingAlert ? matchingAlert.timestamp : (rf.lastUpdated || '--:--'),
+        acknowledged: matchingAlert ? matchingAlert.acknowledged : false
+      };
     });
 
     return (
@@ -2096,8 +2096,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, setActiveView, onSta
                 </div>
               ) : (
                 refuelingRequests.map(request => {
-                  const match = request.message.match(/unit\s+(RF-\d+)/i);
-                  const vehicleId = match ? match[1].toUpperCase() : '';
+                  const vehicleId = request.vehicleId;
                   return (
                     <div key={request.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-surface-dim/60 border border-outline rounded-2xl gap-4 hover:bg-surface-container transition-all">
                       <div className="flex items-center space-x-4">

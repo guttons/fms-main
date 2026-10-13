@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { MOCK_USERS } from '../constants';
-import { FileText, Search, Download, Filter, X, Calendar, Plane, Anchor, Droplet, Fuel, Truck, Sailboat, AlertTriangle, Gauge, Printer, Pencil } from 'lucide-react';
+import { FileText, Search, Download, Filter, X, Calendar, Plane, Anchor, Droplet, Fuel, Truck, Sailboat, AlertTriangle, Gauge, Printer, Pencil, Share2 } from 'lucide-react';
 import { Logo } from './Logo';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { FlightLog, User, UserRole, EquipmentType, cleanRemarks } from '../types';
 import { supabaseService } from '../services/supabaseService';
 import { supabase } from '../supabase';
 import { checkDuplicateTicketAcrossJetA1 } from '../services/ticketValidation';
-import { openPrintInvoice } from '../services/invoicePdfService';
+import { openPrintInvoice, shareInvoice } from '../services/invoicePdfService';
 
 const parseGroundLog = (log: FlightLog) => {
   const parts = (log.flightNumber || '').split('-');
@@ -1212,14 +1212,13 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                     let badgeClass = '';
                                     let badgeStyle = {};
                                     if (cat === 'VOID') {
-                                      badgeClass = 'bg-error/15 text-error border border-error/20';
+                                      badgeClass = 'bg-error/15 text-error';
                                     } else if (cat === 'SEA') {
-                                      badgeClass = 'border';
-                                      badgeStyle = { backgroundColor: 'rgba(139, 92, 246, 0.15)', color: '#a78bfa', borderColor: 'rgba(139, 92, 246, 0.2)' };
+                                      badgeStyle = { backgroundColor: 'rgba(139, 92, 246, 0.15)', color: '#a78bfa' };
                                     } else if (cat === 'DOM') {
-                                      badgeClass = 'bg-success/15 text-success border border-success/20';
+                                      badgeClass = 'bg-success/15 text-success';
                                     } else {
-                                      badgeClass = 'bg-primary/15 text-primary border border-primary/20';
+                                      badgeClass = 'bg-primary/15 text-primary';
                                     }
                                     return (
                                       <span 
@@ -1382,10 +1381,21 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                    e.stopPropagation();
                                    openPrintInvoice(log, user);
                                  }}
-                                 className="p-1.5 rounded-lg bg-primary/10 hover-kinetic-gradient text-primary border border-primary/20 transition-all active:scale-95 cursor-pointer"
-                                 title="View / Print Jet A-1 Delivery Invoice (FORM NO: G-001)"
-                                >
+                                 className="p-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-all active:scale-95 cursor-pointer"
+                                 title="View / Print Jet A-1 Delivery Invoice"
+                               >
                                  <FileText className="w-3.5 h-3.5" />
+                               </button>
+                               <button
+                                 type="button"
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   shareInvoice(log, user);
+                                 }}
+                                 className="p-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-all active:scale-95 cursor-pointer"
+                                 title="Share / Download PDF Invoice"
+                               >
+                                 <Share2 className="w-3.5 h-3.5" />
                                </button>
                                {canEditLog(log) ? (
                                  <button 
@@ -1462,7 +1472,7 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
                                        bridgingSupervisor: (log as any).co || ''
                                      });
                                    }} 
-                                   className="p-1.5 rounded-lg bg-primary/10 hover-kinetic-gradient text-primary border border-primary/20 transition-all active:scale-95 cursor-pointer"
+                                   className="p-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-all active:scale-95 cursor-pointer"
                                    title="Edit Operational Log"
                                  >
                                    <Pencil className="w-3.5 h-3.5" />

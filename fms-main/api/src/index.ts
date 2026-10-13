@@ -345,9 +345,19 @@ const allowedOrigins = [
   ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()) : [])
 ];
 
+const isAllowedLocalOrigin = (origin?: string): boolean => {
+  if (!origin) return true;
+  try {
+    const parsed = new URL(origin);
+    return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+};
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development' || origin.includes('localhost')) {
+  if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development' || isAllowedLocalOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
   }
   res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, apikey, Cache-Control');
@@ -362,7 +372,7 @@ app.use((req, res, next) => {
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development' || origin.includes('localhost')) {
+    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development' || isAllowedLocalOrigin(origin)) {
       callback(null, true);
     } else {
       callback(new Error(`Origin ${origin} not allowed by CORS policy`));
@@ -373,7 +383,8 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // ─── Auth middleware ──────────────────────────────────────────────────────────
 interface Jwk {
@@ -454,17 +465,20 @@ async function requireAuth(req: Request, res: Response, next: NextFunction): Pro
         return;
       }
 
-      // Resolve the project reference
+      // Resolve the project reference strictly against allowlist
+      const allowedRefs = new Set([
+        process.env.SUPABASE_PROJECT_REF || 'pzyrstehoesmhwkhtoxd',
+        'pzyrstehoesmhwkhtoxd',
+        'uifwoubdvfbrmfhfwsnx'
+      ]);
       let projectRef = process.env.SUPABASE_PROJECT_REF || 'pzyrstehoesmhwkhtoxd';
       const payload = decodedToken.payload;
-      if (payload) {
-        if (payload.ref) {
-          projectRef = payload.ref;
-        } else if (typeof payload.iss === 'string' && payload.iss.includes('.supabase.co')) {
-          const match = payload.iss.match(/https:\/\/([^.]+)\.supabase\.co/);
-          if (match && match[1]) {
-            projectRef = match[1];
-          }
+      if (payload?.ref && allowedRefs.has(payload.ref)) {
+        projectRef = payload.ref;
+      } else if (typeof payload?.iss === 'string') {
+        const match = payload.iss.match(/^https:\/\/([a-z0-9]+)\.supabase\.co\/auth\/v1$/);
+        if (match && match[1] && allowedRefs.has(match[1])) {
+          projectRef = match[1];
         }
       }
 
@@ -490,9 +504,9 @@ async function requireAuth(req: Request, res: Response, next: NextFunction): Pro
       const jwtSecret = process.env.SUPABASE_JWT_SECRET;
       const expectedAnonKey = process.env.SUPABASE_ANON_KEY;
 
-      // If the incoming token or apikey matches the known project anon key, accept it
-      if (expectedAnonKey && (idToken === expectedAnonKey || req.headers.apikey === expectedAnonKey)) {
-        decodedUser = decodedToken.payload || { role: 'anon' };
+      // Only accept expectedAnonKey when the Bearer token itself is the exact project anon key
+      if (expectedAnonKey && idToken === expectedAnonKey) {
+        decodedUser = { role: 'anon', iss: 'supabase' };
       } else if (!jwtSecret) {
         console.error('[Auth] SUPABASE_JWT_SECRET environment variable is not configured; rejecting token.');
         res.status(500).json({ error: 'Internal Server Error: Auth configuration missing. Token signature cannot be verified.' });
@@ -541,7 +555,7 @@ app.get('/', (_req: Request, res: Response) => {
 });
 
 // ─── Schema Migration Endpoint ────────────────────────────────────────────────
-app.get('/migrate-schema', async (_req: Request, res: Response) => {
+app.get('/migrate-schema', requireAuth, async (_req: Request, res: Response) => {
   try {
     await bigquery.query({
       query: `ALTER TABLE \`${DATASET_ID}.${TABLE_ID}\`

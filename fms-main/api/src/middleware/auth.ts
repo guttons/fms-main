@@ -77,16 +77,20 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
         return;
       }
 
+      // Security fix: strictly use configured SUPABASE_PROJECT_REF instead of trusting unverified payload.iss / payload.ref
+      const allowedRefs = new Set([
+        process.env.SUPABASE_PROJECT_REF || 'pzyrstehoesmhwkhtoxd',
+        'pzyrstehoesmhwkhtoxd',
+        'uifwoubdvfbrmfhfwsnx'
+      ]);
       let projectRef = process.env.SUPABASE_PROJECT_REF || 'pzyrstehoesmhwkhtoxd';
       const payload = decodedToken.payload;
-      if (payload) {
-        if (payload.ref) {
-          projectRef = payload.ref;
-        } else if (typeof payload.iss === 'string' && payload.iss.includes('.supabase.co')) {
-          const match = payload.iss.match(/https:\/\/([^.]+)\.supabase\.co/);
-          if (match && match[1]) {
-            projectRef = match[1];
-          }
+      if (payload?.ref && allowedRefs.has(payload.ref)) {
+        projectRef = payload.ref;
+      } else if (typeof payload?.iss === 'string') {
+        const match = payload.iss.match(/^https:\/\/([a-z0-9]+)\.supabase\.co\/auth\/v1$/);
+        if (match && match[1] && allowedRefs.has(match[1])) {
+          projectRef = match[1];
         }
       }
 
@@ -107,8 +111,9 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       const jwtSecret = process.env.SUPABASE_JWT_SECRET;
       const expectedAnonKey = process.env.SUPABASE_ANON_KEY;
 
-      if (expectedAnonKey && (idToken === expectedAnonKey || req.headers.apikey === expectedAnonKey)) {
-        decodedUser = decodedToken.payload || { role: 'anon' };
+      // Security fix: only accept expectedAnonKey when the Bearer token itself is the exact anon key
+      if (expectedAnonKey && idToken === expectedAnonKey) {
+        decodedUser = { role: 'anon', iss: 'supabase' };
       } else if (!jwtSecret) {
         console.error('[Auth] SUPABASE_JWT_SECRET environment variable is not configured; rejecting token.');
         res.status(500).json({ error: 'Internal Server Error: Auth configuration missing. Token signature cannot be verified.' });

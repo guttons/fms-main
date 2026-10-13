@@ -44,24 +44,27 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
 
   const replenishmentRequests = refuelingVehicles.map(rf => {
     const matchingAlert = (alerts || [])
-      .filter(a => a && a.message.includes(rf.id))
+      .filter(a =>
+        a &&
+        a.message.toUpperCase().includes(rf.id.toUpperCase()) &&
+        a.message.toLowerCase().includes('request') &&
+        (a.message.toLowerCase().includes('replenish') || a.message.toLowerCase().includes('refuel'))
+      )
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
 
-    if (matchingAlert) {
-      return {
-        id: matchingAlert.id,
-        message: matchingAlert.message,
-        timestamp: matchingAlert.timestamp,
-        acknowledged: false
-      };
-    } else {
-      return {
-        id: `synth-${rf.id}`,
-        message: `Replenishment requested for unit ${rf.id} (Low fuel: ${rf.currentVolume?.toLocaleString() || 0}L)`,
-        timestamp: rf.lastUpdated || '--:--',
-        acknowledged: false
-      };
-    }
+    const currentVol = rf.currentVolume ?? 0;
+    const maxCap = rf.maxCapacity ?? 0;
+
+    return {
+      id: matchingAlert ? matchingAlert.id : `synth-${rf.id}`,
+      alertId: matchingAlert && !matchingAlert.acknowledged ? matchingAlert.id : undefined,
+      vehicleId: rf.id,
+      currentVolume: currentVol,
+      maxCapacity: maxCap,
+      message: `Replenishment requested for unit ${rf.id} (Balance: ${currentVol.toLocaleString()}L / ${maxCap.toLocaleString()}L)`,
+      timestamp: matchingAlert ? matchingAlert.timestamp : (rf.lastUpdated || '--:--'),
+      acknowledged: matchingAlert ? matchingAlert.acknowledged : false
+    };
   });
 
   // Extract staff roles for personnel dropdowns
@@ -69,14 +72,14 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
   const activeOfficers = (staff || []).filter(s => [UserRole.DEPOT_MANAGER, UserRole.ITP_MANAGER, UserRole.ADMIN].includes(s.role));
 
   const handleBridgingComplete = async (vehicleId: string) => {
-    // Acknowledge the corresponding alert
-    // Only acknowledge the replenishment REQUEST alert (not any completion alert)
-    const relevantAlert = (alerts || []).find(a => 
+    // Acknowledge any unacknowledged replenishment REQUEST alerts for this vehicle
+    const relevantAlerts = (alerts || []).filter(a => 
       a && !a.acknowledged && 
-      a.message.toLowerCase().includes('requested') &&
-      a.message.includes(`unit ${vehicleId}`)
+      a.message.toLowerCase().includes('request') &&
+      (a.message.toLowerCase().includes('replenish') || a.message.toLowerCase().includes('refuel')) &&
+      a.message.toUpperCase().includes(vehicleId.toUpperCase())
     );
-    if (relevantAlert) {
+    for (const relevantAlert of relevantAlerts) {
       await acknowledgeAlert(relevantAlert.id);
     }
   };
@@ -132,15 +135,31 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
     }
   };
 
-  // Prefill vehicle from dashboard "Dispatch" action
+  // Prefill vehicle from dashboard "Dispatch" or alert modal "Initiate Loading" action
   useEffect(() => {
+    const applyInitiatedVehicle = (vehicleId: string) => {
+      if (!vehicleId) return;
+      setFormData(prev => ({ ...prev, vehicleId }));
+      localStorage.removeItem('fms_initiate_loading_vehicle');
+      notify(`Initiated loading for unit ${vehicleId} based on ITP request.`, 'info');
+      sendInitiatedAlert(vehicleId);
+      handleBridgingComplete(vehicleId);
+    };
+
     const prefilled = localStorage.getItem('fms_initiate_loading_vehicle');
     if (prefilled) {
-      setFormData(prev => ({ ...prev, vehicleId: prefilled }));
-      localStorage.removeItem('fms_initiate_loading_vehicle');
-      notify(`Initiated loading for unit ${prefilled} based on ITP request.`, 'info');
-      sendInitiatedAlert(prefilled);
+      applyInitiatedVehicle(prefilled);
     }
+
+    const handleCustomInitiate = (e: Event) => {
+      const customEvent = e as CustomEvent<{ vehicleId?: string }>;
+      if (customEvent.detail?.vehicleId) {
+        applyInitiatedVehicle(customEvent.detail.vehicleId);
+      }
+    };
+
+    window.addEventListener('fms-initiate-loading', handleCustomInitiate);
+    return () => window.removeEventListener('fms-initiate-loading', handleCustomInitiate);
   }, [notify]);
 
   // Fetch logs from Firebase on mount
@@ -387,12 +406,11 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
                 </h3>
                 <div className="space-y-2">
                   {replenishmentRequests.map(req => {
-                    const match = req.message.match(/unit\s+(RF-\d+)/i);
-                    const vehicleId = match ? match[1].toUpperCase() : '';
+                    const vehicleId = req.vehicleId;
                     return (
                       <div key={req.id} className="flex justify-between items-center bg-surface p-3.5 rounded-xl border border-outline/50 shadow-sm">
                         <div className="flex items-center space-x-3">
-                          <Truck className="w-4 h-4 text-primary opacity-60" />
+                          <Truck className="w-4 h-4 text-primary opacity-60 shrink-0" />
                           <div className="flex flex-col">
                             <span className="text-[11px] font-bold text-on-surface">{req.message}</span>
                             <span className="text-[9px] font-black text-on-surface-dim opacity-50 uppercase tracking-widest mt-1 flex items-center">
@@ -403,11 +421,12 @@ export const Bridging: React.FC<BridgingProps> = ({ user, setActiveView }) => {
                         </div>
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
                             if (vehicleId) {
                               setFormData(prev => ({ ...prev, vehicleId }));
                               notify(`Initiated loading for unit ${vehicleId}`, 'success');
                               sendInitiatedAlert(vehicleId);
+                              await handleBridgingComplete(vehicleId);
                             }
                           }}
                           className="px-4 py-1.5 kinetic-gradient-no-glow text-white hover:scale-105 active:scale-95 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer"

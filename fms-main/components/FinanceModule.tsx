@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { useFinanceData, CustomerClassification, CustomerAccount, FuelRequest, MpdSale } from '../context/FinanceDataContext';
+import { useFinanceData, CustomerClassification, CustomerAccount, AirlineHolding, FuelRequest, MpdSale } from '../context/FinanceDataContext';
 import { useNotification } from '../context/NotificationContext';
+import { sendFlightJobEmail } from '../services/invoicePdfService';
 import { 
   DollarSign, FileText, Upload, CheckCircle, RefreshCw, BarChart2, Briefcase, 
   FileSpreadsheet, AlertTriangle, Printer, Download, ChevronRight, PlusCircle, 
-  Layers, Scale, ListTodo, Shield, Trash2, ArrowUpRight, Search, Eye, X
+  Layers, Scale, ListTodo, Shield, Trash2, ArrowUpRight, Search, Eye, X,
+  Plane, Mail, Edit3, Zap, Send, Building2
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Legend } from 'recharts';
 
@@ -12,13 +14,15 @@ export const FinanceModule: React.FC = () => {
   const { 
     customers, upcomingPayments, invoices, receipts, proformaRegister, 
     fuelRequests, varianceLogs, procurementPRs, surcharges, mpdSales, customsShipments,
+    realtimeDeductions,
     reviewSwiftCopy, syncOracleReceipt, runBillingProcess, applyFIFOLogic, 
     generateProforma, approveVariance, createProcurementPR, verifyVendorInvoice, 
-    raisePO, enterAPInvoice, addSurcharge, resetAllFinanceMockData
+    raisePO, enterAPInvoice, addSurcharge, resetAllFinanceMockData,
+    upsertCustomerAccount, deleteCustomerAccount, resolveCustomerByFlightOrAirline, deductFlightUpliftRealtime
   } = useFinanceData();
 
   const { notify } = useNotification();
-  const [activeTab, setActiveTab] = useState<'balances' | 'billing' | 'variance' | 'procurement' | 'reports'>('balances');
+  const [activeTab, setActiveTab] = useState<'balances' | 'accounts' | 'billing' | 'variance' | 'procurement' | 'reports'>('balances');
   
   // Local state for forms
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,6 +52,20 @@ export const FinanceModule: React.FC = () => {
   // Delivery ticket details modal state for "TAX INVOICE" mockup
   const [selectedTicket, setSelectedTicket] = useState<FuelRequest | MpdSale | null>(null);
 
+  // Customer Account & Airline Email Directory Editor State
+  const [editingCustomer, setEditingCustomer] = useState<CustomerAccount | null>(null);
+  const [newAirlineCode, setNewAirlineCode] = useState('');
+  const [newAirlineName, setNewAirlineName] = useState('');
+  const [newAirlineJobEmails, setNewAirlineJobEmails] = useState('');
+  const [newAirlineBillingEmails, setNewAirlineBillingEmails] = useState('');
+  const [newAirlineRegs, setNewAirlineRegs] = useState('');
+
+  // Quick Flight Job Uplift & Email Dispatch Simulator State
+  const [simFlightNo, setSimFlightNo] = useState('EK653');
+  const [simAircraftReg, setSimAircraftReg] = useState('A6-EEO');
+  const [simVolume, setSimVolume] = useState('14500');
+  const [simStand, setSimStand] = useState('A4');
+
   // MOCK COGS Chart Data
   const cogsChartData = [
     { name: 'Jan', Sales: 2400000, COGS: 1800000, Margin: 600000 },
@@ -57,11 +75,157 @@ export const FinanceModule: React.FC = () => {
     { name: 'May', Sales: 3500000, COGS: 2600000, Margin: 900000 },
   ];
 
-  // Filters
-  const filteredCustomers = customers.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    c.classification.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filters (searches customer name, classification, held airlines, and emails)
+  const filteredCustomers = customers.filter(c => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    const matchesNameOrClass =
+      c.name.toLowerCase().includes(q) || c.classification.toLowerCase().includes(q);
+    const matchesAirlines =
+      (c.associatedAirlines || []).some(a => a.toLowerCase().includes(q)) ||
+      (c.airlineHoldings || []).some(
+        h =>
+          h.code.toLowerCase().includes(q) ||
+          h.name.toLowerCase().includes(q) ||
+          (h.flightJobEmails || []).some(e => e.toLowerCase().includes(q)) ||
+          (h.billingEmails || []).some(e => e.toLowerCase().includes(q))
+      );
+    const matchesEmails = (c.accountEmails || []).some(e => e.toLowerCase().includes(q));
+    return matchesNameOrClass || matchesAirlines || matchesEmails;
+  });
+
+  const openNewCustomerModal = () => {
+    setEditingCustomer({
+      id: `cust-${Date.now()}`,
+      name: '',
+      classification: 'ADVANCE',
+      openingBalance: 0,
+      paymentsReceived: 0,
+      advanceBalance: 0,
+      creditLimit: 0,
+      estimated5DaysSales: 50000,
+      runningBalance: 0,
+      outstandingReceipts: 0,
+      openingBalanceLiters: 0,
+      balanceLiters: 0,
+      defaultPricePerLiter: 1.19197,
+      autoDeductOnUplift: true,
+      associatedAirlines: [],
+      associatedRegs: [],
+      accountEmails: [],
+      airlineHoldings: []
+    });
+  };
+
+  const handleAddAirlineHoldingToEditor = () => {
+    if (!editingCustomer) return;
+    if (!newAirlineCode.trim() || !newAirlineName.trim()) {
+      notify('Please enter both Airline Code (e.g. EK, BA) and Airline Name.', 'warning');
+      return;
+    }
+    const code = newAirlineCode.toUpperCase().trim();
+    const jobEmails = newAirlineJobEmails
+      .split(',')
+      .map(e => e.trim())
+      .filter(Boolean);
+    const billEmails = newAirlineBillingEmails
+      .split(',')
+      .map(e => e.trim())
+      .filter(Boolean);
+    const regs = newAirlineRegs
+      .split(',')
+      .map(r => r.toUpperCase().trim())
+      .filter(Boolean);
+
+    const newHolding: AirlineHolding = {
+      code,
+      name: newAirlineName.trim(),
+      flightJobEmails: jobEmails,
+      billingEmails: billEmails.length > 0 ? billEmails : jobEmails,
+      aircraftRegs: regs,
+      autoSendFlightJob: true,
+      autoSendInvoice: true
+    };
+
+    const existingHoldings = editingCustomer.airlineHoldings || [];
+    const updatedHoldings = existingHoldings.some(h => h.code.toUpperCase() === code)
+      ? existingHoldings.map(h => (h.code.toUpperCase() === code ? newHolding : h))
+      : [...existingHoldings, newHolding];
+
+    setEditingCustomer({
+      ...editingCustomer,
+      airlineHoldings: updatedHoldings
+    });
+    setNewAirlineCode('');
+    setNewAirlineName('');
+    setNewAirlineJobEmails('');
+    setNewAirlineBillingEmails('');
+    setNewAirlineRegs('');
+  };
+
+  const handleRemoveAirlineHoldingFromEditor = (code: string) => {
+    if (!editingCustomer) return;
+    setEditingCustomer({
+      ...editingCustomer,
+      airlineHoldings: (editingCustomer.airlineHoldings || []).filter(h => h.code !== code)
+    });
+  };
+
+  const handleSaveCustomerAccount = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCustomer || !editingCustomer.name.trim()) {
+      notify('Customer Account Name is required.', 'warning');
+      return;
+    }
+    upsertCustomerAccount(editingCustomer);
+    notify(`Saved Customer Account "${editingCustomer.name}" with ${(editingCustomer.airlineHoldings || []).length} held airline(s).`, 'success');
+    setEditingCustomer(null);
+  };
+
+  const handleTriggerRealtimeFlightJob = (sendEmailAfter: boolean) => {
+    const vol = parseFloat(simVolume) || 0;
+    if (!simFlightNo.trim() || vol <= 0) {
+      notify('Enter a valid flight number and uplift volume (L).', 'warning');
+      return;
+    }
+    const resolved = resolveCustomerByFlightOrAirline(simFlightNo, undefined, simAircraftReg);
+    const res = deductFlightUpliftRealtime({
+      deliveryNumber: `${Math.floor(313000 + Math.random() * 6999)}`,
+      flightNumber: simFlightNo.toUpperCase().trim(),
+      airline: resolved.airlineHolding?.name || resolved.customer?.name || simFlightNo.toUpperCase().slice(0, 2),
+      aircraftReg: simAircraftReg.toUpperCase().trim() || 'TBA',
+      volumeLiters: vol,
+      source: 'FINANCE_DISPATCH'
+    });
+
+    if (res.deducted && res.customer) {
+      notify(res.message, 'success');
+      if (sendEmailAfter) {
+        const targetEmails = resolved.emails;
+        if (targetEmails.length === 0) {
+          notify(`Uplift deducted, but no email addresses are configured for ${simFlightNo}.`, 'warning');
+        } else {
+          sendFlightJobEmail(
+            {
+              flightNumber: simFlightNo.toUpperCase().trim(),
+              airline: resolved.airlineHolding?.name || res.customer.name,
+              aircraftReg: simAircraftReg.toUpperCase().trim(),
+              stand: simStand,
+              estimatedVolume: vol,
+              status: 'UPLIFT DEDUCTED & DISPATCHED',
+              customerAccountName: res.customer.name,
+              classification: res.customer.classification,
+              remainingBalance: res.newBalance
+            },
+            targetEmails
+          );
+          notify(`Opened Flight Job email to ${targetEmails.join(', ')}`, 'info');
+        }
+      }
+    } else {
+      notify(res.message, 'warning');
+    }
+  };
 
   const handleSyncReceipt = (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,28 +301,35 @@ export const FinanceModule: React.FC = () => {
   };
 
   return (
-    <div className="p-4 lg:p-8 space-y-8 animate-in slide-in-from-bottom-2 duration-300">
+    <div className="p-3 sm:p-5 lg:p-8 space-y-6 lg:space-y-8 max-w-full min-w-0 overflow-x-hidden animate-in slide-in-from-bottom-2 duration-300">
       
       {/* Top Title & Info Bar */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-outline pb-6">
-        <div>
-          <span className="text-[10px] font-black uppercase text-primary tracking-widest bg-primary/10 px-3 py-1.5 rounded-full border border-primary/20">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-outline pb-6 min-w-0">
+        <div className="min-w-0">
+          <span className="text-[10px] font-black uppercase text-primary tracking-widest bg-primary/10 px-3 py-1.5 rounded-full border border-primary/20 inline-block">
             INTEGRATED ERP PORTAL
           </span>
-          <h2 className="headline-lg text-on-surface tracking-tighter uppercase mt-3">
+          <h2 className="headline-lg text-on-surface tracking-tighter uppercase mt-3 break-words">
             FINANCE & BILLING DIVISION
           </h2>
           <p className="text-on-surface-dim uppercase tracking-wider text-[9px] font-black opacity-60">
-            Real-time Invoicing • Cost of Goods Sold • Oracle Sync
+            Real-time Flight Job Deduction • Multi-Airline Accounts • Airline Email Dispatch • Oracle Sync
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={openNewCustomerModal}
+            className="flex items-center gap-2 kinetic-gradient text-white px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-premium transition-all active:scale-95 min-h-[42px]"
+          >
+            <PlusCircle className="w-3.5 h-3.5" />
+            New Customer Account
+          </button>
           <button 
             onClick={() => {
               resetAllFinanceMockData();
               notify('Financial simulator database reset.', 'info');
             }}
-            className="flex items-center gap-2 border border-outline hover:bg-surface-dim px-4.5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-on-surface transition-all active:scale-95"
+            className="flex items-center gap-2 border border-outline hover:bg-surface-dim px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-on-surface transition-all active:scale-95 min-h-[42px]"
           >
             <Trash2 className="w-3.5 h-3.5 text-error" />
             Reset Data
@@ -166,36 +337,15 @@ export const FinanceModule: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs Row — scrollable on mobile/tablet, evenly spread on desktop */}
-      <div className="bg-surface-dim p-1 rounded-2xl border border-outline relative flex w-full overflow-x-auto no-scrollbar shadow-inner">
-        {/* Sliding kinetic-gradient indicator — fixed widths for mobile, flex-1 tracking on lg */}
-        <div
-          className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
-            lg:hidden
-            ${activeTab === 'balances'    ? 'left-1 w-[140px] translate-x-0'       : ''}
-            ${activeTab === 'billing'     ? 'left-1 w-[140px] translate-x-[140px]'  : ''}
-            ${activeTab === 'variance'    ? 'left-1 w-[148px] translate-x-[280px]'  : ''}
-            ${activeTab === 'procurement' ? 'left-1 w-[168px] translate-x-[428px]'  : ''}
-            ${activeTab === 'reports'     ? 'left-1 w-[155px] translate-x-[596px]'  : ''}
-          `}
-        />
-        {/* Desktop indicator uses percentage-based 20% width since buttons are flex-1 equal */}
-        <div
-          className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium
-            hidden lg:block w-[calc(20%-1.6px)]
-            ${activeTab === 'balances'    ? 'translate-x-0'    : ''}
-            ${activeTab === 'billing'     ? 'translate-x-[100%]' : ''}
-            ${activeTab === 'variance'    ? 'translate-x-[200%]' : ''}
-            ${activeTab === 'procurement' ? 'translate-x-[300%]' : ''}
-            ${activeTab === 'reports'     ? 'translate-x-[400%]' : ''}
-          `}
-        />
+      {/* Tablet & Mobile Safe Responsive Tabs Grid (replaces hardcoded pixel offsets that clipped on tablets) */}
+      <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 w-full shadow-inner">
         {[
-          { id: 'balances',    label: 'Balances & SWIFTs',  icon: DollarSign,      w: 'w-[140px] lg:w-auto' },
-          { id: 'billing',     label: 'Invoicing & FIFO',    icon: FileText,        w: 'w-[140px] lg:w-auto' },
-          { id: 'variance',    label: 'Variance & COGS',     icon: Scale,           w: 'w-[148px] lg:w-auto' },
-          { id: 'procurement', label: 'Duty & Procurement',  icon: Layers,          w: 'w-[168px] lg:w-auto' },
-          { id: 'reports',     label: 'Financial Reports',   icon: FileSpreadsheet, w: 'w-[155px] lg:w-auto' },
+          { id: 'balances',    label: 'Balances & SWIFTs',     icon: DollarSign },
+          { id: 'accounts',    label: 'Accounts & Airlines',   icon: Plane },
+          { id: 'billing',     label: 'Invoicing & FIFO',      icon: FileText },
+          { id: 'variance',    label: 'Variance & COGS',       icon: Scale },
+          { id: 'procurement', label: 'Duty & Procurement',    icon: Layers },
+          { id: 'reports',     label: 'Financial Reports',     icon: FileSpreadsheet },
         ].map(t => {
           const Icon = t.icon;
           const isActive = activeTab === t.id;
@@ -203,92 +353,149 @@ export const FinanceModule: React.FC = () => {
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id as any)}
-              className={`${t.w} flex-shrink-0 lg:flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[9px] font-black uppercase tracking-wider transition-all relative z-10 ${
-                isActive ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
+              className={`min-h-[44px] px-3 py-2.5 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider transition-all ${
+                isActive
+                  ? 'kinetic-gradient text-white shadow-premium'
+                  : 'text-on-surface-dim hover:text-on-surface hover:bg-surface-lowest/50'
               }`}
             >
               <Icon className="w-3.5 h-3.5 shrink-0" />
-              <span className="leading-tight">{t.label}</span>
+              <span className="leading-tight truncate">{t.label}</span>
             </button>
           );
         })}
       </div>
 
-
-      {/* Content Container */}
-      <div className="grid grid-cols-1 gap-8">
+      {/* Content Container — min-w-0 prevents CSS Grid intrinsic width expansion on tablets */}
+      <div className="grid grid-cols-1 gap-6 lg:gap-8 min-w-0 max-w-full">
         
         {/* TAB 1: Balances & SWIFT Copy Review */}
         {activeTab === 'balances' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Customer accounts table */}
-            <div className="lg:col-span-2 bg-surface-lowest border border-outline p-6 rounded-[32px] shadow-premium space-y-6">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                <div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 min-w-0">
+            {/* Customer accounts table — min-w-0 ensures overflow-x-auto scrolls inside the card on tablets */}
+            <div className="lg:col-span-2 min-w-0 max-w-full bg-surface-lowest border border-outline p-4 sm:p-6 rounded-[24px] sm:rounded-[32px] shadow-premium space-y-6 overflow-hidden">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 min-w-0">
+                <div className="min-w-0">
                   <h3 className="title-md text-on-surface font-black uppercase tracking-tight">Customer Credit & Balances</h3>
-                  <p className="text-[10px] text-on-surface-dim uppercase font-bold tracking-wider">Real-time validation matching circular rates</p>
+                  <p className="text-[10px] text-on-surface-dim uppercase font-bold tracking-wider">
+                    Real-time deduction as flight jobs get entered • Tap any account to manage airlines & emails
+                  </p>
                 </div>
-                <div className="flex items-center border border-outline bg-surface-dim px-3 py-1.5 rounded-xl max-w-xs">
-                  <Search className="w-4 h-4 opacity-40 mr-2" />
+                <div className="flex items-center border border-outline bg-surface-dim px-3 py-2 rounded-xl w-full sm:max-w-xs min-h-[42px]">
+                  <Search className="w-4 h-4 opacity-40 mr-2 shrink-0" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search accounts..."
+                    placeholder="Search account, airline (EK, BA), email..."
                     className="bg-transparent border-none outline-none text-xs font-bold text-on-surface w-full"
                   />
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+              <div className="w-full overflow-x-auto touch-pan-x -mx-1 px-1 pb-2 custom-scrollbar">
+                <table className="w-full min-w-[780px] text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-outline text-[10px] font-black uppercase tracking-widest text-on-surface-dim">
-                      <th className="pb-3">Customer</th>
-                      <th className="pb-3">Classification</th>
-                      <th className="pb-3 text-right">Advance Balance</th>
-                      <th className="pb-3 text-right">Balance (Liters)</th>
-                      <th className="pb-3 text-right">Credit Limit</th>
-                      <th className="pb-3 text-right">5-Day Sales Limit</th>
-                      <th className="pb-3">Threshold Alert</th>
+                      <th className="pb-3 pr-3">Customer & Held Airlines</th>
+                      <th className="pb-3 px-2">Class</th>
+                      <th className="pb-3 px-2 text-right">Advance / Running Bal</th>
+                      <th className="pb-3 px-2 text-right">Volume (L)</th>
+                      <th className="pb-3 px-2 text-right">5-Day Sales Est.</th>
+                      <th className="pb-3 px-2 text-right">Credit Limit</th>
+                      <th className="pb-3 px-2">Status</th>
+                      <th className="pb-3 pl-2 text-right">Manage</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline">
                     {filteredCustomers.map(c => {
                       const isLow = c.classification === 'ADVANCE' && c.advanceBalance < c.estimated5DaysSales;
+                      const holdings = c.airlineHoldings || [];
+                      const allEmails = Array.from(
+                        new Set([
+                          ...(c.accountEmails || []),
+                          ...holdings.flatMap(h => [...(h.flightJobEmails || []), ...(h.billingEmails || [])])
+                        ])
+                      );
                       return (
                         <tr key={c.id} className="hover:bg-surface-dim/40 transition-colors">
-                          <td className="py-4 font-black text-on-surface">{c.name}</td>
-                          <td className="py-4">
-                            <span className={`px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest uppercase border
+                          <td className="py-3.5 pr-3">
+                            <div className="font-black text-on-surface">{c.name}</div>
+                            <div className="flex flex-wrap items-center gap-1 mt-1">
+                              {holdings.length > 0 ? (
+                                holdings.map(h => (
+                                  <span
+                                    key={h.code}
+                                    title={`${h.name}: ${(h.flightJobEmails || []).join(', ')}`}
+                                    className="px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[9px] font-black uppercase tracking-wider"
+                                  >
+                                    {h.code} • {h.name}
+                                  </span>
+                                ))
+                              ) : (
+                                (c.associatedAirlines || []).slice(0, 5).map(code => (
+                                  <span
+                                    key={code}
+                                    className="px-1.5 py-0.5 rounded bg-surface-dim text-on-surface-dim border border-outline text-[9px] font-black uppercase"
+                                  >
+                                    {code}
+                                  </span>
+                                ))
+                              )}
+                              {allEmails.length > 0 && (
+                                <span
+                                  title={allEmails.join(', ')}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-success/10 text-success border border-success/20 text-[9px] font-bold"
+                                >
+                                  <Mail className="w-2.5 h-2.5" /> {allEmails.length} email{allEmails.length > 1 ? 's' : ''}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-2">
+                            <span className={`px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest uppercase border whitespace-nowrap
                               ${c.classification === 'ADVANCE' ? 'bg-primary/10 text-primary border-primary/20' : 
                                 c.classification === 'CREDIT' ? 'bg-warning/10 text-warning border-warning/20' : 
                                 'bg-success/10 text-success border-success/20'}`}>
                               {c.classification}
                             </span>
                           </td>
-                          <td className="py-4 text-right font-bold text-primary">
-                            {c.classification === 'ADVANCE' ? `$${c.advanceBalance.toLocaleString()}` : '-'}
+                          <td className="py-3.5 px-2 text-right font-bold whitespace-nowrap">
+                            {c.classification === 'ADVANCE' ? (
+                              <span className="text-primary">${c.advanceBalance.toLocaleString()}</span>
+                            ) : (
+                              <span className={c.runningBalance < 0 ? 'text-warning' : 'text-on-surface'}>
+                                ${c.runningBalance.toLocaleString()}
+                              </span>
+                            )}
                           </td>
-                          <td className="py-4 text-right font-bold text-on-surface">
-                            {c.classification === 'ADVANCE' && c.balanceLiters ? `${c.balanceLiters.toLocaleString()} L` : '-'}
+                          <td className="py-3.5 px-2 text-right font-bold text-on-surface whitespace-nowrap">
+                            {c.balanceLiters !== undefined ? `${c.balanceLiters.toLocaleString()} L` : '-'}
                           </td>
-                          <td className="py-4 text-right font-bold text-on-surface-dim">
-                            {c.classification === 'CREDIT' ? `$${c.creditLimit.toLocaleString()}` : '-'}
-                          </td>
-                          <td className="py-4 text-right font-bold text-on-surface-dim">
+                          <td className="py-3.5 px-2 text-right font-bold text-on-surface-dim whitespace-nowrap">
                             {c.classification === 'ADVANCE' || c.classification === 'CREDIT' ? `$${c.estimated5DaysSales.toLocaleString()}` : '-'}
                           </td>
-                          <td className="py-4">
+                          <td className="py-3.5 px-2 text-right font-bold text-on-surface-dim whitespace-nowrap">
+                            {c.classification === 'CREDIT' ? `$${c.creditLimit.toLocaleString()}` : '-'}
+                          </td>
+                          <td className="py-3.5 px-2 whitespace-nowrap">
                             {isLow ? (
                               <span className="flex items-center gap-1.5 text-error font-black uppercase text-[9px] tracking-widest animate-pulse">
-                                <AlertTriangle className="w-3.5 h-3.5" /> CRITICAL (LOW)
+                                <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> CRITICAL (LOW)
                               </span>
                             ) : (
                               <span className="flex items-center gap-1.5 text-success font-bold uppercase text-[9px] tracking-widest">
-                                <CheckCircle className="w-3.5 h-3.5" /> SECURE
+                                <CheckCircle className="w-3.5 h-3.5 shrink-0" /> SECURE
                               </span>
                             )}
+                          </td>
+                          <td className="py-3.5 pl-2 text-right whitespace-nowrap">
+                            <button
+                              onClick={() => setEditingCustomer(c)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-surface-dim hover:bg-primary/15 text-on-surface hover:text-primary border border-outline text-[9px] font-black uppercase tracking-wider transition-all"
+                            >
+                              <Edit3 className="w-3 h-3" /> Airlines & Emails
+                            </button>
                           </td>
                         </tr>
                       );
@@ -396,10 +603,359 @@ export const FinanceModule: React.FC = () => {
           </div>
         )}
 
+        {/* TAB 1B: Customer Accounts Database, Held Airlines, Airline Emails & Real-Time Flight Job Deduction */}
+        {activeTab === 'accounts' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 min-w-0">
+            {/* Left 2 Columns: Customer Accounts & Multi-Airline Email Directory */}
+            <div className="lg:col-span-2 min-w-0 space-y-6">
+              <div className="bg-surface-lowest border border-outline p-4 sm:p-6 rounded-[24px] sm:rounded-[32px] shadow-premium space-y-6 min-w-0 overflow-hidden">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                  <div>
+                    <h3 className="title-md text-on-surface font-black uppercase tracking-tight flex items-center gap-2">
+                      <Building2 className="w-5 h-5 text-primary" />
+                      Customer Accounts & Airline Email Database
+                    </h3>
+                    <p className="text-[10px] text-on-surface-dim uppercase font-bold tracking-wider mt-0.5">
+                      Maps every Customer Account to its held airlines, tail registrations, and dispatch/billing email addresses
+                    </p>
+                  </div>
+                  <button
+                    onClick={openNewCustomerModal}
+                    className="kinetic-gradient text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-premium flex items-center gap-1.5 shrink-0 min-h-[42px]"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" /> Add Customer Account
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {filteredCustomers.map(cust => {
+                    const holdings = cust.airlineHoldings || [];
+                    return (
+                      <div
+                        key={cust.id}
+                        className="bg-surface-dim/40 border border-outline rounded-2xl p-4 sm:p-5 space-y-4 hover:border-primary/40 transition-all"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-outline/60 pb-3">
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="text-sm font-black text-on-surface uppercase">{cust.name}</h4>
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-[9px] font-black tracking-widest uppercase border ${
+                                  cust.classification === 'ADVANCE'
+                                    ? 'bg-primary/10 text-primary border-primary/20'
+                                    : cust.classification === 'CREDIT'
+                                    ? 'bg-warning/10 text-warning border-warning/20'
+                                    : 'bg-success/10 text-success border-success/20'
+                                }`}
+                              >
+                                {cust.classification}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[9px] font-black uppercase">
+                                {cust.autoDeductOnUplift !== false ? 'Real-Time Auto-Deduct ON' : 'Manual Deduction'}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold text-on-surface-dim">
+                              <span>
+                                Balance:{' '}
+                                <strong className="text-primary">
+                                  ${(cust.classification === 'ADVANCE' ? cust.advanceBalance : cust.runningBalance).toLocaleString()}
+                                </strong>
+                              </span>
+                              {cust.balanceLiters !== undefined && (
+                                <span>
+                                  VolumeQuota: <strong className="text-on-surface">{cust.balanceLiters.toLocaleString()} L</strong>
+                                </span>
+                              )}
+                              <span>
+                                Rate: <strong className="text-on-surface">${(cust.defaultPricePerLiter || 1.19197).toFixed(5)}/L</strong>
+                              </span>
+                              {(cust.accountEmails || []).length > 0 && (
+                                <span className="inline-flex items-center gap-1 text-on-surface">
+                                  <Mail className="w-3 h-3 text-primary" /> {(cust.accountEmails || []).join(', ')}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              onClick={() => setEditingCustomer(cust)}
+                              className="px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 min-h-[38px]"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" /> Configure Airlines & Emails
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Airlines Held by this Customer Account */}
+                        <div className="space-y-2">
+                          <div className="text-[9px] font-black uppercase tracking-widest text-on-surface-dim flex items-center gap-1.5">
+                            <Plane className="w-3 h-3 text-primary" />
+                            Airlines Held by {cust.name} ({holdings.length})
+                          </div>
+                          {holdings.length === 0 ? (
+                            <p className="text-[10px] text-on-surface-dim italic">
+                              No structured airlines configured yet. Tap "Configure Airlines & Emails" to add airlines and email routing.
+                            </p>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                              {holdings.map(h => {
+                                const allAirlineEmails = Array.from(
+                                  new Set([...(h.flightJobEmails || []), ...(h.billingEmails || [])])
+                                );
+                                return (
+                                  <div
+                                    key={h.code}
+                                    className="bg-surface-lowest border border-outline rounded-xl p-3 flex flex-col justify-between gap-2"
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div>
+                                        <span className="px-2 py-0.5 rounded bg-primary text-white text-[9px] font-black uppercase tracking-widest mr-1.5">
+                                          {h.code}
+                                        </span>
+                                        <span className="text-xs font-black text-on-surface">{h.name}</span>
+                                      </div>
+                                      <button
+                                        onClick={() => {
+                                          if (allAirlineEmails.length === 0) {
+                                            notify(`No email configured for ${h.name}`, 'warning');
+                                            return;
+                                          }
+                                          sendFlightJobEmail(
+                                            {
+                                              flightNumber: `${h.code}101`,
+                                              airline: h.name,
+                                              aircraftReg: (h.aircraftRegs && h.aircraftRegs[0]) || 'TBA',
+                                              status: 'SCHEDULED / READY FOR UPLIFT',
+                                              customerAccountName: cust.name,
+                                              classification: cust.classification,
+                                              remainingBalance:
+                                                cust.classification === 'ADVANCE' ? cust.advanceBalance : cust.runningBalance
+                                            },
+                                            allAirlineEmails
+                                          );
+                                        }}
+                                        className="px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shrink-0"
+                                        title={`Send Flight Job email to ${allAirlineEmails.join(', ')}`}
+                                      >
+                                        <Send className="w-2.5 h-2.5" /> Email Job
+                                      </button>
+                                    </div>
+                                    <div className="space-y-1 text-[10px]">
+                                      <div className="text-on-surface-dim">
+                                        <strong className="text-on-surface uppercase text-[9px]">Flight Job Emails:</strong>{' '}
+                                        {(h.flightJobEmails || []).length > 0 ? h.flightJobEmails.join(', ') : 'None'}
+                                      </div>
+                                      <div className="text-on-surface-dim">
+                                        <strong className="text-on-surface uppercase text-[9px]">Billing Emails:</strong>{' '}
+                                        {(h.billingEmails || []).length > 0 ? h.billingEmails.join(', ') : 'None'}
+                                      </div>
+                                      {(h.aircraftRegs || []).length > 0 && (
+                                        <div className="text-on-surface-dim">
+                                          <strong className="text-on-surface uppercase text-[9px]">Aircraft Regs:</strong>{' '}
+                                          {h.aircraftRegs?.join(', ')}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Real-Time Flight Job Entry & Deduction Feed */}
+            <div className="space-y-6 min-w-0">
+              <div className="bg-surface-lowest border border-outline p-5 sm:p-6 rounded-[24px] sm:rounded-[32px] shadow-premium space-y-5">
+                <div>
+                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[9px] font-black uppercase tracking-widest inline-flex items-center gap-1">
+                    <Zap className="w-3 h-3" /> Live Apron-to-Finance Bridge
+                  </span>
+                  <h3 className="title-md text-on-surface font-black uppercase tracking-tight mt-2">
+                    Real-Time Flight Job Deduction & Email Dispatch
+                  </h3>
+                  <p className="text-[10px] text-on-surface-dim uppercase font-bold tracking-wider">
+                    Flight jobs entered in Into-Plane, Seaplane, or Schedule deduct automatically. You can also dispatch & deduct directly below:
+                  </p>
+                </div>
+
+                {(() => {
+                  const preview = resolveCustomerByFlightOrAirline(simFlightNo, undefined, simAircraftReg);
+                  return (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-on-surface-dim tracking-wider">Flight Number</label>
+                          <input
+                            type="text"
+                            value={simFlightNo}
+                            onChange={e => setSimFlightNo(e.target.value.toUpperCase())}
+                            placeholder="e.g. EK653, BA2043, EY379"
+                            className="w-full bg-surface-dim border border-outline px-3 py-2.5 rounded-xl text-xs font-black text-on-surface uppercase outline-none"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-on-surface-dim tracking-wider">Aircraft Reg</label>
+                          <input
+                            type="text"
+                            value={simAircraftReg}
+                            onChange={e => setSimAircraftReg(e.target.value.toUpperCase())}
+                            placeholder="e.g. A6-EEO"
+                            className="w-full bg-surface-dim border border-outline px-3 py-2.5 rounded-xl text-xs font-black text-on-surface uppercase outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-on-surface-dim tracking-wider">Uplift Volume (L)</label>
+                          <input
+                            type="number"
+                            value={simVolume}
+                            onChange={e => setSimVolume(e.target.value)}
+                            placeholder="14500"
+                            className="w-full bg-surface-dim border border-outline px-3 py-2.5 rounded-xl text-xs font-black text-on-surface outline-none"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-on-surface-dim tracking-wider">Stand / Bay</label>
+                          <input
+                            type="text"
+                            value={simStand}
+                            onChange={e => setSimStand(e.target.value.toUpperCase())}
+                            placeholder="A4"
+                            className="w-full bg-surface-dim border border-outline px-3 py-2.5 rounded-xl text-xs font-black text-on-surface uppercase outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Live Resolved Account & Airline Preview Box */}
+                      <div className="bg-surface-dim/60 border border-outline rounded-2xl p-3.5 space-y-1.5 text-xs">
+                        {preview.customer ? (
+                          <>
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-primary">Matched Account</span>
+                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-primary/10 text-primary">
+                                {preview.customer.classification}
+                              </span>
+                            </div>
+                            <div className="font-black text-on-surface">{preview.customer.name}</div>
+                            {preview.airlineHolding && (
+                              <div className="text-[10px] font-bold text-on-surface-dim">
+                                Held Airline: <strong className="text-on-surface">{preview.airlineHolding.code} — {preview.airlineHolding.name}</strong>
+                              </div>
+                            )}
+                            <div className="text-[10px] font-bold text-on-surface-dim">
+                              Est. Deduction:{' '}
+                              <strong className="text-error">
+                                -${((parseFloat(simVolume) || 0) * (preview.customer.defaultPricePerLiter || 1.19197)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                              </strong>
+                            </div>
+                            <div className="text-[10px] text-on-surface-dim break-all">
+                              <strong className="text-on-surface">Target Emails:</strong>{' '}
+                              {preview.emails.length > 0 ? preview.emails.join(', ') : 'No email configured'}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-[10px] font-bold text-warning">
+                            No Customer Account matched for "{simFlightNo}". Add this airline prefix to a Customer Account.
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleTriggerRealtimeFlightJob(false)}
+                          className="kinetic-gradient text-white font-black py-3 px-3 rounded-xl text-[10px] uppercase tracking-widest shadow-premium flex items-center justify-center gap-1.5 min-h-[42px]"
+                        >
+                          <Zap className="w-3.5 h-3.5" /> Deduct Balance Now
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleTriggerRealtimeFlightJob(true)}
+                          className="bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 font-black py-3 px-3 rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 min-h-[42px]"
+                        >
+                          <Send className="w-3.5 h-3.5" /> Deduct & Email Job
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Real-Time Deduction Activity Feed */}
+              <div className="bg-surface-lowest border border-outline p-5 sm:p-6 rounded-[24px] sm:rounded-[32px] shadow-premium space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-black uppercase text-on-surface tracking-wider">Real-Time Uplift Deduction Log</h4>
+                    <p className="text-[9px] font-bold uppercase text-on-surface-dim">Live balance deductions from entered flight jobs</p>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[9px] font-black">
+                    {realtimeDeductions.length} events
+                  </span>
+                </div>
+
+                <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1 custom-scrollbar">
+                  {realtimeDeductions.length === 0 ? (
+                    <div className="text-center py-8 text-[10px] font-bold uppercase text-on-surface-dim opacity-50">
+                      No real-time flight job deductions recorded in this session yet.
+                    </div>
+                  ) : (
+                    realtimeDeductions.map(ev => (
+                      <div key={ev.id} className="bg-surface-dim/50 border border-outline rounded-2xl p-3.5 space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-primary uppercase">
+                            {ev.flightNumber} • Ticket #{ev.deliveryNumber}
+                          </span>
+                          <span className="font-black text-error">-${ev.amountDeducted.toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] font-bold text-on-surface">
+                          <span>{ev.customerName} ({ev.airlineName})</span>
+                          <span>{ev.volumeLiters.toLocaleString()} L</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[9px] text-on-surface-dim">
+                          <span>New Bal: ${ev.newBalance.toLocaleString()}</span>
+                          {ev.emailsNotified.length > 0 && (
+                            <button
+                              onClick={() =>
+                                sendFlightJobEmail(
+                                  {
+                                    flightNumber: ev.flightNumber,
+                                    airline: ev.airlineName,
+                                    estimatedVolume: ev.volumeLiters,
+                                    status: `COMPLETED (Ticket #${ev.deliveryNumber})`,
+                                    customerAccountName: ev.customerName,
+                                    classification: ev.classification,
+                                    remainingBalance: ev.newBalance
+                                  },
+                                  ev.emailsNotified
+                                )
+                              }
+                              className="text-primary hover:underline font-black uppercase flex items-center gap-1"
+                            >
+                              <Mail className="w-2.5 h-2.5" /> Email ({ev.emailsNotified.length})
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* TAB 2: Billing & Invoicing Automation */}
         {activeTab === 'billing' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-w-0">
+            <div className="lg:col-span-2 space-y-8 min-w-0">
               <div className="bg-surface-lowest border border-outline p-6 rounded-[32px] shadow-premium space-y-6">
                 <div>
                   <h3 className="title-md text-on-surface font-black uppercase tracking-tight">Billing Run Operations</h3>
@@ -1808,6 +2364,367 @@ export const FinanceModule: React.FC = () => {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOMER ACCOUNT, HELD AIRLINES & EMAIL ROUTING MODAL */}
+      {editingCustomer && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-surface-lowest border border-outline rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden my-auto max-h-[92dvh] flex flex-col">
+            <div className="px-6 py-4 border-b border-outline flex items-center justify-between bg-surface-dim/50 shrink-0">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-widest text-primary">
+                  Customer Account & Airline Email Routing
+                </span>
+                <h3 className="text-base font-black text-on-surface uppercase">
+                  {editingCustomer.name || 'New Customer Account'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setEditingCustomer(null)}
+                className="w-9 h-9 rounded-xl bg-surface-dim hover:bg-error/15 text-on-surface hover:text-error flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCustomerAccount} className="p-5 sm:p-6 space-y-6 overflow-y-auto custom-scrollbar flex-1">
+              {/* Section 1: Core Account Details & Balances */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="sm:col-span-2 space-y-1">
+                  <label className="text-[10px] font-black uppercase text-on-surface-dim tracking-wider">
+                    Customer Account Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editingCustomer.name}
+                    onChange={e => setEditingCustomer({ ...editingCustomer, name: e.target.value })}
+                    placeholder="e.g. Access Flight Support / Emirates"
+                    className="w-full bg-surface-dim border border-outline px-3.5 py-2.5 rounded-xl text-xs font-bold text-on-surface outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-on-surface-dim tracking-wider">
+                    Billing Classification
+                  </label>
+                  <select
+                    value={editingCustomer.classification}
+                    onChange={e =>
+                      setEditingCustomer({
+                        ...editingCustomer,
+                        classification: e.target.value as CustomerClassification
+                      })
+                    }
+                    className="w-full bg-surface-dim border border-outline px-3.5 py-2.5 rounded-xl text-xs font-bold text-on-surface outline-none"
+                  >
+                    <option value="ADVANCE">ADVANCE (Pre-Paid Deposit)</option>
+                    <option value="CREDIT">CREDIT (Periodic Invoicing)</option>
+                    <option value="CASH">CASH (Immediate Settlement)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-on-surface-dim tracking-wider">
+                    Circular Rate ($ / Liter)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.00001"
+                    value={editingCustomer.defaultPricePerLiter ?? 1.19197}
+                    onChange={e =>
+                      setEditingCustomer({
+                        ...editingCustomer,
+                        defaultPricePerLiter: parseFloat(e.target.value) || 1.19197
+                      })
+                    }
+                    className="w-full bg-surface-dim border border-outline px-3.5 py-2.5 rounded-xl text-xs font-bold text-on-surface outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-on-surface-dim tracking-wider">
+                    Advance Balance ($)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingCustomer.advanceBalance}
+                    onChange={e => {
+                      const val = parseFloat(e.target.value) || 0;
+                      const rate = editingCustomer.defaultPricePerLiter || 1.19197;
+                      setEditingCustomer({
+                        ...editingCustomer,
+                        advanceBalance: val,
+                        runningBalance: editingCustomer.classification === 'ADVANCE' ? val : editingCustomer.runningBalance,
+                        balanceLiters: editingCustomer.classification === 'ADVANCE' ? Math.round(val / rate) : editingCustomer.balanceLiters
+                      });
+                    }}
+                    className="w-full bg-surface-dim border border-outline px-3.5 py-2.5 rounded-xl text-xs font-bold text-on-surface outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-on-surface-dim tracking-wider">
+                    Running Balance ($)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingCustomer.runningBalance}
+                    onChange={e =>
+                      setEditingCustomer({
+                        ...editingCustomer,
+                        runningBalance: parseFloat(e.target.value) || 0
+                      })
+                    }
+                    className="w-full bg-surface-dim border border-outline px-3.5 py-2.5 rounded-xl text-xs font-bold text-on-surface outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-on-surface-dim tracking-wider">
+                    Credit Limit ($)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingCustomer.creditLimit}
+                    onChange={e =>
+                      setEditingCustomer({
+                        ...editingCustomer,
+                        creditLimit: parseFloat(e.target.value) || 0
+                      })
+                    }
+                    className="w-full bg-surface-dim border border-outline px-3.5 py-2.5 rounded-xl text-xs font-bold text-on-surface outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-on-surface-dim tracking-wider">
+                    5-Day Sales Threshold ($)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingCustomer.estimated5DaysSales}
+                    onChange={e =>
+                      setEditingCustomer({
+                        ...editingCustomer,
+                        estimated5DaysSales: parseFloat(e.target.value) || 0
+                      })
+                    }
+                    className="w-full bg-surface-dim border border-outline px-3.5 py-2.5 rounded-xl text-xs font-bold text-on-surface outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-on-surface-dim tracking-wider">
+                    Account-Level Emails (comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={(editingCustomer.accountEmails || []).join(', ')}
+                    onChange={e =>
+                      setEditingCustomer({
+                        ...editingCustomer,
+                        accountEmails: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                      })
+                    }
+                    placeholder="ops@account.com, billing@account.com"
+                    className="w-full bg-surface-dim border border-outline px-3.5 py-2.5 rounded-xl text-xs font-bold text-on-surface outline-none"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between bg-surface-dim/60 border border-outline rounded-xl px-4 py-3 mt-auto">
+                  <div>
+                    <div className="text-xs font-black text-on-surface uppercase">Real-Time Flight Job Balance Deduction</div>
+                    <div className="text-[10px] text-on-surface-dim">
+                      Automatically deduct uplift amount from balance as flight jobs are entered
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={editingCustomer.autoDeductOnUplift !== false}
+                    onChange={e =>
+                      setEditingCustomer({
+                        ...editingCustomer,
+                        autoDeductOnUplift: e.target.checked
+                      })
+                    }
+                    className="w-5 h-5 accent-blue-600 rounded cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Section 2: Held Airlines & Per-Airline Email Routing */}
+              <div className="border-t border-outline pt-5 space-y-4">
+                <div>
+                  <h4 className="text-xs font-black text-on-surface uppercase flex items-center gap-2">
+                    <Plane className="w-4 h-4 text-primary" />
+                    Airlines Held by this Customer Account ({(editingCustomer.airlineHoldings || []).length})
+                  </h4>
+                  <p className="text-[10px] text-on-surface-dim">
+                    Add every airline operated or represented under this customer account along with the email addresses to receive Flight Jobs and Fuel Delivery Invoices.
+                  </p>
+                </div>
+
+                {/* Add / Update Airline Holding Form */}
+                <div className="bg-surface-dim/50 border border-outline rounded-2xl p-4 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black uppercase text-on-surface-dim">Airline Prefix / Code *</label>
+                      <input
+                        type="text"
+                        value={newAirlineCode}
+                        onChange={e => setNewAirlineCode(e.target.value.toUpperCase())}
+                        placeholder="e.g. EK, BA, EY, Q2"
+                        className="w-full bg-surface-lowest border border-outline px-3 py-2 rounded-xl text-xs font-black text-on-surface uppercase outline-none"
+                      />
+                    </div>
+                    <div className="sm:col-span-2 space-y-1">
+                      <label className="text-[9px] font-black uppercase text-on-surface-dim">Airline Name *</label>
+                      <input
+                        type="text"
+                        value={newAirlineName}
+                        onChange={e => setNewAirlineName(e.target.value)}
+                        placeholder="e.g. British Airways / Emirates"
+                        className="w-full bg-surface-lowest border border-outline px-3 py-2 rounded-xl text-xs font-bold text-on-surface outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black uppercase text-on-surface-dim">Flight Job Dispatch Emails</label>
+                      <input
+                        type="text"
+                        value={newAirlineJobEmails}
+                        onChange={e => setNewAirlineJobEmails(e.target.value)}
+                        placeholder="ops@airline.com, dispatch@agent.com"
+                        className="w-full bg-surface-lowest border border-outline px-3 py-2 rounded-xl text-xs font-bold text-on-surface outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black uppercase text-on-surface-dim">Billing / Invoice Emails</label>
+                      <input
+                        type="text"
+                        value={newAirlineBillingEmails}
+                        onChange={e => setNewAirlineBillingEmails(e.target.value)}
+                        placeholder="fuel.billing@airline.com"
+                        className="w-full bg-surface-lowest border border-outline px-3 py-2 rounded-xl text-xs font-bold text-on-surface outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black uppercase text-on-surface-dim">Aircraft Tail Regs (optional)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newAirlineRegs}
+                          onChange={e => setNewAirlineRegs(e.target.value.toUpperCase())}
+                          placeholder="A6-EEO, G-ZBJA"
+                          className="w-full bg-surface-lowest border border-outline px-3 py-2 rounded-xl text-xs font-bold text-on-surface uppercase outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddAirlineHoldingToEditor}
+                          className="kinetic-gradient text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider shrink-0 shadow-premium"
+                        >
+                          + Add Airline
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* List of Held Airlines */}
+                <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1 custom-scrollbar">
+                  {(editingCustomer.airlineHoldings || []).map(h => (
+                    <div
+                      key={h.code}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-surface-dim/30 border border-outline rounded-xl p-3 text-xs"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-primary text-white text-[10px] font-black uppercase">
+                            {h.code}
+                          </span>
+                          <span className="font-black text-on-surface">{h.name}</span>
+                          {(h.aircraftRegs || []).length > 0 && (
+                            <span className="text-[10px] text-on-surface-dim font-bold">
+                              [Regs: {h.aircraftRegs?.join(', ')}]
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-on-surface-dim">
+                          <strong>Job Emails:</strong> {(h.flightJobEmails || []).join(', ') || 'None'} &nbsp;|&nbsp;{' '}
+                          <strong>Billing Emails:</strong> {(h.billingEmails || []).join(', ') || 'None'}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewAirlineCode(h.code);
+                            setNewAirlineName(h.name);
+                            setNewAirlineJobEmails((h.flightJobEmails || []).join(', '));
+                            setNewAirlineBillingEmails((h.billingEmails || []).join(', '));
+                            setNewAirlineRegs((h.aircraftRegs || []).join(', '));
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-surface-dim hover:bg-primary/15 text-on-surface hover:text-primary text-[9px] font-black uppercase"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAirlineHoldingFromEditor(h.code)}
+                          className="px-2.5 py-1 rounded-lg bg-error/10 hover:bg-error/20 text-error text-[9px] font-black uppercase"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-outline pt-4 flex items-center justify-between gap-3">
+                {customers.some(c => c.id === editingCustomer.id) ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      deleteCustomerAccount(editingCustomer.id);
+                      notify(`Deleted Customer Account "${editingCustomer.name}".`, 'info');
+                      setEditingCustomer(null);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-error/10 hover:bg-error/20 text-error text-[10px] font-black uppercase tracking-wider"
+                  >
+                    Delete Account
+                  </button>
+                ) : (
+                  <div />
+                )}
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditingCustomer(null)}
+                    className="px-5 py-2.5 rounded-xl border border-outline text-[10px] font-black uppercase tracking-wider text-on-surface"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 rounded-xl kinetic-gradient text-white text-[10px] font-black uppercase tracking-widest shadow-premium"
+                  >
+                    Save Account & Airlines
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}

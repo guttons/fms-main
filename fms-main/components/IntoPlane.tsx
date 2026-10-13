@@ -16,8 +16,10 @@ import { cleanAircraftTypeName, normalizeRegistration } from '../services/aircra
 import { checkDuplicateTicketAcrossJetA1 } from '../services/ticketValidation';
 import { serverTimeService } from '../services/serverTimeService';
 import { SignatureAcknowledgment } from './SignatureAcknowledgment';
-import { generateInvoiceHtml, openPrintInvoice, sendInvoiceEmail, shareInvoice } from '../services/invoicePdfService';
+import { generateInvoiceHtml, generateInvoicePdfFile, openPrintInvoice, sendInvoiceEmail, shareInvoice, getInvoiceEmailDetails } from '../services/invoicePdfService';
+import { EmailDispatchModal } from './EmailDispatchModal';
 import { useFuelDispatch } from '../hooks/useFuelDispatch';
+import { useFinanceData } from '../context/FinanceDataContext';
 
 interface IntoPlaneProps {
     user: User;
@@ -1710,6 +1712,98 @@ const ScreenDashboard: React.FC<{
   );
 };
 
+const NumpadTimeInput: React.FC<{
+  value: string;
+  onChange: (val: string) => void;
+  disabled?: boolean;
+  className?: string;
+}> = ({ value, onChange, disabled, className }) => {
+  const [localVal, setLocalVal] = useState(value || '');
+  const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setLocalVal(value || '');
+    }
+  }, [value, isFocused]);
+
+  // Also sync if value was cleared or set externally while focused via button tap
+  useEffect(() => {
+    if (value !== localVal && (value === '' || (value && value.length === 5 && localVal.replace(/\D/g, '').length !== 4))) {
+      setLocalVal(value || '');
+    }
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 4);
+    if (digits.length === 0) {
+      setLocalVal('');
+      if (value) onChange('');
+      return;
+    }
+
+    const formatted = digits.length >= 3
+      ? `${digits.slice(0, 2)}:${digits.slice(2, 4)}`
+      : digits;
+    setLocalVal(formatted);
+
+    if (digits.length === 4) {
+      const hh = Math.min(23, parseInt(digits.slice(0, 2), 10));
+      const mm = Math.min(59, parseInt(digits.slice(2, 4), 10));
+      const validTime = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+      setLocalVal(validTime);
+      onChange(validTime);
+    }
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    const digits = localVal.replace(/\D/g, '');
+    if (digits.length === 0) {
+      if (value) onChange('');
+      setLocalVal('');
+      return;
+    }
+    if (digits.length === 3) {
+      const hh = Math.min(23, parseInt(`0${digits[0]}`, 10));
+      const mm = Math.min(59, parseInt(digits.slice(1, 3), 10));
+      const validTime = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+      setLocalVal(validTime);
+      onChange(validTime);
+      return;
+    }
+    if (digits.length === 4) {
+      const hh = Math.min(23, parseInt(digits.slice(0, 2), 10));
+      const mm = Math.min(59, parseInt(digits.slice(2, 4), 10));
+      const validTime = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+      setLocalVal(validTime);
+      onChange(validTime);
+      return;
+    }
+    // Incomplete 1-2 digits on blur: revert to external value
+    setLocalVal(value || '');
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9:]*"
+      maxLength={5}
+      placeholder="HH:MM"
+      disabled={disabled}
+      value={localVal}
+      onFocus={(e) => {
+        setIsFocused(true);
+        e.target.select();
+      }}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      className={className}
+    />
+  );
+};
+
 const ScreenTimestamps: React.FC<{ 
   activeFlight: Partial<FlightLog> | null, 
   onTimestamp: (field: keyof FlightLog) => void, 
@@ -2183,12 +2277,11 @@ const ScreenTimestamps: React.FC<{
               <div className="card-premium p-6 border-outline flex flex-col justify-center items-center w-36 sm:w-44 shrink-0">
                   <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-3 text-center">Manual Time</span>
                   <div className="relative w-full">
-                      <input 
-                          type="time"
+                      <NumpadTimeInput 
                           disabled={isReadOnly(user.role)}
                           value={activeFlight?.timestampArrived ? getLocalTimeValue(activeFlight.timestampArrived) : ''}
-                          onChange={(e) => setManualTime('timestampArrived', e.target.value)}
-                          className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
+                          onChange={(val) => setManualTime('timestampArrived', val)}
+                          className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-mono font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-on-surface placeholder:text-on-surface-dim/30"
                       />
                   </div>
               </div>
@@ -2232,12 +2325,11 @@ const ScreenTimestamps: React.FC<{
               <div className="card-premium p-6 border-outline flex flex-col justify-center items-center w-36 sm:w-44 shrink-0">
                   <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-3 text-center">Manual Time</span>
                   <div className="relative w-full">
-                      <input 
-                          type="time"
+                      <NumpadTimeInput 
                           disabled={!activeFlight?.timestampArrived || isReadOnly(user.role)}
                           value={activeFlight?.timestampPosition ? getLocalTimeValue(activeFlight.timestampPosition) : ''}
-                          onChange={(e) => setManualTime('timestampPosition', e.target.value)}
-                          className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
+                          onChange={(val) => setManualTime('timestampPosition', val)}
+                          className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-mono font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-on-surface placeholder:text-on-surface-dim/30 disabled:opacity-40"
                       />
                   </div>
               </div>
@@ -2281,12 +2373,11 @@ const ScreenTimestamps: React.FC<{
               <div className="card-premium p-6 border-outline flex flex-col justify-center items-center w-36 sm:w-44 shrink-0">
                   <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-3 text-center">Manual Time</span>
                   <div className="relative w-full">
-                      <input 
-                          type="time"
+                      <NumpadTimeInput 
                           disabled={!activeFlight?.timestampPosition || isReadOnly(user.role)}
                           value={activeFlight?.timestampStart ? getLocalTimeValue(activeFlight.timestampStart) : ''}
-                          onChange={(e) => setManualTime('timestampStart', e.target.value)}
-                          className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
+                          onChange={(val) => setManualTime('timestampStart', val)}
+                          className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-mono font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-on-surface placeholder:text-on-surface-dim/30 disabled:opacity-40"
                       />
                   </div>
               </div>
@@ -2361,78 +2452,7 @@ const ScreenMetering: React.FC<{
               />
           </div>
 
-          {/* Operation Delta (Initial End) */}
-          <div className="flex gap-4 items-stretch w-full">
-              <button 
-                  onClick={() => onTimestamp('timestampInitialEnd')}
-                  disabled={activeFlight?.meterOpen === undefined || isReadOnly(user.role)}
-                  className={`flex-1 p-6 sm:p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
-                      ${activeFlight?.timestampInitialEnd 
-                          ? 'bg-success/5 border-success text-on-surface' 
-                          : (activeFlight?.meterOpen === undefined || isReadOnly(user.role))
-                              ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
-                              : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
-                  `}
-              >
-                  <div className="relative z-10">
-                      <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Delta</span>
-                      <span className={`block text-xl sm:text-2xl font-[900] tracking-tighter ${activeFlight?.timestampInitialEnd ? 'text-success' : 'text-on-surface'}`}>
-                          INITIAL END
-                      </span>
-                      {activeFlight?.timestampInitialEnd && (
-                          <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
-                               <Clock className="w-4 h-4 mr-2 opacity-60"/>
-                               {new Date(activeFlight.timestampInitialEnd).toLocaleTimeString([], { hour12: false })}
-                           </span>
-                      )}
-                  </div>
-                  {!activeFlight?.timestampInitialEnd && <Pause className="absolute right-6 bottom-6 w-16 h-16 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
-                  {activeFlight?.timestampInitialEnd && <CheckCircle className="absolute right-6 bottom-6 w-16 h-16 text-success opacity-10" />}
-              </button>
-              <div className="card-premium p-6 border-outline flex flex-col justify-center items-center w-36 sm:w-44 shrink-0">
-                  <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-3 text-center">Manual Time</span>
-                  <div className="relative w-full">
-                      <input 
-                          type="time"
-                          disabled={activeFlight?.meterOpen === undefined || isReadOnly(user.role)}
-                          value={activeFlight?.timestampInitialEnd ? getLocalTimeValue(activeFlight.timestampInitialEnd) : ''}
-                          onChange={(e) => setManualTime('timestampInitialEnd', e.target.value)}
-                          className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
-                      />
-                  </div>
-              </div>
-          </div>
-
-          <div className="mt-4 p-4 lg:p-8 bg-surface-dim/30 rounded-[32px] lg:rounded-[40px] border border-outline">
-               <label className="block text-[10px] font-black text-on-surface uppercase mb-6 tracking-widest text-center opacity-60">Manual Volume Entry (L)</label>
-               <div className="relative w-full max-w-md mx-auto">
-                   <input 
-                       type="text" 
-                       inputMode="numeric"
-                       pattern="[0-9,]*"
-                       disabled={isReadOnly(user.role)}
-                       className="w-full px-6 lg:px-10 py-4 lg:py-6 bg-surface-lowest border border-outline/50 rounded-[24px] lg:rounded-[32px] text-4xl sm:text-6xl font-[900] text-primary tracking-tighter text-center outline-none focus:border-primary transition-all font-mono disabled:opacity-50"
-                       placeholder="0,000"
-                       value={activeFlight?.volume ? activeFlight.volume.toLocaleString() : ''}
-                       onChange={(e) => {
-                           const val = e.target.value.replace(/,/g, '');
-                           if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                               onInputChange('volume', val === '' ? 0 : parseFloat(val));
-                           }
-                       }}
-                   />
-                   <span className="absolute right-6 lg:right-10 top-1/2 transform -translate-y-1/2 text-[10px] font-black text-on-surface-dim uppercase opacity-30">LTRS</span>
-               </div>
-          </div>
-
-          <div className="card-premium p-6 border-outline bg-surface-dim/40">
-              <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Calculated Closing Totalizer</label>
-              <div className="text-4xl sm:text-6xl font-mono font-black py-4 text-on-surface-dim tracking-tight">
-                  {((typeof activeFlight?.meterOpen === 'number' ? activeFlight.meterOpen : 0) + (typeof activeFlight?.volume === 'number' ? activeFlight.volume : 0)).toLocaleString()}
-              </div>
-          </div>
-
-          {/* Metering Metrics: PSI & LPM */}
+          {/* Metering Metrics: PSI & LPM (Placed above INITIAL END) */}
           <div className="grid grid-cols-2 gap-4">
               <div className="p-6 border border-outline rounded-3xl bg-surface-dim/20">
                   <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-3 opacity-40">Pressure (PSI)</label>
@@ -2469,18 +2489,89 @@ const ScreenMetering: React.FC<{
                   />
               </div>
           </div>
-       </div>
 
-          <div className="border-t border-outline pt-6">
+          {/* Operation Delta (Initial End) */}
+          <div className="flex gap-4 items-stretch w-full">
+              <button 
+                  onClick={() => onTimestamp('timestampInitialEnd')}
+                  disabled={activeFlight?.meterOpen === undefined || isReadOnly(user.role)}
+                  className={`flex-1 p-6 sm:p-8 rounded-3xl border-2 text-left transition-all relative overflow-hidden group
+                      ${activeFlight?.timestampInitialEnd 
+                          ? 'bg-success/5 border-success text-on-surface' 
+                          : (activeFlight?.meterOpen === undefined || isReadOnly(user.role))
+                              ? 'bg-surface-container-low border-outline opacity-40 cursor-not-allowed'
+                              : 'bg-surface-container-lowest border-outline hover:border-primary active:scale-[0.98]'}
+                  `}
+              >
+                  <div className="relative z-10">
+                      <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-dim opacity-40 mb-2">Operation Delta</span>
+                      <span className={`block text-xl sm:text-2xl font-[900] tracking-tighter ${activeFlight?.timestampInitialEnd ? 'text-success' : 'text-on-surface'}`}>
+                          INITIAL END
+                      </span>
+                      {activeFlight?.timestampInitialEnd && (
+                          <span className="block mt-4 font-black text-[11px] uppercase tracking-widest text-success flex items-center">
+                               <Clock className="w-4 h-4 mr-2 opacity-60"/>
+                               {new Date(activeFlight.timestampInitialEnd).toLocaleTimeString([], { hour12: false })}
+                           </span>
+                      )}
+                  </div>
+                  {!activeFlight?.timestampInitialEnd && <Pause className="absolute right-6 bottom-6 w-16 h-16 text-on-surface opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" />}
+                  {activeFlight?.timestampInitialEnd && <CheckCircle className="absolute right-6 bottom-6 w-16 h-16 text-success opacity-10" />}
+              </button>
+              <div className="card-premium p-6 border-outline flex flex-col justify-center items-center w-36 sm:w-44 shrink-0">
+                  <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-3 text-center">Manual Time</span>
+                  <div className="relative w-full">
+                      <NumpadTimeInput 
+                          disabled={activeFlight?.meterOpen === undefined || isReadOnly(user.role)}
+                          value={activeFlight?.timestampInitialEnd ? getLocalTimeValue(activeFlight.timestampInitialEnd) : ''}
+                          onChange={(val) => setManualTime('timestampInitialEnd', val)}
+                          className="w-full text-center px-3 py-2 bg-surface-dim border border-outline rounded-xl text-sm font-mono font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-on-surface placeholder:text-on-surface-dim/30 disabled:opacity-40"
+                      />
+                  </div>
+              </div>
+          </div>
+
+          {/* Register Top-Up Event (Placed above Manual Volume Entry) */}
+          <div className="pt-2">
                <button 
+                   type="button"
                    onClick={() => { if (!isReadOnly(user.role)) setShowTopUp(!showTopUp); }} 
                    disabled={isReadOnly(user.role)}
-                   className="text-primary font-black text-[11px] uppercase tracking-widest flex items-center hover:scale-105 transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
+                   className={`w-full p-4 sm:p-5 rounded-2xl border-2 transition-all flex items-center justify-between gap-4 group cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                     showTopUp || activeFlight?.timestampFinalStart || activeFlight?.timestampFinalEnd
+                       ? 'bg-primary/10 border-primary/50 text-primary shadow-sm'
+                       : 'bg-surface-dim/40 hover:bg-primary/5 border-dashed border-primary/30 hover:border-primary/60 text-on-surface'
+                   }`}
                >
-                   {showTopUp ? '- Strike Top-Up Data' : '+ Register Top-Up Event'}
+                   <div className="flex items-center gap-3.5 text-left">
+                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 ${
+                         showTopUp || activeFlight?.timestampFinalStart || activeFlight?.timestampFinalEnd
+                           ? 'kinetic-gradient text-white shadow-sm'
+                           : 'bg-primary/10 text-primary group-hover:scale-105'
+                       }`}>
+                           <Zap className="w-5 h-5" />
+                       </div>
+                       <div>
+                           <span className="block text-xs sm:text-sm font-[900] uppercase tracking-wider text-on-surface group-hover:text-primary transition-colors">
+                               {showTopUp ? 'Hide Top-Up Event' : 'Register Top-Up Event'}
+                           </span>
+                           <span className="block text-[9px] font-bold uppercase tracking-widest text-on-surface-dim opacity-60 mt-0.5">
+                               {activeFlight?.timestampFinalStart || activeFlight?.timestampFinalEnd
+                                 ? 'Secondary pumping timestamps recorded'
+                                 : 'Optional secondary fueling start & end timestamps'}
+                           </span>
+                       </div>
+                   </div>
+                   <div className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all shrink-0 ${
+                     showTopUp
+                       ? 'bg-surface border-outline text-on-surface-dim'
+                       : 'bg-primary/15 border-primary/30 text-primary group-hover:bg-primary group-hover:text-white'
+                   }`}>
+                       {showTopUp ? 'Collapse' : '+ Add Top-Up'}
+                   </div>
                </button>
                {showTopUp && (
-                    <div className="space-y-4 mt-6 animate-in fade-in slide-in-from-top-4 duration-400">
+                    <div className="space-y-4 mt-4 p-4 sm:p-5 rounded-3xl bg-surface-dim/25 border border-outline/50 animate-in fade-in slide-in-from-top-4 duration-300">
                         {/* Final Start */}
                         <div className="flex gap-4 items-stretch w-full">
                             <button 
@@ -2512,12 +2603,11 @@ const ScreenMetering: React.FC<{
                             <div className="card-premium p-4 border-outline flex flex-col justify-center items-center w-36 sm:w-44 shrink-0">
                                 <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-2 text-center">Manual Time</span>
                                 <div className="relative w-full">
-                                    <input 
-                                        type="time"
+                                    <NumpadTimeInput 
                                         disabled={isReadOnly(user.role)}
                                         value={activeFlight?.timestampFinalStart ? getLocalTimeValue(activeFlight.timestampFinalStart) : ''}
-                                        onChange={(e) => setManualTime('timestampFinalStart', e.target.value)}
-                                        className="w-full text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
+                                        onChange={(val) => setManualTime('timestampFinalStart', val)}
+                                        className="w-full text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-mono font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-on-surface placeholder:text-on-surface-dim/30"
                                     />
                                 </div>
                             </div>
@@ -2554,12 +2644,11 @@ const ScreenMetering: React.FC<{
                             <div className="card-premium p-4 border-outline flex flex-col justify-center items-center w-36 sm:w-44 shrink-0">
                                 <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-2 text-center">Manual Time</span>
                                 <div className="relative w-full">
-                                    <input 
-                                        type="time"
+                                    <NumpadTimeInput 
                                         disabled={isReadOnly(user.role)}
                                         value={activeFlight?.timestampFinalEnd ? getLocalTimeValue(activeFlight.timestampFinalEnd) : ''}
-                                        onChange={(e) => setManualTime('timestampFinalEnd', e.target.value)}
-                                        className="w-full text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
+                                        onChange={(val) => setManualTime('timestampFinalEnd', val)}
+                                        className="w-full text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-mono font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-on-surface placeholder:text-on-surface-dim/30"
                                     />
                                 </div>
                             </div>
@@ -2567,6 +2656,36 @@ const ScreenMetering: React.FC<{
                     </div>
                 )}
           </div>
+
+          <div className="mt-4 p-4 lg:p-8 bg-surface-dim/30 rounded-[32px] lg:rounded-[40px] border border-outline">
+               <label className="block text-[10px] font-black text-on-surface uppercase mb-6 tracking-widest text-center opacity-60">Manual Volume Entry (L)</label>
+               <div className="relative w-full max-w-md mx-auto">
+                   <input 
+                       type="text" 
+                       inputMode="numeric"
+                       pattern="[0-9,]*"
+                       disabled={isReadOnly(user.role)}
+                       className="w-full px-6 lg:px-10 py-4 lg:py-6 bg-surface-lowest border border-outline/50 rounded-[24px] lg:rounded-[32px] text-4xl sm:text-6xl font-[900] text-primary tracking-tighter text-center outline-none focus:border-primary transition-all font-mono disabled:opacity-50"
+                       placeholder="0,000"
+                       value={activeFlight?.volume ? activeFlight.volume.toLocaleString() : ''}
+                       onChange={(e) => {
+                           const val = e.target.value.replace(/,/g, '');
+                           if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                               onInputChange('volume', val === '' ? 0 : parseFloat(val));
+                           }
+                       }}
+                   />
+                   <span className="absolute right-6 lg:right-10 top-1/2 transform -translate-y-1/2 text-[10px] font-black text-on-surface-dim uppercase opacity-30">LTRS</span>
+               </div>
+          </div>
+
+          <div className="card-premium p-6 border-outline bg-surface-dim/40">
+              <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-4 opacity-40">Calculated Closing Totalizer</label>
+              <div className="text-4xl sm:text-6xl font-mono font-black py-4 text-on-surface-dim tracking-tight">
+                  {((typeof activeFlight?.meterOpen === 'number' ? activeFlight.meterOpen : 0) + (typeof activeFlight?.volume === 'number' ? activeFlight.volume : 0)).toLocaleString()}
+              </div>
+          </div>
+       </div>
 
        <div className="mt-auto pt-10">
            <button 
@@ -2621,46 +2740,91 @@ const ScreenQC: React.FC<{
         </button>
         <h2 className="text-on-surface text-xl sm:text-2xl font-black mb-8 tracking-tighter uppercase px-2 sm:px-0">JIG <span className="text-primary italic">Compliance Protocol</span></h2>
 
-        <div className="space-y-4 p-2 sm:p-8 sm:card-premium sm:border sm:border-outline sm:shadow-inner bg-transparent sm:bg-surface-container-lowest rounded-none sm:rounded-3xl border-0">
-           {['panelCheck', 'walkAroundCheck', 'appearanceCheck', 'waterCheck'].map((check) => {
-               const isChecked = !!activeFlight?.[check as keyof FlightLog];
-               const isDisabled = isReadOnly(user.role);
-               const details = qcCheckDetails[check];
+        <div className="space-y-6 p-2 sm:p-8 sm:card-premium sm:border sm:border-outline sm:shadow-inner bg-transparent sm:bg-surface-container-lowest rounded-none sm:rounded-3xl border-0">
+           <div className="space-y-4">
+             {['panelCheck', 'walkAroundCheck', 'appearanceCheck', 'waterCheck'].map((check) => {
+                 const isChecked = !!activeFlight?.[check as keyof FlightLog];
+                 const isDisabled = isReadOnly(user.role);
+                 const details = qcCheckDetails[check];
 
-               return (
-                   <label 
-                       key={check} 
-                       className={`flex items-center p-4 sm:p-5 rounded-2xl border-2 transition-all 
-                           ${isChecked ? 'border-success/40 bg-success/5' : 'border-outline bg-surface-dim'} 
-                           ${isDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-primary/30'}
-                       `}
-                   >
-                       <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 
-                           ${isChecked ? 'bg-success border-success' : 'border-outline bg-surface'}
-                       `}>
-                           {isChecked && <CheckCircle className="w-4 h-4 text-white" />}
-                       </div>
-                       <input 
-                           type="checkbox" 
-                           checked={isChecked} 
-                           onChange={(e) => onInputChange(check as keyof FlightLog, e.target.checked)}
-                           disabled={isDisabled}
-                           className="hidden"
-                       />
-                       <div className="ml-4 sm:ml-5">
-                           <span className="block text-[10px] font-[900] text-on-surface uppercase tracking-widest">
-                               {details.title}
-                           </span>
-                           <span className="block text-[9px] text-on-surface-dim opacity-40 uppercase tracking-widest mt-1">
-                               {details.subtitle}
-                           </span>
-                       </div>
-                   </label>
-               );
-           })}
+                 return (
+                     <label 
+                         key={check} 
+                         className={`flex items-center p-4 sm:p-5 rounded-2xl border-2 transition-all 
+                             ${isChecked ? 'border-success/40 bg-success/5' : 'border-outline bg-surface-dim'} 
+                             ${isDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-primary/30'}
+                         `}
+                     >
+                         <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 
+                             ${isChecked ? 'bg-success border-success' : 'border-outline bg-surface'}
+                         `}>
+                             {isChecked && <CheckCircle className="w-4 h-4 text-white" />}
+                         </div>
+                         <input 
+                             type="checkbox" 
+                             checked={isChecked} 
+                             onChange={(e) => onInputChange(check as keyof FlightLog, e.target.checked)}
+                             disabled={isDisabled}
+                             className="hidden"
+                         />
+                         <div className="ml-4 sm:ml-5">
+                             <span className="block text-[10px] font-[900] text-on-surface uppercase tracking-widest">
+                                 {details.title}
+                             </span>
+                             <span className="block text-[9px] text-on-surface-dim opacity-40 uppercase tracking-widest mt-1">
+                                 {details.subtitle}
+                             </span>
+                         </div>
+                     </label>
+                 );
+             })}
+           </div>
 
-           {/* Operation Clearance (Log Clearance Time) */}
-           <div className="pt-4 border-t border-outline/40">
+            {/* Task Remarks & Operational Notes */}
+            <div className="pt-4 border-t border-outline/40">
+               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-3 opacity-50">
+                  Task Remarks & Operational Notes
+               </label>
+               <textarea 
+                 className="w-full bg-surface-dim border border-outline rounded-2xl p-4 text-xs font-bold text-on-surface outline-none focus:border-primary transition-all min-h-[90px] placeholder:opacity-30 disabled:opacity-50"
+                 placeholder={isReadOnly(user.role) ? 'No remarks' : 'Enter any operational remarks, delays, or equipment notes...'}
+                 value={cleanRemarks(activeFlight?.remarks)}
+                 onChange={(e) => onInputChange('remarks', e.target.value)}
+                 disabled={isReadOnly(user.role)}
+               />
+            </div>
+
+            {/* Customer / Flight Crew Full-Screen Signature & Declaration */}
+            <div className="pt-6 border-t border-outline/40">
+              <SignatureAcknowledgment
+                fullScreenSection={true}
+                signerName={activeFlight?.signerName || ''}
+                onSignerNameChange={(val) => onInputChange('signerName', val.toUpperCase())}
+                signerDesignation={activeFlight?.signerDesignation || ''}
+                onSignerDesignationChange={(val) => onInputChange('signerDesignation', val)}
+                signerEmail={activeFlight?.signerEmail || ''}
+                onSignerEmailChange={(val) => onInputChange('signerEmail', val)}
+                signatureDataUrl={activeFlight?.signatureDataUrl || null}
+                onSignatureChange={(val) => {
+                  onInputChange('signatureDataUrl', val);
+                  onInputChange('signedAt', val ? new Date().toISOString() : undefined);
+                  onInputChange('declarationConfirmed', !!val);
+                }}
+                disabled={isReadOnly(user.role)}
+                designationPresets={[
+                  'Captain (PIC)',
+                  'First Officer',
+                  'Aircraft Maintenance Engineer',
+                  'Ground Handler Rep'
+                ]}
+                declarationText="I hereby acknowledge and certify receipt of the specified fuel volume into the aircraft. All quality control procedures, meter readings, and safety clearances have been verified and accepted."
+                title="Customer / Flight Crew Acknowledgment"
+                subtitle="Official Into-Plane Fueling Certification"
+              />
+            </div>
+
+           {/* Operation Clearance (Log Clearance Time) — Placed after Signature Section */}
+           <div className="pt-6 border-t border-outline/40">
               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-3 opacity-50">
                  Safety & Ramp Clearance Milestone
               </label>
@@ -2695,59 +2859,16 @@ const ScreenQC: React.FC<{
                   <div className="card-premium p-3 sm:p-4 border-outline flex flex-col justify-center items-center w-32 sm:w-44 shrink-0">
                       <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-2 text-center">Manual Time</span>
                       <div className="relative w-full">
-                          <input 
-                              type="time"
+                          <NumpadTimeInput 
                               disabled={isReadOnly(user.role)}
                               value={activeFlight?.timestampClearance && getLocalTimeValue ? getLocalTimeValue(activeFlight.timestampClearance) : ''}
-                              onChange={(e) => setManualTime ? setManualTime('timestampClearance', e.target.value) : undefined}
-                              className="w-full text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer text-on-surface"
+                              onChange={(val) => setManualTime ? setManualTime('timestampClearance', val) : undefined}
+                              className="w-full text-center px-2 py-1.5 bg-surface-dim border border-outline rounded-lg text-xs font-mono font-black focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-on-surface placeholder:text-on-surface-dim/30"
                           />
                       </div>
                   </div>
               </div>
            </div>
-
-            {/* Task Remarks & Operational Notes */}
-            <div className="pt-4 border-t border-outline/40">
-               <label className="block text-[10px] font-black text-on-surface-dim uppercase tracking-[0.2em] mb-3 opacity-50">
-                  Task Remarks & Operational Notes
-               </label>
-               <textarea 
-                 className="w-full bg-surface-dim border border-outline rounded-2xl p-4 text-xs font-bold text-on-surface outline-none focus:border-primary transition-all min-h-[90px] placeholder:opacity-30 disabled:opacity-50"
-                 placeholder={isReadOnly(user.role) ? 'No remarks' : 'Enter any operational remarks, delays, or equipment notes...'}
-                 value={cleanRemarks(activeFlight?.remarks)}
-                 onChange={(e) => onInputChange('remarks', e.target.value)}
-                 disabled={isReadOnly(user.role)}
-               />
-            </div>
-
-            {/* Customer / Flight Crew Signature & Declaration */}
-            <div className="pt-4 border-t border-outline/40">
-              <SignatureAcknowledgment
-                signerName={activeFlight?.signerName || ''}
-                onSignerNameChange={(val) => onInputChange('signerName', val.toUpperCase())}
-                signerDesignation={activeFlight?.signerDesignation || ''}
-                onSignerDesignationChange={(val) => onInputChange('signerDesignation', val)}
-                signerEmail={activeFlight?.signerEmail || ''}
-                onSignerEmailChange={(val) => onInputChange('signerEmail', val)}
-                signatureDataUrl={activeFlight?.signatureDataUrl || null}
-                onSignatureChange={(val) => {
-                  onInputChange('signatureDataUrl', val);
-                  onInputChange('signedAt', val ? new Date().toISOString() : undefined);
-                  onInputChange('declarationConfirmed', !!val);
-                }}
-                disabled={isReadOnly(user.role)}
-                designationPresets={[
-                  'Captain (PIC)',
-                  'First Officer',
-                  'Aircraft Maintenance Engineer',
-                  'Ground Handler Rep'
-                ]}
-                declarationText="I hereby acknowledge and certify receipt of the specified fuel volume into the aircraft. All quality control procedures, meter readings, and safety clearances have been verified and accepted."
-                title="Customer / Flight Crew Acknowledgment"
-                subtitle="Official Into-Plane Fueling Certification"
-              />
-            </div>
         </div>
 
         <div className="mt-auto pt-6 sm:pt-10 space-y-4 sm:space-y-6 px-2 sm:px-0">
@@ -2792,6 +2913,7 @@ const ScreenQC: React.FC<{
 
 export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob, initialVehicleId, onClearInitialVehicleId, setActiveView }) => {
   const { notify } = useNotification();
+  const { resolveCustomerByFlightOrAirline } = useFinanceData();
   const { equipment, flightJobs, rawFlightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, updateFlightLog, externalFlights, staff, refreshData, selectedBriefingDate, tanks, updateTankLevel, serviceTankId, briefingInfo, internationalSchedules, addFlightLogEntry, isTicketAutoEnabled, generateTicketNumber } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(() => {
@@ -2821,8 +2943,58 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   const [voidSuccess, setVoidSuccess] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [completedInvoiceLog, setCompletedInvoiceLog] = useState<FlightLog | null>(null);
+  const [invoiceModalEmail, setInvoiceModalEmail] = useState<string>('');
+  const [prebuiltInvoicePdf, setPrebuiltInvoicePdf] = useState<File | null>(null);
+  const [isSharingPdf, setIsSharingPdf] = useState<boolean>(false);
+  const [showInvoiceEmailModal, setShowInvoiceEmailModal] = useState<boolean>(false);
+  const invoiceEmailInputRef = React.useRef<HTMLInputElement | null>(null);
   const [showEditActiveFlight, setShowEditActiveFlight] = useState(false);
   const [showEditActiveFrt, setShowEditActiveFrt] = useState(false);
+
+  const activeAccountResolution = useMemo(() => {
+    if (!activeFlight?.flightNumber && !activeFlight?.aircraftReg && !activeFlight?.airline && !activeFlight?.co) {
+      return { customer: undefined, airlineHolding: undefined, emails: [] as string[] };
+    }
+    return resolveCustomerByFlightOrAirline(
+      activeFlight.flightNumber,
+      activeFlight.airline,
+      activeFlight.aircraftReg,
+      activeFlight.co
+    );
+  }, [activeFlight?.flightNumber, activeFlight?.airline, activeFlight?.aircraftReg, activeFlight?.co, resolveCustomerByFlightOrAirline]);
+
+  const completedAccountResolution = useMemo(() => {
+    if (!completedInvoiceLog) {
+      return { customer: undefined, airlineHolding: undefined, emails: [] as string[] };
+    }
+    return resolveCustomerByFlightOrAirline(
+      completedInvoiceLog.flightNumber,
+      completedInvoiceLog.airline,
+      completedInvoiceLog.aircraftReg,
+      completedInvoiceLog.co
+    );
+  }, [completedInvoiceLog, resolveCustomerByFlightOrAirline]);
+
+  // Auto-populate signerEmail from the customer account's airline email directory if empty
+  useEffect(() => {
+    if (activeFlight && !activeFlight.signerEmail && activeAccountResolution.emails.length > 0) {
+      setActiveFlight(prev => prev && !prev.signerEmail ? { ...prev, signerEmail: activeAccountResolution.emails[0] } : prev);
+    }
+  }, [activeFlight?.flightNumber, activeFlight?.aircraftReg, activeAccountResolution.emails]);
+
+  // Pre-generate the .pdf File as soon as the Delivery Invoice Ready modal opens so Share / Email is instant
+  useEffect(() => {
+    if (completedInvoiceLog) {
+      const defaultEmail = completedInvoiceLog.signerEmail || completedAccountResolution.emails[0] || '';
+      setInvoiceModalEmail(defaultEmail);
+      setPrebuiltInvoicePdf(null);
+      generateInvoicePdfFile(completedInvoiceLog, user)
+        .then(file => setPrebuiltInvoicePdf(file))
+        .catch(err => console.warn('[IntoPlane] Prebuild invoice PDF warning:', err));
+    } else {
+      setPrebuiltInvoicePdf(null);
+    }
+  }, [completedInvoiceLog?.id, completedInvoiceLog?.deliveryNumber, user, completedAccountResolution.emails]);
 
   // Auto-show void modal when VOID selected
   useEffect(() => {
@@ -2924,7 +3096,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     localStorage.setItem(`fms_last_selected_vehicle_${user.id}`, id);
   };
 
-  const [showTopUp, setShowTopUp] = useState(false);
+  const [showTopUp, setShowTopUp] = useState<boolean>(() => !!(activeFlight?.timestampFinalStart || activeFlight?.timestampFinalEnd));
   const [equipPickerJob, setEquipPickerJob] = useState<FlightJob | null>(null);
   const [equipPickerSelected, setEquipPickerSelected] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -2965,7 +3137,31 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
   useEffect(() => {
     activeFlightRef.current = activeFlight;
-  }, [activeFlight]);
+    if (activeFlight && activeFlight.flightNumber) {
+      try {
+        localStorage.setItem(`fms_active_flight_${user?.id || ''}`, JSON.stringify(activeFlight));
+        const normNo = (activeFlight.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+        const fDate = activeFlight.operationalDate || selectedBriefingDate || new Date().toISOString().split('T')[0];
+        if (normNo) {
+          localStorage.setItem(`fms_flight_draft_${normNo}_${fDate}`, JSON.stringify(activeFlight));
+        }
+      } catch {}
+    }
+  }, [activeFlight, user?.id, selectedBriefingDate]);
+
+  // Always scroll to top when proceeding between flight job pages
+  useEffect(() => {
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      const mainEl = document.querySelector('main');
+      if (mainEl) {
+        mainEl.scrollTop = 0;
+        mainEl.scrollTo?.({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+      }
+    } catch {}
+  }, [currentScreen]);
 
   useEffect(() => {
     selectedVehicleIdRef.current = selectedVehicleId;
@@ -3006,9 +3202,12 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     // 3. Clear active flight state and matching sessions from localStorage
     try {
       localStorage.removeItem(`fms_active_flight_${user?.id || ''}`);
+      if (normFlightNo) {
+        localStorage.removeItem(`fms_flight_draft_${normFlightNo}_${targetFlightDate}`);
+      }
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith('fms_active_flight_')) {
+        if (key && (key.startsWith('fms_active_flight_') || key.startsWith('fms_flight_draft_'))) {
           const stored = localStorage.getItem(key);
           if (stored) {
             try {
@@ -3090,6 +3289,9 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     const cleanJobNo = (job.flightNumber || '').replace(/\s+/g, '').toUpperCase();
     const cleanActiveNo = (activeFlight?.flightNumber || '').replace(/\s+/g, '').toUpperCase();
     if (activeFlight && cleanActiveNo === cleanJobNo) {
+      if (activeFlight.timestampFinalStart || activeFlight.timestampFinalEnd) {
+        setShowTopUp(true);
+      }
       navigateToScreen('timestamps');
       return;
     }
@@ -3231,40 +3433,72 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     const resolvedCo = (job as any).co || matchingAdhoc?.co || '';
     const resolvedOperatorName = job.isAdhoc ? ((job as any).operatorName || matchingAdhoc?.operatorName || '') : '';
 
+    // Check if there is a saved draft for this flight job on this date
+    const resolvedOpDate = targetFlightDate || new Date().toISOString().split('T')[0];
+    let savedDraft: Partial<FlightLog> | null = null;
+    try {
+      const rawDraft = normJobNo ? localStorage.getItem(`fms_flight_draft_${normJobNo}_${resolvedOpDate}`) : null;
+      if (rawDraft) {
+        savedDraft = JSON.parse(rawDraft);
+      }
+    } catch {}
+
+    const baseReg = (job.aircraftReg && job.aircraftReg !== '8Q-TBA' && !job.aircraftReg.startsWith('8Q-DOM')) ? job.aircraftReg : ((matchingJob?.aircraftReg && matchingJob.aircraftReg !== '8Q-TBA' && !matchingJob.aircraftReg.startsWith('8Q-DOM')) ? matchingJob.aircraftReg : '');
+
     const flightData = {
       id: targetJobId,
       jobId: targetJobId,
       flightNumber: job.flightNumber,
-      aircraftReg: (job.aircraftReg && job.aircraftReg !== '8Q-TBA' && !job.aircraftReg.startsWith('8Q-DOM')) ? job.aircraftReg : ((matchingJob?.aircraftReg && matchingJob.aircraftReg !== '8Q-TBA' && !matchingJob.aircraftReg.startsWith('8Q-DOM')) ? matchingJob.aircraftReg : ''),
-      aircraftType: cleanAircraftTypeName(job.aircraftType || matchingJob?.aircraftType || (isDomFlight ? 'ATR' : 'A320')),
-      stand: job.stand || matchingJob?.stand || '---',
+      aircraftReg: savedDraft?.aircraftReg || baseReg,
+      aircraftType: savedDraft?.aircraftType || cleanAircraftTypeName(job.aircraftType || matchingJob?.aircraftType || (isDomFlight ? 'ATR' : 'A320')),
+      stand: savedDraft?.stand || job.stand || matchingJob?.stand || '---',
       operatorId: effectiveAssignee,
       vehicleId: activeVehicleId,
       status: 'IN_PROGRESS',
-      meterOpen: initialMeter,
-      volume: 0,
-      panelCheck: false,
-      walkAroundCheck: false,
-      appearanceCheck: false,
-      waterCheck: false,
-      remarks: cleanRemarks(job.remarks || ''),
+      meterOpen: savedDraft?.meterOpen !== undefined ? savedDraft.meterOpen : initialMeter,
+      volume: savedDraft?.volume !== undefined ? savedDraft.volume : 0,
+      psi: savedDraft?.psi,
+      lpm: savedDraft?.lpm,
+      deliveryNumber: savedDraft?.deliveryNumber,
+      pitNumber: savedDraft?.pitNumber,
+      timestampArrived: savedDraft?.timestampArrived,
+      timestampPosition: savedDraft?.timestampPosition,
+      timestampStart: savedDraft?.timestampStart,
+      timestampInitialEnd: savedDraft?.timestampInitialEnd,
+      timestampFinalStart: savedDraft?.timestampFinalStart,
+      timestampFinalEnd: savedDraft?.timestampFinalEnd,
+      panelCheck: savedDraft?.panelCheck ?? false,
+      walkAroundCheck: savedDraft?.walkAroundCheck ?? false,
+      appearanceCheck: savedDraft?.appearanceCheck ?? false,
+      waterCheck: savedDraft?.waterCheck ?? false,
+      remarks: savedDraft?.remarks !== undefined ? savedDraft.remarks : cleanRemarks(job.remarks || ''),
+      signerName: savedDraft?.signerName,
+      signerDesignation: savedDraft?.signerDesignation,
+      signerEmail: savedDraft?.signerEmail,
+      signatureDataUrl: savedDraft?.signatureDataUrl,
+      signedAt: savedDraft?.signedAt,
+      declarationConfirmed: savedDraft?.declarationConfirmed,
       isAdhoc: job.isAdhoc,
       route: job.route || matchingJob?.route,
       isDomestic: isDomFlight,
       officer: job.assignedOfficer || matchingJob?.assignedOfficer || '',
-      operationalDate: targetFlightDate || new Date().toISOString().split('T')[0],
+      operationalDate: resolvedOpDate,
       std: resolvedStd,
       tobt: resolvedTobt,
       frtAirline: resolvedFrtAirline,
       frtAocc: resolvedFrtAocc,
       frtFor: resolvedFrtFor,
-      timestampClearance: job.timestampClearance,
-      co: resolvedCo,
-      operatorName: resolvedOperatorName,
+      timestampClearance: savedDraft?.timestampClearance || job.timestampClearance,
+      co: savedDraft?.co || resolvedCo,
+      operatorName: savedDraft?.operatorName || resolvedOperatorName,
     };
+    setShowTopUp(!!(flightData.timestampFinalStart || flightData.timestampFinalEnd));
     setActiveFlight(flightData as any);
     try {
       localStorage.setItem(`fms_active_flight_${user?.id || ''}`, JSON.stringify(flightData));
+      if (normJobNo) {
+        localStorage.setItem(`fms_flight_draft_${normJobNo}_${resolvedOpDate}`, JSON.stringify(flightData));
+      }
     } catch {}
     navigateToScreen('timestamps');
   };
@@ -3461,8 +3695,14 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
   const completeOrCancelJobAndExit = (successMessage?: string) => {
     isSubmittingOrCompletingRef.current = true;
+    const currentActive = activeFlightRef.current || activeFlight;
+    const normNo = (currentActive?.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    const fDate = currentActive?.operationalDate || selectedBriefingDate || new Date().toISOString().split('T')[0];
     try {
       localStorage.removeItem(`fms_active_flight_${user?.id || ''}`);
+      if (normNo) {
+        localStorage.removeItem(`fms_flight_draft_${normNo}_${fDate}`);
+      }
     } catch {}
     if (successMessage) {
       notify(successMessage, "success");
@@ -3492,7 +3732,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
   const handleBackToDashboard = () => {
     isSubmittingOrCompletingRef.current = true;
-    cancelActiveFlightJob();
+    // Preserve activeFlight and draft in localStorage so resuming the flight job restores all entered data
     setCurrentScreen('dashboard');
 
     if (window.history.state?.itpScreen) {
@@ -3513,7 +3753,6 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
       if (isSubmittingOrCompletingRef.current) {
-        setActiveFlight(null);
         setCurrentScreen('dashboard');
         return;
       }
@@ -3524,9 +3763,8 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
           setCurrentScreen(targetScreen);
         }
       } else {
-        // Popped back to dashboard (or out of ITP sub-screens)
+        // Popped back to dashboard (or out of ITP sub-screens) — preserve activeFlight & draft
         if (currentScreen !== 'dashboard') {
-          cancelActiveFlightJob();
           setCurrentScreen('dashboard');
         }
       }
@@ -3582,7 +3820,20 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
     }
 
     if (finalDeliveryNumber) {
-      const ticketVal = await checkDuplicateTicketAcrossJetA1(finalDeliveryNumber, undefined, flightLogs);
+      // Exclude any ghost optimistic entry for the currently active flight in case a prior save attempt failed
+      const currentNormFn = (activeFlight.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      const currentOpDate = activeFlight.operationalDate || selectedBriefingDate || new Date().toISOString().split('T')[0];
+      const logsForValidation = (flightLogs || []).filter(l => {
+        if (!l) return false;
+        const lFn = (l.flightNumber || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+        const lDate = l.operationalDate || (l.timestampStart ? l.timestampStart.split('T')[0] : '');
+        // If this is the exact same active flight on the same date being retried, don't block its own retry
+        if (currentNormFn && lFn === currentNormFn && (!lDate || lDate === currentOpDate) && l.deliveryNumber === finalDeliveryNumber) {
+          return false;
+        }
+        return true;
+      });
+      const ticketVal = await checkDuplicateTicketAcrossJetA1(finalDeliveryNumber, activeFlight.id, logsForValidation);
       if (ticketVal.isDuplicate) {
         notify(ticketVal.message || `Delivery ticket number ${finalDeliveryNumber} is already used. Please enter a unique ticket number.`, 'error');
         return;
@@ -3765,21 +4016,17 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         } catch (e) {}
       }
 
-      try {
-        logToSave.invoiceHtml = generateInvoiceHtml(logToSave, user);
-      } catch (invErr) {
-        console.warn('[IntoPlane] Invoice HTML generation error:', invErr);
-      }
+      // 1. Save to BigQuery first BEFORE mutating in-memory flightLogs or marking the job COMPLETED.
+      // This guarantees that if the network call fails, no ghost ticket number is left in memory.
+      const savedLog = await supabaseService.createFlightLog(logToSave);
 
-      // Optimistically push into in-memory state so user sees it right away in Log History
+      // 2. Now that BigQuery save succeeded, push into in-memory state so user sees it right away in Log History
       if (addFlightLogEntry) {
-        addFlightLogEntry({ ...logToSave });
+        addFlightLogEntry({ ...savedLog });
       }
 
-      // Collect auxiliary promises to run concurrently with BigQuery save
+      // 3. Collect auxiliary inventory & job completion promises
       const auxPromises: Promise<any>[] = [];
-
-      const logPromise = supabaseService.createFlightLog(logToSave);
 
       // Update Refueller Payload/Inventory if applicable
       if (selectedVehicleId.startsWith('RF')) {
@@ -3851,12 +4098,16 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         }).catch(e => console.warn('[IntoPlane] Direct completion update to Supabase warning:', e));
       }
 
-      // Concurrently wait for BigQuery and Supabase writes
-      await Promise.all([logPromise, ...auxPromises]);
+      await Promise.all(auxPromises);
 
       // Refresh in background so user doesn't wait
       refreshData().catch(e => console.warn('[IntoPlane] Background refresh failed:', e));
-      const finalizedLog = { ...logToSave };
+      const finalizedLog: FlightLog = { ...savedLog };
+      try {
+        finalizedLog.invoiceHtml = generateInvoiceHtml(finalizedLog, user);
+      } catch (invErr) {
+        console.warn('[IntoPlane] Invoice HTML generation error:', invErr);
+      }
       completeOrCancelJobAndExit("Job Completed & Synced to Database!");
       setCompletedInvoiceLog(finalizedLog);
     } catch (error) {
@@ -4002,81 +4253,84 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
         {/* Detail Confirmation Modal */}
         {showConfirmModal && activeFlight && createPortal(
-          <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-            <div className="bg-surface rounded-3xl border border-outline shadow-premium w-full max-w-2xl p-8 animate-in fade-in zoom-in duration-300 my-auto max-h-[90vh] flex flex-col">
-              <div className="flex items-center justify-between pb-4 border-b border-outline/30 shrink-0">
-                <div>
-                  <span className="block text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-1">Confirm Authorization</span>
-                  <h3 className="text-2xl font-[900] tracking-tighter text-on-surface">REVIEW OPERATIONS LOG</h3>
+          <div className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 overflow-hidden">
+            <div className="bg-surface rounded-2xl sm:rounded-3xl border border-outline shadow-premium w-full max-w-2xl p-4 sm:p-7 animate-in fade-in zoom-in duration-300 my-auto max-h-[92dvh] flex flex-col overflow-hidden">
+              <div className="flex items-start sm:items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-outline/30 shrink-0">
+                <div className="min-w-0">
+                  <span className="block text-[9px] sm:text-[10px] font-black text-primary uppercase tracking-[0.25em] sm:tracking-[0.3em] mb-0.5 sm:mb-1">Confirm Authorization</span>
+                  <h3 className="text-lg sm:text-2xl font-[900] tracking-tight sm:tracking-tighter text-on-surface leading-tight">REVIEW OPERATIONS LOG</h3>
                 </div>
-                <button onClick={() => setShowConfirmModal(false)} className="p-2 rounded-xl hover:bg-surface-dim transition-colors">
+                <button onClick={() => setShowConfirmModal(false)} className="p-2 rounded-xl hover:bg-surface-dim transition-colors shrink-0">
                   <X className="w-5 h-5 text-on-surface-dim" />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto py-6 space-y-6 scrollbar-thin">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden py-3.5 sm:py-5 space-y-4 sm:space-y-5 scrollbar-thin">
                 {/* Flight & Equipment Block */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-surface-dim/40 p-5 rounded-2xl border border-outline/20">
-                  <div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 bg-surface-dim/40 p-3.5 sm:p-5 rounded-2xl border border-outline/20">
+                  <div className="min-w-0">
                     <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">Flight Number</span>
-                    <span className="text-[12px] font-black text-on-surface uppercase">{activeFlight.flightNumber || 'N/A'}</span>
+                    <span className="block text-[12px] font-black text-on-surface uppercase truncate">{activeFlight.flightNumber || 'N/A'}</span>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">Airline / Customer</span>
-                    <span className="text-[12px] font-black text-primary uppercase">{activeFlight.airline || getAirlineName(activeFlight.flightNumber || '', externalFlights) || 'N/A'}</span>
+                    <span className="block text-[12px] font-black text-primary uppercase truncate">{activeFlight.airline || getAirlineName(activeFlight.flightNumber || '', externalFlights) || 'N/A'}</span>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">Reg / Type</span>
-                    <span className="text-[12px] font-black text-on-surface uppercase">
+                    <span className="block text-[12px] font-black text-on-surface uppercase truncate">
                       {(activeFlight.aircraftReg || 'N/A')} / {(activeFlight.aircraftType || 'N/A')}
                     </span>
                   </div>
                   {!(isDomesticFlight(activeFlight as any) || (activeFlight as any).isDomestic || (activeFlight as any).isAdhoc) && (
-                    <div>
+                    <div className="min-w-0">
                       <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">Parking Stand</span>
-                      <span className="text-[12px] font-black text-on-surface uppercase">{activeFlight.stand || 'N/A'}</span>
+                      <span className="block text-[12px] font-black text-on-surface uppercase truncate">{activeFlight.stand || 'N/A'}</span>
                     </div>
                   )}
                 </div>
 
-                {/* Metering & Delivery Info */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-                  <div className="card-premium p-4 border-outline/30">
+                {/* Metering & Delivery Info (4 cards: 2x2 on mobile, 4-col on desktop) */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5">
+                  <div className="card-premium p-3 sm:p-4 border-outline/30 min-w-0">
                     <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">Opening Meter</span>
-                    <span className="text-lg font-mono font-black text-on-surface">
+                    <span className="block text-base sm:text-lg font-mono font-black text-on-surface truncate">
                       {activeFlight.meterOpen?.toLocaleString() || '0'}
                     </span>
                   </div>
-                  <div className="card-premium p-4 border-outline/30">
+                  <div className="card-premium p-3 sm:p-4 border-outline/30 min-w-0">
                     <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">Totalizer Volume</span>
-                    <span className="text-lg font-mono font-black text-primary">
+                    <span className="block text-base sm:text-lg font-mono font-black text-primary truncate">
                       {activeFlight.volume?.toLocaleString() || '0'} L
                     </span>
                   </div>
-                  <div className="card-premium p-4 border-outline/30">
+                  <div className="card-premium p-3 sm:p-4 border-outline/30 min-w-0">
                     <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">Closing Meter</span>
-                    <span className="text-lg font-mono font-black text-on-surface">
+                    <span className="block text-base sm:text-lg font-mono font-black text-on-surface truncate">
                       {((activeFlight.meterOpen || 0) + (activeFlight.volume || 0)).toLocaleString()}
                     </span>
                   </div>
-                  <div className="card-premium p-4 border-outline/30">
-                    <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">PSI</span>
-                    <span className="text-lg font-mono font-black text-on-surface">
-                      {activeFlight.psi !== undefined && activeFlight.psi !== null ? activeFlight.psi : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="card-premium p-4 border-outline/30">
-                    <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">LPM</span>
-                    <span className="text-lg font-mono font-black text-on-surface">
-                      {activeFlight.lpm !== undefined && activeFlight.lpm !== null ? activeFlight.lpm : 'N/A'}
-                    </span>
+                  <div className="card-premium p-3 sm:p-4 border-outline/30 min-w-0 flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">PSI</span>
+                      <span className="block text-base sm:text-lg font-mono font-black text-on-surface truncate">
+                        {activeFlight.psi !== undefined && activeFlight.psi !== null && String(activeFlight.psi) !== '' ? activeFlight.psi : 'N/A'}
+                      </span>
+                    </div>
+                    <div className="w-px h-7 bg-outline/30 shrink-0" />
+                    <div className="min-w-0 flex-1 text-right">
+                      <span className="block text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1">LPM</span>
+                      <span className="block text-base sm:text-lg font-mono font-black text-on-surface truncate">
+                        {activeFlight.lpm !== undefined && activeFlight.lpm !== null && String(activeFlight.lpm) !== '' ? activeFlight.lpm : 'N/A'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 {/* Timestamps Listing */}
-                <div className="space-y-3">
+                <div className="space-y-2.5 sm:space-y-3">
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-on-surface-dim opacity-60">Operations Timeline</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                     {[
                       { label: 'Ramp Arrived', time: activeFlight.timestampArrived },
                       { label: 'Positioned at AC', time: activeFlight.timestampPosition },
@@ -4085,15 +4339,15 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                       { label: 'Top-Up Start', time: activeFlight.timestampFinalStart },
                       { label: 'Top-Up End', time: activeFlight.timestampFinalEnd },
                     ].map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3.5 bg-surface-dim/30 rounded-xl border border-outline/20">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-on-surface">{item.label}</span>
+                      <div key={idx} className="flex items-center justify-between gap-2 p-2.5 sm:p-3.5 bg-surface-dim/30 rounded-xl border border-outline/20 min-w-0">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-on-surface truncate">{item.label}</span>
                         {item.time ? (
-                          <span className="text-[10px] font-black text-success font-mono flex items-center">
+                          <span className="text-[10px] font-black text-success font-mono flex items-center shrink-0">
                             <Clock className="w-3.5 h-3.5 mr-1.5 opacity-60" />
                             {new Date(item.time).toLocaleTimeString([], { hour12: false })}
                           </span>
                         ) : (
-                          <span className="text-[10px] font-bold text-on-surface-dim opacity-30 italic">Not Registered</span>
+                          <span className="text-[10px] font-bold text-on-surface-dim opacity-30 italic shrink-0">Not Registered</span>
                         )}
                       </div>
                     ))}
@@ -4101,30 +4355,30 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 </div>
 
                 {/* QC Compliance & Ticket Details */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div className="p-5 bg-success/5 border border-success/20 rounded-2xl space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-5">
+                  <div className="p-3.5 sm:p-5 bg-success/5 border border-success/20 rounded-2xl space-y-2.5 sm:space-y-3">
                     <h4 className="text-[10px] font-black uppercase tracking-widest text-success">JIG QC Compliance</h4>
                     <div className="grid grid-cols-2 gap-2 text-[10px] font-black uppercase text-on-surface">
                       <div className="flex items-center gap-1.5">
-                        <CheckCircle className="w-4 h-4 text-success" />
+                        <CheckCircle className="w-4 h-4 text-success shrink-0" />
                         <span>Panel Check</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <CheckCircle className="w-4 h-4 text-success" />
+                        <CheckCircle className="w-4 h-4 text-success shrink-0" />
                         <span>Walk Around</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <CheckCircle className="w-4 h-4 text-success" />
+                        <CheckCircle className="w-4 h-4 text-success shrink-0" />
                         <span>Appearance</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <CheckCircle className="w-4 h-4 text-success" />
+                        <CheckCircle className="w-4 h-4 text-success shrink-0" />
                         <span>Water Check</span>
                       </div>
                     </div>
                   </div>
                   
-                  <div className="p-5 bg-surface-dim/40 border border-outline/20 rounded-2xl space-y-3">
+                  <div className="p-3.5 sm:p-5 bg-surface-dim/40 border border-outline/20 rounded-2xl space-y-2.5 sm:space-y-3">
                     <h4 className="text-[10px] font-black uppercase tracking-widest text-on-surface-dim opacity-55">Log Billing & Personnel</h4>
                     <div className="space-y-1.5 text-[10px] font-black uppercase">
                       <div>
@@ -4178,9 +4432,9 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
 
                 {/* Remarks */}
                 {activeFlight.remarks && (
-                  <div className="p-4 bg-surface-dim/40 border border-outline/20 rounded-2xl">
-                    <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-2">Remarks</span>
-                    <p className="text-[11px] font-medium text-on-surface italic">{activeFlight.remarks}</p>
+                  <div className="p-3.5 sm:p-4 bg-surface-dim/40 border border-outline/20 rounded-2xl">
+                    <span className="block text-[9px] font-black uppercase tracking-wider text-on-surface-dim opacity-40 mb-1.5">Remarks</span>
+                    <p className="text-[11px] font-medium text-on-surface italic break-words">{activeFlight.remarks}</p>
                   </div>
                 )}
 
@@ -4211,12 +4465,13 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-4 pt-4 border-t border-outline/30 shrink-0">
+              <div className="flex gap-2.5 sm:gap-4 pt-3 sm:pt-4 border-t border-outline/30 shrink-0">
                 <button
                   onClick={() => setShowConfirmModal(false)}
-                  className="flex-1 py-4 bg-surface-dim border border-outline text-on-surface rounded-2xl font-[900] text-[11px] uppercase tracking-[0.2em] hover:bg-surface-container-low transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 py-3.5 sm:py-4 px-3 bg-surface-dim border border-outline text-on-surface rounded-2xl font-[900] text-[10px] sm:text-[11px] uppercase tracking-[0.12em] sm:tracking-[0.2em] hover:bg-surface-container-low transition-colors flex items-center justify-center gap-1.5 sm:gap-2"
                 >
-                  <ChevronLeft className="w-5 h-5 shrink-0" />
+                  <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                  <span className="sm:hidden">Edit</span>
                   <span className="hidden sm:inline">Go Back & Edit</span>
                 </button>
                 <button
@@ -4225,13 +4480,14 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                     await handleSubmit();
                   }}
                   disabled={loading || !activeFlight.signatureDataUrl || !activeFlight.signerName?.trim()}
-                  className="flex-1 py-4 kinetic-gradient text-white rounded-2xl font-[900] text-[11px] uppercase tracking-[0.2em] shadow-premium hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:grayscale"
+                  className="flex-[1.5] sm:flex-1 py-3.5 sm:py-4 px-3 kinetic-gradient text-white rounded-2xl font-[900] text-[10px] sm:text-[11px] uppercase tracking-[0.12em] sm:tracking-[0.2em] shadow-premium hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 sm:gap-2 disabled:opacity-40 disabled:grayscale"
                 >
                   {loading ? (
                     <span className="font-[900]">SYNCING...</span>
                   ) : (
                     <>
-                      <CheckCircle className="w-5 h-5 shrink-0" />
+                      <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                      <span className="sm:hidden">Authorize & Save</span>
                       <span className="hidden sm:inline">Authorize & Submit</span>
                     </>
                   )}
@@ -4310,6 +4566,55 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         )}
 
         <div className="flex-1">
+            {currentScreen !== 'dashboard' && activeAccountResolution.customer && (
+              <div className="mx-4 sm:mx-5 mt-3 p-3.5 rounded-2xl bg-primary/5 border border-primary/25 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-300">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-primary">
+                        Linked Customer Account
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider border ${
+                        activeAccountResolution.customer.classification === 'ADVANCE'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          : activeAccountResolution.customer.classification === 'CREDIT'
+                            ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
+                            : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                      }`}>
+                        {activeAccountResolution.customer.classification}
+                      </span>
+                      {activeAccountResolution.airlineHolding && (
+                        <span className="px-2 py-0.5 rounded-md bg-surface border border-outline text-[9px] font-mono font-black text-on-surface">
+                          {activeAccountResolution.airlineHolding.code} • {activeAccountResolution.airlineHolding.name}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs sm:text-sm font-black text-on-surface truncate mt-0.5">
+                      {activeAccountResolution.customer.name}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 ml-auto">
+                  <div className="text-right">
+                    <span className="block text-[8px] font-black uppercase tracking-widest text-on-surface-dim opacity-60">
+                      Live Balance (Auto-Deduct)
+                    </span>
+                    <span className="text-xs sm:text-sm font-mono font-black text-emerald-400">
+                      ${(activeAccountResolution.customer.classification === 'ADVANCE'
+                        ? activeAccountResolution.customer.advanceBalance
+                        : activeAccountResolution.customer.runningBalance
+                      ).toLocaleString()}
+                      {activeAccountResolution.customer.balanceLiters
+                        ? ` • ${activeAccountResolution.customer.balanceLiters.toLocaleString()} L`
+                        : ''}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
             {currentScreen === 'dashboard' && (
               <ScreenDashboard 
                 user={user} 
@@ -4369,9 +4674,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
             overflow: hidden !important;
             height: 100% !important;
           }
-          @media (max-width: 1023px) {
-            html.modal-open .sticky.top-0,
-            html.modal-open header,
+          @media (max-width: 767px) {
             html.modal-open .fixed.bottom-6 {
               display: none !important;
             }
@@ -4569,6 +4872,26 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                   </div>
                 </div>
 
+                {completedAccountResolution.customer && (
+                  <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-2">
+                    <div>
+                      <span className="block text-[8px] font-black uppercase tracking-widest text-emerald-400">
+                        Real-Time Account Balance Deducted
+                      </span>
+                      <span className="text-xs font-black text-on-surface">
+                        {completedAccountResolution.customer.name}
+                        {completedAccountResolution.airlineHolding ? ` (${completedAccountResolution.airlineHolding.code})` : ''}
+                      </span>
+                    </div>
+                    <span className="text-xs font-mono font-black text-emerald-400">
+                      Bal: ${(completedAccountResolution.customer.classification === 'ADVANCE'
+                        ? completedAccountResolution.customer.advanceBalance
+                        : completedAccountResolution.customer.runningBalance
+                      ).toLocaleString()}
+                    </span>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="p-3 rounded-xl bg-surface-container-lowest border border-outline/20">
                     <span className="block text-[8px] font-black uppercase text-on-surface-dim opacity-50">Flight No</span>
@@ -4588,12 +4911,63 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                   </div>
                 </div>
 
-                {completedInvoiceLog.signerEmail && (
-                  <div className="flex items-center gap-2 p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-cyan-300 text-xs">
-                    <Mail className="w-4 h-4 shrink-0" />
-                    <span className="truncate">Representative Email: <strong>{completedInvoiceLog.signerEmail}</strong></span>
+                <div className="p-3 rounded-xl bg-surface-container-lowest border border-outline/30 space-y-2">
+                  <label className="block text-[8px] font-black uppercase tracking-widest text-on-surface-dim opacity-60">
+                    Representative / Airline Email (for Instant Invoice Dispatch)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-cyan-400 shrink-0" />
+                    <input
+                      ref={invoiceEmailInputRef}
+                      type="email"
+                      value={invoiceModalEmail}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setInvoiceModalEmail(val);
+                        setCompletedInvoiceLog(prev => (prev ? { ...prev, signerEmail: val } : prev));
+                      }}
+                      placeholder="Enter representative email address..."
+                      className="w-full bg-transparent text-xs font-bold text-on-surface outline-none placeholder:text-on-surface-dim/40"
+                    />
                   </div>
-                )}
+                  {completedAccountResolution.emails.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1 border-t border-outline/20">
+                      <span className="text-[8px] font-black uppercase tracking-wider text-on-surface-dim opacity-60 self-center mr-1">
+                        Account Emails:
+                      </span>
+                      {completedAccountResolution.emails.map((emailAddr) => (
+                        <button
+                          key={emailAddr}
+                          type="button"
+                          onClick={() => {
+                            setInvoiceModalEmail(emailAddr);
+                            setCompletedInvoiceLog(prev => (prev ? { ...prev, signerEmail: emailAddr } : prev));
+                          }}
+                          className={`px-2 py-0.5 rounded-md text-[9px] font-mono font-bold border transition-all cursor-pointer ${
+                            invoiceModalEmail === emailAddr
+                              ? 'bg-primary text-white border-primary'
+                              : 'bg-surface-dim text-on-surface-dim border-outline hover:border-primary/40 hover:text-on-surface'
+                          }`}
+                        >
+                          {emailAddr}
+                        </button>
+                      ))}
+                      {completedAccountResolution.emails.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const allJoined = completedAccountResolution.emails.join(', ');
+                            setInvoiceModalEmail(allJoined);
+                            setCompletedInvoiceLog(prev => (prev ? { ...prev, signerEmail: allJoined } : prev));
+                          }}
+                          className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/25 cursor-pointer"
+                        >
+                          All ({completedAccountResolution.emails.length})
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Actions */}
@@ -4601,32 +4975,46 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 <button
                   type="button"
                   onClick={() => openPrintInvoice(completedInvoiceLog, user)}
-                  className="w-full py-4 kinetic-gradient text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-premium hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center gap-3 cursor-pointer"
+                  className="w-full py-4 kinetic-gradient text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-premium hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center gap-2.5 cursor-pointer"
                 >
-                  <Printer className="w-5 h-5" />
-                  Print / Save PDF Invoice (FORM NO: G-001)
+                  <Printer className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                  <span className="sm:hidden">Print / Save PDF</span>
+                  <span className="hidden sm:inline">Print / Save PDF Invoice (FORM NO: G-001)</span>
                 </button>
 
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => sendInvoiceEmail(completedInvoiceLog, completedInvoiceLog.signerEmail)}
+                    onClick={() => {
+                      setShowInvoiceEmailModal(true);
+                    }}
                     className="flex-1 py-3 px-4 bg-surface-dim hover:bg-surface-container border border-outline rounded-xl font-black text-[11px] uppercase tracking-wider text-on-surface transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <Mail className="w-4 h-4 text-primary" />
-                    Email to Rep
+                    <Mail className="w-4 h-4 text-primary shrink-0" />
+                    <span>Email to Rep</span>
                   </button>
 
-                  {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
-                    <button
-                      type="button"
-                      onClick={() => shareInvoice(completedInvoiceLog)}
-                      className="flex-1 py-3 px-4 bg-surface-dim hover:bg-surface-container border border-outline rounded-xl font-black text-[11px] uppercase tracking-wider text-on-surface transition-all flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <Share2 className="w-4 h-4 text-cyan-400" />
-                      Share
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    disabled={isSharingPdf}
+                    onClick={async () => {
+                      setIsSharingPdf(true);
+                      try {
+                        const res = await shareInvoice(completedInvoiceLog, user, prebuiltInvoicePdf);
+                        if (res === 'downloaded') {
+                          notify('Invoice PDF downloaded to your device.', 'success');
+                        }
+                      } catch {
+                        notify('Could not share PDF invoice.', 'error');
+                      } finally {
+                        setIsSharingPdf(false);
+                      }
+                    }}
+                    className="flex-1 py-3 px-4 bg-surface-dim hover:bg-surface-container border border-outline rounded-xl font-black text-[11px] uppercase tracking-wider text-on-surface transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <Share2 className="w-4 h-4 text-cyan-400 shrink-0" />
+                    <span>{isSharingPdf ? 'Sharing...' : 'Share PDF'}</span>
+                  </button>
                 </div>
 
                 <button
@@ -4641,6 +5029,30 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
           </div>,
           document.body
         )}
+
+        {/* Dedicated Email Dispatcher Modal for Delivery Invoice */}
+        {showInvoiceEmailModal && completedInvoiceLog && (() => {
+          const emailDetails = getInvoiceEmailDetails(
+            completedInvoiceLog,
+            invoiceModalEmail || completedInvoiceLog.signerEmail
+          );
+          return (
+            <EmailDispatchModal
+              isOpen={true}
+              onClose={() => setShowInvoiceEmailModal(false)}
+              title={`Email Delivery Invoice — ${completedInvoiceLog.deliveryNumber || 'MLE-INVOICE'}`}
+              subtitle={`Form No: G-001 • Uplift: ${completedInvoiceLog.volume?.toLocaleString() || 0} L`}
+              flightNumber={completedInvoiceLog.flightNumber}
+              airlineName={completedInvoiceLog.airline || completedAccountResolution.customer?.name}
+              defaultTo={invoiceModalEmail || emailDetails.to}
+              availableEmails={completedAccountResolution.emails}
+              subject={emailDetails.subject}
+              bodyText={emailDetails.bodyText}
+              pdfAttachment={prebuiltInvoicePdf}
+              pdfFilename={`${completedInvoiceLog.deliveryNumber || 'MLE-INVOICE'}.pdf`}
+            />
+          );
+        })()}
     </div>
   );
 };

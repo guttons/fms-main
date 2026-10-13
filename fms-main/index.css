@@ -231,6 +231,10 @@ svg *:focus,
 [data-theme='black'] .logo-dark { display: block; }
 
 /* Global Reset */
+*, ::before, ::after {
+  border-color: var(--color-outline);
+}
+
 html, body, #root {
   margin: 0;
   padding: 0;

@@ -210,6 +210,42 @@ class SyncEngine {
         }
         break;
       }
+      case 'flight_log': {
+        if (action === 'DELETE') {
+          const { error } = await supabase.from('flight_logs').delete().eq('id', item.entityId);
+          if (error) throw error;
+        } else if (action === 'UPDATE') {
+          const { error } = await supabase.from('flight_logs').update(payload).eq('id', item.entityId);
+          if (error) throw error;
+        } else {
+          const logPayload = { id: item.entityId, ...payload };
+          const { error } = await supabase.from('flight_logs').upsert([logPayload]);
+          if (error) throw error;
+        }
+        break;
+      }
+      case 'customer': {
+        if (action === 'DELETE') {
+          const { error } = await supabase.from('fin_customers').delete().eq('id', item.entityId);
+          if (error) throw error;
+        } else {
+          const custPayload = { id: item.entityId, ...payload };
+          const { error } = await supabase.from('fin_customers').upsert([custPayload]);
+          if (error) throw error;
+        }
+        break;
+      }
+      case 'shift_briefing': {
+        if (action === 'DELETE') {
+          const { error } = await supabase.from('shift_briefings').delete().eq('id', item.entityId);
+          if (error) throw error;
+        } else {
+          const briefingPayload = { id: item.entityId, ...payload };
+          const { error } = await supabase.from('shift_briefings').upsert([briefingPayload]);
+          if (error) throw error;
+        }
+        break;
+      }
       default:
         console.warn(`[SyncEngine] Unknown entity type: ${entityType}`);
     }

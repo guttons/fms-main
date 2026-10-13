@@ -112,49 +112,32 @@ export const CustomerPortal: React.FC<{ user: any }> = ({ user }) => {
       </div>
 
       {/* Main Grid Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 min-w-0">
         
         {/* LEFT COLUMN: Actions & Tab Forms */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="lg:col-span-2 space-y-6 lg:space-y-8 min-w-0">
           
-          {/* Navigation Tabs — EquipmentStatus-style pill bar */}
-          <div className="bg-surface-dim p-1 rounded-2xl border border-outline relative flex w-full overflow-x-auto no-scrollbar shadow-inner">
-            {/* Mobile/tablet: fixed-width pixel indicator */}
-            <div
-              className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium lg:hidden
-                ${activeTab === 'request'    ? 'left-1 w-[130px] translate-x-0'      : ''}
-                ${activeTab === 'statements' ? 'left-1 w-[155px] translate-x-[130px]' : ''}
-                ${activeTab === 'payments'   ? 'left-1 w-[145px] translate-x-[285px]' : ''}
-              `}
-            />
-            {/* Desktop: percentage-based indicator (flex-1 equal thirds) */}
-            <div
-              className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium hidden lg:block w-[calc(33.333%-1.33px)]
-                ${activeTab === 'request'    ? 'translate-x-0'    : ''}
-                ${activeTab === 'statements' ? 'translate-x-[100%]' : ''}
-                ${activeTab === 'payments'   ? 'translate-x-[200%]' : ''}
-              `}
-            />
+          {/* Tablet & Mobile Safe Navigation Tabs */}
+          <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline grid grid-cols-3 gap-1.5 w-full shadow-inner">
             {[
-              { id: 'request',    label: 'Request Fuel',      w: 'w-[130px] lg:w-auto' },
-              { id: 'statements', label: 'Uplift Statements', w: 'w-[155px] lg:w-auto' },
-              { id: 'payments',   label: 'Ledger Payments',   w: 'w-[145px] lg:w-auto' },
+              { id: 'request',    label: 'Request Fuel' },
+              { id: 'statements', label: 'Uplift Statements' },
+              { id: 'payments',   label: 'Ledger Payments' },
             ].map(t => (
               <button
                 key={t.id}
                 onClick={() => setActiveTab(t.id as any)}
-                className={`${t.w} flex-shrink-0 lg:flex-1 flex items-center justify-center py-3 text-[10px] font-black uppercase tracking-widest transition-all relative z-10
-                  ${activeTab === t.id ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'}`}
+                className={`min-h-[44px] px-3 py-2.5 rounded-xl flex items-center justify-center text-[10px] font-black uppercase tracking-widest transition-all
+                  ${activeTab === t.id ? 'kinetic-gradient text-white shadow-premium' : 'text-on-surface-dim hover:text-on-surface hover:bg-surface-lowest/50'}`}
               >
-                {t.label}
+                <span className="truncate">{t.label}</span>
               </button>
             ))}
           </div>
 
-
           {/* TAB 1: Fuel request form with live validation */}
           {activeTab === 'request' && (
-            <div className="bg-surface-lowest border border-outline p-6 rounded-[32px] shadow-premium space-y-6">
+            <div className="bg-surface-lowest border border-outline p-6 rounded-[32px] shadow-premium space-y-6 min-w-0">
               <div>
                 <h3 className="title-md text-on-surface font-black uppercase tracking-tight">Request Flight Fueling</h3>
                 <p className="text-[10px] text-on-surface-dim uppercase font-bold tracking-wider">Submits real-time validated fueling command to Apron team</p>
