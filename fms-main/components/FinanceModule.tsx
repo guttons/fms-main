@@ -1,12 +1,21 @@
 import React, { useState } from 'react';
-import { useFinanceData, CustomerClassification, CustomerAccount, AirlineHolding, FuelRequest, MpdSale } from '../context/FinanceDataContext';
+import { 
+  useFinanceData, 
+  CustomerClassification, 
+  CustomerAccount, 
+  AirlineHolding, 
+  FuelRequest, 
+  MpdSale,
+  FuelRateRecord,
+  CustomerCategory 
+} from '../context/FinanceDataContext';
 import { useNotification } from '../context/NotificationContext';
 import { sendFlightJobEmail } from '../services/invoicePdfService';
 import { 
   DollarSign, FileText, Upload, CheckCircle, RefreshCw, BarChart2, Briefcase, 
   FileSpreadsheet, AlertTriangle, Printer, Download, ChevronRight, PlusCircle, 
   Layers, Scale, ListTodo, Shield, Trash2, ArrowUpRight, Search, Eye, X,
-  Plane, Mail, Edit3, Zap, Send, Building2
+  Plane, Mail, Edit3, Zap, Send, Building2, ChevronDown, ChevronUp, Tag, Coins, Percent
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Legend } from 'recharts';
 
@@ -15,14 +24,33 @@ export const FinanceModule: React.FC = () => {
     customers, upcomingPayments, invoices, receipts, proformaRegister, 
     fuelRequests, varianceLogs, procurementPRs, surcharges, mpdSales, customsShipments,
     realtimeDeductions,
+    fuelRates, activeUsdToMvrRate, updateFuelRate, addFuelRate, deleteFuelRate,
     reviewSwiftCopy, syncOracleReceipt, runBillingProcess, applyFIFOLogic, 
     generateProforma, approveVariance, createProcurementPR, verifyVendorInvoice, 
     raisePO, enterAPInvoice, addSurcharge, resetAllFinanceMockData,
-    upsertCustomerAccount, deleteCustomerAccount, resolveCustomerByFlightOrAirline, deductFlightUpliftRealtime
+    upsertCustomerAccount, deleteCustomerAccount, resolveCustomerByFlightOrAirline, deductFlightUpliftRealtime,
+    rollbackFlightDeduction
   } = useFinanceData();
 
   const { notify } = useNotification();
   const [activeTab, setActiveTab] = useState<'balances' | 'accounts' | 'billing' | 'variance' | 'procurement' | 'reports'>('balances');
+  
+  // Collapsible Customer Accounts state
+  const [collapsedAccounts, setCollapsedAccounts] = useState<Record<string, boolean>>({});
+
+  // Category filter state for Customer Credit & Balances
+  const [balanceCategoryFilter, setBalanceCategoryFilter] = useState<CustomerCategory | 'ALL'>('ALL');
+
+  // Fuel Rates Schedule Modal state
+  const [showFuelRatesModal, setShowFuelRatesModal] = useState(false);
+  const [editingFuelRate, setEditingFuelRate] = useState<FuelRateRecord | null>(null);
+  const [rateAirline, setRateAirline] = useState('');
+  const [rateDate, setRateDate] = useState('1-Mar-23');
+  const [rateUsd, setRateUsd] = useState('1.85');
+  const [rateMvr, setRateMvr] = useState('28.527');
+  const [rateCurrency, setRateCurrency] = useState<'USD' | 'MVR'>('USD');
+  const [rateCategory, setRateCategory] = useState<FuelRateRecord['category']>('INT');
+  const [rateNotes, setRateNotes] = useState('');
   
   // Local state for forms
   const [searchQuery, setSearchQuery] = useState('');
@@ -318,6 +346,23 @@ export const FinanceModule: React.FC = () => {
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           <button
+            onClick={() => {
+              setEditingFuelRate(null);
+              setRateAirline('');
+              setRateDate('1-Mar-23');
+              setRateUsd('1.85');
+              setRateMvr('28.527');
+              setRateCurrency('USD');
+              setRateCategory('INT');
+              setRateNotes('');
+              setShowFuelRatesModal(true);
+            }}
+            className="flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 min-h-[42px]"
+          >
+            <Coins className="w-3.5 h-3.5" />
+            Fuel Rates Schedule (USD & MVR)
+          </button>
+          <button
             onClick={openNewCustomerModal}
             className="flex items-center gap-2 kinetic-gradient text-white px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-premium transition-all active:scale-95 min-h-[42px]"
           >
@@ -378,131 +423,268 @@ export const FinanceModule: React.FC = () => {
                 <div className="min-w-0">
                   <h3 className="title-md text-on-surface font-black uppercase tracking-tight">Customer Credit & Balances</h3>
                   <p className="text-[10px] text-on-surface-dim uppercase font-bold tracking-wider">
-                    Real-time deduction as flight jobs get entered • Tap any account to manage airlines & emails
+                    Categorized Accounts • Real-time deduction on flight job entry • Airline codes quick reference
                   </p>
                 </div>
-                <div className="flex items-center border border-outline bg-surface-dim px-3 py-2 rounded-xl w-full sm:max-w-xs min-h-[42px]">
-                  <Search className="w-4 h-4 opacity-40 mr-2 shrink-0" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search account, airline (EK, BA), email..."
-                    className="bg-transparent border-none outline-none text-xs font-bold text-on-surface w-full"
-                  />
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center border border-outline bg-surface-dim px-3 py-2 rounded-xl w-full sm:max-w-xs min-h-[42px]">
+                    <Search className="w-4 h-4 opacity-40 mr-2 shrink-0" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search account, airline (EK, BA)..."
+                      className="bg-transparent border-none outline-none text-xs font-bold text-on-surface w-full"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="w-full overflow-x-auto touch-pan-x -mx-1 px-1 pb-2 custom-scrollbar">
-                <table className="w-full min-w-[780px] text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-outline text-[10px] font-black uppercase tracking-widest text-on-surface-dim">
-                      <th className="pb-3 pr-3">Customer & Held Airlines</th>
-                      <th className="pb-3 px-2">Class</th>
-                      <th className="pb-3 px-2 text-right">Advance / Running Bal</th>
-                      <th className="pb-3 px-2 text-right">Volume (L)</th>
-                      <th className="pb-3 px-2 text-right">5-Day Sales Est.</th>
-                      <th className="pb-3 px-2 text-right">Credit Limit</th>
-                      <th className="pb-3 px-2">Status</th>
-                      <th className="pb-3 pl-2 text-right">Manage</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline">
-                    {filteredCustomers.map(c => {
-                      const isLow = c.classification === 'ADVANCE' && c.advanceBalance < c.estimated5DaysSales;
-                      const holdings = c.airlineHoldings || [];
-                      const allEmails = Array.from(
-                        new Set([
-                          ...(c.accountEmails || []),
-                          ...holdings.flatMap(h => [...(h.flightJobEmails || []), ...(h.billingEmails || [])])
-                        ])
-                      );
-                      return (
-                        <tr key={c.id} className="hover:bg-surface-dim/40 transition-colors">
-                          <td className="py-3.5 pr-3">
-                            <div className="font-black text-on-surface">{c.name}</div>
-                            <div className="flex flex-wrap items-center gap-1 mt-1">
-                              {holdings.length > 0 ? (
-                                holdings.map(h => (
-                                  <span
-                                    key={h.code}
-                                    title={`${h.name}: ${(h.flightJobEmails || []).join(', ')}`}
-                                    className="px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[9px] font-black uppercase tracking-wider"
-                                  >
-                                    {h.code} • {h.name}
-                                  </span>
-                                ))
-                              ) : (
-                                (c.associatedAirlines || []).slice(0, 5).map(code => (
-                                  <span
-                                    key={code}
-                                    className="px-1.5 py-0.5 rounded bg-surface-dim text-on-surface-dim border border-outline text-[9px] font-black uppercase"
-                                  >
-                                    {code}
-                                  </span>
-                                ))
-                              )}
-                              {allEmails.length > 0 && (
-                                <span
-                                  title={allEmails.join(', ')}
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-success/10 text-success border border-success/20 text-[9px] font-bold"
-                                >
-                                  <Mail className="w-2.5 h-2.5" /> {allEmails.length} email{allEmails.length > 1 ? 's' : ''}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-2">
-                            <span className={`px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest uppercase border whitespace-nowrap
-                              ${c.classification === 'ADVANCE' ? 'bg-primary/10 text-primary border-primary/20' : 
-                                c.classification === 'CREDIT' ? 'bg-warning/10 text-warning border-warning/20' : 
-                                'bg-success/10 text-success border-success/20'}`}>
-                              {c.classification}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-2 text-right font-bold whitespace-nowrap">
-                            {c.classification === 'ADVANCE' ? (
-                              <span className="text-primary">${c.advanceBalance.toLocaleString()}</span>
-                            ) : (
-                              <span className={c.runningBalance < 0 ? 'text-warning' : 'text-on-surface'}>
-                                ${c.runningBalance.toLocaleString()}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-2 text-right font-bold text-on-surface whitespace-nowrap">
-                            {c.balanceLiters !== undefined ? `${c.balanceLiters.toLocaleString()} L` : '-'}
-                          </td>
-                          <td className="py-3.5 px-2 text-right font-bold text-on-surface-dim whitespace-nowrap">
-                            {c.classification === 'ADVANCE' || c.classification === 'CREDIT' ? `$${c.estimated5DaysSales.toLocaleString()}` : '-'}
-                          </td>
-                          <td className="py-3.5 px-2 text-right font-bold text-on-surface-dim whitespace-nowrap">
-                            {c.classification === 'CREDIT' ? `$${c.creditLimit.toLocaleString()}` : '-'}
-                          </td>
-                          <td className="py-3.5 px-2 whitespace-nowrap">
-                            {isLow ? (
-                              <span className="flex items-center gap-1.5 text-error font-black uppercase text-[9px] tracking-widest animate-pulse">
-                                <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> CRITICAL (LOW)
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-1.5 text-success font-bold uppercase text-[9px] tracking-widest">
-                                <CheckCircle className="w-3.5 h-3.5 shrink-0" /> SECURE
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3.5 pl-2 text-right whitespace-nowrap">
-                            <button
-                              onClick={() => setEditingCustomer(c)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-surface-dim hover:bg-primary/15 text-on-surface hover:text-primary border border-outline text-[9px] font-black uppercase tracking-wider transition-all"
-                            >
-                              <Edit3 className="w-3 h-3" /> Airlines & Emails
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              {/* Category Filter Pills Matching Screenshot 5 */}
+              {(() => {
+                const getCategoryForCustomer = (c: CustomerAccount): CustomerCategory => {
+                  if (c.category) return c.category;
+                  if (c.classification === 'CREDIT') {
+                    if (c.name.toUpperCase().includes('IAS') || c.name.toUpperCase().includes('ISLAND AVIATION')) {
+                      return 'IAS_CREDIT';
+                    }
+                    return 'CREDIT_GENERAL';
+                  }
+                  if (c.currency === 'MVR' || c.name.toUpperCase().includes('FLY ME')) {
+                    return 'ADVANCE_DOM_MVR';
+                  }
+                  if (
+                    c.name.toUpperCase().includes('TMA') ||
+                    c.name.toUpperCase().includes('MANTA') ||
+                    c.name.toUpperCase().includes('DOM')
+                  ) {
+                    return 'ADVANCE_DOM_USD';
+                  }
+                  return 'ADVANCE_INT_USD';
+                };
+
+                const CATEGORIES_DEF: { key: CustomerCategory; label: string; headerBg: string; currency: 'USD' | 'MVR' }[] = [
+                  {
+                    key: 'ADVANCE_INT_USD',
+                    label: 'ADVANCE INT CUSTOMERS USD',
+                    headerBg: 'bg-blue-600 text-white',
+                    currency: 'USD'
+                  },
+                  {
+                    key: 'ADVANCE_DOM_USD',
+                    label: 'ADVANCE DOM CUSTOMERS USD',
+                    headerBg: 'bg-cyan-700 text-white',
+                    currency: 'USD'
+                  },
+                  {
+                    key: 'ADVANCE_DOM_MVR',
+                    label: 'ADVANCE DOM CUSTOMERS MVR',
+                    headerBg: 'bg-teal-700 text-white',
+                    currency: 'MVR'
+                  },
+                  {
+                    key: 'IAS_CREDIT',
+                    label: 'ISLAND AVIATION SERVICES (IAS / CREDIT)',
+                    headerBg: 'bg-slate-900 text-white border-t-2 border-primary',
+                    currency: 'USD'
+                  },
+                  {
+                    key: 'CREDIT_GENERAL',
+                    label: 'OTHER CREDIT CUSTOMERS',
+                    headerBg: 'bg-slate-800 text-white',
+                    currency: 'USD'
+                  }
+                ];
+
+                const activeCats = balanceCategoryFilter === 'ALL'
+                  ? CATEGORIES_DEF
+                  : CATEGORIES_DEF.filter(cat => cat.key === balanceCategoryFilter);
+
+                return (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-1.5 pb-1">
+                      <button
+                        onClick={() => setBalanceCategoryFilter('ALL')}
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all min-h-[34px] ${
+                          balanceCategoryFilter === 'ALL'
+                            ? 'kinetic-gradient text-white shadow-premium'
+                            : 'bg-surface-dim hover:bg-surface-dim/80 text-on-surface-dim border border-outline'
+                        }`}
+                      >
+                        All Categories ({filteredCustomers.length})
+                      </button>
+                      {CATEGORIES_DEF.map(cat => {
+                        const count = filteredCustomers.filter(c => getCategoryForCustomer(c) === cat.key).length;
+                        return (
+                          <button
+                            key={cat.key}
+                            onClick={() => setBalanceCategoryFilter(cat.key)}
+                            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all min-h-[34px] ${
+                              balanceCategoryFilter === cat.key
+                                ? 'kinetic-gradient text-white shadow-premium'
+                                : 'bg-surface-dim hover:bg-surface-dim/80 text-on-surface-dim border border-outline'
+                            }`}
+                          >
+                            {cat.label} ({count})
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="w-full overflow-x-auto touch-pan-x -mx-1 px-1 pb-2 custom-scrollbar">
+                      <table className="w-full min-w-[760px] text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-outline text-[10px] font-black uppercase tracking-widest text-on-surface-dim">
+                            <th className="pb-3 pr-3">Customer & Held Airlines</th>
+                            <th className="pb-3 px-2">Class</th>
+                            <th className="pb-3 px-2 text-right">Advance / Running Bal</th>
+                            <th className="pb-3 px-2 text-right">Volume (L)</th>
+                            <th className="pb-3 px-2 text-right">5-Day Sales Est.</th>
+                            <th className="pb-3 px-2 text-right">Credit Limit</th>
+                            <th className="pb-3 px-2 text-right">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-outline">
+                          {activeCats.map(cat => {
+                            const catCustomers = filteredCustomers.filter(c => getCategoryForCustomer(c) === cat.key);
+                            if (catCustomers.length === 0 && balanceCategoryFilter !== cat.key) return null;
+
+                            const subtotalBal = catCustomers.reduce(
+                              (sum, c) => sum + (c.classification === 'ADVANCE' ? c.advanceBalance : c.runningBalance),
+                              0
+                            );
+                            const subtotalLiters = catCustomers.reduce((sum, c) => sum + (c.balanceLiters || 0), 0);
+                            const currSymbol = cat.currency === 'MVR' ? 'MVR ' : '$';
+
+                            return (
+                              <React.Fragment key={cat.key}>
+                                {/* Category Header Bar Matching Screenshot 5 */}
+                                <tr className={`${cat.headerBg} font-black text-xs uppercase tracking-wider shadow-sm`}>
+                                  <td colSpan={7} className="py-2.5 px-3">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                      <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-white/80"></span>
+                                        <span className="font-black text-white text-[11px] tracking-wider">{cat.label}</span>
+                                        <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-black/25 text-white/95 border border-white/20">
+                                          {catCustomers.length} Account{catCustomers.length !== 1 ? 's' : ''}
+                                        </span>
+                                      </div>
+                                      <div className="text-[10px] font-bold text-white/90 flex items-center gap-4">
+                                        <span>
+                                          Subtotal: <strong className="text-white font-mono">{currSymbol}{subtotalBal.toLocaleString()}</strong>
+                                        </span>
+                                        {subtotalLiters > 0 && (
+                                          <span>
+                                            Quota: <strong className="text-white font-mono">{subtotalLiters.toLocaleString()} L</strong>
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+
+                                {catCustomers.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={7} className="py-4 text-center text-on-surface-dim italic text-xs">
+                                      No accounts found in this category.
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  catCustomers.map(c => {
+                                    const isLow = c.classification === 'ADVANCE' && c.advanceBalance < c.estimated5DaysSales;
+                                    const holdings = c.airlineHoldings || [];
+                                    const currPrefix = c.currency === 'MVR' ? 'MVR ' : '$';
+
+                                    return (
+                                      <tr key={c.id} className="hover:bg-surface-dim/40 transition-colors">
+                                        {/* Customer Name & Quick Reference Airline Codes */}
+                                        <td className="py-3 pr-3">
+                                          <div className="font-black text-on-surface text-xs">{c.name}</div>
+                                          <div className="flex flex-wrap items-center gap-1 mt-1">
+                                            {holdings.length > 0 ? (
+                                              holdings.map(h => (
+                                                <span
+                                                  key={h.code}
+                                                  title={`${h.code} — ${h.name} (${(h.flightJobEmails || []).join(', ')})`}
+                                                  className="px-1.5 py-0.5 rounded bg-gradient-to-r from-sky-500 to-blue-600 text-white border border-sky-400/30 text-[9px] font-black uppercase tracking-wider font-mono shadow-sm"
+                                                >
+                                                  {h.code}
+                                                </span>
+                                              ))
+                                            ) : (
+                                              (c.associatedAirlines || []).slice(0, 6).map(code => (
+                                                <span
+                                                  key={code}
+                                                  className="px-1.5 py-0.5 rounded bg-gradient-to-r from-sky-500 to-blue-600 text-white border border-sky-400/30 text-[9px] font-black uppercase font-mono shadow-sm"
+                                                >
+                                                  {code}
+                                                </span>
+                                              ))
+                                            )}
+                                          </div>
+                                        </td>
+
+                                        {/* Classification */}
+                                        <td className="py-3 px-2">
+                                          <span className={`px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest uppercase border whitespace-nowrap
+                                            ${c.classification === 'ADVANCE' ? 'bg-primary/10 text-primary border-primary/20' : 
+                                              c.classification === 'CREDIT' ? 'bg-warning/10 text-warning border-warning/20' : 
+                                              'bg-success/10 text-success border-success/20'}`}>
+                                            {c.classification}
+                                          </span>
+                                        </td>
+
+                                        {/* Advance / Running Balance */}
+                                        <td className="py-3 px-2 text-right font-bold whitespace-nowrap">
+                                          {c.classification === 'ADVANCE' ? (
+                                            <span className="text-primary font-mono">{currPrefix}{c.advanceBalance.toLocaleString()}</span>
+                                          ) : (
+                                            <span className={`font-mono ${c.runningBalance < 0 ? 'text-warning' : 'text-on-surface'}`}>
+                                              {currPrefix}{c.runningBalance.toLocaleString()}
+                                            </span>
+                                          )}
+                                        </td>
+
+                                        {/* Quota Liters */}
+                                        <td className="py-3 px-2 text-right font-bold text-on-surface whitespace-nowrap font-mono">
+                                          {c.balanceLiters !== undefined ? `${c.balanceLiters.toLocaleString()} L` : '-'}
+                                        </td>
+
+                                        {/* 5-Day Sales Estimate */}
+                                        <td className="py-3 px-2 text-right font-bold text-on-surface-dim whitespace-nowrap font-mono">
+                                          {c.classification === 'ADVANCE' || c.classification === 'CREDIT' ? `${currPrefix}${c.estimated5DaysSales.toLocaleString()}` : '-'}
+                                        </td>
+
+                                        {/* Credit Limit */}
+                                        <td className="py-3 px-2 text-right font-bold text-on-surface-dim whitespace-nowrap font-mono">
+                                          {c.classification === 'CREDIT' ? `${currPrefix}${c.creditLimit.toLocaleString()}` : '-'}
+                                        </td>
+
+                                        {/* Status */}
+                                        <td className="py-3 px-2 text-right whitespace-nowrap">
+                                          {isLow ? (
+                                            <span className="inline-flex items-center gap-1 text-error font-black uppercase text-[9px] tracking-widest animate-pulse">
+                                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> LOW
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center gap-1 text-success font-bold uppercase text-[9px] tracking-widest">
+                                              <CheckCircle className="w-3.5 h-3.5 shrink-0" /> SECURE
+                                            </span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Side pane: SWIFT copy uploads & Oracle sync */}
@@ -619,17 +801,41 @@ export const FinanceModule: React.FC = () => {
                       Maps every Customer Account to its held airlines, tail registrations, and dispatch/billing email addresses
                     </p>
                   </div>
-                  <button
-                    onClick={openNewCustomerModal}
-                    className="kinetic-gradient text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-premium flex items-center gap-1.5 shrink-0 min-h-[42px]"
-                  >
-                    <PlusCircle className="w-3.5 h-3.5" /> Add Customer Account
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCollapsedAccounts({})}
+                      className="px-3 py-2 rounded-xl border border-outline bg-surface-dim hover:bg-surface-dim/80 text-[10px] font-black uppercase tracking-wider text-on-surface transition-all min-h-[42px]"
+                      title="Expand all customer airline holdings"
+                    >
+                      Expand All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const all: Record<string, boolean> = {};
+                        filteredCustomers.forEach(c => { all[c.id] = true; });
+                        setCollapsedAccounts(all);
+                      }}
+                      className="px-3 py-2 rounded-xl border border-outline bg-surface-dim hover:bg-surface-dim/80 text-[10px] font-black uppercase tracking-wider text-on-surface transition-all min-h-[42px]"
+                      title="Collapse all customer airline holdings"
+                    >
+                      Collapse All
+                    </button>
+                    <button
+                      onClick={openNewCustomerModal}
+                      className="kinetic-gradient text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-premium flex items-center gap-1.5 shrink-0 min-h-[42px]"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" /> Add Customer Account
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
                   {filteredCustomers.map(cust => {
                     const holdings = cust.airlineHoldings || [];
+                    const isCollapsed = !!collapsedAccounts[cust.id];
+
                     return (
                       <div
                         key={cust.id}
@@ -657,17 +863,17 @@ export const FinanceModule: React.FC = () => {
                             <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold text-on-surface-dim">
                               <span>
                                 Balance:{' '}
-                                <strong className="text-primary">
-                                  ${(cust.classification === 'ADVANCE' ? cust.advanceBalance : cust.runningBalance).toLocaleString()}
+                                <strong className="text-primary font-mono">
+                                  {cust.currency === 'MVR' ? 'MVR ' : '$'}{(cust.classification === 'ADVANCE' ? cust.advanceBalance : cust.runningBalance).toLocaleString()}
                                 </strong>
                               </span>
                               {cust.balanceLiters !== undefined && (
                                 <span>
-                                  VolumeQuota: <strong className="text-on-surface">{cust.balanceLiters.toLocaleString()} L</strong>
+                                  VolumeQuota: <strong className="text-on-surface font-mono">{cust.balanceLiters.toLocaleString()} L</strong>
                                 </span>
                               )}
                               <span>
-                                Rate: <strong className="text-on-surface">${(cust.defaultPricePerLiter || 1.19197).toFixed(5)}/L</strong>
+                                Rate: <strong className="text-on-surface font-mono">{cust.currency === 'MVR' ? 'MVR ' : '$'}{(cust.defaultPricePerLiter || 1.19197).toFixed(5)}/L</strong>
                               </span>
                               {(cust.accountEmails || []).length > 0 && (
                                 <span className="inline-flex items-center gap-1 text-on-surface">
@@ -676,7 +882,22 @@ export const FinanceModule: React.FC = () => {
                               )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setCollapsedAccounts(prev => ({ ...prev, [cust.id]: !prev[cust.id] }))}
+                              className="px-3.5 py-2 rounded-xl bg-surface-dim hover:bg-surface-lowest text-on-surface border border-outline text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 min-h-[38px] transition-all"
+                            >
+                              {isCollapsed ? (
+                                <>
+                                  <ChevronDown className="w-3.5 h-3.5 text-primary" /> Show Airlines ({holdings.length})
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronUp className="w-3.5 h-3.5 text-primary" /> Hide Airlines
+                                </>
+                              )}
+                            </button>
                             <button
                               onClick={() => setEditingCustomer(cust)}
                               className="px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 min-h-[38px]"
@@ -686,82 +907,121 @@ export const FinanceModule: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Airlines Held by this Customer Account */}
-                        <div className="space-y-2">
-                          <div className="text-[9px] font-black uppercase tracking-widest text-on-surface-dim flex items-center gap-1.5">
-                            <Plane className="w-3 h-3 text-primary" />
-                            Airlines Held by {cust.name} ({holdings.length})
-                          </div>
-                          {holdings.length === 0 ? (
-                            <p className="text-[10px] text-on-surface-dim italic">
-                              No structured airlines configured yet. Tap "Configure Airlines & Emails" to add airlines and email routing.
-                            </p>
-                          ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                              {holdings.map(h => {
-                                const allAirlineEmails = Array.from(
-                                  new Set([...(h.flightJobEmails || []), ...(h.billingEmails || [])])
-                                );
-                                return (
-                                  <div
+                        {/* Airlines Held by this Customer Account (Collapsible Section) */}
+                        {isCollapsed ? (
+                          <div 
+                            onClick={() => setCollapsedAccounts(prev => ({ ...prev, [cust.id]: false }))}
+                            className="bg-surface-dim/70 border border-outline/70 hover:border-primary/40 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 cursor-pointer transition-all"
+                            title="Click to show held airlines"
+                          >
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-[9px] font-black uppercase text-on-surface-dim mr-1">Held Airlines ({holdings.length}):</span>
+                              {holdings.length > 0 ? (
+                                holdings.map(h => (
+                                  <span
                                     key={h.code}
-                                    className="bg-surface-lowest border border-outline rounded-xl p-3 flex flex-col justify-between gap-2"
+                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-surface-lowest border border-outline text-[9px] font-bold text-on-surface"
                                   >
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div>
-                                        <span className="px-2 py-0.5 rounded bg-primary text-white text-[9px] font-black uppercase tracking-widest mr-1.5">
-                                          {h.code}
-                                        </span>
-                                        <span className="text-xs font-black text-on-surface">{h.name}</span>
-                                      </div>
-                                      <button
-                                        onClick={() => {
-                                          if (allAirlineEmails.length === 0) {
-                                            notify(`No email configured for ${h.name}`, 'warning');
-                                            return;
-                                          }
-                                          sendFlightJobEmail(
-                                            {
-                                              flightNumber: `${h.code}101`,
-                                              airline: h.name,
-                                              aircraftReg: (h.aircraftRegs && h.aircraftRegs[0]) || 'TBA',
-                                              status: 'SCHEDULED / READY FOR UPLIFT',
-                                              customerAccountName: cust.name,
-                                              classification: cust.classification,
-                                              remainingBalance:
-                                                cust.classification === 'ADVANCE' ? cust.advanceBalance : cust.runningBalance
-                                            },
-                                            allAirlineEmails
-                                          );
-                                        }}
-                                        className="px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shrink-0"
-                                        title={`Send Flight Job email to ${allAirlineEmails.join(', ')}`}
-                                      >
-                                        <Send className="w-2.5 h-2.5" /> Email Job
-                                      </button>
-                                    </div>
-                                    <div className="space-y-1 text-[10px]">
-                                      <div className="text-on-surface-dim">
-                                        <strong className="text-on-surface uppercase text-[9px]">Flight Job Emails:</strong>{' '}
-                                        {(h.flightJobEmails || []).length > 0 ? h.flightJobEmails.join(', ') : 'None'}
-                                      </div>
-                                      <div className="text-on-surface-dim">
-                                        <strong className="text-on-surface uppercase text-[9px]">Billing Emails:</strong>{' '}
-                                        {(h.billingEmails || []).length > 0 ? h.billingEmails.join(', ') : 'None'}
-                                      </div>
-                                      {(h.aircraftRegs || []).length > 0 && (
-                                        <div className="text-on-surface-dim">
-                                          <strong className="text-on-surface uppercase text-[9px]">Aircraft Regs:</strong>{' '}
-                                          {h.aircraftRegs?.join(', ')}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
+                                    <span className="px-1.5 py-0.2 rounded bg-gradient-to-r from-sky-500 to-blue-600 text-white font-mono text-[8.5px] font-black shadow-sm border border-sky-400/30">
+                                      {h.code}
+                                    </span>
+                                    <span>{h.name}</span>
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-[9px] text-on-surface-dim italic">None configured yet</span>
+                              )}
                             </div>
-                          )}
-                        </div>
+                            <span className="text-[9px] font-black text-primary uppercase tracking-wider flex items-center gap-1">
+                              Show Details <ChevronDown className="w-3 h-3" />
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="space-y-2 animate-in slide-in-from-top-1 duration-200">
+                            <div className="text-[9px] font-black uppercase tracking-widest text-on-surface-dim flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <Plane className="w-3 h-3 text-primary" />
+                                Airlines Held by {cust.name} ({holdings.length})
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setCollapsedAccounts(prev => ({ ...prev, [cust.id]: true }))}
+                                className="text-[9px] font-black text-on-surface-dim hover:text-primary uppercase tracking-wider flex items-center gap-1"
+                              >
+                                Hide <ChevronUp className="w-3 h-3" />
+                              </button>
+                            </div>
+                            {holdings.length === 0 ? (
+                              <p className="text-[10px] text-on-surface-dim italic">
+                                No structured airlines configured yet. Tap "Configure Airlines & Emails" to add airlines and email routing.
+                              </p>
+                            ) : (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                                {holdings.map(h => {
+                                  const allAirlineEmails = Array.from(
+                                    new Set([...(h.flightJobEmails || []), ...(h.billingEmails || [])])
+                                  );
+                                  return (
+                                    <div
+                                      key={h.code}
+                                      className="bg-surface-lowest border border-outline rounded-xl p-3 flex flex-col justify-between gap-2"
+                                    >
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div>
+                                          <span className="px-2 py-0.5 rounded bg-gradient-to-r from-sky-500 to-blue-600 text-white border border-sky-400/30 text-[9px] font-black uppercase tracking-widest mr-1.5 font-mono shadow-sm">
+                                            {h.code}
+                                          </span>
+                                          <span className="text-xs font-black text-on-surface">{h.name}</span>
+                                        </div>
+                                        <button
+                                          onClick={() => {
+                                            if (allAirlineEmails.length === 0) {
+                                              notify(`No email configured for ${h.name}`, 'warning');
+                                              return;
+                                            }
+                                            sendFlightJobEmail(
+                                              {
+                                                flightNumber: `${h.code}101`,
+                                                airline: h.name,
+                                                aircraftReg: (h.aircraftRegs && h.aircraftRegs[0]) || 'TBA',
+                                                status: 'SCHEDULED / READY FOR UPLIFT',
+                                                customerAccountName: cust.name,
+                                                classification: cust.classification,
+                                                remainingBalance:
+                                                  cust.classification === 'ADVANCE' ? cust.advanceBalance : cust.runningBalance
+                                              },
+                                              allAirlineEmails
+                                            );
+                                          }}
+                                          className="px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shrink-0"
+                                          title={`Send Flight Job email to ${allAirlineEmails.join(', ')}`}
+                                        >
+                                          <Send className="w-2.5 h-2.5" /> Email Job
+                                        </button>
+                                      </div>
+                                      <div className="space-y-1 text-[10px]">
+                                        <div className="text-on-surface-dim">
+                                          <strong className="text-on-surface uppercase text-[9px]">Flight Job Emails:</strong>{' '}
+                                          {(h.flightJobEmails || []).length > 0 ? h.flightJobEmails.join(', ') : 'None'}
+                                        </div>
+                                        <div className="text-on-surface-dim">
+                                          <strong className="text-on-surface uppercase text-[9px]">Billing Emails:</strong>{' '}
+                                          {(h.billingEmails || []).length > 0 ? h.billingEmails.join(', ') : 'None'}
+                                        </div>
+                                        {(h.aircraftRegs || []).length > 0 && (
+                                          <div className="text-on-surface-dim">
+                                            <strong className="text-on-surface uppercase text-[9px]">Aircraft Regs:</strong>{' '}
+                                            {h.aircraftRegs?.join(', ')}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -846,8 +1106,12 @@ export const FinanceModule: React.FC = () => {
                             </div>
                             <div className="font-black text-on-surface">{preview.customer.name}</div>
                             {preview.airlineHolding && (
-                              <div className="text-[10px] font-bold text-on-surface-dim">
-                                Held Airline: <strong className="text-on-surface">{preview.airlineHolding.code} — {preview.airlineHolding.name}</strong>
+                              <div className="text-[10px] font-bold text-on-surface-dim flex items-center gap-1.5">
+                                <span>Held Airline:</span>
+                                <span className="px-1.5 py-0.2 rounded bg-gradient-to-r from-sky-500 to-blue-600 text-white border border-sky-400/30 text-[9px] font-black font-mono shadow-sm">
+                                  {preview.airlineHolding.code}
+                                </span>
+                                <strong className="text-on-surface">{preview.airlineHolding.name}</strong>
                               </div>
                             )}
                             <div className="text-[10px] font-bold text-on-surface-dim">
@@ -919,29 +1183,46 @@ export const FinanceModule: React.FC = () => {
                           <span>{ev.customerName} ({ev.airlineName})</span>
                           <span>{ev.volumeLiters.toLocaleString()} L</span>
                         </div>
-                        <div className="flex items-center justify-between text-[9px] text-on-surface-dim">
+                        <div className="flex items-center justify-between text-[9px] text-on-surface-dim pt-1 border-t border-outline/30">
                           <span>New Bal: ${ev.newBalance.toLocaleString()}</span>
-                          {ev.emailsNotified.length > 0 && (
+                          <div className="flex items-center gap-3">
+                            {ev.emailsNotified.length > 0 && (
+                              <button
+                                onClick={() =>
+                                  sendFlightJobEmail(
+                                    {
+                                      flightNumber: ev.flightNumber,
+                                      airline: ev.airlineName,
+                                      estimatedVolume: ev.volumeLiters,
+                                      status: `COMPLETED (Ticket #${ev.deliveryNumber})`,
+                                      customerAccountName: ev.customerName,
+                                      classification: ev.classification,
+                                      remainingBalance: ev.newBalance
+                                    },
+                                    ev.emailsNotified
+                                  )
+                                }
+                                className="text-primary hover:underline font-black uppercase flex items-center gap-1"
+                              >
+                                <Mail className="w-2.5 h-2.5" /> Email ({ev.emailsNotified.length})
+                              </button>
+                            )}
                             <button
-                              onClick={() =>
-                                sendFlightJobEmail(
-                                  {
-                                    flightNumber: ev.flightNumber,
-                                    airline: ev.airlineName,
-                                    estimatedVolume: ev.volumeLiters,
-                                    status: `COMPLETED (Ticket #${ev.deliveryNumber})`,
-                                    customerAccountName: ev.customerName,
-                                    classification: ev.classification,
-                                    remainingBalance: ev.newBalance
-                                  },
-                                  ev.emailsNotified
-                                )
-                              }
-                              className="text-primary hover:underline font-black uppercase flex items-center gap-1"
+                              type="button"
+                              onClick={() => {
+                                rollbackFlightDeduction({
+                                  id: ev.id,
+                                  deliveryNumber: ev.deliveryNumber,
+                                  flightNumber: ev.flightNumber
+                                });
+                                notify(`Removed deduction for Ticket #${ev.deliveryNumber} and refunded customer balance.`, 'success');
+                              }}
+                              className="text-error hover:text-error/80 font-black uppercase flex items-center gap-1 hover:underline transition-all"
+                              title="Rollback this deduction and refund customer balance"
                             >
-                              <Mail className="w-2.5 h-2.5" /> Email ({ev.emailsNotified.length})
+                              <Trash2 className="w-2.5 h-2.5" /> Rollback / Refund
                             </button>
-                          )}
+                          </div>
                         </div>
                       </div>
                     ))
@@ -2650,7 +2931,7 @@ export const FinanceModule: React.FC = () => {
                     >
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded bg-primary text-white text-[10px] font-black uppercase">
+                          <span className="px-2 py-0.5 rounded bg-gradient-to-r from-sky-500 to-blue-600 text-white border border-sky-400/30 text-[10px] font-black uppercase font-mono shadow-sm">
                             {h.code}
                           </span>
                           <span className="font-black text-on-surface">{h.name}</span>
@@ -2725,6 +3006,317 @@ export const FinanceModule: React.FC = () => {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* JET A-1 FUEL RATES SCHEDULE MODAL (USD & MVR) */}
+      {showFuelRatesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-surface-lowest border border-outline rounded-[28px] sm:rounded-[36px] max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-5 sm:p-6 border-b border-outline flex items-center justify-between gap-4 bg-surface-dim/40">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[9px] font-black uppercase tracking-widest inline-flex items-center gap-1">
+                    <Coins className="w-3 h-3" /> Circular Tariff Schedule
+                  </span>
+                  <span className="text-[10px] font-bold text-on-surface-dim">
+                    FX: 1 USD = {activeUsdToMvrRate} MVR
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-on-surface uppercase tracking-tight mt-1">
+                  JET A-1 Fuel Rates Schedule (USD & MVR)
+                </h3>
+                <p className="text-[10px] text-on-surface-dim uppercase font-bold tracking-wider">
+                  Configured rates reflect in real-time to Into-Plane cash rate bar and delivery invoices
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFuelRatesModal(false);
+                  setEditingFuelRate(null);
+                }}
+                className="p-2 rounded-xl hover:bg-surface-dim text-on-surface-dim hover:text-on-surface transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
+              {/* Form to Edit or Add a Rate */}
+              <div className="bg-surface-dim/50 border border-outline rounded-2xl p-4 sm:p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-on-surface flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5 text-primary" />
+                    {editingFuelRate ? `Edit Rate: ${editingFuelRate.airlineOrSector}` : 'Add / Set Fuel Rate'}
+                  </h4>
+                  {editingFuelRate && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingFuelRate(null);
+                        setRateAirline('');
+                        setRateUsd('1.85');
+                        setRateMvr('28.527');
+                        setRateNotes('');
+                      }}
+                      className="text-[9px] font-black text-on-surface-dim hover:text-primary uppercase"
+                    >
+                      Cancel Edit
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-on-surface-dim tracking-wider">Airline / Sector</label>
+                    <input
+                      type="text"
+                      value={rateAirline}
+                      onChange={e => setRateAirline(e.target.value.toUpperCase())}
+                      placeholder="e.g. INT, DOM, FLY ME, IAS"
+                      className="w-full bg-surface-lowest border border-outline px-3 py-2 rounded-xl text-xs font-black text-on-surface uppercase outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-on-surface-dim tracking-wider">Effective Date</label>
+                    <input
+                      type="text"
+                      value={rateDate}
+                      onChange={e => setRateDate(e.target.value)}
+                      placeholder="1-Mar-23"
+                      className="w-full bg-surface-lowest border border-outline px-3 py-2 rounded-xl text-xs font-bold text-on-surface outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-on-surface-dim tracking-wider">USD Rate ($/L)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-on-surface-dim">$</span>
+                      <input
+                        type="number"
+                        step="0.001"
+                        value={rateUsd}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setRateUsd(val);
+                          const n = parseFloat(val);
+                          if (!isNaN(n)) {
+                            setRateMvr((n * activeUsdToMvrRate).toFixed(3));
+                          }
+                        }}
+                        placeholder="1.85"
+                        className="w-full bg-surface-lowest border border-outline pl-7 pr-3 py-2 rounded-xl text-xs font-black text-emerald-500 outline-none font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-on-surface-dim tracking-wider">MVR Rate (MVR/L)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-on-surface-dim">Rf</span>
+                      <input
+                        type="number"
+                        step="0.001"
+                        value={rateMvr}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setRateMvr(val);
+                          const n = parseFloat(val);
+                          if (!isNaN(n)) {
+                            setRateUsd((n / activeUsdToMvrRate).toFixed(3));
+                          }
+                        }}
+                        placeholder="28.527"
+                        className="w-full bg-surface-lowest border border-outline pl-8 pr-3 py-2 rounded-xl text-xs font-black text-cyan-500 outline-none font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-on-surface-dim tracking-wider">Primary Currency</label>
+                    <select
+                      value={rateCurrency}
+                      onChange={e => setRateCurrency(e.target.value as any)}
+                      className="w-full bg-surface-lowest border border-outline px-3 py-2 rounded-xl text-xs font-black text-on-surface uppercase outline-none"
+                    >
+                      <option value="USD">USD ($)</option>
+                      <option value="MVR">MVR (Rf)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-on-surface-dim tracking-wider">Category</label>
+                    <select
+                      value={rateCategory}
+                      onChange={e => setRateCategory(e.target.value as any)}
+                      className="w-full bg-surface-lowest border border-outline px-3 py-2 rounded-xl text-xs font-black text-on-surface uppercase outline-none"
+                    >
+                      <option value="INT">International (INT)</option>
+                      <option value="DOM">Domestic (DOM)</option>
+                      <option value="SEAPLANE">Seaplane (SEAPLANE)</option>
+                      <option value="AIRLINE_CUSTOM">Airline Contract Custom</option>
+                      <option value="IAS_DISCOUNT">Volume Discount</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-on-surface-dim tracking-wider">Notes / Reference</label>
+                    <input
+                      type="text"
+                      value={rateNotes}
+                      onChange={e => setRateNotes(e.target.value)}
+                      placeholder="e.g. Standard international uplift tariff"
+                      className="w-full bg-surface-lowest border border-outline px-3 py-2 rounded-xl text-xs font-bold text-on-surface outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!rateAirline.trim() || !rateUsd || !rateMvr) {
+                        notify('Airline/Sector, USD rate and MVR rate are required.', 'warning');
+                        return;
+                      }
+                      const numUsd = parseFloat(rateUsd) || 0;
+                      const numMvr = parseFloat(rateMvr) || 0;
+
+                      if (editingFuelRate) {
+                        updateFuelRate({
+                          ...editingFuelRate,
+                          airlineOrSector: rateAirline.trim(),
+                          effectiveDate: rateDate.trim() || '1-Mar-23',
+                          rateUsd: numUsd,
+                          rateMvr: numMvr,
+                          currency: rateCurrency,
+                          category: rateCategory,
+                          notes: rateNotes.trim(),
+                          active: true
+                        });
+                        notify(`Updated rate for "${rateAirline}" ($${numUsd} / MVR ${numMvr}).`, 'success');
+                        setEditingFuelRate(null);
+                      } else {
+                        addFuelRate({
+                          airlineOrSector: rateAirline.trim(),
+                          effectiveDate: rateDate.trim() || '1-Mar-23',
+                          rateUsd: numUsd,
+                          rateMvr: numMvr,
+                          currency: rateCurrency,
+                          category: rateCategory,
+                          notes: rateNotes.trim(),
+                          active: true
+                        });
+                        notify(`Added new rate for "${rateAirline}" ($${numUsd} / MVR ${numMvr}).`, 'success');
+                      }
+                      setRateAirline('');
+                      setRateNotes('');
+                    }}
+                    className="kinetic-gradient text-white font-black px-5 py-2.5 rounded-xl text-[10px] uppercase tracking-widest shadow-premium"
+                  >
+                    {editingFuelRate ? 'Update Fuel Rate' : 'Save Fuel Rate'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Rates Schedule Table Matching Screenshot 3 */}
+              <div className="border border-outline rounded-2xl overflow-hidden">
+                <div className="p-3 bg-surface-dim border-b border-outline flex items-center justify-between">
+                  <div className="text-[10px] font-black uppercase text-on-surface tracking-wider">
+                    Official Jet A-1 Tariff Schedule ({fuelRates.length} Entries)
+                  </div>
+                  <span className="text-[9px] font-black text-emerald-500 uppercase">
+                    Live Synced with Apron Ops
+                  </span>
+                </div>
+                <div className="overflow-x-auto touch-pan-x custom-scrollbar">
+                  <table className="w-full text-left border-collapse text-xs min-w-[700px]">
+                    <thead>
+                      <tr className="bg-surface-lowest border-b border-outline text-[10px] font-black uppercase tracking-widest text-on-surface-dim">
+                        <th className="py-2.5 px-3">Airline / Sector</th>
+                        <th className="py-2.5 px-3">Effective Date</th>
+                        <th className="py-2.5 px-3 text-right">USD Rate ($/L)</th>
+                        <th className="py-2.5 px-3 text-right">MVR Rate (MVR/L)</th>
+                        <th className="py-2.5 px-2 text-center">Curr</th>
+                        <th className="py-2.5 px-3">Notes</th>
+                        <th className="py-2.5 px-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline">
+                      {fuelRates.map(r => (
+                        <tr key={r.id} className="hover:bg-surface-dim/40 transition-colors">
+                          <td className="py-2.5 px-3 font-black text-on-surface">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              <span>{r.airlineOrSector}</span>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 font-bold text-on-surface-dim text-[11px]">
+                            {r.effectiveDate}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-black text-emerald-500 font-mono text-[11px]">
+                            ${r.rateUsd.toFixed(r.rateUsd < 1 ? 3 : 2)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-black text-cyan-500 font-mono text-[11px]">
+                            {r.rateMvr.toFixed(3)}
+                          </td>
+                          <td className="py-2.5 px-2 text-center font-black text-[9px] uppercase">
+                            <span className={`px-2 py-0.5 rounded ${r.currency === 'MVR' ? 'bg-cyan-500/10 text-cyan-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                              {r.currency}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-on-surface-dim text-[10px]">
+                            {r.notes || '-'}
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingFuelRate(r);
+                                setRateAirline(r.airlineOrSector);
+                                setRateDate(r.effectiveDate);
+                                setRateUsd(String(r.rateUsd));
+                                setRateMvr(String(r.rateMvr));
+                                setRateCurrency(r.currency);
+                                setRateCategory(r.category);
+                                setRateNotes(r.notes || '');
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-[9px] font-black uppercase tracking-wider"
+                            >
+                              Edit
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 sm:p-5 border-t border-outline bg-surface-dim/30 flex items-center justify-between">
+              <span className="text-[10px] text-on-surface-dim font-bold">
+                Rates automatically configure cash flight invoices in Into-Plane and Seaplane modules.
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFuelRatesModal(false);
+                  setEditingFuelRate(null);
+                }}
+                className="px-5 py-2 rounded-xl bg-surface-lowest hover:bg-surface-dim border border-outline text-[10px] font-black uppercase text-on-surface"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

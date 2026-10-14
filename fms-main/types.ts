@@ -186,6 +186,9 @@ export interface FlightLog {
   tacticalOperator?: string;
   destination?: string;
   paymentType?: string;
+  cashRate?: number;
+  cashRateCurrency?: 'USD' | 'MVR';
+  cashTotalAmount?: number;
   created_at?: string;
 
   // Digital Signature & Declaration of Acknowledgment

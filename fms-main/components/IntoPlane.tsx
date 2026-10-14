@@ -19,7 +19,7 @@ import { SignatureAcknowledgment } from './SignatureAcknowledgment';
 import { generateInvoiceHtml, generateInvoicePdfFile, openPrintInvoice, sendInvoiceEmail, shareInvoice, getInvoiceEmailDetails } from '../services/invoicePdfService';
 import { EmailDispatchModal } from './EmailDispatchModal';
 import { useFuelDispatch } from '../hooks/useFuelDispatch';
-import { useFinanceData } from '../context/FinanceDataContext';
+import { useFinanceData, FuelRateRecord } from '../context/FinanceDataContext';
 
 interface IntoPlaneProps {
     user: User;
@@ -128,9 +128,12 @@ const MobileHeader: React.FC<{
     setPaymentType: (v: string) => void,
     cashRate: string,
     setCashRate: (rate: string) => void,
+    cashCurrency?: 'USD' | 'MVR',
+    setCashCurrency?: (curr: 'USD' | 'MVR') => void,
+    fuelRates?: FuelRateRecord[],
     onEditActiveAircraft?: () => void,
     onEditActiveStand?: () => void
-}> = ({ user, isOnline, activeFlight, selectedVehicleId, setSelectedVehicleId, equipment, paymentType, setPaymentType, cashRate, setCashRate, onEditActiveAircraft, onEditActiveStand }) => (
+}> = ({ user, isOnline, activeFlight, selectedVehicleId, setSelectedVehicleId, equipment, paymentType, setPaymentType, cashRate, setCashRate, cashCurrency = 'USD', setCashCurrency, fuelRates = [], onEditActiveAircraft, onEditActiveStand }) => (
   <div className="bg-surface text-on-surface p-4 border-b border-outline sticky top-0 z-30 transition-colors shadow-sm flex items-center justify-between gap-3 overflow-hidden">
       <div className="flex items-center flex-1 min-w-0">
           <Truck className="w-5 h-5 mr-3 text-primary animate-pulse flex-shrink-0" />
@@ -204,18 +207,66 @@ const MobileHeader: React.FC<{
                       </div>
 
                       {paymentType === 'CASH' && (
-                          <div className="flex items-center space-x-1.5 bg-surface-container-highest border border-outline rounded-lg py-1.5 px-3 shadow-sm">
-                              <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">Rate: $</span>
+                          <div className="flex items-center space-x-1.5 bg-surface-container-highest border border-outline rounded-lg py-1 px-2.5 shadow-sm">
+                              {/* Currency Selector */}
+                              <select
+                                  value={cashCurrency}
+                                  onChange={(e) => {
+                                      const newCurr = e.target.value as 'USD' | 'MVR';
+                                      if (setCashCurrency) setCashCurrency(newCurr);
+                                      if (fuelRates && fuelRates.length > 0) {
+                                          const matched = fuelRates.find(r => r.currency === newCurr && r.active);
+                                          if (matched) {
+                                              setCashRate(newCurr === 'MVR' ? String(matched.rateMvr) : String(matched.rateUsd));
+                                          }
+                                      }
+                                  }}
+                                  className="bg-transparent border-none outline-none text-[10px] font-black text-[#22c55e] cursor-pointer"
+                              >
+                                  <option value="USD" className="bg-surface-dim text-on-surface">USD ($)</option>
+                                  <option value="MVR" className="bg-surface-dim text-on-surface">MVR (Rf)</option>
+                              </select>
+
+                              {/* Tariff Rate Quick Picker */}
+                              {fuelRates && fuelRates.length > 0 && (
+                                  <div className="relative hidden sm:block">
+                                      <select
+                                          onChange={(e) => {
+                                              const selectedId = e.target.value;
+                                              const r = fuelRates.find(fr => fr.id === selectedId);
+                                              if (r) {
+                                                  if (setCashCurrency) setCashCurrency(r.currency);
+                                                  setCashRate(r.currency === 'MVR' ? String(r.rateMvr) : String(r.rateUsd));
+                                              }
+                                          }}
+                                          defaultValue=""
+                                          className="bg-surface-dim border border-outline/60 text-[9px] font-black uppercase text-on-surface py-0.5 px-1.5 rounded cursor-pointer pr-4 appearance-none"
+                                          title="Tariff Rate Schedule"
+                                      >
+                                          <option value="" disabled>Tariff</option>
+                                          {fuelRates.filter(r => r.active).map(r => (
+                                              <option key={r.id} value={r.id} className="bg-surface-dim text-on-surface">
+                                                  {r.airlineOrSector}: {r.currency === 'MVR' ? `Rf ${r.rateMvr}` : `$${r.rateUsd}`}
+                                              </option>
+                                          ))}
+                                      </select>
+                                      <ChevronRight className="absolute right-0.5 top-1/2 -translate-y-1/2 w-2.5 h-2.5 text-on-surface-dim rotate-90 pointer-events-none" />
+                                  </div>
+                              )}
+
+                              <span className="text-[10px] font-black text-on-surface-dim uppercase tracking-wider opacity-60">
+                                  {cashCurrency === 'MVR' ? 'Rf' : '$'}
+                              </span>
                               {user.role === UserRole.ITP_MANAGER ? (
                                   <input 
                                       type="text" 
                                       value={cashRate}
                                       onChange={(e) => setCashRate(e.target.value)}
-                                      className="bg-transparent border-none outline-none text-[11px] font-black text-[#22c55e] w-12 p-0 focus:ring-0"
+                                      className="bg-transparent border-none outline-none text-[11px] font-black text-[#22c55e] w-12 p-0 focus:ring-0 font-mono"
                                       placeholder="0.00"
                                   />
                               ) : (
-                                  <span className="text-[11px] font-black text-[#22c55e]">{cashRate}</span>
+                                  <span className="text-[11px] font-black text-[#22c55e] font-mono">{cashRate}</span>
                               )}
                           </div>
                       )}
@@ -282,8 +333,8 @@ const MobileHeader: React.FC<{
                       {paymentType}
                   </span>
                   {paymentType === 'CASH' && (
-                      <span className="text-[9px] font-black text-primary font-mono mt-0.5">
-                          ${cashRate}
+                      <span className="text-[9px] font-black text-emerald-500 font-mono mt-0.5">
+                          {cashCurrency === 'MVR' ? `Rf ${cashRate}` : `$${cashRate}`}
                       </span>
                   )}
               </div>
@@ -2913,7 +2964,7 @@ const ScreenQC: React.FC<{
 
 export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearInitialJob, initialVehicleId, onClearInitialVehicleId, setActiveView }) => {
   const { notify } = useNotification();
-  const { resolveCustomerByFlightOrAirline } = useFinanceData();
+  const { resolveCustomerByFlightOrAirline, fuelRates, getActiveFuelRate } = useFinanceData();
   const { equipment, flightJobs, rawFlightJobs, flightLogs, updateEquipmentStatus, updateEquipment, createAlert, updateFlightJob, updateFlightLog, externalFlights, staff, refreshData, selectedBriefingDate, tanks, updateTankLevel, serviceTankId, briefingInfo, internationalSchedules, addFlightLogEntry, isTicketAutoEnabled, generateTicketNumber } = useOperationalData();
   const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'timestamps' | 'metering' | 'qc'>('dashboard');
   const [activeFlight, setActiveFlight] = useState<Partial<FlightLog> | null>(() => {
@@ -2936,6 +2987,7 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
   });
   const originViewRef = React.useRef<string | null>(null);
   const [paymentType, setPaymentType] = useState<'CREDIT' | 'CASH' | 'VOID'>('CREDIT');
+  const [cashCurrency, setCashCurrency] = useState<'USD' | 'MVR'>('USD');
   const [cashRate, setCashRate] = useState<string>('1.85');
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [voidForm, setVoidForm] = useState({ date: new Date().toISOString().split('T')[0], deliveryNumber: '' });
@@ -3492,6 +3544,17 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
       co: savedDraft?.co || resolvedCo,
       operatorName: savedDraft?.operatorName || resolvedOperatorName,
     };
+
+    // Auto preset tariff rate & currency from fuel rates schedule
+    const matchedRate = getActiveFuelRate(
+      isDomFlight ? 'DOM' : ((job as any).logType === 'SEAPLANE' ? 'SEAPLANE' : 'INT'),
+      (job as any).airline || (matchingJob as any)?.airline || job.flightNumber
+    );
+    if (matchedRate) {
+      setCashCurrency(matchedRate.currency || 'USD');
+      setCashRate(matchedRate.currency === 'MVR' ? String(matchedRate.rateMvr) : String(matchedRate.rateUsd));
+    }
+
     setShowTopUp(!!(flightData.timestampFinalStart || flightData.timestampFinalEnd));
     setActiveFlight(flightData as any);
     try {
@@ -3988,6 +4051,11 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
         tacticalOperator: resolvedTacticalOperator,
         destination: activeFlight.destination,
         paymentType: paymentType || activeFlight.paymentType || 'CREDIT',
+        cashRate: paymentType === 'CASH' ? (parseFloat(cashRate) || 1.85) : undefined,
+        cashRateCurrency: paymentType === 'CASH' ? cashCurrency : undefined,
+        cashTotalAmount: paymentType === 'CASH' && activeFlight.volume
+          ? Number(((activeFlight.volume || 0) * (parseFloat(cashRate) || 1.85)).toFixed(2))
+          : undefined,
         signatureDataUrl: activeFlight.signatureDataUrl || undefined,
         signerName: activeFlight.signerName ? activeFlight.signerName.toUpperCase() : undefined,
         signerDesignation: activeFlight.signerDesignation || undefined,
@@ -4133,6 +4201,9 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
           setPaymentType={(v) => setPaymentType(v as any)}
           cashRate={cashRate}
           setCashRate={setCashRate}
+          cashCurrency={cashCurrency}
+          setCashCurrency={setCashCurrency}
+          fuelRates={fuelRates}
           onEditActiveAircraft={() => setShowEditActiveFlight(true)}
           onEditActiveStand={(user.role === UserRole.ITP_MANAGER || user.role === UserRole.ADMIN) ? () => setShowEditActiveFlight(true) : undefined}
         />

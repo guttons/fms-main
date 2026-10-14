@@ -271,6 +271,21 @@ export function generateInvoiceHtml(log: Partial<FlightLog>, operatorUser?: Part
   const meterOpen = escapeHtml(typeof log.meterOpen === 'number' ? log.meterOpen.toLocaleString() : (log.meterOpen || '-'));
   const meterClose = escapeHtml(typeof log.meterClose === 'number' ? log.meterClose.toLocaleString() : (log.meterClose || '-'));
 
+  // Calculate pricing for Cash delivery invoices in USD or MVR
+  let priceTotalDisplay = 'On Account';
+  if (isCash) {
+    const cashCurr = log.cashRateCurrency || (log.remarks && log.remarks.includes('MVR') ? 'MVR' : 'USD');
+    const currSym = cashCurr === 'MVR' ? 'MVR ' : '$';
+    let rateNum = log.cashRate;
+    if (rateNum === undefined && log.remarks) {
+      const match = log.remarks.match(/Rate:\s*[$]?([0-9.]+)/i);
+      if (match) rateNum = parseFloat(match[1]);
+    }
+    const finalRate = rateNum !== undefined ? rateNum : 1.85;
+    const finalTotal = log.cashTotalAmount || (volumeNumber > 0 ? Number((volumeNumber * finalRate).toFixed(2)) : 0);
+    priceTotalDisplay = `Rate: ${currSym}${finalRate.toFixed(finalRate < 1 ? 4 : 2)} / L${finalTotal > 0 ? `<br><strong style="color: #15803d; font-size: 10.5px;">Total: ${currSym}${finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>` : ''}`;
+  }
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -701,7 +716,7 @@ export function generateInvoiceHtml(log: Partial<FlightLog>, operatorUser?: Part
           <td>${meterOpen}</td>
           <td>${meterClose}</td>
           <td><strong style="font-size: 13px; color: #000;">${volumeNumber > 0 ? volumeNumber.toLocaleString() : '-'}</strong></td>
-          <td>${isCash ? (log.remarks && log.remarks.includes('$') ? escapeHtml(log.remarks) : 'Cash Rate: 1.85') : 'On Account'}</td>
+          <td>${priceTotalDisplay}</td>
         </tr>
         <tr>
           <td colspan="5" class="words-box">

@@ -4,6 +4,7 @@ import { MOCK_USERS } from '../constants';
 import { FileText, Search, Download, Filter, X, Calendar, Plane, Anchor, Droplet, Fuel, Truck, Sailboat, AlertTriangle, Gauge, Printer, Pencil, Share2 } from 'lucide-react';
 import { Logo } from './Logo';
 import { useOperationalData } from '../context/OperationalDataContext';
+import { useFinanceData } from '../context/FinanceDataContext';
 import { FlightLog, User, UserRole, EquipmentType, cleanRemarks } from '../types';
 import { supabaseService } from '../services/supabaseService';
 import { supabase } from '../supabase';
@@ -73,6 +74,7 @@ const formatOperationalDate = (rawDate?: string): string => {
 
 export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
   const { staff, equipment, flightJobs, updateFlightJob, deleteFlightLogEntry, flightLogs, updateFlightLog, refreshData } = useOperationalData();
+  const { rollbackFlightDeduction, updateFlightDeduction } = useFinanceData();
   const activeOperators = (staff || []).filter(s => [UserRole.DEPOT_OPERATOR, UserRole.ITP_OPERATOR, UserRole.ITP_SUPERVISOR].includes(s.role));
   const activeOfficers = (staff || []).filter(s => [UserRole.DEPOT_MANAGER, UserRole.ITP_MANAGER, UserRole.ADMIN].includes(s.role));
   const [logs, setLogs] = useState<FlightLog[]>([]);
@@ -662,6 +664,9 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
       if (updateFlightLog) {
         updateFlightLog(editingLog.id, updatedPayload);
       }
+      if (updateFlightDeduction) {
+        updateFlightDeduction(editingLog.id, updatedPayload, editingLog.deliveryNumber || undefined);
+      }
 
       setEditingLog(null);
       await fetchLogs();
@@ -735,6 +740,16 @@ export const LogHistory: React.FC<LogHistoryProps> = ({ user }) => {
       // 2. Immediately remove from local operational state & cache
       if (deleteFlightLogEntry) {
         deleteFlightLogEntry(editingLog.id, editingLog.flightNumber, editingLog.deliveryNumber);
+      }
+
+      // 2.5 Rollback real-time balance deduction in Finance Module and refund customer account
+      if (rollbackFlightDeduction) {
+        rollbackFlightDeduction({
+          id: editingLog.id,
+          deliveryNumber: editingLog.deliveryNumber,
+          flightNumber: editingLog.flightNumber,
+          volume: editingLog.volume
+        });
       }
 
       // 3. Delete from backend database & cache
