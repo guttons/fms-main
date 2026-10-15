@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { haptic } from '../utils/haptics';
 import { 
   useFinanceData, 
   CustomerClassification, 
@@ -19,6 +21,15 @@ import {
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Legend } from 'recharts';
 
+const FINANCE_TABS = [
+  { id: 'balances',    label: 'Balances & SWIFTs',     icon: DollarSign },
+  { id: 'accounts',    label: 'Accounts & Airlines',   icon: Plane },
+  { id: 'billing',     label: 'Invoicing & FIFO',      icon: FileText },
+  { id: 'variance',    label: 'Variance & COGS',       icon: Scale },
+  { id: 'procurement', label: 'Duty & Procurement',    icon: Layers },
+  { id: 'reports',     label: 'Financial Reports',     icon: FileSpreadsheet },
+] as const;
+
 export const FinanceModule: React.FC = () => {
   const { 
     customers, upcomingPayments, invoices, receipts, proformaRegister, 
@@ -28,13 +39,51 @@ export const FinanceModule: React.FC = () => {
     reviewSwiftCopy, syncOracleReceipt, runBillingProcess, applyFIFOLogic, 
     generateProforma, approveVariance, createProcurementPR, verifyVendorInvoice, 
     raisePO, enterAPInvoice, addSurcharge, resetAllFinanceMockData,
-    upsertCustomerAccount, deleteCustomerAccount, resolveCustomerByFlightOrAirline, deductFlightUpliftRealtime,
+    upsertCustomerAccount, deleteCustomerAccount,
     rollbackFlightDeduction
   } = useFinanceData();
 
   const { notify } = useNotification();
   const [activeTab, setActiveTab] = useState<'balances' | 'accounts' | 'billing' | 'variance' | 'procurement' | 'reports'>('balances');
   
+  // Radio button slider references & state for top navigation tabs
+  const tabBtnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [tabSlider, setTabSlider] = useState<{ left: number; top: number; width: number; height: number; ready: boolean }>({
+    left: 0,
+    top: 0,
+    width: 0,
+    height: 0,
+    ready: false,
+  });
+
+  const updateTabSlider = useCallback(() => {
+    const idx = FINANCE_TABS.findIndex(t => t.id === activeTab);
+    const btn = tabBtnRefs.current[idx];
+    if (btn) {
+      setTabSlider({
+        left: btn.offsetLeft,
+        top: btn.offsetTop,
+        width: btn.offsetWidth,
+        height: btn.offsetHeight,
+        ready: true,
+      });
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    updateTabSlider();
+    const frame = requestAnimationFrame(updateTabSlider);
+    const timer1 = setTimeout(updateTabSlider, 60);
+    const timer2 = setTimeout(updateTabSlider, 200);
+    window.addEventListener('resize', updateTabSlider);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      window.removeEventListener('resize', updateTabSlider);
+    };
+  }, [updateTabSlider]);
+
   // Collapsible Customer Accounts state
   const [collapsedAccounts, setCollapsedAccounts] = useState<Record<string, boolean>>({});
 
@@ -88,12 +137,6 @@ export const FinanceModule: React.FC = () => {
   const [newAirlineBillingEmails, setNewAirlineBillingEmails] = useState('');
   const [newAirlineRegs, setNewAirlineRegs] = useState('');
 
-  // Quick Flight Job Uplift & Email Dispatch Simulator State
-  const [simFlightNo, setSimFlightNo] = useState('EK653');
-  const [simAircraftReg, setSimAircraftReg] = useState('A6-EEO');
-  const [simVolume, setSimVolume] = useState('14500');
-  const [simStand, setSimStand] = useState('A4');
-
   // MOCK COGS Chart Data
   const cogsChartData = [
     { name: 'Jan', Sales: 2400000, COGS: 1800000, Margin: 600000 },
@@ -121,6 +164,20 @@ export const FinanceModule: React.FC = () => {
     const matchesEmails = (c.accountEmails || []).some(e => e.toLowerCase().includes(q));
     return matchesNameOrClass || matchesAirlines || matchesEmails;
   });
+
+  // Check if all filtered customers are currently expanded
+  const isAllAccountsExpanded = 
+    filteredCustomers.length > 0 && 
+    filteredCustomers.every(c => collapsedAccounts[c.id] === false);
+
+  const toggleAllAccounts = () => {
+    const all: Record<string, boolean> = {};
+    const nextCollapse = isAllAccountsExpanded;
+    filteredCustomers.forEach(c => {
+      all[c.id] = nextCollapse;
+    });
+    setCollapsedAccounts(all);
+  };
 
   const openNewCustomerModal = () => {
     setEditingCustomer({
@@ -210,50 +267,6 @@ export const FinanceModule: React.FC = () => {
     setEditingCustomer(null);
   };
 
-  const handleTriggerRealtimeFlightJob = (sendEmailAfter: boolean) => {
-    const vol = parseFloat(simVolume) || 0;
-    if (!simFlightNo.trim() || vol <= 0) {
-      notify('Enter a valid flight number and uplift volume (L).', 'warning');
-      return;
-    }
-    const resolved = resolveCustomerByFlightOrAirline(simFlightNo, undefined, simAircraftReg);
-    const res = deductFlightUpliftRealtime({
-      deliveryNumber: `${Math.floor(313000 + Math.random() * 6999)}`,
-      flightNumber: simFlightNo.toUpperCase().trim(),
-      airline: resolved.airlineHolding?.name || resolved.customer?.name || simFlightNo.toUpperCase().slice(0, 2),
-      aircraftReg: simAircraftReg.toUpperCase().trim() || 'TBA',
-      volumeLiters: vol,
-      source: 'FINANCE_DISPATCH'
-    });
-
-    if (res.deducted && res.customer) {
-      notify(res.message, 'success');
-      if (sendEmailAfter) {
-        const targetEmails = resolved.emails;
-        if (targetEmails.length === 0) {
-          notify(`Uplift deducted, but no email addresses are configured for ${simFlightNo}.`, 'warning');
-        } else {
-          sendFlightJobEmail(
-            {
-              flightNumber: simFlightNo.toUpperCase().trim(),
-              airline: resolved.airlineHolding?.name || res.customer.name,
-              aircraftReg: simAircraftReg.toUpperCase().trim(),
-              stand: simStand,
-              estimatedVolume: vol,
-              status: 'UPLIFT DEDUCTED & DISPATCHED',
-              customerAccountName: res.customer.name,
-              classification: res.customer.classification,
-              remainingBalance: res.newBalance
-            },
-            targetEmails
-          );
-          notify(`Opened Flight Job email to ${targetEmails.join(', ')}`, 'info');
-        }
-      }
-    } else {
-      notify(res.message, 'warning');
-    }
-  };
 
   const handleSyncReceipt = (e: React.FormEvent) => {
     e.preventDefault();
@@ -382,27 +395,38 @@ export const FinanceModule: React.FC = () => {
         </div>
       </div>
 
-      {/* Tablet & Mobile Safe Responsive Tabs Grid (replaces hardcoded pixel offsets that clipped on tablets) */}
-      <div className="bg-surface-dim p-1.5 rounded-2xl border border-outline grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 w-full shadow-inner">
-        {[
-          { id: 'balances',    label: 'Balances & SWIFTs',     icon: DollarSign },
-          { id: 'accounts',    label: 'Accounts & Airlines',   icon: Plane },
-          { id: 'billing',     label: 'Invoicing & FIFO',      icon: FileText },
-          { id: 'variance',    label: 'Variance & COGS',       icon: Scale },
-          { id: 'procurement', label: 'Duty & Procurement',    icon: Layers },
-          { id: 'reports',     label: 'Financial Reports',     icon: FileSpreadsheet },
-        ].map(t => {
+      {/* Tablet & Mobile Safe Responsive Tabs Grid with Animated Radio Slider */}
+      <div className="relative bg-surface-dim p-1.5 rounded-2xl border border-outline grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 w-full shadow-inner select-none overflow-hidden">
+        {/* Animated Kinetic Gradient Radio Slider matching System Settings */}
+        {tabSlider.ready && (
+          <div
+            className="absolute rounded-xl kinetic-gradient shadow-premium transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] will-change-transform pointer-events-none"
+            style={{
+              left: `${tabSlider.left}px`,
+              top: `${tabSlider.top}px`,
+              width: `${tabSlider.width}px`,
+              height: `${tabSlider.height}px`,
+            }}
+          />
+        )}
+
+        {FINANCE_TABS.map((t, idx) => {
           const Icon = t.icon;
           const isActive = activeTab === t.id;
           return (
             <button
               key={t.id}
-              onClick={() => setActiveTab(t.id as any)}
-              className={`min-h-[44px] px-3 py-2.5 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider transition-all ${
+              ref={el => { tabBtnRefs.current[idx] = el; }}
+              type="button"
+              onClick={() => {
+                haptic('TAP');
+                setActiveTab(t.id as any);
+              }}
+              className={`relative z-10 min-h-[44px] px-3 py-2.5 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider transition-colors duration-300 cursor-pointer select-none ${
                 isActive
-                  ? 'kinetic-gradient text-white shadow-premium'
-                  : 'text-on-surface-dim hover:text-on-surface hover:bg-surface-lowest/50'
-              }`}
+                  ? 'text-white font-black'
+                  : 'text-on-surface-dim hover:text-on-surface hover:bg-surface-lowest/40 font-bold'
+              } ${!tabSlider.ready && isActive ? 'kinetic-gradient shadow-premium' : ''}`}
             >
               <Icon className="w-3.5 h-3.5 shrink-0" />
               <span className="leading-tight truncate">{t.label}</span>
@@ -804,23 +828,19 @@ export const FinanceModule: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setCollapsedAccounts({})}
-                      className="px-3 py-2 rounded-xl border border-outline bg-surface-dim hover:bg-surface-dim/80 text-[10px] font-black uppercase tracking-wider text-on-surface transition-all min-h-[42px]"
-                      title="Expand all customer airline holdings"
+                      onClick={toggleAllAccounts}
+                      className="px-3.5 py-2 rounded-xl border border-outline bg-surface-dim hover:bg-surface-lowest text-[10px] font-black uppercase tracking-wider text-on-surface flex items-center gap-1.5 transition-all min-h-[42px]"
+                      title={isAllAccountsExpanded ? "Collapse all customer airline holdings" : "Expand all customer airline holdings"}
                     >
-                      Expand All
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const all: Record<string, boolean> = {};
-                        filteredCustomers.forEach(c => { all[c.id] = true; });
-                        setCollapsedAccounts(all);
-                      }}
-                      className="px-3 py-2 rounded-xl border border-outline bg-surface-dim hover:bg-surface-dim/80 text-[10px] font-black uppercase tracking-wider text-on-surface transition-all min-h-[42px]"
-                      title="Collapse all customer airline holdings"
-                    >
-                      Collapse All
+                      {isAllAccountsExpanded ? (
+                        <>
+                          <ChevronUp className="w-3.5 h-3.5 text-primary" /> Collapse All
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-3.5 h-3.5 text-primary" /> Expand All
+                        </>
+                      )}
                     </button>
                     <button
                       onClick={openNewCustomerModal}
@@ -834,7 +854,7 @@ export const FinanceModule: React.FC = () => {
                 <div className="space-y-4">
                   {filteredCustomers.map(cust => {
                     const holdings = cust.airlineHoldings || [];
-                    const isCollapsed = !!collapsedAccounts[cust.id];
+                    const isCollapsed = collapsedAccounts[cust.id] !== false;
 
                     return (
                       <div
@@ -855,9 +875,6 @@ export const FinanceModule: React.FC = () => {
                                 }`}
                               >
                                 {cust.classification}
-                              </span>
-                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[9px] font-black uppercase">
-                                {cust.autoDeductOnUplift !== false ? 'Real-Time Auto-Deduct ON' : 'Manual Deduction'}
                               </span>
                             </div>
                             <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold text-on-surface-dim">
@@ -880,12 +897,28 @@ export const FinanceModule: React.FC = () => {
                                   <Mail className="w-3 h-3 text-primary" /> {(cust.accountEmails || []).join(', ')}
                                 </span>
                               )}
+                              {holdings.length > 0 && (
+                                <span className="inline-flex items-center gap-1.5 text-on-surface-dim">
+                                  <span>Airlines:</span>
+                                  <span className="inline-flex items-center gap-1">
+                                    {holdings.map(h => (
+                                      <span
+                                        key={h.code}
+                                        className="px-1.5 py-0.2 rounded bg-gradient-to-r from-sky-500 to-blue-600 text-white font-mono text-[8.5px] font-black shadow-sm border border-sky-400/30"
+                                        title={h.name}
+                                      >
+                                        {h.code}
+                                      </span>
+                                    ))}
+                                  </span>
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div className="flex flex-wrap items-center gap-2 shrink-0">
                             <button
                               type="button"
-                              onClick={() => setCollapsedAccounts(prev => ({ ...prev, [cust.id]: !prev[cust.id] }))}
+                              onClick={() => setCollapsedAccounts(prev => ({ ...prev, [cust.id]: !isCollapsed }))}
                               className="px-3.5 py-2 rounded-xl bg-surface-dim hover:bg-surface-lowest text-on-surface border border-outline text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 min-h-[38px] transition-all"
                             >
                               {isCollapsed ? (
@@ -907,49 +940,12 @@ export const FinanceModule: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Airlines Held by this Customer Account (Collapsible Section) */}
-                        {isCollapsed ? (
-                          <div 
-                            onClick={() => setCollapsedAccounts(prev => ({ ...prev, [cust.id]: false }))}
-                            className="bg-surface-dim/70 border border-outline/70 hover:border-primary/40 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 cursor-pointer transition-all"
-                            title="Click to show held airlines"
-                          >
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="text-[9px] font-black uppercase text-on-surface-dim mr-1">Held Airlines ({holdings.length}):</span>
-                              {holdings.length > 0 ? (
-                                holdings.map(h => (
-                                  <span
-                                    key={h.code}
-                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-surface-lowest border border-outline text-[9px] font-bold text-on-surface"
-                                  >
-                                    <span className="px-1.5 py-0.2 rounded bg-gradient-to-r from-sky-500 to-blue-600 text-white font-mono text-[8.5px] font-black shadow-sm border border-sky-400/30">
-                                      {h.code}
-                                    </span>
-                                    <span>{h.name}</span>
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-[9px] text-on-surface-dim italic">None configured yet</span>
-                              )}
-                            </div>
-                            <span className="text-[9px] font-black text-primary uppercase tracking-wider flex items-center gap-1">
-                              Show Details <ChevronDown className="w-3 h-3" />
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="space-y-2 animate-in slide-in-from-top-1 duration-200">
-                            <div className="text-[9px] font-black uppercase tracking-widest text-on-surface-dim flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <Plane className="w-3 h-3 text-primary" />
-                                Airlines Held by {cust.name} ({holdings.length})
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setCollapsedAccounts(prev => ({ ...prev, [cust.id]: true }))}
-                                className="text-[9px] font-black text-on-surface-dim hover:text-primary uppercase tracking-wider flex items-center gap-1"
-                              >
-                                Hide <ChevronUp className="w-3 h-3" />
-                              </button>
+                        {/* Airlines Held by this Customer Account (Expanded only when toggled) */}
+                        {!isCollapsed && (
+                          <div className="space-y-2.5 animate-in slide-in-from-top-1 duration-200 pt-2 border-t border-outline/40">
+                            <div className="text-[9px] font-black uppercase tracking-widest text-on-surface-dim flex items-center gap-1.5">
+                              <Plane className="w-3 h-3 text-primary" />
+                              Airlines Held by {cust.name} ({holdings.length})
                             </div>
                             {holdings.length === 0 ? (
                               <p className="text-[10px] text-on-surface-dim italic">
@@ -1029,143 +1025,24 @@ export const FinanceModule: React.FC = () => {
               </div>
             </div>
 
-            {/* Right Column: Real-Time Flight Job Entry & Deduction Feed */}
+            {/* Right Column: Real-Time Uplift Deduction Log */}
             <div className="space-y-6 min-w-0">
-              <div className="bg-surface-lowest border border-outline p-5 sm:p-6 rounded-[24px] sm:rounded-[32px] shadow-premium space-y-5">
-                <div>
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[9px] font-black uppercase tracking-widest inline-flex items-center gap-1">
-                    <Zap className="w-3 h-3" /> Live Apron-to-Finance Bridge
-                  </span>
-                  <h3 className="title-md text-on-surface font-black uppercase tracking-tight mt-2">
-                    Real-Time Flight Job Deduction & Email Dispatch
-                  </h3>
-                  <p className="text-[10px] text-on-surface-dim uppercase font-bold tracking-wider">
-                    Flight jobs entered in Into-Plane, Seaplane, or Schedule deduct automatically. You can also dispatch & deduct directly below:
-                  </p>
-                </div>
-
-                {(() => {
-                  const preview = resolveCustomerByFlightOrAirline(simFlightNo, undefined, simAircraftReg);
-                  return (
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-black uppercase text-on-surface-dim tracking-wider">Flight Number</label>
-                          <input
-                            type="text"
-                            value={simFlightNo}
-                            onChange={e => setSimFlightNo(e.target.value.toUpperCase())}
-                            placeholder="e.g. EK653, BA2043, EY379"
-                            className="w-full bg-surface-dim border border-outline px-3 py-2.5 rounded-xl text-xs font-black text-on-surface uppercase outline-none"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-black uppercase text-on-surface-dim tracking-wider">Aircraft Reg</label>
-                          <input
-                            type="text"
-                            value={simAircraftReg}
-                            onChange={e => setSimAircraftReg(e.target.value.toUpperCase())}
-                            placeholder="e.g. A6-EEO"
-                            className="w-full bg-surface-dim border border-outline px-3 py-2.5 rounded-xl text-xs font-black text-on-surface uppercase outline-none"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-black uppercase text-on-surface-dim tracking-wider">Uplift Volume (L)</label>
-                          <input
-                            type="number"
-                            value={simVolume}
-                            onChange={e => setSimVolume(e.target.value)}
-                            placeholder="14500"
-                            className="w-full bg-surface-dim border border-outline px-3 py-2.5 rounded-xl text-xs font-black text-on-surface outline-none"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-black uppercase text-on-surface-dim tracking-wider">Stand / Bay</label>
-                          <input
-                            type="text"
-                            value={simStand}
-                            onChange={e => setSimStand(e.target.value.toUpperCase())}
-                            placeholder="A4"
-                            className="w-full bg-surface-dim border border-outline px-3 py-2.5 rounded-xl text-xs font-black text-on-surface uppercase outline-none"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Live Resolved Account & Airline Preview Box */}
-                      <div className="bg-surface-dim/60 border border-outline rounded-2xl p-3.5 space-y-1.5 text-xs">
-                        {preview.customer ? (
-                          <>
-                            <div className="flex items-center justify-between">
-                              <span className="text-[9px] font-black uppercase tracking-widest text-primary">Matched Account</span>
-                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-primary/10 text-primary">
-                                {preview.customer.classification}
-                              </span>
-                            </div>
-                            <div className="font-black text-on-surface">{preview.customer.name}</div>
-                            {preview.airlineHolding && (
-                              <div className="text-[10px] font-bold text-on-surface-dim flex items-center gap-1.5">
-                                <span>Held Airline:</span>
-                                <span className="px-1.5 py-0.2 rounded bg-gradient-to-r from-sky-500 to-blue-600 text-white border border-sky-400/30 text-[9px] font-black font-mono shadow-sm">
-                                  {preview.airlineHolding.code}
-                                </span>
-                                <strong className="text-on-surface">{preview.airlineHolding.name}</strong>
-                              </div>
-                            )}
-                            <div className="text-[10px] font-bold text-on-surface-dim">
-                              Est. Deduction:{' '}
-                              <strong className="text-error">
-                                -${((parseFloat(simVolume) || 0) * (preview.customer.defaultPricePerLiter || 1.19197)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                              </strong>
-                            </div>
-                            <div className="text-[10px] text-on-surface-dim break-all">
-                              <strong className="text-on-surface">Target Emails:</strong>{' '}
-                              {preview.emails.length > 0 ? preview.emails.join(', ') : 'No email configured'}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="text-[10px] font-bold text-warning">
-                            No Customer Account matched for "{simFlightNo}". Add this airline prefix to a Customer Account.
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => handleTriggerRealtimeFlightJob(false)}
-                          className="kinetic-gradient text-white font-black py-3 px-3 rounded-xl text-[10px] uppercase tracking-widest shadow-premium flex items-center justify-center gap-1.5 min-h-[42px]"
-                        >
-                          <Zap className="w-3.5 h-3.5" /> Deduct Balance Now
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleTriggerRealtimeFlightJob(true)}
-                          className="bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 font-black py-3 px-3 rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 min-h-[42px]"
-                        >
-                          <Send className="w-3.5 h-3.5" /> Deduct & Email Job
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
               {/* Real-Time Deduction Activity Feed */}
               <div className="bg-surface-lowest border border-outline p-5 sm:p-6 rounded-[24px] sm:rounded-[32px] shadow-premium space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[9px] font-black uppercase tracking-widest inline-flex items-center gap-1 mb-1.5">
+                      <Zap className="w-3 h-3" /> Live Apron Sync
+                    </span>
                     <h4 className="text-xs font-black uppercase text-on-surface tracking-wider">Real-Time Uplift Deduction Log</h4>
-                    <p className="text-[9px] font-bold uppercase text-on-surface-dim">Live balance deductions from entered flight jobs</p>
+                    <p className="text-[9px] font-bold uppercase text-on-surface-dim">Live balance deductions synced from Into-Plane ops</p>
                   </div>
                   <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[9px] font-black">
                     {realtimeDeductions.length} events
                   </span>
                 </div>
 
-                <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1 custom-scrollbar">
+                <div className="space-y-2.5 max-h-[680px] overflow-y-auto pr-1 custom-scrollbar">
                   {realtimeDeductions.length === 0 ? (
                     <div className="text-center py-8 text-[10px] font-bold uppercase text-on-surface-dim opacity-50">
                       No real-time flight job deductions recorded in this session yet.
@@ -2450,7 +2327,7 @@ export const FinanceModule: React.FC = () => {
       </div>
 
       {/* ─── PREMIUM TAX INVOICE MODAL ─── */}
-      {selectedTicket && (
+      {selectedTicket && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 overflow-y-auto" onClick={() => setSelectedTicket(null)}>
           <div 
             className="bg-white text-slate-800 rounded-3xl w-full max-w-4xl shadow-premium border border-outline/50 overflow-hidden flex flex-col my-auto transition-transform duration-300 scale-100"
@@ -2646,13 +2523,20 @@ export const FinanceModule: React.FC = () => {
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* CUSTOMER ACCOUNT, HELD AIRLINES & EMAIL ROUTING MODAL */}
-      {editingCustomer && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-surface-lowest border border-outline rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden my-auto max-h-[92dvh] flex flex-col">
+      {editingCustomer && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+          onClick={() => setEditingCustomer(null)}
+        >
+          <div 
+            className="bg-surface-lowest border border-outline rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden my-auto max-h-[92dvh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="px-6 py-4 border-b border-outline flex items-center justify-between bg-surface-dim/50 shrink-0">
               <div>
                 <span className="text-[9px] font-black uppercase tracking-widest text-primary">
@@ -3007,13 +2891,23 @@ export const FinanceModule: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* JET A-1 FUEL RATES SCHEDULE MODAL (USD & MVR) */}
-      {showFuelRatesModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-surface-lowest border border-outline rounded-[28px] sm:rounded-[36px] max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+      {showFuelRatesModal && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto"
+          onClick={() => {
+            setShowFuelRatesModal(false);
+            setEditingFuelRate(null);
+          }}
+        >
+          <div 
+            className="bg-surface-lowest border border-outline rounded-[28px] sm:rounded-[36px] max-w-4xl w-full max-h-[90vh] my-auto flex flex-col shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
             {/* Modal Header */}
             <div className="p-5 sm:p-6 border-b border-outline flex items-center justify-between gap-4 bg-surface-dim/40">
               <div className="min-w-0">
@@ -3318,7 +3212,8 @@ export const FinanceModule: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

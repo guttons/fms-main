@@ -172,7 +172,7 @@ export const EmailDispatchModal: React.FC<EmailDispatchModalProps> = ({
   };
 
   const modalContent = (
-    <div className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+    <div className="fixed inset-0 z-[11000] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
       <div className="bg-surface rounded-2xl sm:rounded-3xl border border-outline shadow-2xl w-full max-w-xl p-5 sm:p-7 animate-in fade-in zoom-in duration-200 my-auto flex flex-col max-h-[94dvh] overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 pb-3 sm:pb-4 border-b border-outline/30 shrink-0">

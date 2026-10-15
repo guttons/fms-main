@@ -282,18 +282,8 @@ const MobileHeader: React.FC<{
                           {(() => {
                             const isDomOrAdhoc = isDomesticFlight(activeFlight as any) || (activeFlight as any).isDomestic || (activeFlight as any).isAdhoc;
                             return !isDomOrAdhoc ? (
-                              <span className="group/hdrstand inline-flex items-center mr-1">
+                              <span className="inline-flex items-center mr-1">
                                 <span className="text-on-surface">{activeFlight.stand || 'TBA'}</span>
-                                {onEditActiveStand && (
-                                  <button
-                                    type="button"
-                                    onClick={onEditActiveStand}
-                                    className="p-1 ml-0.5 rounded-md hover:bg-surface-container text-on-surface-dim hover:text-primary transition-all opacity-0 group-hover/hdrstand:opacity-100 flex-shrink-0 cursor-pointer"
-                                    title="Edit Aircraft Details & Stand"
-                                  >
-                                    <Pencil className="w-2.5 h-2.5" />
-                                  </button>
-                                )}
                               </span>
                             ) : null;
                           })()}
@@ -1095,13 +1085,12 @@ const ScreenDashboard: React.FC<{
                                   {!isDomesticOrAdhoc && (
                                     <div 
                                       onClick={canEditStand ? (e) => { e.stopPropagation(); setEditingJob(job); } : undefined}
-                                      className={`group/stand flex items-center gap-1 bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider shrink-0 ${
+                                      className={`flex items-center justify-center bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider shrink-0 ${
                                           canEditStand ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500' : ''
                                       }`}
                                       title={canEditStand ? "Click to edit aircraft & stand" : undefined}
                                     >
                                         <span>{job.stand || 'TBA'}</span>
-                                        {canEditStand && <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/stand:opacity-100 transition-opacity" />}
                                     </div>
                                   )}
 
@@ -1293,10 +1282,10 @@ const ScreenDashboard: React.FC<{
                                                e.stopPropagation();
                                                window.open(flightRadarService.getFlightWebUrl(inboundFlightNumber), '_blank', 'noopener,noreferrer');
                                            }}
-                                           className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 active:scale-95 border border-sky-500/25 shadow-sm cursor-pointer"
+                                           className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all bg-surface-container-high/40 text-on-surface-dim hover:text-on-surface hover:bg-surface-container active:scale-95 border border-outline shadow-sm cursor-pointer"
                                            title={`Track inbound flight ${inboundFlightNumber} live on FlightRadar24 map`}
                                        >
-                                           <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5" />
+                                           <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5 opacity-60 hover:opacity-100 transition-opacity" />
                                        </button>
 
                                        {/* Personal ETA Arrival Alert Watch Toggle */}
@@ -1382,13 +1371,21 @@ const ScreenDashboard: React.FC<{
                                                 onStartJob(job);
                                             }
                                         }}
-                                         className={`w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all shadow-sm cursor-pointer
-                                              ${job.status === 'COMPLETED' ? 'bg-success/10 text-success border border-success/20 hover:bg-success hover:text-white' : 'kinetic-gradient text-white hover:scale-[1.05] active:scale-95 shadow-premium'}
-                                         `}
-                                         title={job.status === 'COMPLETED' ? 'View / Print Invoice (PDF)' : displayStatus === 'IN_PROGRESS' ? 'Resume Fueling' : 'Start Job'}
-                                     >
-                                         {job.status === 'COMPLETED' ? <FileText className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" /> : <Play className="w-[18px] h-[18px] sm:w-[24px] sm:h-[24px] flex-shrink-0 ml-0.5" fill="white" color="white" strokeWidth={2.5} />}
-                                     </button>
+                                        className={`w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-all border shadow-sm cursor-pointer active:scale-95 ${
+                                            job.status === 'COMPLETED'
+                                                ? 'bg-success/10 text-success border-success/20 hover:bg-success hover:text-white'
+                                                : displayStatus === 'IN_PROGRESS'
+                                                ? 'bg-amber-500/10 text-amber-400 border-amber-500/25 hover:bg-amber-500/20'
+                                                : 'bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 border-sky-500/25'
+                                        }`}
+                                        title={job.status === 'COMPLETED' ? 'View / Print Invoice (PDF)' : displayStatus === 'IN_PROGRESS' ? 'Resume Fueling' : 'Start Job'}
+                                    >
+                                        {job.status === 'COMPLETED' ? (
+                                            <FileText className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
+                                        ) : (
+                                            <Play className="w-4 h-4 sm:w-5 sm:h-5 ml-0.5 fill-current" />
+                                        )}
+                                    </button>
                                   )}
                             </div>
                           </div>
@@ -2613,10 +2610,10 @@ const ScreenMetering: React.FC<{
                            </span>
                        </div>
                    </div>
-                   <div className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all shrink-0 ${
+                   <div className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all shrink-0 ${
                      showTopUp
-                       ? 'bg-surface border-outline text-on-surface-dim'
-                       : 'bg-primary/15 border-primary/30 text-primary group-hover:bg-primary group-hover:text-white'
+                       ? 'bg-surface border-outline text-on-surface-dim hover:text-on-surface'
+                       : 'kinetic-gradient text-white border-transparent shadow-premium group-hover:scale-105 active:scale-95'
                    }`}>
                        {showTopUp ? 'Collapse' : '+ Add Top-Up'}
                    </div>
@@ -5056,8 +5053,14 @@ export const IntoPlane: React.FC<IntoPlaneProps> = ({ user, initialJob, onClearI
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowInvoiceEmailModal(true);
+                    onClick={async () => {
+                      const targetEmail = (invoiceModalEmail || completedInvoiceLog.signerEmail || '').trim();
+                      if (!targetEmail) {
+                        notify('Saving PDF invoice & opening email client. You can also enter the representative email above.', 'info');
+                      } else {
+                        notify(`Saving PDF invoice & opening email to ${targetEmail}...`, 'success');
+                      }
+                      await sendInvoiceEmail(completedInvoiceLog, targetEmail, user || undefined, prebuiltInvoicePdf);
                     }}
                     className="flex-1 py-3 px-4 bg-surface-dim hover:bg-surface-container border border-outline rounded-xl font-black text-[11px] uppercase tracking-wider text-on-surface transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >

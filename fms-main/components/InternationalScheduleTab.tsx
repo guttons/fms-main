@@ -397,51 +397,51 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
 
         {/* Sub Navigation Bar with Animated Kinetic Gradient Sliding Pill */}
         <div className="mt-6 pt-6 border-t border-outline">
-          <div className="bg-surface-dim/80 p-1.5 rounded-2xl md:rounded-full border border-outline shadow-inner relative flex items-center w-full md:w-auto self-start">
+          <div className="bg-surface-dim/80 p-1.5 rounded-2xl sm:rounded-full border border-outline shadow-inner relative grid grid-cols-2 w-full sm:w-[640px] overflow-hidden">
             <div
-              className={`absolute top-1.5 bottom-1.5 rounded-xl md:rounded-full kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${
-                activeSubTab === 'master'
-                  ? 'w-[calc(50%-3px)] left-1.5 md:w-[230px] md:left-1.5 md:translate-x-0'
-                  : 'w-[calc(50%-3px)] left-[calc(50%+1.5px)] md:w-[270px] md:left-1.5 md:translate-x-[230px]'
+              className={`absolute top-1.5 bottom-1.5 left-1.5 w-[calc(50%-6px)] rounded-xl sm:rounded-full kinetic-gradient transition-transform duration-300 ease-out shadow-premium pointer-events-none will-change-transform ${
+                activeSubTab === 'crosscheck' ? 'translate-x-full' : 'translate-x-0'
               }`}
             />
             <button
+              type="button"
               onClick={() => {
                 setActiveSubTab('master');
                 triggerSubTabTooltip('master');
               }}
-              className={`flex-1 md:flex-initial md:w-[230px] px-3 md:px-6 py-2.5 rounded-xl md:rounded-full text-xs font-black uppercase tracking-wider transition-all relative z-10 flex items-center justify-center gap-1.5 sm:gap-2 ${
+              className={`py-2.5 px-3 sm:px-5 rounded-xl sm:rounded-full text-xs font-black uppercase tracking-wider relative z-10 flex items-center justify-center gap-1.5 sm:gap-2 transition-colors duration-200 select-none ${
                 activeSubTab === 'master' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
               }`}
             >
               {activeSubTabTooltip === 'master' && (
-                <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[10px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-150 md:hidden">
+                <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[10px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-150 sm:hidden">
                   Schedule Registry ({internationalSchedules.length})
                   <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
                 </div>
               )}
               <Layers className="w-4 h-4 shrink-0" />
-              <span className="hidden md:inline whitespace-nowrap">Schedule Registry ({internationalSchedules.length})</span>
-              <span className="md:hidden text-[10px] font-extrabold opacity-90">({internationalSchedules.length})</span>
+              <span className="hidden sm:inline whitespace-nowrap">Schedule Registry ({internationalSchedules.length})</span>
+              <span className="sm:hidden text-[10px] font-extrabold opacity-90">({internationalSchedules.length})</span>
             </button>
 
             <button
+              type="button"
               onClick={() => {
                 setActiveSubTab('crosscheck');
                 triggerSubTabTooltip('crosscheck');
               }}
-              className={`flex-1 md:flex-initial md:w-[270px] px-3 md:px-6 py-2.5 rounded-xl md:rounded-full text-xs font-black uppercase tracking-wider transition-all relative z-10 flex items-center justify-center gap-1.5 sm:gap-2 ${
+              className={`py-2.5 px-3 sm:px-5 rounded-xl sm:rounded-full text-xs font-black uppercase tracking-wider relative z-10 flex items-center justify-center gap-1.5 sm:gap-2 transition-colors duration-200 select-none ${
                 activeSubTab === 'crosscheck' ? 'text-white' : 'text-on-surface-dim hover:text-on-surface'
               }`}
             >
               {activeSubTabTooltip === 'crosscheck' && (
-                <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[10px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-150 md:hidden">
+                <div className="absolute bottom-full mb-3 bg-surface-container border border-outline px-2.5 py-1.5 rounded-xl text-[10px] font-black text-on-surface uppercase tracking-widest shadow-premium z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 duration-150 sm:hidden">
                   Daily Flight Cross-Check
                   <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-surface-container" />
                 </div>
               )}
               <Clock className="w-4 h-4 shrink-0" />
-              <span className="hidden md:inline whitespace-nowrap">Daily Flight Cross-Check</span>
+              <span className="hidden sm:inline whitespace-nowrap">Daily Flight Cross-Check</span>
               {retimedCount + swapCount + missingCount > 0 && (
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 transition-colors ${
                   activeSubTab === 'crosscheck'
@@ -710,9 +710,9 @@ export const InternationalScheduleTab: React.FC<InternationalScheduleTabProps> =
               </div>
 
               {/* Category Filter Pills (ALL / INT / DOM) with Animated Kinetic Gradient Sliding Pill */}
-              <div className="bg-surface-dim/80 p-1 rounded-2xl border border-outline relative flex items-center self-start sm:self-auto shadow-inner min-w-[280px]">
+              <div className="bg-surface-dim/80 p-1 rounded-2xl border border-outline relative flex items-center self-start sm:self-auto shadow-inner min-w-[280px] overflow-hidden">
                 <div
-                  className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-premium ${
+                  className={`absolute top-1 bottom-1 rounded-xl kinetic-gradient transition-all duration-300 ease-out shadow-premium pointer-events-none will-change-transform ${
                     crossCheckCategoryFilter === 'ALL'
                       ? 'w-[calc(33.333%-2px)] left-1'
                       : crossCheckCategoryFilter === 'INT'

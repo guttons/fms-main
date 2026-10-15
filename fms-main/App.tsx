@@ -2032,19 +2032,17 @@ const AppContextContent: React.FC<any> = ({
           </div>
         )}
 
-        {/* Floating ASK AI Assistant Button (Desktop Only - Theme Adaptive) */}
+        {/* Floating ASK AI Assistant Button (Desktop Only - Matched to Alert/Header button style) */}
         <button
           onClick={() => setIsAIChatOpen(true)}
-          className={`hidden lg:flex fixed bottom-6 right-6 z-[120] items-center space-x-2.5 px-4 py-3 kinetic-gradient rounded-full shadow-premium border border-white/20 hover:scale-105 active:scale-95 transition-all duration-200 group ${
-            theme === 'black' ? 'text-black' : 'text-white'
-          }`}
+          className="hidden lg:flex fixed bottom-6 right-6 z-[120] items-center space-x-2.5 px-4 py-3 bg-surface-dim/90 hover:bg-surface-container border border-outline hover:border-primary/40 rounded-full shadow-premium backdrop-blur-xl text-on-surface-dim hover:text-primary hover:scale-105 active:scale-95 transition-all duration-200 group"
           title="Open FMS Assistant"
         >
           <div className="relative flex items-center justify-center">
-            <Sparkles className={`w-5 h-5 ${theme === 'black' ? 'text-black' : 'text-white'} animate-[pulse_10s_cubic-bezier(0.4,0,0.6,1)_infinite]`} />
-            <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${theme === 'black' ? 'bg-black' : 'bg-white'} animate-[ping_8s_cubic-bezier(0,0,0.2,1)_infinite] opacity-50`}></span>
+            <Sparkles className="w-5 h-5 text-primary group-hover:scale-110 transition-transform animate-[pulse_10s_cubic-bezier(0.4,0,0.6,1)_infinite]" />
+            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-primary animate-[ping_8s_cubic-bezier(0,0,0.2,1)_infinite] opacity-50"></span>
           </div>
-          <span className={`text-xs font-black uppercase tracking-wider hidden sm:inline ${theme === 'black' ? 'text-black' : 'text-white'}`}>ASK</span>
+          <span className="text-xs font-black uppercase tracking-wider hidden sm:inline text-on-surface group-hover:text-primary transition-colors">ASK</span>
         </button>
 
         {/* FMS Generative AI Assistant Chatbot Modal */}

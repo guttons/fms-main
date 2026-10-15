@@ -1591,13 +1591,12 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
                               {/* Yellow gradient stand badge */}
                               <div 
                                 onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFlight(item); } : undefined}
-                                className={`group/stand bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center gap-1 ${
+                                className={`bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center justify-center ${
                                   isItpManagerOrAdmin ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500 shadow-md' : ''
                                 }`}
                                 title={isItpManagerOrAdmin ? "Click to edit aircraft & stand" : undefined}
                               >
                                 <span>{item.stand}</span>
-                                {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/stand:opacity-100 transition-opacity" />}
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <span className="text-xl font-[900] tracking-tighter italic">{item.flightNumber}</span>
@@ -1621,7 +1620,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
                               <div
                                 onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFlight(item); } : undefined}
                                 className={`group/ac flex flex-col rounded-lg px-2 py-1 -mx-2 -my-1 transition-all ${
-                                  isItpManagerOrAdmin ? 'cursor-pointer hover:bg-surface-dim/70 hover:border-primary/40 border border-transparent' : ''
+                                  isItpManagerOrAdmin ? 'cursor-pointer hover:bg-surface-dim/70' : ''
                                 }`}
                                 title={isItpManagerOrAdmin ? "Click to edit aircraft & stand" : undefined}
                               >
@@ -1710,10 +1709,10 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
                               />
                               <button 
                                 onClick={() => handleAssignFlight(item.id, 'equipmentUsage', activeEquipmentUsage === 'HYDRANT' ? 'REFUELLER' : 'HYDRANT', item)} 
-                                className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all shrink-0 cursor-pointer ${
+                                className={`px-2.5 sm:px-3 py-1.5 text-[9px] font-black uppercase rounded-lg border transition-all shrink-0 cursor-pointer active:scale-95 ${
                                   activeEquipmentUsage === 'HYDRANT' 
-                                    ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white border-transparent' 
-                                    : 'bg-gradient-to-r from-amber-500 to-amber-600 text-white border-transparent'
+                                    ? 'bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border-cyan-500/30' 
+                                    : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/30'
                                 }`}
                               >
                                 {activeEquipmentUsage === 'HYDRANT' ? 'HD' : 'RF'}
@@ -1742,13 +1741,12 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
                             {/* Yellow gradient stand badge */}
                             <div 
                               onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFlight(item); } : undefined}
-                              className={`group/stand bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center gap-1 ${
+                              className={`bg-gradient-to-br from-yellow-400 to-amber-500 text-slate-950 text-[10px] font-[900] px-2 py-0.5 rounded-md shadow-sm select-none uppercase tracking-wider flex items-center justify-center ${
                                 isItpManagerOrAdmin ? 'cursor-pointer hover:scale-105 active:scale-95 transition-all ring-1 ring-amber-400/40 hover:ring-amber-500' : ''
                               }`}
                               title={isItpManagerOrAdmin ? "Click to edit aircraft & stand" : undefined}
                             >
                               <span>{item.stand}</span>
-                              {isItpManagerOrAdmin && <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/stand:opacity-100 transition-opacity" />}
                             </div>
                             <div>
                               <div className="flex items-center gap-1.5 flex-wrap">
@@ -1821,10 +1819,10 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
                           <label className="block text-[9px] font-black text-on-surface-dim uppercase tracking-widest opacity-40">Assigned Crew</label>
                           <button 
                             onClick={() => handleAssignFlight(item.id, 'equipmentUsage', activeEquipmentUsage === 'HYDRANT' ? 'REFUELLER' : 'HYDRANT', item)} 
-                            className={`px-3 py-1 text-[8px] font-black uppercase rounded transition-all cursor-pointer ${
+                            className={`px-2.5 py-1 text-[8px] font-black uppercase rounded-lg border transition-all cursor-pointer active:scale-95 ${
                               activeEquipmentUsage === 'HYDRANT' 
-                                ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white border-transparent' 
-                                : 'bg-gradient-to-r from-amber-500 to-amber-600 text-white border-transparent'
+                                ? 'bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border-cyan-500/30' 
+                                : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/30'
                             }`}
                           >
                             {activeEquipmentUsage === 'HYDRANT' ? 'HD' : 'RF'}
@@ -1951,7 +1949,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
                               <div
                                 onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFlight(flight); } : undefined}
                                 className={`group/ac flex flex-col rounded-lg px-2 py-1 -mx-2 -my-1 transition-all ${
-                                  isItpManagerOrAdmin ? 'cursor-pointer hover:bg-surface-dim/70 hover:border-primary/40 border border-transparent' : ''
+                                  isItpManagerOrAdmin ? 'cursor-pointer hover:bg-surface-dim/70' : ''
                                 }`}
                                 title={isItpManagerOrAdmin ? "Click to edit aircraft details" : undefined}
                               >
@@ -2150,7 +2148,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
                               <div
                                 onClick={isItpManagerOrAdmin ? (e) => { e.stopPropagation(); setEditingFlight(flight); } : undefined}
                                 className={`group/ac flex flex-col rounded-lg px-2 py-1 -mx-2 -my-1 transition-all ${
-                                  isItpManagerOrAdmin ? 'cursor-pointer hover:bg-surface-dim/70 hover:border-primary/40 border border-transparent' : ''
+                                  isItpManagerOrAdmin ? 'cursor-pointer hover:bg-surface-dim/70' : ''
                                 }`}
                                 title={isItpManagerOrAdmin ? "Click to edit aircraft details" : undefined}
                               >
