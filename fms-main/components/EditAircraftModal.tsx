@@ -18,9 +18,18 @@ export const COMMON_AIRCRAFT_TYPES = [
 ];
 
 export const COMMON_MLE_STANDS = [
-  '1', '2', '3', '4', '5', '8', '9', '10', '11', '12', '14', '15', '16', '17', '18', '19', '20',
-  '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35', '36',
-  '37', '38', '39', '40', 'N', 'E'
+  'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9',
+  '1R', 'ST 1', '1L',
+  '2R', 'ST 2', '2L',
+  '3R', 'ST 3', '3L',
+  '4R', 'ST 4', '4L',
+  '5R', 'ST 5', '5L',
+  '6R', 'ST 6', '6L',
+  '7R', 'ST 7', '7L',
+  '8R', 'ST 8', '8L',
+  '9R', 'ST 9', '9L',
+  'A10', 'A11', 'A12',
+  'N', 'E'
 ];
 
 export interface EditAircraftModalProps {
@@ -299,7 +308,7 @@ export const EditAircraftModal: React.FC<EditAircraftModalProps> = ({
                 type="text"
                 value={stand}
                 onChange={(e) => setStand(e.target.value.toUpperCase())}
-                placeholder="e.g. 14, 22, N, E"
+                placeholder="e.g. A1, 1R, ST 1, N, E"
                 className="w-full px-4 py-3 bg-surface-dim border border-outline rounded-2xl text-[13px] font-black uppercase tracking-wider focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 outline-none transition-all font-mono text-amber-400"
               />
               <div className="mt-2.5">

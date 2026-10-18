@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { MOCK_USERS, EQUIPMENT } from '../constants';
 import { UserRole, EquipmentType, FlightJob, isDomesticFlight } from '../types';
-import { Calendar, Zap, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home, Radio, RefreshCw, PlaneLanding, PlaneTakeoff, Check, CheckCheck, Fuel, XCircle, ArrowRightCircle, AlertTriangle, Lock, Ban, Play, CheckCircle, Globe, X, Pencil, Plus, Mail } from 'lucide-react';
+import { Calendar, Zap, Plane, Clock, Users, Truck, MapPin, ChevronDown, Droplet, Settings, Home, Radio, RefreshCw, PlaneLanding, PlaneTakeoff, Check, CheckCheck, Fuel, XCircle, ArrowRightCircle, AlertTriangle, Lock, Ban, Play, CheckCircle, Globe, X, Pencil, Plus } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { useOperationalData } from '../context/OperationalDataContext';
 import { BriefingShift } from '../context/OperationalDataContext';
@@ -14,9 +14,6 @@ import { cleanAircraftTypeName } from '../services/aircraftLookupService';
 import { useFuelDispatch } from '../hooks/useFuelDispatch';
 import { FuelDispatchControl } from './FuelDispatchControl';
 import { useRolePermissions } from '../hooks/useRolePermissions';
-import { useFinanceData } from '../context/FinanceDataContext';
-import { sendFlightJobEmail, getFlightJobEmailDetails } from '../services/invoicePdfService';
-import { EmailDispatchModal } from './EmailDispatchModal';
 
 export const COMMON_MLE_STANDS = [
   'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9',
@@ -45,7 +42,6 @@ interface ScheduleProps {
 
 export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSchedule }) => {
   const { notify } = useNotification();
-  const { resolveCustomerByFlightOrAirline } = useFinanceData();
   const [editingFlight, setEditingFlight] = useState<any | null>(null);
   const [editingFrtFlight, setEditingFrtFlight] = useState<FlightJob | null>(null);
   const [isAddAdhocModalOpen, setIsAddAdhocModalOpen] = useState(false);
@@ -61,79 +57,6 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
     cancelFuelAlert,
     handleCrewReassignment
   } = useFuelDispatch(user);
-
-  const [emailModalData, setEmailModalData] = useState<{
-    flightNumber: string;
-    airlineName: string;
-    to: string;
-    availableEmails: string[];
-    subject: string;
-    bodyText: string;
-  } | null>(null);
-
-  const renderAirlineEmailButton = (job: any) => {
-    const resolved = resolveCustomerByFlightOrAirline(
-      job?.flightNumber,
-      job?.airline,
-      job?.aircraftReg,
-      job?.co
-    );
-    const emails = resolved.emails || [];
-    const acctName = resolved.customer?.name;
-    const holdingCode = resolved.airlineHolding?.code;
-
-    return (
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          const details = getFlightJobEmailDetails(
-            {
-              flightNumber: job.flightNumber || '',
-              airline: resolved.airlineHolding?.name || job.airline || acctName,
-              customerAccountName: acctName,
-              aircraftReg: job.aircraftReg,
-              aircraftType: job.aircraftType,
-              stand: job.stand,
-              eta: job.eta,
-              etd: job.std || job.tobt,
-              destination: job.route,
-              assignedVehicle: job.vehicleId,
-              status: job.status,
-              classification: resolved.customer?.classification,
-              remainingBalance: resolved.customer
-                ? (resolved.customer.classification === 'ADVANCE'
-                    ? resolved.customer.advanceBalance
-                    : resolved.customer.runningBalance)
-                : undefined
-            },
-            emails
-          );
-          setEmailModalData({
-            flightNumber: job.flightNumber || '',
-            airlineName: resolved.airlineHolding?.name || job.airline || acctName || '',
-            to: details.to,
-            availableEmails: emails,
-            subject: details.subject,
-            bodyText: details.bodyText
-          });
-        }}
-        title={
-          emails.length > 0
-            ? `Email Flight Job (${acctName}${holdingCode ? ` • ${holdingCode}` : ''}): ${emails.join(', ')}`
-            : `Email Flight Job: ${job?.flightNumber || 'flight'}`
-        }
-        className={`px-2.5 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shrink-0 cursor-pointer ${
-          emails.length > 0
-            ? 'bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
-            : 'bg-surface-dim text-on-surface-dim/50 border-outline hover:text-on-surface-dim'
-        }`}
-      >
-        <Mail className="w-3 h-3 shrink-0" />
-        <span className="hidden xl:inline">{holdingCode ? `Email ${holdingCode}` : 'Email'}</span>
-      </button>
-    );
-  };
 
   const cleanDisplayReg = (reg?: string) => {
     if (!reg || reg === '8Q-TBA' || reg === 'TBA' || reg.startsWith('8Q-DOM')) return '';
@@ -1695,7 +1618,6 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
                           <td className="px-4 py-6 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex justify-end items-center gap-3">
                               {renderStatusBadge(item.status)}
-                              {renderAirlineEmailButton(item)}
                               <FuelDispatchControl
                                 job={item}
                                 dispatchState={getDispatchState(item)}
@@ -1859,7 +1781,6 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
                             onSend={sendFuelAlert}
                             onCancel={cancelFuelAlert}
                           />
-                          {renderAirlineEmailButton(item)}
                         </div>
                         <div className="flex items-center gap-2">
                           {renderStatusBadge(item.status)}
@@ -1978,7 +1899,6 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
                             <td className="px-4 py-6 whitespace-nowrap">
                               <div className="flex items-center gap-2">
                                 {renderStatusBadge(flight.status)}
-                                {renderAirlineEmailButton(flight)}
                                 <FuelDispatchControl
                                   job={flight}
                                   dispatchState={getDispatchState(flight)}
@@ -2073,7 +1993,6 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
                             onSend={sendFuelAlert}
                             onCancel={cancelFuelAlert}
                           />
-                          {renderAirlineEmailButton(flight)}
                         </div>
                         <div className="flex items-center gap-2">
                           {renderStatusBadge(flight.status)}
@@ -2177,7 +2096,6 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
                             <td className="px-4 py-6 whitespace-nowrap">
                               <div className="flex items-center gap-2">
                                 {renderStatusBadge(flight.status)}
-                                {renderAirlineEmailButton(flight)}
                                 <FuelDispatchControl
                                   job={flight}
                                   dispatchState={getDispatchState(flight)}
@@ -2287,7 +2205,6 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
                             onSend={sendFuelAlert}
                             onCancel={cancelFuelAlert}
                           />
-                          {renderAirlineEmailButton(flight)}
                         </div>
                         <div className="flex items-center gap-2">
                           {renderStatusBadge(flight.status)}
@@ -2950,20 +2867,6 @@ export const Schedule: React.FC<ScheduleProps> = ({ user, onStartJob, canEditSch
         onAdd={handleAddAdhocFlight}
         notify={notify}
       />
-
-      {emailModalData && (
-        <EmailDispatchModal
-          isOpen={true}
-          onClose={() => setEmailModalData(null)}
-          title={`Email Flight Job Dispatch — ${emailModalData.flightNumber}`}
-          flightNumber={emailModalData.flightNumber}
-          airlineName={emailModalData.airlineName}
-          defaultTo={emailModalData.to}
-          availableEmails={emailModalData.availableEmails}
-          subject={emailModalData.subject}
-          bodyText={emailModalData.bodyText}
-        />
-      )}
 
       {isModalOpen && (
         <style>{`

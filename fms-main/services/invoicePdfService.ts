@@ -1,5 +1,6 @@
 import { FlightLog, User } from '../types';
 import { numberToWords } from '../utils/numberToWords';
+import { MACL_LOGO_BASE64 } from './maclLogoBase64';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -97,9 +98,672 @@ function formatDateTime(dateStr?: string | null): string {
 }
 
 /**
+ * Safely escapes HTML special characters
+ */
+function escapeHtml(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  return String(val)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
+ * Resolves all normalized fields needed to render the G-002 Ground Station Delivery Invoice
+ */
+function resolveG002InvoiceFields(log: Partial<FlightLog>, operatorUser?: Partial<User>) {
+  const station: 'LFS' | 'AFS' = 
+    (log as any).station === 'LFS' || 
+    (log.stand && log.stand.includes('LANDSIDE')) || 
+    (log.flightNumber || '').includes('LFS') || 
+    (log.deliveryNumber || '').startsWith('LMPD')
+      ? 'LFS'
+      : 'AFS';
+
+  const defaultPrefix = station === 'LFS' ? 'LMPD' : 'MPD';
+  let deliveryNum = log.deliveryNumber || '';
+  if (!deliveryNum) {
+    deliveryNum = `${defaultPrefix} - ${Math.floor(100000 + Math.random() * 900000)}`;
+  } else {
+    const match = deliveryNum.match(/^(LMPD|MPD|MLE)\s*[-_]?\s*(.*)$/i);
+    if (match) {
+      const pfx = match[1].toUpperCase() === 'MLE' ? defaultPrefix : match[1].toUpperCase();
+      deliveryNum = `${pfx} - ${match[2]}`;
+    }
+  }
+
+  const dateFormatted = formatDate(log.timestampStart || log.operationalDate || log.created_at);
+  const volumeNumber = typeof log.volume === 'number' ? log.volume : parseFloat(String(log.volume || 0));
+  const volumeInWords = numberToWords(volumeNumber) + ' Litres only';
+
+  const isCash = (log.paymentType || '').toUpperCase() === 'CASH';
+  const isCredit = !isCash;
+
+  const productRaw = ((log as any).product || (log as any).fuelType || 'DIESEL').toUpperCase();
+  const isDiesel = productRaw.includes('DIESEL') || productRaw.includes('MGO') || (!productRaw.includes('PETROL') && !productRaw.includes('LUB'));
+  const isPetrol = productRaw.includes('PETROL') || productRaw.includes('GASOLINE') || productRaw.includes('MOGAS');
+  const isLubOil = productRaw.includes('LUB') || productRaw.includes('OIL');
+  const isInternal = true;
+
+  const onAccountOf = (log.co || log.airline || (log as any).driverName || (log as any).account || 'Ramp Service').trim();
+  const fleetReg = (log.aircraftReg || (log as any).vehicleReg || '').trim();
+  const equipmentName = (
+    log.aircraftType && log.aircraftType !== 'GROUND VEHICLE' 
+      ? log.aircraftType 
+      : ((log as any).equipmentName || '')
+  ).trim();
+
+  const meterNo = (log as any).meterNo || (log as any).vehicleId || `${station}-${productRaw}-01`;
+  const meterBefore = typeof log.meterOpen === 'number' ? log.meterOpen.toLocaleString() : (log.meterOpen || '0');
+  const meterAfter = typeof log.meterClose === 'number' ? log.meterClose.toLocaleString() : (log.meterClose || (volumeNumber > 0 ? volumeNumber.toLocaleString() : '-'));
+
+  // Delivered By (MACL staff)
+  let deliveringOfficer =
+    log.officer ||
+    log.tacticalOperator ||
+    (log.operatorId && !log.operatorId.startsWith('st-') ? log.operatorId : '') ||
+    operatorUser?.name ||
+    'Fuel Services Staff';
+
+  let deliveringDesignation = (operatorUser as any)?.designation;
+  if (!deliveringDesignation && typeof window !== 'undefined') {
+    try {
+      const rawStaff = localStorage.getItem('fms_staff_list_v3');
+      if (rawStaff) {
+        const staffList: any[] = JSON.parse(rawStaff);
+        const officerLower = (deliveringOfficer || '').toLowerCase().trim();
+        const matched = staffList.find(
+          s =>
+            (operatorUser?.id && s.id === operatorUser.id) ||
+            (s.name && s.name.toLowerCase().trim() === officerLower) ||
+            (log.operatorId && (s.id === log.operatorId || s.employeeId?.toLowerCase() === log.operatorId.toLowerCase()))
+        );
+        if (matched?.designation) {
+          deliveringDesignation = matched.designation;
+        }
+      }
+    } catch {}
+  }
+  if (!deliveringDesignation) {
+    deliveringDesignation = operatorUser?.role ? operatorUser.role.replace(/_/g, ' ') : 'Depot Officer / Operator';
+  }
+
+  // Received By (Customer / Driver)
+  let signatureImg = log.signatureDataUrl;
+  let signerName = log.signerName || (log as any).receivedBy || (log as any).driverName || 'Authorized Driver';
+  let signerDesignation = log.signerDesignation || 'Vehicle Driver / Representative';
+  let signedAt = log.signedAt;
+
+  if (typeof window !== 'undefined') {
+    try {
+      const keysToTry = [
+        log.deliveryNumber ? `fms_sig_${log.deliveryNumber}` : null,
+        log.id ? `fms_sig_${log.id}` : null,
+        log.flightNumber ? `fms_sig_${log.flightNumber}` : null,
+      ].filter(Boolean) as string[];
+
+      for (const k of keysToTry) {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.signatureDataUrl) {
+            signatureImg = signatureImg || parsed.signatureDataUrl;
+            signerName = signerName || parsed.signerName;
+            signerDesignation = signerDesignation || parsed.signerDesignation;
+            signedAt = signedAt || parsed.signedAt;
+            break;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // Pricing
+  let pricePerUnit = 'On Account';
+  let totalAmountFigures = 'Credit';
+  let totalAmountWords = 'Chargeable on Account';
+
+  if (isCash) {
+    const cashCurr = log.cashRateCurrency || ((log.remarks && log.remarks.includes('MVR')) ? 'MVR' : 'USD');
+    const currSym = cashCurr === 'MVR' ? 'MVR ' : '$';
+    let rateNum = log.cashRate;
+    if (rateNum === undefined && log.remarks) {
+      const match = log.remarks.match(/Rate:\s*[$]?([0-9.]+)/i);
+      if (match) rateNum = parseFloat(match[1]);
+    }
+    const finalRate = rateNum !== undefined ? rateNum : 1.85;
+    const finalTotal = log.cashTotalAmount || (volumeNumber > 0 ? Number((volumeNumber * finalRate).toFixed(2)) : 0);
+    pricePerUnit = `${currSym}${finalRate.toFixed(finalRate < 1 ? 4 : 2)} / L`;
+    totalAmountFigures = `${currSym}${finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    totalAmountWords = numberToWords(Math.round(finalTotal)) + ' ' + (cashCurr === 'MVR' ? 'Rufiyaa only' : 'Dollars only');
+  }
+
+  return {
+    station,
+    stationTitle: station === 'LFS' ? 'LANDSIDE FUELLING STATION' : 'AIRSIDE FUELLING STATION',
+    deliveryNum,
+    dateFormatted,
+    volumeNumber,
+    volumeInWords,
+    productName: productRaw,
+    isDiesel,
+    isPetrol,
+    isLubOil,
+    isCash,
+    isCredit,
+    isInternal,
+    onAccountOf,
+    fleetReg,
+    equipmentName,
+    meterNo,
+    meterBefore,
+    meterAfter,
+    deliveringOfficer,
+    deliveringDesignation,
+    signatureImg,
+    signerName,
+    signerDesignation,
+    signedAt,
+    pricePerUnit,
+    totalAmountFigures,
+    totalAmountWords
+  };
+}
+
+/**
+ * Generates high-fidelity HTML for Ground Filling Station Multi Product Delivery (FORM NO: G-002)
+ */
+export function generateG002InvoiceHtml(log: Partial<FlightLog>, operatorUser?: Partial<User>): string {
+  const d = resolveG002InvoiceFields(log, operatorUser);
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Multi Product Delivery Invoice - ${escapeHtml(d.deliveryNum)}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 10mm;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-size: 10px;
+      line-height: 1.35;
+      color: #0f172a;
+      background-color: #fff;
+      margin: 0;
+      padding: 0;
+    }
+    .invoice-wrapper {
+      width: 100%;
+      max-width: 190mm;
+      min-height: 265mm;
+      margin: 0 auto;
+      border: 2px solid #0369a1;
+      border-radius: 6px;
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+    }
+
+    /* Top Header */
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid #0369a1;
+      padding-bottom: 10px;
+      margin-bottom: 8px;
+    }
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .title-banner {
+      background-color: #1e293b;
+      color: #ffffff;
+      padding: 5px 12px;
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      display: inline-block;
+      width: fit-content;
+      margin-bottom: 3px;
+    }
+    .station-subtitle {
+      font-size: 11px;
+      font-weight: 900;
+      color: #0f172a;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .dept-title {
+      font-size: 9px;
+      font-weight: 700;
+      color: #0369a1;
+    }
+    .company-title {
+      font-size: 8.5px;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    .header-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+    .header-logo {
+      height: 48px;
+      object-fit: contain;
+    }
+    .ticket-num-wrap {
+      text-align: right;
+    }
+    .ticket-label {
+      font-size: 7.5px;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      text-transform: uppercase;
+    }
+    .ticket-num {
+      font-family: monospace, Courier, sans-serif;
+      font-size: 20px;
+      font-weight: 900;
+      color: #dc2626;
+      letter-spacing: 0.05em;
+    }
+
+    /* Meta Bar: Date, Payment, Products */
+    .meta-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 6px 12px;
+      margin-bottom: 10px;
+      font-size: 9px;
+      font-weight: 700;
+    }
+    .meta-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .check-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 800;
+      color: #1e293b;
+    }
+    .box {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      border: 1.5px solid #0369a1;
+      font-size: 11px;
+      line-height: 1;
+      color: #0369a1;
+      font-weight: 900;
+      background: #fff;
+    }
+
+    /* Main Grid: Left Column & Right Column */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      flex-grow: 1;
+      margin-bottom: 8px;
+    }
+    .col-left, .col-right {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* Card Panels */
+    .panel-box {
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 8px 10px;
+      background-color: #ffffff;
+    }
+    .panel-label {
+      font-size: 8px;
+      font-weight: 900;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+      display: block;
+    }
+    .panel-val {
+      font-size: 13px;
+      font-weight: 900;
+      color: #0f172a;
+      text-transform: uppercase;
+      min-height: 18px;
+    }
+
+    /* Meter Table */
+    .table-container {
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .voucher-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9.5px;
+    }
+    .voucher-table th, .voucher-table td {
+      border: 1px solid #cbd5e1;
+      padding: 6px 8px;
+    }
+    .voucher-table th {
+      background-color: #f1f5f9;
+      color: #0369a1;
+      font-weight: 900;
+      text-transform: uppercase;
+      font-size: 8px;
+      text-align: left;
+      width: 45%;
+    }
+    .voucher-table td {
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    /* Volume in Words */
+    .words-panel {
+      border: 1px solid #bae6fd;
+      border-radius: 4px;
+      background-color: #f0f9ff;
+      padding: 8px 10px;
+    }
+    .words-val {
+      font-size: 12px;
+      font-weight: 900;
+      font-style: italic;
+      color: #0369a1;
+      letter-spacing: 0.02em;
+      line-height: 1.3;
+    }
+
+    /* Signatures Section */
+    .signatures-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 8px;
+      background-color: #fafafa;
+    }
+    .sig-col {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .sig-title {
+      font-size: 8px;
+      font-weight: 900;
+      color: #0369a1;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 3px;
+    }
+    .sig-draw-box {
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px dashed #cbd5e1;
+      border-radius: 3px;
+      background: #fff;
+    }
+    .sig-img {
+      max-height: 42px;
+      max-width: 95%;
+      object-fit: contain;
+    }
+    .sig-badge {
+      font-size: 11px;
+      font-weight: 900;
+      font-style: italic;
+      color: #0369a1;
+    }
+    .sig-field {
+      font-size: 8px;
+      color: #64748b;
+      margin-top: 1px;
+    }
+    .sig-field span {
+      font-weight: 800;
+      color: #0f172a;
+      text-transform: uppercase;
+    }
+
+    /* Official Use Box */
+    .official-box {
+      border: 1px dashed #94a3b8;
+      border-radius: 4px;
+      padding: 6px 10px;
+      background-color: #f8fafc;
+      min-height: 45px;
+    }
+
+    /* Footer */
+    .footer-section {
+      border-top: 2px solid #0369a1;
+      padding-top: 6px;
+      text-align: center;
+      margin-top: 4px;
+    }
+    .cert-line {
+      color: #dc2626;
+      font-size: 8.5px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      margin-bottom: 3px;
+      text-transform: uppercase;
+    }
+    .contact-line {
+      font-size: 7.5px;
+      color: #64748b;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+  </style>
+</head>
+<body>
+  <div class="invoice-wrapper">
+    <!-- Header -->
+    <div class="header-row">
+      <div class="header-left">
+        <div class="title-banner">MULTI PRODUCT DELIVERY</div>
+        <div class="station-subtitle">${escapeHtml(d.stationTitle)}</div>
+        <div class="dept-title">Fuel Services</div>
+        <div class="company-title">Maldives Airports Company Limited.</div>
+      </div>
+      <div class="header-right">
+        <img class="header-logo" src="${MACL_LOGO_BASE64}" alt="MACL Logo" />
+        <div class="ticket-num-wrap">
+          <div class="ticket-label">VOUCHER / INVOICE NO</div>
+          <div class="ticket-num">${escapeHtml(d.deliveryNum)}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Meta Bar -->
+    <div class="meta-bar">
+      <div class="meta-group">
+        <span>DATE: <strong style="color: #0f172a; font-size: 10px; margin-left: 4px;">${escapeHtml(d.dateFormatted)}</strong></span>
+        <span class="check-item"><span class="box">${d.isCash ? '&#10003;' : ''}</span> CASH</span>
+        <span class="check-item"><span class="box">${d.isCredit ? '&#10003;' : ''}</span> CREDIT</span>
+      </div>
+      <div class="meta-group">
+        <span class="check-item"><span class="box">${d.isDiesel ? '&#10003;' : ''}</span> DIESEL</span>
+        <span class="check-item"><span class="box">${d.isPetrol ? '&#10003;' : ''}</span> PETROL</span>
+        <span class="check-item"><span class="box">${d.isLubOil ? '&#10003;' : ''}</span> LUB OIL</span>
+        <span class="check-item"><span class="box">${d.isInternal ? '&#10003;' : ''}</span> INTERNAL</span>
+      </div>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="main-grid">
+      <!-- Left Column -->
+      <div class="col-left">
+        <!-- On Account Of -->
+        <div class="panel-box">
+          <span class="panel-label">ON ACCOUNT OF:</span>
+          <div class="panel-val">${escapeHtml(d.onAccountOf)}</div>
+        </div>
+
+        <!-- Meter Table -->
+        <div class="table-container">
+          <table class="voucher-table">
+            <tr>
+              <th>METER NO:</th>
+              <td>${escapeHtml(d.meterNo)}</td>
+            </tr>
+            <tr>
+              <th>BEFORE</th>
+              <td>${escapeHtml(d.meterBefore)}</td>
+            </tr>
+            <tr>
+              <th>AFTER</th>
+              <td>${escapeHtml(d.meterAfter)}</td>
+            </tr>
+            <tr>
+              <th style="color: #0369a1; font-weight: 900;">VOLUME DELIVERED</th>
+              <td style="font-size: 15px; font-weight: 900; color: #0369a1;">${d.volumeNumber.toLocaleString()} L</td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Signatures Box -->
+        <div class="signatures-grid">
+          <!-- Delivered By -->
+          <div class="sig-col">
+            <div class="sig-title">DELIVERED BY</div>
+            <div class="sig-draw-box">
+              <span class="sig-badge">${escapeHtml(d.deliveringOfficer)}</span>
+            </div>
+            <div class="sig-field">(NAME): <span>${escapeHtml(d.deliveringOfficer)}</span></div>
+            <div class="sig-field">(DESIGNATION): <span>${escapeHtml(d.deliveringDesignation)}</span></div>
+          </div>
+
+          <!-- Received By -->
+          <div class="sig-col">
+            <div class="sig-title">RECEIVED BY</div>
+            <div class="sig-draw-box">
+              ${d.signatureImg ? `<img class="sig-img" src="${d.signatureImg}" alt="Signature" />` : '<span style="font-size: 8px; color: #94a3b8; font-style: italic;">(Signed Electronically)</span>'}
+            </div>
+            <div class="sig-field">(NAME): <span>${escapeHtml(d.signerName)}</span></div>
+            <div class="sig-field">(DESIGNATION): <span>${escapeHtml(d.signerDesignation)}</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column -->
+      <div class="col-right">
+        <!-- Vehicle & Equipment -->
+        <div class="panel-box">
+          <span class="panel-label">FLEET / REGISTRATION NO:</span>
+          <div class="panel-val" style="color: #0369a1;">${escapeHtml(d.fleetReg || 'N/A')}</div>
+          <div style="height: 1px; background: #e2e8f0; margin: 6px 0;"></div>
+          <span class="panel-label">EQUIPMENT NAME:</span>
+          <div class="panel-val">${escapeHtml(d.equipmentName || 'N/A')}</div>
+        </div>
+
+        <!-- Volume in words -->
+        <div class="words-panel">
+          <span class="panel-label" style="color: #0369a1;">VOLUME DELIVERED (LITRES) IN WORDS:</span>
+          <div class="words-val">${escapeHtml(d.volumeInWords)}</div>
+        </div>
+
+        <!-- Pricing Table -->
+        <div class="table-container">
+          <table class="voucher-table">
+            <tr>
+              <th>PRICE PER UNIT</th>
+              <td>${escapeHtml(d.pricePerUnit)}</td>
+            </tr>
+            <tr>
+              <th>TOTAL AMOUNT (FIGURES)</th>
+              <td style="font-weight: 900; color: #15803d;">${escapeHtml(d.totalAmountFigures)}</td>
+            </tr>
+            <tr>
+              <th>TOTAL AMOUNT (WORDS)</th>
+              <td style="font-style: italic;">${escapeHtml(d.totalAmountWords)}</td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Official Use Box -->
+        <div class="official-box">
+          <span class="panel-label" style="font-size: 7.5px;">OFFICIAL USE:</span>
+          <div style="font-size: 8.5px; color: #64748b; font-weight: 600;">
+            Station: ${escapeHtml(d.stationTitle)} • Verified & Synced with SCADA & FMS
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer-section">
+      <div class="cert-line">
+        (CERTIFIED THAT THE PRODUCT SUPPLIED HEREIN CONFIRMS TO SPECIFICATION)  FORM NO: G-002
+      </div>
+      <div class="contact-line">
+        Maldives Airports Company Limited, Fuel Services, Velana International Airport, Republic of Maldives.
+      </div>
+      <div class="contact-line">
+        Tel: (960) 3026464, E-mail: fuel@macl.aero, Website: www.macl.aero
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+/**
  * Generates high-fidelity HTML for Jet A-1 FORM NO: G-001 Delivery Invoice
  */
 export function generateInvoiceHtml(log: Partial<FlightLog>, operatorUser?: Partial<User>): string {
+  const isFillingStation = 
+    log.logType === 'FILLING_STATION' ||
+    (log as any).station === 'LFS' ||
+    (log as any).station === 'AFS' ||
+    (log.flightNumber || '').startsWith('GROUND-') ||
+    (log.stand || '').includes('STATION');
+
+  if (isFillingStation) {
+    return generateG002InvoiceHtml(log, operatorUser);
+  }
+
   const deliveryNum = log.deliveryNumber || `MLE-${Math.floor(100000 + Math.random() * 900000)}`;
   const dateFormatted = formatDate(log.timestampStart || log.operationalDate || log.created_at);
   const volumeNumber = typeof log.volume === 'number' ? log.volume : parseFloat(String(log.volume || 0));
@@ -635,7 +1299,7 @@ export function generateInvoiceHtml(log: Partial<FlightLog>, operatorUser?: Part
     <!-- Header -->
     <div class="header-row">
       <div class="brand-section">
-        <img src="https://static.routesonline.com/images/cached/organisation-14252-scaled-300x130.png" alt="MACL Logo" onerror="this.style.display='none'" />
+        <img src="${MACL_LOGO_BASE64}" alt="MACL Logo" />
         <div class="company-titles">
           <h1>MALDIVES AIRPORTS COMPANY LIMITED</h1>
           <h2>FUEL SERVICES SECTION</h2>
@@ -1066,6 +1730,17 @@ function loadImageSafe(src: string, timeoutMs = 400): Promise<HTMLImageElement |
  * Draws the complete A4 Jet A-1 Delivery Invoice (FORM NO: G-001) onto an HTMLCanvasElement
  */
 async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Partial<User>): Promise<HTMLCanvasElement> {
+  const isFillingStation = 
+    log.logType === 'FILLING_STATION' ||
+    (log as any).station === 'LFS' ||
+    (log as any).station === 'AFS' ||
+    (log.flightNumber || '').startsWith('GROUND-') ||
+    (log.stand || '').includes('STATION');
+
+  if (isFillingStation) {
+    return renderG002InvoiceToCanvas(log, operatorUser);
+  }
+
   const d = resolveInvoiceFields(log, operatorUser);
   const canvas = document.createElement('canvas');
   // A4 portrait at ~150 DPI
@@ -1079,18 +1754,18 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, W, H);
 
-  // Outer Invoice Box
-  const boxX = 72;
-  const boxY = 72;
-  const boxW = W - 144; // 1096
-  const boxH = H - 144; // 1610
+  // Outer Invoice Box (matches A4 print margins 10-12mm / 36px)
+  const boxX = 36;
+  const boxY = 36;
+  const boxW = W - 72; // 1168
+  const boxH = H - 72; // 1682
   ctx.strokeStyle = '#0369a1';
   ctx.lineWidth = 3.5;
   ctx.strokeRect(boxX, boxY, boxW, boxH);
 
-  const inX = boxX + 28; // 100
-  const inW = boxW - 56; // 1040
-  let curY = boxY + 28;  // 100
+  const inX = boxX + 24; // 60
+  const inW = boxW - 48; // 1120
+  let curY = boxY + 24;  // 60
 
   // Helper: draw checkbox with optional checkmark
   const drawCheckbox = (x: number, y: number, checked: boolean, label: string) => {
@@ -1128,7 +1803,7 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
 
   // ── 1. HEADER ──
   // Draw MACL Emblem Badge on left
-  const logoImg = await loadImageSafe('https://static.routesonline.com/images/cached/organisation-14252-scaled-300x130.png', 250);
+  const logoImg = await loadImageSafe(MACL_LOGO_BASE64, 1000);
   let titleStartX = inX;
   if (logoImg) {
     try {
@@ -1570,6 +2245,447 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
     inX + inW / 2,
     footerY + 64
   );
+
+  return canvas;
+}
+
+/**
+ * Draws the complete A4 Multi Product Delivery (FORM NO: G-002) Ground Station Invoice onto an HTMLCanvasElement
+ */
+async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Partial<User>): Promise<HTMLCanvasElement> {
+  const d = resolveG002InvoiceFields(log, operatorUser);
+  const canvas = document.createElement('canvas');
+  const W = 1240;
+  const H = 1754;
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+
+  // White page background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+
+  // Outer Invoice Box matching A4 print margins (10-12mm / 36px)
+  const boxX = 36;
+  const boxY = 36;
+  const boxW = W - 72; // 1168
+  const boxH = H - 72; // 1682
+  ctx.strokeStyle = '#0369a1';
+  ctx.lineWidth = 3.5;
+  ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+  const inX = boxX + 24; // 60
+  const inW = boxW - 48; // 1120
+  let curY = boxY + 24;  // 60
+
+  // Helper: draw checkbox with optional checkmark
+  const drawCheckbox = (x: number, y: number, checked: boolean, label: string) => {
+    const size = 18;
+    ctx.strokeStyle = '#0369a1';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y - size + 3, size, size);
+    if (checked) {
+      ctx.save();
+      ctx.strokeStyle = '#0369a1';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(x + 3.5, y - size / 2 + 3);
+      ctx.lineTo(x + 7.5, y - 1);
+      ctx.lineTo(x + 14.5, y - size + 6);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.fillStyle = '#334155';
+    ctx.font = '900 13px Arial, Helvetica, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(label, x + size + 6, y);
+    return x + size + 6 + ctx.measureText(label).width + 20;
+  };
+
+  const fitText = (text: string, maxWidth: number): string => {
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    let t = text;
+    while (t.length > 3 && ctx.measureText(t + '...').width > maxWidth) {
+      t = t.slice(0, -1);
+    }
+    return t + '...';
+  };
+
+  // ── 1. HEADER ──
+  const logoImg = await loadImageSafe(MACL_LOGO_BASE64, 1000);
+
+  // Left Title Banner
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(inX, curY, 350, 42);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 20px Arial, Helvetica, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('MULTI PRODUCT DELIVERY', inX + 16, curY + 28);
+
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '900 17px Arial, Helvetica, sans-serif';
+  ctx.fillText(d.stationTitle, inX, curY + 70);
+
+  ctx.fillStyle = '#0369a1';
+  ctx.font = '700 14px Arial, Helvetica, sans-serif';
+  ctx.fillText('Fuel Services', inX, curY + 92);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '600 13px Arial, Helvetica, sans-serif';
+  ctx.fillText('Maldives Airports Company Limited.', inX, curY + 112);
+
+  // Right: MACL Logo & Ticket Number
+  if (logoImg) {
+    const lw = 130;
+    const lh = 60;
+    ctx.drawImage(logoImg, inX + inW - lw, curY, lw, lh);
+  }
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#64748b';
+  ctx.font = '900 11px Arial, Helvetica, sans-serif';
+  ctx.fillText('VOUCHER / INVOICE NO', inX + inW, curY + 84);
+
+  ctx.fillStyle = '#dc2626';
+  ctx.font = '900 26px monospace, Courier, Arial';
+  ctx.fillText(d.deliveryNum, inX + inW, curY + 116);
+
+  // Header bottom border
+  curY += 134;
+  ctx.beginPath();
+  ctx.moveTo(inX, curY);
+  ctx.lineTo(inX + inW, curY);
+  ctx.strokeStyle = '#0369a1';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // ── 2. META BAR: DATE, PAYMENT & PRODUCT CHECKBOXES ──
+  curY += 14;
+  const metaH = 50;
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(inX, curY, inW, metaH);
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(inX, curY, inW, metaH);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '900 12px Arial, Helvetica, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('DATE:', inX + 14, curY + 30);
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '900 14px Arial, Helvetica, sans-serif';
+  ctx.fillText(d.dateFormatted, inX + 60, curY + 30);
+
+  let cbX = inX + 175;
+  cbX = drawCheckbox(cbX, curY + 30, d.isCash, 'CASH');
+  cbX = drawCheckbox(cbX, curY + 30, d.isCredit, 'CREDIT');
+
+  cbX = inX + 540;
+  cbX = drawCheckbox(cbX, curY + 30, d.isDiesel, 'DIESEL');
+  cbX = drawCheckbox(cbX, curY + 30, d.isPetrol, 'PETROL');
+  cbX = drawCheckbox(cbX, curY + 30, d.isLubOil, 'LUB OIL');
+  cbX = drawCheckbox(cbX, curY + 30, d.isInternal, 'INTERNAL');
+
+  // ── 3. MAIN GRID (LEFT & RIGHT COLUMNS) ──
+  curY += metaH + 20;
+  const colGap = 20;
+  const colW = (inW - colGap) / 2;
+  const leftX = inX;
+  const rightX = inX + colW + colGap;
+  const gridStartY = curY;
+
+  // ── LEFT COLUMN ──
+  // Box 1: On Account Of
+  let lY = gridStartY;
+  const onAccH = 160;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(leftX, lY, colW, onAccH);
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(leftX, lY, colW, onAccH);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '900 12px Arial, Helvetica, sans-serif';
+  ctx.fillText('ON ACCOUNT OF:', leftX + 16, lY + 32);
+
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '900 24px Arial, Helvetica, sans-serif';
+  ctx.fillText(fitText(d.onAccountOf.toUpperCase(), colW - 32), leftX + 16, lY + 85);
+
+  // Box 2: Meter Table
+  lY += onAccH + 24;
+  const rowH = 80;
+  const meterRows = [
+    { label: 'METER NO:', val: d.meterNo },
+    { label: 'BEFORE', val: d.meterBefore },
+    { label: 'AFTER', val: d.meterAfter },
+    { label: 'VOLUME DELIVERED', val: `${d.volumeNumber.toLocaleString()} L`, highlight: true }
+  ];
+  const tableH = meterRows.length * rowH;
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(leftX, lY, colW, tableH);
+
+  const lblColW = 210;
+  meterRows.forEach((row, i) => {
+    const ry = lY + i * rowH;
+    if (i > 0) {
+      ctx.beginPath();
+      ctx.moveTo(leftX, ry);
+      ctx.lineTo(leftX + colW, ry);
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#f1f5f9';
+    ctx.fillRect(leftX, ry, lblColW, rowH);
+
+    ctx.fillStyle = row.highlight ? '#0369a1' : '#475569';
+    ctx.font = '900 13px Arial, Helvetica, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(row.label, leftX + 16, ry + 46);
+
+    ctx.fillStyle = row.highlight ? '#0369a1' : '#0f172a';
+    ctx.font = row.highlight ? '900 24px Arial, Helvetica, sans-serif' : '800 16px Arial, Helvetica, sans-serif';
+    ctx.fillText(row.val, leftX + lblColW + 20, ry + 46);
+  });
+  ctx.beginPath();
+  ctx.moveTo(leftX + lblColW, lY);
+  ctx.lineTo(leftX + lblColW, lY + tableH);
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.stroke();
+
+  // Box 3: Signatures (Delivered By & Received By)
+  lY += tableH + 24;
+  const sigBoxH = 680;
+  ctx.fillStyle = '#fafafa';
+  ctx.fillRect(leftX, lY, colW, sigBoxH);
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(leftX, lY, colW, sigBoxH);
+
+  const halfSigW = colW / 2;
+  ctx.beginPath();
+  ctx.moveTo(leftX + halfSigW, lY);
+  ctx.lineTo(leftX + halfSigW, lY + sigBoxH);
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.stroke();
+
+  // DELIVERED BY
+  ctx.fillStyle = '#0369a1';
+  ctx.font = '900 14px Arial, Helvetica, sans-serif';
+  ctx.fillText('DELIVERED BY', leftX + 16, lY + 36);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(leftX + 16, lY + 54, halfSigW - 32, 280);
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.strokeRect(leftX + 16, lY + 54, halfSigW - 32, 280);
+
+  ctx.fillStyle = '#0369a1';
+  ctx.font = 'italic 700 24px Georgia, serif';
+  ctx.fillText(fitText(d.deliveringOfficer, halfSigW - 48), leftX + 32, lY + 180);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '900 11px Arial, Helvetica, sans-serif';
+  ctx.fillText('(NAME):', leftX + 16, lY + 380);
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '900 14px Arial, Helvetica, sans-serif';
+  ctx.fillText(fitText(d.deliveringOfficer, halfSigW - 32), leftX + 16, lY + 410);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '900 11px Arial, Helvetica, sans-serif';
+  ctx.fillText('(DESIGNATION):', leftX + 16, lY + 460);
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '800 13px Arial, Helvetica, sans-serif';
+  ctx.fillText(fitText(d.deliveringDesignation, halfSigW - 32), leftX + 16, lY + 490);
+
+  // RECEIVED BY
+  const recX = leftX + halfSigW;
+  ctx.fillStyle = '#0369a1';
+  ctx.font = '900 14px Arial, Helvetica, sans-serif';
+  ctx.fillText('RECEIVED BY', recX + 16, lY + 36);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(recX + 16, lY + 54, halfSigW - 32, 280);
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.strokeRect(recX + 16, lY + 54, halfSigW - 32, 280);
+
+  if (d.signatureImg) {
+    const sigImg = await loadImageSafe(d.signatureImg, 500);
+    if (sigImg) {
+      try {
+        const maxSW = halfSigW - 48;
+        const maxSH = 240;
+        const aspect = (sigImg.width || 400) / (sigImg.height || 150);
+        let sW = maxSW;
+        let sH = maxSW / aspect;
+        if (sH > maxSH) {
+          sH = maxSH;
+          sW = maxSH * aspect;
+        }
+        const sX = recX + 16 + ((halfSigW - 32) - sW) / 2;
+        const sY = lY + 54 + (280 - sH) / 2;
+        ctx.drawImage(sigImg, sX, sY, sW, sH);
+      } catch {}
+    }
+  } else {
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'italic 16px Arial, Helvetica, sans-serif';
+    ctx.fillText('(Electronic Signature)', recX + 32, lY + 180);
+  }
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '900 11px Arial, Helvetica, sans-serif';
+  ctx.fillText('(NAME):', recX + 16, lY + 380);
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '900 14px Arial, Helvetica, sans-serif';
+  ctx.fillText(fitText(d.signerName, halfSigW - 32), recX + 16, lY + 410);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '900 11px Arial, Helvetica, sans-serif';
+  ctx.fillText('(DESIGNATION):', recX + 16, lY + 460);
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '800 13px Arial, Helvetica, sans-serif';
+  ctx.fillText(fitText(d.signerDesignation, halfSigW - 32), recX + 16, lY + 490);
+
+  // ── RIGHT COLUMN ──
+  // Box 1: Fleet & Equipment
+  let rY = gridStartY;
+  const equipH = 260;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(rightX, rY, colW, equipH);
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(rightX, rY, colW, equipH);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '900 12px Arial, Helvetica, sans-serif';
+  ctx.fillText('FLEET / REGISTRATION NO:', rightX + 16, rY + 34);
+  ctx.fillStyle = '#0369a1';
+  ctx.font = '900 22px Arial, Helvetica, sans-serif';
+  ctx.fillText(fitText(d.fleetReg || 'N/A', colW - 32), rightX + 16, rY + 76);
+
+  ctx.beginPath();
+  ctx.moveTo(rightX, rY + 125);
+  ctx.lineTo(rightX + colW, rY + 125);
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.stroke();
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '900 12px Arial, Helvetica, sans-serif';
+  ctx.fillText('EQUIPMENT NAME:', rightX + 16, rY + 158);
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '900 20px Arial, Helvetica, sans-serif';
+  ctx.fillText(fitText(d.equipmentName || 'N/A', colW - 32), rightX + 16, rY + 198);
+
+  // Box 2: Volume in words
+  rY += equipH + 24;
+  const wordsH = 220;
+  ctx.fillStyle = '#f0f9ff';
+  ctx.fillRect(rightX, rY, colW, wordsH);
+  ctx.strokeStyle = '#bae6fd';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(rightX, rY, colW, wordsH);
+
+  ctx.fillStyle = '#0369a1';
+  ctx.font = '900 12px Arial, Helvetica, sans-serif';
+  ctx.fillText('VOLUME DELIVERED (LITRES) IN WORDS:', rightX + 16, rY + 36);
+
+  ctx.fillStyle = '#0369a1';
+  ctx.font = 'italic 900 19px Georgia, serif';
+  const words = d.volumeInWords.split(' ');
+  let curLine = '';
+  let lineY = rY + 84;
+  for (const w of words) {
+    const testLine = curLine ? `${curLine} ${w}` : w;
+    if (ctx.measureText(testLine).width > colW - 32) {
+      ctx.fillText(curLine, rightX + 16, lineY);
+      curLine = w;
+      lineY += 34;
+    } else {
+      curLine = testLine;
+    }
+  }
+  if (curLine) {
+    ctx.fillText(curLine, rightX + 16, lineY);
+  }
+
+  // Box 3: Pricing Table
+  rY += wordsH + 24;
+  const priceRows = [
+    { label: 'PRICE PER UNIT', val: d.pricePerUnit },
+    { label: 'TOTAL AMOUNT (FIGURES)', val: d.totalAmountFigures, color: '#15803d' },
+    { label: 'TOTAL AMOUNT (WORDS)', val: d.totalAmountWords, italic: true }
+  ];
+  const prTableH = priceRows.length * rowH;
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(rightX, rY, colW, prTableH);
+
+  const prColW = 220;
+  priceRows.forEach((row, i) => {
+    const ry = rY + i * rowH;
+    if (i > 0) {
+      ctx.beginPath();
+      ctx.moveTo(rightX, ry);
+      ctx.lineTo(rightX + colW, ry);
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#f1f5f9';
+    ctx.fillRect(rightX, ry, prColW, rowH);
+
+    ctx.fillStyle = '#475569';
+    ctx.font = '900 12px Arial, Helvetica, sans-serif';
+    ctx.fillText(row.label, rightX + 16, ry + 46);
+
+    ctx.fillStyle = row.color || '#0f172a';
+    ctx.font = row.italic ? 'italic 800 15px Georgia, serif' : '900 18px Arial, Helvetica, sans-serif';
+    ctx.fillText(fitText(row.val, colW - prColW - 24), rightX + prColW + 20, ry + 46);
+  });
+  ctx.beginPath();
+  ctx.moveTo(rightX + prColW, rY);
+  ctx.lineTo(rightX + prColW, rY + prTableH);
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.stroke();
+
+  // Box 4: Official Use Box
+  rY += prTableH + 24;
+  const offH = sigBoxH - (equipH + 24 + wordsH + 24 + prTableH + 24 - (onAccH + 24 + tableH + 24));
+  const actualOffH = Math.max(offH, 152);
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(rightX, rY, colW, actualOffH);
+  ctx.setLineDash([6, 6]);
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(rightX, rY, colW, actualOffH);
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '900 12px Arial, Helvetica, sans-serif';
+  ctx.fillText('OFFICIAL USE:', rightX + 16, rY + 36);
+
+  ctx.fillStyle = '#475569';
+  ctx.font = '700 14px Arial, Helvetica, sans-serif';
+  ctx.fillText(`Station: ${d.stationTitle}`, rightX + 16, rY + 74);
+  ctx.fillText('Verified & Synchronized with SCADA & Depot Operations System', rightX + 16, rY + 104);
+
+  // ── 4. FOOTER ──
+  const footerY = boxY + boxH - 74;
+  ctx.beginPath();
+  ctx.moveTo(inX, footerY - 18);
+  ctx.lineTo(inX + inW, footerY - 18);
+  ctx.strokeStyle = '#0369a1';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#dc2626';
+  ctx.font = '900 13px Arial, Helvetica, sans-serif';
+  ctx.fillText('(CERTIFIED THAT THE PRODUCT SUPPLIED HEREIN CONFIRMS TO SPECIFICATION)  FORM NO: G-002', W / 2, footerY);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '600 11px Arial, Helvetica, sans-serif';
+  ctx.fillText('Maldives Airports Company Limited, Fuel Services, Velana International Airport, Republic of Maldives.', W / 2, footerY + 22);
+  ctx.fillText('Tel: (960) 3026464, E-mail: fuel@macl.aero, Website: www.macl.aero', W / 2, footerY + 40);
 
   return canvas;
 }

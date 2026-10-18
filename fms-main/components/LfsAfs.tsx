@@ -97,13 +97,45 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
         }));
     };
 
+    const getStationTicketPrefix = () => {
+        if (formData.station === 'LFS') {
+            return isPaperMode ? 'LMPD-P-' : 'LMPD-';
+        }
+        return isPaperMode ? 'MPD-P-' : 'MPD-';
+    };
+
+    const formatDeliveryTicket = (rawTicket: string) => {
+        if (!rawTicket) return '';
+        const prefix = getStationTicketPrefix();
+        const trimmed = rawTicket.trim().toUpperCase();
+        if (trimmed.startsWith('LMPD-') || trimmed.startsWith('MPD-')) {
+            return trimmed;
+        }
+        if (trimmed.startsWith('LMPD - ') || trimmed.startsWith('MPD - ')) {
+            return trimmed.replace(/\s+/g, '');
+        }
+        if (trimmed.startsWith('MLE-')) {
+            const stripped = trimmed.replace(/^MLE-(?:D-|P-)?/i, '');
+            return `${prefix}${stripped}`;
+        }
+        return `${prefix}${trimmed}`;
+    };
+
     const getPreviewTicket = () => {
         if (formData.invoiceNumber) {
-            if (formData.invoiceNumber.startsWith('MLE-')) return formData.invoiceNumber;
-            return isPaperMode ? `MLE-P-${formData.invoiceNumber}` : `MLE-${formData.invoiceNumber}`;
+            return formatDeliveryTicket(formData.invoiceNumber);
         }
-        if (isPaperMode && isAutoPaper) return previewNextTicketNumber('PAPER_OFFLINE');
-        if (isAutoMgo && !isPaperMode) return previewNextTicketNumber('MGO');
+        const prefix = getStationTicketPrefix();
+        if (isPaperMode && isAutoPaper) {
+            const next = previewNextTicketNumber('PAPER_OFFLINE');
+            const num = next.replace(/^(?:MLE-[DP]?-|LMPD-[P]?-|MPD-[P]?-)/i, '');
+            return `${prefix}${num}`;
+        }
+        if (isAutoMgo && !isPaperMode) {
+            const next = previewNextTicketNumber('MGO');
+            const num = next.replace(/^(?:MLE-[DP]?-|LMPD-[P]?-|MPD-[P]?-)/i, '');
+            return `${prefix}${num}`;
+        }
         return 'AUTO-ASSIGNED';
     };
 
@@ -111,15 +143,14 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
         e.preventDefault();
         setDuplicateError(null);
 
-        const candidateTicket = formData.invoiceNumber
-            ? (isPaperMode && !formData.invoiceNumber.includes('-P-')
-                ? `MLE-P-${formData.invoiceNumber.replace(/^MLE-P-/i, '')}`
-                : (formData.invoiceNumber.startsWith('MLE-') ? formData.invoiceNumber : `MLE-${formData.invoiceNumber}`))
-            : '';
+        const candidateTicket = formData.invoiceNumber ? formatDeliveryTicket(formData.invoiceNumber) : '';
 
         if (candidateTicket) {
             const isDuplicate = (flightLogs || []).some(
-                (log) => log && (log.deliveryNumber === candidateTicket || log.deliveryNumber === candidateTicket.replace('MLE-', ''))
+                (log) => log && (
+                    log.deliveryNumber === candidateTicket || 
+                    log.deliveryNumber === candidateTicket.replace(/^(?:LMPD-|MPD-|MLE-)/, '')
+                )
             );
             if (isDuplicate) {
                 setDuplicateError(
@@ -148,24 +179,24 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
         setDuplicateError(null);
         setShowConfirmModal(false);
 
-        let fullDeliveryNumber = formData.invoiceNumber 
-            ? (formData.invoiceNumber.startsWith('MLE-') ? formData.invoiceNumber : `MLE-${formData.invoiceNumber}`) 
-            : '';
+        let fullDeliveryNumber = formData.invoiceNumber ? formatDeliveryTicket(formData.invoiceNumber) : '';
 
         if (isAutoMgo && !fullDeliveryNumber) {
             const cat = isPaperMode ? 'PAPER_OFFLINE' : 'MGO';
             const genRes = await generateTicketNumber(cat, formData.officer || user?.name || user?.id || 'System Admin');
             if (genRes.success && genRes.ticketNumber) {
-                fullDeliveryNumber = genRes.ticketNumber;
+                const num = genRes.ticketNumber.replace(/^(?:MLE-[DP]?-|LMPD-[P]?-|MPD-[P]?-)/i, '');
+                fullDeliveryNumber = `${getStationTicketPrefix()}${num}`;
             }
-        } else if (isPaperMode && !fullDeliveryNumber.includes('-P-')) {
-            fullDeliveryNumber = `MLE-P-${formData.invoiceNumber.replace(/^MLE-P-/i, '')}`;
         }
 
         // ── Duplicate delivery number check ──
         if (fullDeliveryNumber) {
             const isDuplicate = (flightLogs || []).some(
-                (log) => log && (log.deliveryNumber === fullDeliveryNumber || log.deliveryNumber === fullDeliveryNumber.replace('MLE-', ''))
+                (log) => log && (
+                    log.deliveryNumber === fullDeliveryNumber || 
+                    log.deliveryNumber === fullDeliveryNumber.replace(/^(?:LMPD-|MPD-|MLE-)/, '')
+                )
             );
             if (isDuplicate) {
                 setDuplicateError(
@@ -476,7 +507,7 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                     {isAutoMgo && !isPaperMode ? (
                         <div className="flex items-center justify-between gap-2 max-w-full overflow-hidden py-2">
                             <div className="text-4xl sm:text-5xl font-mono font-black text-warning">
-                                {formData.invoiceNumber || previewNextTicketNumber('MGO')}
+                                {formData.invoiceNumber ? formatDeliveryTicket(formData.invoiceNumber) : getPreviewTicket()}
                             </div>
                             <span className="text-[9px] font-black text-on-surface-dim opacity-50 uppercase tracking-widest bg-surface-container-low px-3 py-1.5 rounded-xl border border-outline shrink-0">
                                 System Assigned
@@ -485,7 +516,7 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                     ) : isPaperMode && isAutoPaper ? (
                         <div className="flex items-center justify-between gap-2 max-w-full overflow-hidden py-2">
                             <div className="text-4xl sm:text-5xl font-mono font-black text-success">
-                                {formData.invoiceNumber || previewNextTicketNumber('PAPER_OFFLINE')}
+                                {formData.invoiceNumber ? formatDeliveryTicket(formData.invoiceNumber) : getPreviewTicket()}
                             </div>
                             <span className="text-[9px] font-black text-success/80 uppercase tracking-widest bg-success/10 px-3 py-1.5 rounded-xl border border-success/20 shrink-0">
                                 Auto Paper Series
@@ -494,7 +525,7 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                     ) : (
                         <div className="flex items-center gap-2 max-w-full overflow-hidden">
                             <span className="text-2xl sm:text-3xl font-mono font-black text-on-surface-dim opacity-30 shrink-0">
-                                {isPaperMode ? 'MLE-P-' : 'MLE-'}
+                                {getStationTicketPrefix()}
                             </span>
                             <input 
                                 type="text" 
@@ -874,8 +905,8 @@ export const LfsAfs: React.FC<LfsAfsProps> = ({ user }) => {
                         </div>
                       </div>
                       {formData.signatureDataUrl && (
-                        <div className="bg-white rounded-xl p-2 flex items-center justify-center h-20 border border-outline/20">
-                          <img src={formData.signatureDataUrl} alt="Recipient Signature" className="max-h-16 object-contain" />
+                        <div className="bg-surface-container-lowest/80 border border-outline/30 rounded-xl p-3 flex items-center justify-center h-24 shadow-inner">
+                          <img src={formData.signatureDataUrl} alt="Recipient Signature" className="max-h-20 object-contain" />
                         </div>
                       )}
                     </div>
