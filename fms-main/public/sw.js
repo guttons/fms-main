@@ -1,9 +1,12 @@
-const CACHE_NAME = 'fms-v7';
+const CACHE_NAME = 'fms-v8';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
   '/favicon.svg',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/apple-touch-icon.png',
   '/icon-light.svg',
   '/icon-dark.svg',
 ];

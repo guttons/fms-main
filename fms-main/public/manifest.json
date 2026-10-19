@@ -12,16 +12,34 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/icon-dark.svg",
-      "sizes": "192x192 512x512 any",
-      "type": "image/svg+xml",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/icon-dark.svg",
       "sizes": "192x192 512x512 any",
       "type": "image/svg+xml",
-      "purpose": "maskable"
+      "purpose": "any"
     },
     {
       "src": "/icon-light.svg",
@@ -36,14 +54,14 @@
       "short_name": "Dashboard",
       "description": "Open the operations dashboard",
       "url": "/?view=dashboard",
-      "icons": [{ "src": "/icon-dark.svg", "sizes": "any" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Into-Plane Fueling",
       "short_name": "Into-Plane",
       "description": "Log a fueling operation",
       "url": "/?view=intoplane",
-      "icons": [{ "src": "/icon-dark.svg", "sizes": "any" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

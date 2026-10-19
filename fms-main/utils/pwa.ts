@@ -34,77 +34,20 @@ export const updatePWAManifestAndTheme = async (theme: 'light' | 'dark' | 'black
     appleTouchIcon.setAttribute('rel', 'apple-touch-icon');
     document.head.appendChild(appleTouchIcon);
   }
-  // Point directly at the SVG — iOS 14.5+ supports SVG apple-touch-icons
-  appleTouchIcon.setAttribute('href', iconSrc);
+  appleTouchIcon.setAttribute('href', '/apple-touch-icon.png');
 
-  // ── 4. Dynamic manifest blob ─────────────────────────────────────────────
-  try {
-    const origin = window.location.origin;
-    const absIconSrc = origin + iconSrc;
-
-    const manifestData = {
-      name: 'Fuel Management System',
-      short_name: 'FMS',
-      description: 'MACL Aviation Fuel Management System — real-time operations, fueling logs, and fleet tracking.',
-      start_url: origin + '/',
-      scope: origin + '/',
-      display: 'standalone',
-      orientation: 'any',
-      background_color: backgroundColor,
-      theme_color: themeColor,
-      categories: ['business', 'productivity', 'utilities'],
-      prefer_related_applications: false,
-      icons: [
-        {
-          src: absIconSrc,
-          sizes: '192x192 512x512 any',
-          type: 'image/svg+xml',
-          purpose: 'any'
-        },
-        {
-          src: absIconSrc,
-          sizes: '192x192 512x512 any',
-          type: 'image/svg+xml',
-          purpose: 'maskable'
-        }
-      ],
-      shortcuts: [
-        {
-          name: 'Dashboard',
-          short_name: 'Dashboard',
-          description: 'Open the operations dashboard',
-          url: origin + '/?view=dashboard',
-          icons: [{ src: absIconSrc, sizes: 'any' }]
-        },
-        {
-          name: 'Into-Plane Fueling',
-          short_name: 'Into-Plane',
-          description: 'Log a fueling operation',
-          url: origin + '/?view=intoplane',
-          icons: [{ src: absIconSrc, sizes: 'any' }]
-        }
-      ]
-    };
-
-    // Revoke previous blob URL to avoid memory leaks
-    const existingLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement | null;
-    if (existingLink?.href?.startsWith('blob:')) {
-      URL.revokeObjectURL(existingLink.href);
+  // ── 4. Ensure stable static manifest link (WebAPK required) ───────────────
+  const manifestLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement | null;
+  if (manifestLink) {
+    if (manifestLink.href.startsWith('blob:')) {
+      URL.revokeObjectURL(manifestLink.href);
+      manifestLink.setAttribute('href', '/manifest.json');
     }
-
-    const blob = new Blob([JSON.stringify(manifestData)], { type: 'application/manifest+json' });
-    const manifestURL = URL.createObjectURL(blob);
-
-    let manifestLink = existingLink;
-    if (!manifestLink) {
-      manifestLink = document.createElement('link') as HTMLLinkElement;
-      manifestLink.setAttribute('rel', 'manifest');
-      document.head.appendChild(manifestLink);
-    }
-    manifestLink.setAttribute('href', manifestURL);
-
-  } catch (error) {
-    console.warn('[PWA] Failed to update dynamic manifest:', error);
+  } else {
+    const newManifestLink = document.createElement('link');
+    newManifestLink.setAttribute('rel', 'manifest');
+    newManifestLink.setAttribute('href', '/manifest.json');
+    document.head.appendChild(newManifestLink);
   }
 };
 
