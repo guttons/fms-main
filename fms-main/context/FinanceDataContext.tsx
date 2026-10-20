@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { UserRole, User, FlightLog } from '../types';
 import { supabaseService } from '../services/supabaseService';
 import { supabase } from '../supabase';
 import { fmsDb } from '../services/db';
+import { serverTimeService } from '../services/serverTimeService';
 
 export type CustomerClassification = 'ADVANCE' | 'CREDIT' | 'CASH';
 
@@ -1539,7 +1540,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode; user?: U
   const addFuelRate = useCallback((rate: Omit<FuelRateRecord, 'id'>) => {
     const newRecord: FuelRateRecord = {
       ...rate,
-      id: `fr-${Date.now()}`
+      id: `fr-${serverTimeService.getServerEpochMs()}`
     };
     setFuelRates(prev => [...prev, newRecord]);
   }, []);
@@ -1702,12 +1703,12 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode; user?: U
     if (!customer) return;
 
     const newPayment: UpcomingPayment = {
-      id: `sw-${Date.now()}`,
+      id: `sw-${serverTimeService.getServerEpochMs()}`,
       customerId,
       customerName: customer.name,
       referenceNumber,
       amount,
-      uploadDate: new Date().toISOString().split('T')[0],
+      uploadDate: serverTimeService.getServerDate(),
       status: 'PENDING_REVIEW',
       swiftCopyUrl: 'swift_copy.pdf'
     };
@@ -1768,12 +1769,12 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode; user?: U
     if (!customer) return;
 
     const newReceipt: Receipt = {
-      id: `rec-${Date.now()}`,
+      id: `rec-${serverTimeService.getServerEpochMs()}`,
       receiptNumber: `REC-${referenceNumber}`,
       customerId,
       customerName: customer.name,
       amount,
-      date: new Date().toISOString().split('T')[0],
+      date: serverTimeService.getServerDate(),
       status: 'UNAPPLIED',
       remainingAmount: amount
     };

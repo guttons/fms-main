@@ -1,9 +1,41 @@
 import { supabase } from '../supabase';
+import { serverTimeService } from './serverTimeService';
 import { Tank, FlightJob, Equipment, StaffMember, Alert, Vessel, AirlineMaster, FlightMaster, AircraftMaster, AirlineHierarchyNode, InternationalSchedule, DelayLog } from '../types';
 import { CustomerAccount, UpcomingPayment, Invoice, Receipt, ProformaRecord, FuelRequest, MonthEndVariance, ProcurementPR, SurchargeRecord, MpdSale, CustomsShipment } from '../context/FinanceDataContext';
 
 // Deduplication map for concurrent GET requests
 const inFlightRequests = new Map<string, Promise<any>>();
+
+// Signed Staff JWT storage (in-memory + sessionStorage)
+let currentStaffToken: string | null = null;
+const STAFF_JWT_STORAGE_KEY = 'fms_staff_jwt';
+
+export function setStaffAuthToken(token: string | null): void {
+  currentStaffToken = token;
+  if (typeof window !== 'undefined') {
+    try {
+      if (token) {
+        sessionStorage.setItem(STAFF_JWT_STORAGE_KEY, token);
+      } else {
+        sessionStorage.removeItem(STAFF_JWT_STORAGE_KEY);
+      }
+    } catch (_) {}
+  }
+}
+
+export function getStaffAuthToken(): string | null {
+  if (currentStaffToken) return currentStaffToken;
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = sessionStorage.getItem(STAFF_JWT_STORAGE_KEY);
+      if (stored) {
+        currentStaffToken = stored;
+        return stored;
+      }
+    } catch (_) {}
+  }
+  return null;
+}
 
 // Circuit breaker state for external Cloud Run BigQuery API
 let isApiOffline = false;
@@ -11,7 +43,7 @@ let apiOfflineUntil = 0;
 const CIRCUIT_BREAKER_COOLDOWN_MS = 60 * 1000; // 60s cooldown if offline
 
 export function isBigQueryApiAvailable(): boolean {
-  if (isApiOffline && Date.now() < apiOfflineUntil) {
+  if (isApiOffline && serverTimeService.getServerEpochMs() < apiOfflineUntil) {
     return false;
   }
   return true;
@@ -41,6 +73,13 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
     'Content-Type': 'application/json'
   };
 
+  // 1. Prefer signed MACL FMS Staff JWT when available
+  const staffToken = getStaffAuthToken();
+  if (staffToken) {
+    headers['Authorization'] = `Bearer ${staffToken}`;
+    return headers;
+  }
+
   try {
     let { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -63,7 +102,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   // Fast fail when circuit breaker is active to eliminate console network spam
-  if (isApiOffline && Date.now() < apiOfflineUntil) {
+  if (isApiOffline && serverTimeService.getServerEpochMs() < apiOfflineUntil) {
     throw new Error('BigQuery API is currently offline (circuit breaker active)');
   }
 
@@ -114,7 +153,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
         err?.message?.includes('ERR_CONNECTION_CLOSED');
       if (isNetworkIssue) {
         isApiOffline = true;
-        apiOfflineUntil = Date.now() + CIRCUIT_BREAKER_COOLDOWN_MS;
+        apiOfflineUntil = serverTimeService.getServerEpochMs() + CIRCUIT_BREAKER_COOLDOWN_MS;
       }
       throw err;
     }

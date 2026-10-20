@@ -8,6 +8,7 @@ import { supabase } from '../supabase';
 import { sendNativeNotification, subscribeToWebPush } from '../utils/pwa';
 import { cleanAircraftTypeName } from '../services/aircraftLookupService';
 import { ticketGeneratorService, DEFAULT_TICKET_SEQUENCES } from '../services/ticketGeneratorService';
+import { serverTimeService } from '../services/serverTimeService';
 
 import { INITIAL_STAFF_LIST } from '../constants/staffList';
 
@@ -433,9 +434,10 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       if (saved) return saved as BriefingShift;
     } catch(e) {}
     
-    // Auto-detect current shift based on time
-    const hour = new Date().getHours();
-    const min = new Date().getMinutes();
+    // Auto-detect current shift based on Maldives authoritative time
+    const parts = serverTimeService.getMaldivesParts();
+    const hour = parts.hours;
+    const min = parts.minutes;
     const time = hour + min / 60;
     
     // Morning: 07:30 (7.5) to 16:00 (16.0)
@@ -447,7 +449,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   });
 
   const [selectedBriefingDate, setSelectedBriefingDateState] = useState<string>(() => {
-    return new Date().toISOString().split('T')[0];
+    return serverTimeService.getServerDate();
   });
 
   useEffect(() => {
@@ -904,7 +906,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   const loadedAlertIdsRef = React.useRef<Set<string>>(new Set());
   const replenishmentLocks = React.useRef<Record<string, number>>({});
   const prevFlightStatusesRef = React.useRef<Map<string, string>>(new Map());
-  const todayDateStr = new Date().toISOString().split('T')[0];
+  const todayDateStr = serverTimeService.getServerDate();
   const landedAlertsSentRef = React.useRef<Set<string>>(getSentAlertsCache('landed', todayDateStr));
   const flightLogsRef = React.useRef(flightLogs);
   useEffect(() => {
@@ -934,7 +936,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       const lastNum = match ? parseInt(match[1], 10) : 172;
       const nextNum = lastNum + 1;
       
-      const lastDate = lastShipment ? new Date(lastShipment.arrivalDate) : new Date();
+      const lastDate = lastShipment ? new Date(lastShipment.arrivalDate) : new Date(serverTimeService.getServerEpochMs());
       lastDate.setDate(lastDate.getDate() + 19);
       const nextArrivalDate = lastDate.toISOString().split('T')[0];
 
@@ -1154,7 +1156,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       }
       let finalDomAssign = fetchedDomAssign;
       if (!finalDomAssign || finalDomAssign.length === 0) {
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = serverTimeService.getServerDate();
         if (todayStr !== selectedBriefingDate) {
           try {
             const todayAssign = await supabaseService.getDomesticAssignments(todayStr);
@@ -1398,7 +1400,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
   const updateEquipmentStatus = async (id: string, status: EqStatus) => {
     setEquipment(prev => prev.map(eq => 
-      eq.id === id ? { ...eq, status, lastUpdated: new Date().toISOString() } : eq
+      eq.id === id ? { ...eq, status, lastUpdated: serverTimeService.getServerIso() } : eq
     ));
 
     if (appUser) {
@@ -1412,7 +1414,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
   const updateEquipment = async (id: string, updates: Partial<Equipment>) => {
     setEquipment(prev => prev.map(eq => 
-      eq.id === id ? { ...eq, ...updates, lastUpdated: new Date().toISOString() } : eq
+      eq.id === id ? { ...eq, ...updates, lastUpdated: serverTimeService.getServerIso() } : eq
     ));
 
     if (appUser) {
@@ -1426,7 +1428,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
   const updateTankLevel = async (id: string, newLevel: number) => {
     setTanks(prev => prev.map(t => 
-      t.id === id ? { ...t, currentLevel: newLevel, lastUpdated: new Date().toISOString() } : t
+      t.id === id ? { ...t, currentLevel: newLevel, lastUpdated: serverTimeService.getServerIso() } : t
     ));
 
     if (appUser) {
@@ -1534,7 +1536,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       const isDom = isDomesticFlight(virtualJob || {}) || isDomesticFlight(updates) || isDomesticFlight({ flightNumber: finalFlightNum });
       const isAdhoc = !!(virtualJob?.isAdhoc || updates.isAdhoc || (virtualJob?.id && String(virtualJob.id).startsWith('ah-')));
 
-      const fallbackId = cleanUpdatesFlight ? `fj-${cleanUpdatesFlight}-${targetDate}` : `fj-${Date.now()}`;
+      const fallbackId = cleanUpdatesFlight ? `fj-${cleanUpdatesFlight}-${targetDate}` : `fj-${serverTimeService.getServerEpochMs()}`;
       const safeJobId = (virtualJob?.id && !flightJobs.some(fj => fj.id === virtualJob.id && fj.date && fj.date.split('T')[0] !== targetDate))
         ? virtualJob.id
         : (id || fallbackId);
@@ -1987,7 +1989,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
       const isRequestAlert = alertData.message.toLowerCase().includes('requested');
       
       if (isRequestAlert) {
-        const now = Date.now();
+        const now = serverTimeService.getServerEpochMs();
         const lastRequest = replenishmentLocks.current[vehicleId] || 0;
         const COOLDOWN = 5000; // 5 seconds
 
@@ -2014,7 +2016,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     }
 
     // TACTICAL FLIGHT ALERTS DUPLICATE GUARD
-    const targetAlertDate = alertData.flightDate || (alertData.timestamp && alertData.timestamp.length > 10 ? alertData.timestamp.split('T')[0] : null) || new Date().toISOString().split('T')[0];
+    const targetAlertDate = alertData.flightDate || (alertData.timestamp && alertData.timestamp.length > 10 ? alertData.timestamp.split('T')[0] : null) || serverTimeService.getServerDate();
 
     if (alertData.alertType && ['LANDED', 'ETA_15MIN', 'ETA_5MIN', 'REQUEST_FUELING', 'NO_FUEL'].includes(alertData.alertType)) {
       const cleanFlt = (alertData.flightNumber || '').replace(/\s+/g, '').toUpperCase();
@@ -2079,7 +2081,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   useEffect(() => {
     if (!mergedFlightJobs || mergedFlightJobs.length === 0) return;
 
-    const todayDate = new Date().toISOString().split('T')[0];
+    const todayDate = serverTimeService.getServerDate();
 
     mergedFlightJobs.forEach(job => {
       if (!job.flightNumber) return;
@@ -2153,7 +2155,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
               severity: 'medium',
               flightNumber: job.flightNumber,
               message: `✈️ LANDED: Flight ${job.flightNumber} has landed at Stand ${job.stand || 'TBA'}.`,
-              timestamp: new Date().toISOString(),
+              timestamp: serverTimeService.getServerIso(),
               acknowledged: false,
               targetRole: UserRole.ITP_OPERATOR,
               assignedStaffId: job.assignedTo,
@@ -2168,7 +2170,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
               severity: 'medium',
               flightNumber: job.flightNumber,
               message: `✈️ LANDED: Flight ${job.flightNumber} has landed at Stand ${job.stand || 'TBA'}.`,
-              timestamp: new Date().toISOString(),
+              timestamp: serverTimeService.getServerIso(),
               acknowledged: false,
               targetRole: UserRole.ITP_OFFICER,
               assignedStaffId: job.assignedOfficer,
@@ -2182,8 +2184,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
   const acknowledgeAlert = async (id: string, staffName?: string) => {
     try {
-      const nowIso = new Date().toISOString();
-      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      const nowIso = serverTimeService.getServerIso();
+      const nowTime = serverTimeService.getServerTimeString();
       const targetAlert = (alerts || []).find(a => a.id === id);
       const cleanFlt = (targetAlert?.flightNumber || targetAlert?.metadata?.flightNumber || '').replace(/\s+/g, '').toUpperCase();
       
@@ -2250,8 +2252,8 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
   const acknowledgeAllAlerts = async (ids: string[]) => {
     try {
-      const nowIso = new Date().toISOString();
-      const nowTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      const nowIso = serverTimeService.getServerIso();
+      const nowTime = serverTimeService.getServerTimeString();
       await supabaseService.acknowledgeAllAlerts(ids, { acknowledgedAt: nowIso, acknowledgedTime: nowTime });
       setAlerts(prev => prev.map(a => ids.includes(a.id) ? { ...a, acknowledged: true, acknowledgedAt: nowIso, acknowledged_at: nowIso } : a));
     } catch (error) {
@@ -2398,7 +2400,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   };
 
   const crossCheckDailyFlights = (dateStr?: string): ScheduleCrossCheckResult[] => {
-    const targetDate = dateStr || selectedBriefingDate || new Date().toISOString().split('T')[0];
+    const targetDate = dateStr || selectedBriefingDate || serverTimeService.getServerDate();
     return scheduleImportService.crossCheckDailyFlights(
       targetDate,
       mergedFlightJobs || [],
@@ -2407,7 +2409,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
   };
 
   const getPredictiveUpliftForecast = (startDateStr?: string, daysCount: number = 14, categoryFilter: 'ALL' | 'INT' | 'DOM' = 'ALL'): PredictiveUpliftForecast[] => {
-    const targetDate = startDateStr || new Date().toISOString().split('T')[0];
+    const targetDate = startDateStr || serverTimeService.getServerDate();
     return scheduleImportService.generatePredictiveUpliftForecast(
       targetDate,
       daysCount,
@@ -2425,7 +2427,7 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
 
   const updateDelayLog = async (id: string, updates: Partial<DelayLog>) => {
     await supabaseService.updateDelayLog(id, updates);
-    setDelayLogs(prev => prev.map(r => r.id === id ? { ...r, ...updates, updatedAt: new Date().toISOString() } : r));
+    setDelayLogs(prev => prev.map(r => r.id === id ? { ...r, ...updates, updatedAt: serverTimeService.getServerIso() } : r));
   };
 
   const deleteDelayLog = async (id: string) => {
@@ -2472,81 +2474,156 @@ export const OperationalDataProvider: React.FC<{ children: React.ReactNode; user
     return ticketGeneratorService.previewNextTicket(category);
   }, []);
 
+  const contextValue = useMemo(() => ({
+    equipment: equipment || [],
+    tanks: tanks || [],
+    flightJobs: mergedFlightJobs || [],
+    rawFlightJobs: flightJobs || [],
+    domesticFlights: mergedDomesticFlights || [],
+    externalFlights: externalFlights || [],
+    isExternalFlightsLoading,
+    refreshExternalFlights,
+    briefingInfo: briefingInfo || { info: [], dieselNeeds: [], staffAssignments: undefined },
+    selectedBriefingShift,
+    setSelectedBriefingShift,
+    selectedBriefingDate,
+    setSelectedBriefingDate,
+    updateEquipmentStatus,
+    updateEquipment,
+    updateTankLevel,
+    updateBriefingInfo,
+    updateFlightJob,
+    addFlightJob,
+    deleteFlightJob,
+    updateFlightLog,
+    addFlightLogEntry,
+    deleteFlightLogEntry,
+    createAlert,
+    acknowledgeAlert,
+    acknowledgeAllAlerts,
+    clearAllAlerts,
+    deleteAlerts,
+    refreshData,
+    isLoading,
+    alerts: alerts || [],
+    domesticAssignments: domesticAssignments || [],
+    updateDomesticAssignment,
+    flightLogs: flightLogs || [],
+    isAlertsLoading,
+    staff: staff || [],
+    addStaff,
+    updateStaff,
+    deleteStaff,
+    addEquipment,
+    deleteEquipment,
+    addTank,
+    updateTank,
+    deleteTank,
+    vessels: vessels || [],
+    addVessel,
+    updateVessel,
+    deleteVessel,
+    shipments: shipments || [],
+    updateShipment,
+    addShipment,
+    removeShipment,
+    serviceTankId,
+    setServiceTankId,
+    internationalSchedules: internationalSchedules || [],
+    importInternationalSchedules,
+    saveInternationalSchedule,
+    deleteInternationalSchedule,
+    deleteAllInternationalSchedules,
+    toggleInternationalScheduleActive,
+    crossCheckDailyFlights,
+    getPredictiveUpliftForecast,
+    delayLogs: delayLogs || [],
+    createDelayLog,
+    updateDelayLog,
+    deleteDelayLog,
+    ticketSequences,
+    isTicketAutoEnabled,
+    refreshTicketSequences,
+    generateTicketNumber,
+    updateTicketSequence,
+    previewNextTicketNumber
+  }), [
+    equipment,
+    tanks,
+    mergedFlightJobs,
+    flightJobs,
+    mergedDomesticFlights,
+    externalFlights,
+    isExternalFlightsLoading,
+    refreshExternalFlights,
+    briefingInfo,
+    selectedBriefingShift,
+    setSelectedBriefingShift,
+    selectedBriefingDate,
+    setSelectedBriefingDate,
+    updateEquipmentStatus,
+    updateEquipment,
+    updateTankLevel,
+    updateBriefingInfo,
+    updateFlightJob,
+    addFlightJob,
+    deleteFlightJob,
+    updateFlightLog,
+    addFlightLogEntry,
+    deleteFlightLogEntry,
+    createAlert,
+    acknowledgeAlert,
+    acknowledgeAllAlerts,
+    clearAllAlerts,
+    deleteAlerts,
+    refreshData,
+    isLoading,
+    alerts,
+    domesticAssignments,
+    updateDomesticAssignment,
+    flightLogs,
+    isAlertsLoading,
+    staff,
+    addStaff,
+    updateStaff,
+    deleteStaff,
+    addEquipment,
+    deleteEquipment,
+    addTank,
+    updateTank,
+    deleteTank,
+    vessels,
+    addVessel,
+    updateVessel,
+    deleteVessel,
+    shipments,
+    updateShipment,
+    addShipment,
+    removeShipment,
+    serviceTankId,
+    setServiceTankId,
+    internationalSchedules,
+    importInternationalSchedules,
+    saveInternationalSchedule,
+    deleteInternationalSchedule,
+    deleteAllInternationalSchedules,
+    toggleInternationalScheduleActive,
+    crossCheckDailyFlights,
+    getPredictiveUpliftForecast,
+    delayLogs,
+    createDelayLog,
+    updateDelayLog,
+    deleteDelayLog,
+    ticketSequences,
+    isTicketAutoEnabled,
+    refreshTicketSequences,
+    generateTicketNumber,
+    updateTicketSequence,
+    previewNextTicketNumber
+  ]);
+
   return (
-    <OperationalDataContext.Provider value={{
-      equipment: equipment || [],
-      tanks: tanks || [],
-      flightJobs: mergedFlightJobs || [],
-      rawFlightJobs: flightJobs || [],
-      domesticFlights: mergedDomesticFlights || [],
-      externalFlights: externalFlights || [],
-      isExternalFlightsLoading,
-      refreshExternalFlights,
-      briefingInfo: briefingInfo || { info: [], dieselNeeds: [], staffAssignments: undefined },
-      selectedBriefingShift,
-      setSelectedBriefingShift,
-      selectedBriefingDate,
-      setSelectedBriefingDate,
-      updateEquipmentStatus,
-      updateEquipment,
-      updateTankLevel,
-      updateBriefingInfo,
-      updateFlightJob,
-      addFlightJob,
-      deleteFlightJob,
-      updateFlightLog,
-      addFlightLogEntry,
-      deleteFlightLogEntry,
-      createAlert,
-      acknowledgeAlert,
-      acknowledgeAllAlerts,
-      clearAllAlerts,
-      deleteAlerts,
-      refreshData,
-      isLoading,
-      alerts: alerts || [],
-      domesticAssignments: domesticAssignments || [],
-      updateDomesticAssignment,
-      flightLogs: flightLogs || [],
-      isAlertsLoading,
-      staff: staff || [],
-      addStaff,
-      updateStaff,
-      deleteStaff,
-      addEquipment,
-      deleteEquipment,
-      addTank,
-      updateTank,
-      deleteTank,
-      vessels: vessels || [],
-      addVessel,
-      updateVessel,
-      deleteVessel,
-      shipments: shipments || [],
-      updateShipment,
-      addShipment,
-      removeShipment,
-      serviceTankId,
-      setServiceTankId,
-      internationalSchedules: internationalSchedules || [],
-      importInternationalSchedules,
-      saveInternationalSchedule,
-      deleteInternationalSchedule,
-      deleteAllInternationalSchedules,
-      toggleInternationalScheduleActive,
-      crossCheckDailyFlights,
-      getPredictiveUpliftForecast,
-      delayLogs: delayLogs || [],
-      createDelayLog,
-      updateDelayLog,
-      deleteDelayLog,
-      ticketSequences,
-      isTicketAutoEnabled,
-      refreshTicketSequences,
-      generateTicketNumber,
-      updateTicketSequence,
-      previewNextTicketNumber
-    }}>
+    <OperationalDataContext.Provider value={contextValue}>
       {children}
     </OperationalDataContext.Provider>
   );

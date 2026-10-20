@@ -69,14 +69,14 @@ export const useFuelDispatch = (user?: any) => {
       if (!saved) return {};
       const parsed = JSON.parse(saved);
       const migrated: Record<string, DispatchCacheRecord> = {};
-      const todayDate = new Date().toISOString().split('T')[0];
+      const todayDate = serverTimeService.getServerDate();
 
       for (const [k, v] of Object.entries(parsed)) {
         if (typeof v === 'string') {
           migrated[k] = {
             status: v as any,
             flightDate: todayDate,
-            requestedTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+            requestedTime: serverTimeService.getServerTimeString(),
             acknowledged: false
           };
         } else if (v && typeof v === 'object') {
@@ -130,7 +130,7 @@ export const useFuelDispatch = (user?: any) => {
 
   const getOperationalDate = useCallback((job: FlightJob | any): string => {
     if (job?.date) return job.date.split('T')[0];
-    return selectedBriefingDate || new Date().toISOString().split('T')[0];
+    return selectedBriefingDate || serverTimeService.getServerDate();
   }, [selectedBriefingDate]);
 
   // Resolves the exact staff recipients for this flight
@@ -331,13 +331,13 @@ export const useFuelDispatch = (user?: any) => {
         ? 'NO_FUEL'
         : 'REQUEST_FUELING';
       isDispatchAcknowledged = false;
-      dispatchRequestedTime = formatTimeSafe(unackAlert.metadata?.requestedTime || unackAlert.metadata?.requestedAt || unackAlert.timestamp) || new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      dispatchRequestedTime = formatTimeSafe(unackAlert.metadata?.requestedTime || unackAlert.metadata?.requestedAt || unackAlert.timestamp) || serverTimeService.getServerTimeString();
     } else if (latestAlert && latestAlert.acknowledged) {
       dispatchStatus = (latestAlert.alertType === 'NO_FUEL' || (latestAlert.message && latestAlert.message.toLowerCase().includes('no fuel')))
         ? 'NO_FUEL'
         : 'REQUEST_FUELING';
       isDispatchAcknowledged = true;
-      dispatchRequestedTime = formatTimeSafe(latestAlert.metadata?.requestedTime || latestAlert.metadata?.requestedAt || latestAlert.timestamp) || new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      dispatchRequestedTime = formatTimeSafe(latestAlert.metadata?.requestedTime || latestAlert.metadata?.requestedAt || latestAlert.timestamp) || serverTimeService.getServerTimeString();
       const ackDate = latestAlert.acknowledgedAt || latestAlert.acknowledged_at || latestAlert.metadata?.acknowledgedAt || latestAlert.metadata?.acknowledgedTime || cached?.acknowledgedTime || cached?.acknowledgedAt;
       if (ackDate) {
         dispatchAcknowledgedTime = formatTimeSafe(ackDate);

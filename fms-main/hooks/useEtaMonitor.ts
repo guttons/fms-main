@@ -29,6 +29,7 @@ const saveStoredEtaAlert = (dateStr: string, key: string) => {
 };
 
 import { getWatchedFlightIds } from '../services/watchedFlightsService';
+import { serverTimeService } from '../services/serverTimeService';
 
 export const useEtaMonitor = ({
   flightJobs,
@@ -39,14 +40,16 @@ export const useEtaMonitor = ({
   staff,
   updateFlightJob
 }: UseEtaMonitorParams) => {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = serverTimeService.getServerDate();
   const sentAlertsRef = useRef<Set<string>>(getStoredEtaAlerts(todayStr));
   const [monitoredFlightCount, setMonitoredFlightCount] = useState(0);
 
   useEffect(() => {
     const checkETAs = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       let count = 0;
-      const now = new Date();
+      const now = serverTimeService.getServerTime();
+      const currentDateStr = serverTimeService.getServerDate();
 
       // Reload each cycle so toggles take effect within 30s
       const watchedFlightNumbers = getWatchedFlightIds(currentUserId);
@@ -75,8 +78,13 @@ export const useEtaMonitor = ({
         const minutes = parseInt(minutesStr, 10);
         if (isNaN(hours) || isNaN(minutes)) return;
 
-        const targetTime = new Date(now);
-        targetTime.setHours(hours, minutes, 0, 0);
+        const jobDate = (job.date || currentDateStr).split('T')[0];
+        const targetTime = new Date(
+          serverTimeService.toMaldivesIso(
+            jobDate,
+            `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+          )
+        );
 
         if (targetTime.getTime() < now.getTime()) {
           if (now.getTime() - targetTime.getTime() > 60000) return;
@@ -91,7 +99,7 @@ export const useEtaMonitor = ({
 
         if (diffMins <= 15.5 && diffMins > 5.5 && !job.eta_alert_15_sent && !sentAlertsRef.current.has(key15)) {
           sentAlertsRef.current.add(key15);
-          saveStoredEtaAlert(todayStr, key15);
+          saveStoredEtaAlert(currentDateStr, key15);
           if (updateFlightJob && job.id && !job.id.startsWith('live-')) {
             updateFlightJob(job.id, { eta_alert_15_sent: true }).catch(console.warn);
           }
@@ -100,7 +108,7 @@ export const useEtaMonitor = ({
             severity: 'medium',
             targetRole: currentUserRole,
             message: `[ETA_ALERT:15MIN] Flight ${job.flightNumber} arriving in ~15 minutes${job.stand ? ` at Stand ${job.stand}` : ''}`,
-            timestamp: new Date().toISOString(),
+            timestamp: serverTimeService.getServerIso(),
             acknowledged: false,
             flightNumber: job.flightNumber,
             assignedStaffId: currentUserId,
@@ -115,7 +123,7 @@ export const useEtaMonitor = ({
 
         if (diffMins <= 5.5 && diffMins >= -1 && !job.eta_alert_5_sent && !sentAlertsRef.current.has(key5)) {
           sentAlertsRef.current.add(key5);
-          saveStoredEtaAlert(todayStr, key5);
+          saveStoredEtaAlert(currentDateStr, key5);
           if (updateFlightJob && job.id && !job.id.startsWith('live-')) {
             updateFlightJob(job.id, { eta_alert_5_sent: true }).catch(console.warn);
           }
@@ -124,7 +132,7 @@ export const useEtaMonitor = ({
             severity: 'critical',
             targetRole: currentUserRole,
             message: `[ETA_ALERT:5MIN] Flight ${job.flightNumber} arriving in ~5 minutes${job.stand ? ` at Stand ${job.stand}` : ''}`,
-            timestamp: new Date().toISOString(),
+            timestamp: serverTimeService.getServerIso(),
             acknowledged: false,
             flightNumber: job.flightNumber,
             assignedStaffId: currentUserId,

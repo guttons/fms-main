@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import { SystemActivityLog, User, StaffMember } from '../types';
+import { serverTimeService } from './serverTimeService';
 
 export const LogModule = {
   AUTH: 'AUTH',
@@ -63,12 +64,12 @@ function getSessionId(): string {
   try {
     let sid = sessionStorage.getItem('fms_session_id');
     if (!sid) {
-      sid = `sess-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      sid = `sess-${serverTimeService.getServerEpochMs()}-${Math.random().toString(36).substring(2, 9)}`;
       sessionStorage.setItem('fms_session_id', sid);
     }
     return sid;
   } catch {
-    return `sess-${Date.now()}`;
+    return `sess-${serverTimeService.getServerEpochMs()}`;
   }
 }
 
@@ -152,8 +153,8 @@ export const activityLogService = {
     }
 
     const empId = (currentUser as any).employeeId || (currentUser as any).employee_id || null;
-    const entryId = `sal-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-    const now = new Date().toISOString();
+    const entryId = `sal-${serverTimeService.getServerEpochMs()}-${Math.random().toString(36).substring(2, 8)}`;
+    const now = serverTimeService.getServerIso();
 
     const fullLog: SystemActivityLog = {
       id: entryId,
@@ -389,7 +390,7 @@ export const activityLogService = {
    * Realtime subscription for live streaming in System Admin Activity Log tab.
    */
   subscribeToLogs(onNewLog: (log: SystemActivityLog) => void) {
-    const channelName = `sys_act_log_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const channelName = `sys_act_log_${serverTimeService.getServerEpochMs()}_${Math.floor(Math.random() * 1000)}`;
 
     const channel = supabase
       .channel(channelName)
@@ -468,7 +469,7 @@ export const activityLogService = {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `${filenamePrefix}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `${filenamePrefix}_${serverTimeService.getServerDate()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

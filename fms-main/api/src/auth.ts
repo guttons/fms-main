@@ -1,12 +1,14 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
-import { requireAuth } from './middleware/auth';
+import { requireAuth, createRateLimiter, signStaffToken } from './middleware/auth';
 
 const router = Router();
 
+const authRateLimiter = createRateLimiter({ windowMs: 60 * 1000, maxRequests: 15 });
+
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://pzyrstehoesmhwkhtoxd.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6eXJzdGVob2VzbWh3a2h0b3hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMzc3NzUsImV4cCI6MjA5NDkxMzc3NX0.itHESCbXktM7ZVUuB4BhI_UB7qH8IGVM1ZYnml8pxBk';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -33,7 +35,7 @@ const verifyPin = async (pin: string, hash: string): Promise<boolean> => {
 
 // POST /auth/set-pin
 // Body: { staffId: string, pin: string, isFirstTime?: boolean }
-router.post('/set-pin', requireAuth, async (req, res) => {
+router.post('/set-pin', authRateLimiter, requireAuth, async (req, res) => {
   try {
     const { staffId, pin } = req.body;
     if (!staffId || !pin) {
@@ -42,6 +44,14 @@ router.post('/set-pin', requireAuth, async (req, res) => {
     
     if (!/^\d{4,6}$/.test(pin)) {
       return res.status(400).json({ error: 'PIN must be 4-6 digits' });
+    }
+
+    // Enforce that non-admin staff can only set their own PIN
+    const caller = (req as any).user;
+    const callerRole = String(caller?.role || '').toUpperCase();
+    const isAdminOrSupervisor = callerRole === 'ADMIN' || callerRole === 'ITP_MANAGER' || callerRole === 'DEPOT_SUPERVISOR';
+    if (caller?.sub && caller.sub !== staffId && !isAdminOrSupervisor) {
+      return res.status(403).json({ error: 'Forbidden: you can only update your own PIN.' });
     }
 
     const pinHash = await hashPin(pin);
@@ -73,7 +83,7 @@ router.post('/set-pin', requireAuth, async (req, res) => {
 
 // POST /auth/verify-pin  
 // Body: { staffId: string, pin: string }
-router.post('/verify-pin', async (req, res) => {
+router.post('/verify-pin', authRateLimiter, async (req, res) => {
   try {
     const { staffId, pin } = req.body;
     if (!staffId || !pin) {
@@ -125,9 +135,27 @@ router.post('/verify-pin', async (req, res) => {
       .update({ failed_attempts: 0, locked_until: null })
       .eq('staff_id', staffId);
 
+    // Look up staff role & name for signed JWT claims
+    let staffRole = 'OPERATOR';
+    let staffName = staffId;
+    try {
+      const { data: staffData } = await supabase
+        .from('staff')
+        .select('role, name')
+        .eq('id', staffId)
+        .maybeSingle();
+      if (staffData?.role) staffRole = staffData.role;
+      if (staffData?.name) staffName = staffData.name;
+    } catch (_) {}
+
+    const token = signStaffToken({ staffId, role: staffRole, name: staffName });
+
     return res.json({ 
       success: true, 
-      mustChangePin: authRecord.must_change_pin 
+      mustChangePin: authRecord.must_change_pin,
+      token,
+      role: staffRole,
+      name: staffName
     });
 
   } catch (err: any) {
@@ -136,9 +164,37 @@ router.post('/verify-pin', async (req, res) => {
   }
 });
 
+// POST /auth/issue-staff-token
+// Issues a signed staff JWT after verified staff password login
+router.post('/issue-staff-token', authRateLimiter, requireAuth, async (req, res) => {
+  try {
+    const { staffId, role, name } = req.body;
+    if (!staffId) {
+      return res.status(400).json({ error: 'staffId is required' });
+    }
+    let resolvedRole = role || 'OPERATOR';
+    let resolvedName = name || staffId;
+    try {
+      const { data: staffData } = await supabase
+        .from('staff')
+        .select('role, name')
+        .eq('id', staffId)
+        .maybeSingle();
+      if (staffData?.role) resolvedRole = staffData.role;
+      if (staffData?.name) resolvedName = staffData.name;
+    } catch (_) {}
+
+    const token = signStaffToken({ staffId, role: resolvedRole, name: resolvedName });
+    return res.json({ success: true, token, role: resolvedRole, name: resolvedName });
+  } catch (err: any) {
+    console.error('[Auth] issue-staff-token error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST /auth/check-auth-status
 // Body: { staffId: string }
-router.post('/check-auth-status', async (req, res) => {
+router.post('/check-auth-status', authRateLimiter, async (req, res) => {
   try {
     const { staffId } = req.body;
     if (!staffId) {
@@ -172,11 +228,17 @@ router.post('/check-auth-status', async (req, res) => {
 
 // POST /auth/reset-pin (admin action)
 // Body: { staffId: string }
-router.post('/reset-pin', requireAuth, async (req, res) => {
+router.post('/reset-pin', authRateLimiter, requireAuth, async (req, res) => {
   try {
     const { staffId } = req.body;
     if (!staffId) {
       return res.status(400).json({ error: 'staffId is required' });
+    }
+
+    const caller = (req as any).user;
+    const callerRole = String(caller?.role || '').toUpperCase();
+    if (caller?.sub && callerRole !== 'ADMIN' && callerRole !== 'ITP_MANAGER' && callerRole !== 'DEPOT_SUPERVISOR') {
+      return res.status(403).json({ error: 'Forbidden: only administrators or supervisors may reset a staff PIN.' });
     }
 
     const { error } = await supabase

@@ -9,6 +9,7 @@ import masterDbData from './masterDbData.json';
 import { INITIAL_MOCK_SCHEDULES, scheduleImportService } from './scheduleImportService';
 import { activityLogService, LogModule, LogAction } from './activityLogService';
 import { api, isBigQueryApiAvailable } from './apiClient';
+import { serverTimeService } from './serverTimeService';
 
 const localBridgingLogs: BridgingLog[] = [
   {
@@ -23,7 +24,7 @@ const localBridgingLogs: BridgingLog[] = [
     density: 0.8005,
     temperature: 24.5,
     operatorId: 'System Admin',
-    date: new Date().toISOString().split('T')[0]
+    date: serverTimeService.getServerDate()
   },
   {
     id: 'mock-bl-2',
@@ -37,7 +38,7 @@ const localBridgingLogs: BridgingLog[] = [
     density: 0.7998,
     temperature: 25.1,
     operatorId: 'System Admin',
-    date: new Date().toISOString().split('T')[0]
+    date: serverTimeService.getServerDate()
   }
 ];
 
@@ -174,7 +175,7 @@ export const supabaseService = {
 
   async updateTankLevel(id: string, newLevel: number): Promise<void> {
     const index = localTanks.findIndex(t => t.id === id);
-    const lastUpdated = new Date().toISOString();
+    const lastUpdated = serverTimeService.getServerIso();
     if (index !== -1) {
       localTanks[index] = { ...localTanks[index], currentLevel: newLevel, lastUpdated };
       triggerTanksCallbacks();
@@ -192,7 +193,7 @@ export const supabaseService = {
         entityType: 'tank',
         entityId: id,
         payload,
-        idempotencyKey: `tank-lvl-${id}-${Date.now()}`
+        idempotencyKey: `tank-lvl-${id}-${serverTimeService.getServerEpochMs()}`
       });
       syncEngine.flushOutbox().catch(err => console.warn('[Outbox] Background sync queued offline:', err));
     }
@@ -200,7 +201,7 @@ export const supabaseService = {
 
   subscribeToTanks(callback: (tanks: Tank[]) => void) {
     const channel = supabase
-      .channel('tanks-changes-' + Date.now() + '-' + Math.floor(Math.random() * 1000))
+      .channel('tanks-changes-' + serverTimeService.getServerEpochMs() + '-' + Math.floor(Math.random() * 1000))
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tanks' },
@@ -226,7 +227,7 @@ export const supabaseService = {
       id: cleanId,
       ...tank,
       name: cleanId,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: serverTimeService.getServerIso()
     };
     localTanks.push(newTank);
     triggerTanksCallbacks();
@@ -258,7 +259,7 @@ export const supabaseService = {
     let original: Tank | null = null;
     if (index !== -1) {
       original = { ...localTanks[index] };
-      localTanks[index] = { ...localTanks[index], ...updates, lastUpdated: new Date().toISOString() };
+      localTanks[index] = { ...localTanks[index], ...updates, lastUpdated: serverTimeService.getServerIso() };
       triggerTanksCallbacks();
     }
 
@@ -267,7 +268,7 @@ export const supabaseService = {
     } catch (apiErr) {
       console.warn('[API] api.tanks.update failed, falling back to direct:', apiErr);
       const row: Record<string, any> = {
-        last_updated: new Date().toISOString()
+        last_updated: serverTimeService.getServerIso()
       };
       if ('name' in updates) row.name = updates.name;
       if ('type' in updates) row.type = updates.type;
@@ -476,7 +477,7 @@ export const supabaseService = {
           entityType: 'flight_job',
           entityId: job.id,
           payload: row,
-          idempotencyKey: `fj-ins-${job.id}-${Date.now()}`
+          idempotencyKey: `fj-ins-${job.id}-${serverTimeService.getServerEpochMs()}`
         });
         syncEngine.flushOutbox().catch(err => console.warn('[Outbox] Background sync queued offline:', err));
       }
@@ -570,7 +571,7 @@ export const supabaseService = {
           entityType: 'flight_job',
           entityId: id,
           payload: row,
-          idempotencyKey: `fj-upd-${id}-${Date.now()}`
+          idempotencyKey: `fj-upd-${id}-${serverTimeService.getServerEpochMs()}`
         });
         syncEngine.flushOutbox().catch(err => console.warn('[Outbox] Background sync queued offline:', err));
       }
@@ -597,7 +598,7 @@ export const supabaseService = {
         entityType: 'flight_job',
         entityId: id,
         payload: null,
-        idempotencyKey: `fj-del-${id}-${Date.now()}`
+        idempotencyKey: `fj-del-${id}-${serverTimeService.getServerEpochMs()}`
       });
       syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
     }
@@ -632,7 +633,7 @@ export const supabaseService = {
 
   subscribeToFlightJobs(callback: (jobs: FlightJob[]) => void) {
     const channel = supabase
-      .channel('flight_jobs-changes-' + Date.now() + '-' + Math.floor(Math.random() * 1000))
+      .channel('flight_jobs-changes-' + serverTimeService.getServerEpochMs() + '-' + Math.floor(Math.random() * 1000))
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'flight_jobs' },
@@ -778,7 +779,7 @@ export const supabaseService = {
 
   async createFlightLog(log: Omit<FlightLog, 'id'> & { id?: string }): Promise<FlightLog> {
     console.log('[BigQuery API] POST /operations-log');
-    const generatedId = log.id || `op-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const generatedId = log.id || `op-${serverTimeService.getServerEpochMs()}-${Math.random().toString(36).slice(2, 7)}`;
     const compactedSig = await this._compactSignatureIfNeeded(log.signatureDataUrl);
     const fullLog: FlightLog = { ...log, id: generatedId, signatureDataUrl: compactedSig };
 
@@ -1171,7 +1172,7 @@ export const supabaseService = {
           deliveryNumber: row.invoice_number ? `MLE-${row.invoice_number}` : undefined,
           timestampStart: `${rowDate}T08:00:00.000Z`,
           timestampFinalEnd: `${rowDate}T16:00:00.000Z`,
-          timestampClearance: clean(row.created_at) || new Date().toISOString(),
+          timestampClearance: clean(row.created_at) || serverTimeService.getServerIso(),
           meterOpen: 0,
           meterClose: Number(row.volume),
           volume: Number(row.volume),
@@ -1288,7 +1289,7 @@ export const supabaseService = {
 
   subscribeToAlerts(callback: (alerts: Alert[]) => void) {
     const channel = supabase
-      .channel('alerts-changes-' + Date.now() + '-' + Math.floor(Math.random() * 1000))
+      .channel('alerts-changes-' + serverTimeService.getServerEpochMs() + '-' + Math.floor(Math.random() * 1000))
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'alerts' },
@@ -1313,7 +1314,7 @@ export const supabaseService = {
       console.warn('[API] api.alerts.acknowledge failed, falling back to direct:', apiErr);
       const updatePayload: any = { 
         acknowledged: true,
-        acknowledged_at: ackData?.acknowledgedAt || new Date().toISOString()
+        acknowledged_at: ackData?.acknowledgedAt || serverTimeService.getServerIso()
       };
       if (ackData?.acknowledgedBy) {
         updatePayload.acknowledged_by = ackData.acknowledgedBy;
@@ -1363,14 +1364,14 @@ export const supabaseService = {
 
   async createAlert(alert: Omit<Alert, 'id'>): Promise<void> {
     // Safely normalize alert timestamp to a valid ISO string
-    let validTimestamp = new Date().toISOString();
+    let validTimestamp = serverTimeService.getServerIso();
     if (alert.timestamp) {
       const parsed = new Date(alert.timestamp);
       if (!isNaN(parsed.getTime())) {
         validTimestamp = parsed.toISOString();
       } else if (typeof alert.timestamp === 'string' && /^\d{1,2}:\d{2}/.test(alert.timestamp)) {
-        const today = new Date().toISOString().split('T')[0];
-        const combined = new Date(`${today}T${alert.timestamp.padStart(5, '0')}:00Z`);
+        const today = serverTimeService.getServerDate();
+        const combined = new Date(`${today}T${alert.timestamp.padStart(5, '0')}:00+05:00`);
         if (!isNaN(combined.getTime())) {
           validTimestamp = combined.toISOString();
         }
@@ -1397,7 +1398,7 @@ export const supabaseService = {
       // Determine operational date
       const flightDate = safeAlert.flightDate
         || validTimestamp.split('T')[0]
-        || new Date().toISOString().split('T')[0];
+        || serverTimeService.getServerDate();
 
       if (alertsExtendedSupported) {
         const extendedRow = {
@@ -1673,7 +1674,7 @@ export const supabaseService = {
     let original: Equipment | null = null;
     if (index !== -1) {
       original = { ...localEquipment[index] };
-      localEquipment[index] = { ...localEquipment[index], status, lastUpdated: new Date().toISOString() };
+      localEquipment[index] = { ...localEquipment[index], status, lastUpdated: serverTimeService.getServerIso() };
       triggerEquipmentCallbacks();
     }
 
@@ -1683,7 +1684,7 @@ export const supabaseService = {
       console.warn('[API] api.equipment.updateStatus failed, falling back to direct:', apiErr);
       const { error } = await supabase.from('equipment').update({
         status: status,
-        last_updated: new Date().toISOString()
+        last_updated: serverTimeService.getServerIso()
       }).eq('id', id);
 
       if (error) {
@@ -1701,7 +1702,7 @@ export const supabaseService = {
     let original: Equipment | null = null;
     if (index !== -1) {
       original = { ...localEquipment[index] };
-      localEquipment[index] = { ...localEquipment[index], ...updates, lastUpdated: new Date().toISOString() };
+      localEquipment[index] = { ...localEquipment[index], ...updates, lastUpdated: serverTimeService.getServerIso() };
       triggerEquipmentCallbacks();
     }
 
@@ -1710,7 +1711,7 @@ export const supabaseService = {
     } catch (apiErr) {
       console.warn('[API] api.equipment.update failed, falling back to direct:', apiErr);
       const row: Record<string, any> = {
-        last_updated: new Date().toISOString()
+        last_updated: serverTimeService.getServerIso()
       };
       if ('name' in updates) row.name = updates.name;
       if ('type' in updates) row.type = updates.type;
@@ -1732,7 +1733,7 @@ export const supabaseService = {
 
   subscribeToEquipment(callback: (equipment: Equipment[]) => void) {
     const channel = supabase
-      .channel('equipment-changes-' + Date.now() + '-' + Math.floor(Math.random() * 1000))
+      .channel('equipment-changes-' + serverTimeService.getServerEpochMs() + '-' + Math.floor(Math.random() * 1000))
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'equipment' },
@@ -1758,7 +1759,7 @@ export const supabaseService = {
       id: cleanId,
       ...eq,
       name: cleanId,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: serverTimeService.getServerIso()
     };
     localEquipment.push(newEq);
     triggerEquipmentCallbacks();
@@ -1947,7 +1948,7 @@ export const supabaseService = {
   // ── Staff (CRUD, Admin Panel) ───────────────────────────────────────────────
   subscribeToStaff(callback: (staff: StaffMember[]) => void) {
     const channel = supabase
-      .channel('staff-changes-' + Date.now() + '-' + Math.floor(Math.random() * 1000))
+      .channel('staff-changes-' + serverTimeService.getServerEpochMs() + '-' + Math.floor(Math.random() * 1000))
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'staff' },
@@ -2008,7 +2009,7 @@ export const supabaseService = {
               email: row.email,
               designation: row.designation || undefined,
               status: row.status as 'active' | 'inactive',
-              joinDate: row.join_date || new Date().toISOString(),
+              joinDate: row.join_date || serverTimeService.getServerIso(),
               avatar: row.avatar,
               currentStatus: (row.current_status as any) || 'OFFLINE',
               currentJobId: row.current_job_id || undefined,
@@ -2073,7 +2074,7 @@ export const supabaseService = {
   },
 
   async addStaff(member: Omit<StaffMember, 'id'>): Promise<void> {
-    const newId = `st-${Date.now()}`;
+    const newId = `st-${serverTimeService.getServerEpochMs()}`;
     const newMember: StaffMember = {
       id: newId,
       ...member,
@@ -2114,7 +2115,7 @@ export const supabaseService = {
         entityType: 'staff',
         entityId: newId,
         payload,
-        idempotencyKey: `staff-ins-${newId}-${Date.now()}`
+        idempotencyKey: `staff-ins-${newId}-${serverTimeService.getServerEpochMs()}`
       });
       syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
     }
@@ -2156,7 +2157,7 @@ export const supabaseService = {
         entityType: 'staff',
         entityId: id,
         payload: row,
-        idempotencyKey: `staff-upd-${id}-${Date.now()}`
+        idempotencyKey: `staff-upd-${id}-${serverTimeService.getServerEpochMs()}`
       });
       syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
     }
@@ -2188,7 +2189,7 @@ export const supabaseService = {
         entityType: 'staff',
         entityId: id,
         payload: null,
-        idempotencyKey: `staff-del-${id}-${Date.now()}`
+        idempotencyKey: `staff-del-${id}-${serverTimeService.getServerEpochMs()}`
       });
       syncEngine.flushOutbox().catch(e => console.warn('[Outbox] Background sync queued offline:', e));
     }
@@ -3088,7 +3089,7 @@ export const supabaseService = {
       const { error } = await supabase.from('app_settings').upsert({
         key: 'service_tank',
         value: { tankId },
-        updated_at: new Date().toISOString()
+        updated_at: serverTimeService.getServerIso()
       });
       if (error) {
         console.error('[Supabase] setServiceTank failed:', error);
@@ -3099,7 +3100,7 @@ export const supabaseService = {
 
   subscribeToAppSettings(callback: (key: string, value: any) => void) {
     const channel = supabase
-      .channel('app_settings-changes-' + Date.now())
+      .channel('app_settings-changes-' + serverTimeService.getServerEpochMs())
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'app_settings' },
@@ -3120,7 +3121,7 @@ export const supabaseService = {
   // ── Vessels (CRUD, Admin Panel) ──────────────────────────────────────────────
   subscribeToVessels(callback: (vessels: Vessel[]) => void) {
     const channel = supabase
-      .channel('vessels-changes-' + Date.now() + '-' + Math.floor(Math.random() * 1000))
+      .channel('vessels-changes-' + serverTimeService.getServerEpochMs() + '-' + Math.floor(Math.random() * 1000))
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'vessels' },
@@ -3171,7 +3172,7 @@ export const supabaseService = {
   },
 
   async addVessel(vessel: Omit<Vessel, 'id' | 'created_at'>): Promise<void> {
-    const newId = `vessel-${Date.now()}`;
+    const newId = `vessel-${serverTimeService.getServerEpochMs()}`;
     const newVessel: Vessel = {
       id: newId,
       ...vessel,
@@ -3356,7 +3357,7 @@ export const supabaseService = {
         icaoCode: item.icao?.toUpperCase().trim() || undefined,
         category: item.category || 'INT',
         isActive: true,
-        createdAt: new Date().toISOString()
+        createdAt: serverTimeService.getServerIso()
       });
 
       for (const fltNo of (item.flights || [])) {
@@ -3369,7 +3370,7 @@ export const supabaseService = {
           airlineName: cleanName,
           flightNumber: cleanFlt,
           isActive: true,
-          createdAt: new Date().toISOString()
+          createdAt: serverTimeService.getServerIso()
         });
       }
 
@@ -3384,7 +3385,7 @@ export const supabaseService = {
           aircraftReg: reg,
           aircraftType: ac.aircraft_type || 'Unknown',
           isActive: true,
-          createdAt: new Date().toISOString()
+          createdAt: serverTimeService.getServerIso()
         });
       }
     }
@@ -3554,7 +3555,7 @@ export const supabaseService = {
         icaoCode: icaoCode?.toUpperCase().trim() || undefined,
         category: category,
         isActive: true,
-        createdAt: new Date().toISOString()
+        createdAt: serverTimeService.getServerIso()
       };
       await fmsDb.put('airlines', created);
       const updatedList = this.dedupeAirlines([...existing, created]);
@@ -3742,7 +3743,7 @@ export const supabaseService = {
         flightNumber: cleanFlt,
         route: route?.trim() || undefined,
         isActive: true,
-        createdAt: new Date().toISOString()
+        createdAt: serverTimeService.getServerIso()
       };
       await fmsDb.put('flight_master', created);
       const updatedList = this.dedupeFlights([...existing, created]);
@@ -3930,7 +3931,7 @@ export const supabaseService = {
         aircraftReg: cleanReg,
         aircraftType: cleanType,
         isActive: true,
-        createdAt: new Date().toISOString()
+        createdAt: serverTimeService.getServerIso()
       };
       await fmsDb.put('aircraft_master', created);
       const updatedList = this.dedupeAircrafts([...existing, created]);
@@ -4256,12 +4257,12 @@ export const supabaseService = {
   },
 
   async createDelayLog(log: Omit<DelayLog, 'id'>): Promise<DelayLog> {
-    const id = `delay-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const id = `delay-${serverTimeService.getServerEpochMs()}-${Math.random().toString(36).substring(2, 7)}`;
     let newRecord: DelayLog = {
       ...log,
       id,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: serverTimeService.getServerIso(),
+      updatedAt: serverTimeService.getServerIso()
     };
 
     try {
@@ -4325,7 +4326,7 @@ export const supabaseService = {
 
     if (!this.unmigratedTables.has('delay_logs')) {
       try {
-        const row: Record<string, any> = { updated_at: new Date().toISOString() };
+        const row: Record<string, any> = { updated_at: serverTimeService.getServerIso() };
         if ('date' in updates) row.operational_date = updates.date;
         if ('delayFrom' in updates) row.delay_from = updates.delayFrom;
         if ('operator' in updates) row.operator = updates.operator;
@@ -4351,7 +4352,7 @@ export const supabaseService = {
     // Local update
     try {
       const existing = await this.getDelayLogs();
-      const updated = existing.map(r => r.id === id ? { ...r, ...updates, updatedAt: new Date().toISOString() } : r);
+      const updated = existing.map(r => r.id === id ? { ...r, ...updates, updatedAt: serverTimeService.getServerIso() } : r);
       localStorage.setItem('fms_delay_logs', JSON.stringify(updated));
     } catch (e) {}
   },

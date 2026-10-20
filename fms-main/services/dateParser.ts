@@ -36,15 +36,15 @@ const MONTH_NAMES: Record<string, number> = {
   december: 11, dec: 11,
 };
 
+import { serverTimeService } from './serverTimeService';
+
 /**
- * Get the current date/time in Maldives timezone (UTC+5).
- * Returns a Date object adjusted to MVT.
+ * Get the current authoritative server date/time in Maldives timezone (UTC+5).
+ * Returns a Date object whose local getters match Maldives calendar date & time.
  */
 function getMaldivesNow(): Date {
-  const now = new Date();
-  // Convert to Maldives timezone by computing UTC offset
-  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-  return new Date(utc + (5 * 3600000)); // UTC+5
+  const parts = serverTimeService.getMaldivesParts();
+  return new Date(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
 }
 
 function formatDate(d: Date): string {

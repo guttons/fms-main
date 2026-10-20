@@ -1,6 +1,7 @@
 import { UserRole, StaffMember, Tank, FlightJob, Equipment, Alert, EquipmentStatus } from '../types';
 import { parseDateRange, ParsedDateRange, formatDateLabel } from './dateParser';
 import { aiDataEngine, FlightUpliftStats, DailyConsumptionResult, BridgingStats, AIRLINE_MAP, AIRLINE_FLIGHTS_REGISTRY, AirlineUpliftStats } from './aiDataEngine';
+import { serverTimeService } from './serverTimeService';
 
 export interface AIResponse {
   answer: string;
@@ -178,8 +179,8 @@ export const aiAssistantService = {
     }
 
     const effectiveDateRange: ParsedDateRange = parsedDateRange || {
-      startDate: new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0],
-      endDate: new Date().toISOString().split('T')[0],
+      startDate: serverTimeService.getRelativeDate(-30),
+      endDate: serverTimeService.getServerDate(),
       label: 'Last 30 Days'
     };
 
@@ -488,8 +489,8 @@ export const aiAssistantService = {
     if (intent === 'PERIOD_COMPARISON') {
       const targetFlight = flightCode || 'SU321';
       const range1: ParsedDateRange = {
-        startDate: new Date(Date.now() - 60 * 86400000).toISOString().split('T')[0],
-        endDate: new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0],
+        startDate: serverTimeService.getRelativeDate(-60),
+        endDate: serverTimeService.getRelativeDate(-30),
         label: 'Previous 30 Days'
       };
       const range2 = effectiveDateRange;

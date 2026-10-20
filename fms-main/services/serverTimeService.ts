@@ -13,10 +13,21 @@ import { supabase } from '../supabase';
 
 const API_BASE_URL = import.meta.env.VITE_BIGQUERY_API_URL || 'http://localhost:8080';
 const SYNC_INTERVAL_MS = 5 * 60 * 1000; // Resync every 5 minutes
+const MALDIVES_OFFSET_MS = 5 * 3600 * 1000; // Indian/Maldives is permanently UTC+5 (no DST)
+
+export interface MaldivesTimeParts {
+  year: number;
+  month: number; // 1-12
+  day: number;   // 1-31
+  hour: number;  // 0-23
+  minute: number;// 0-59
+  second: number;// 0-59
+}
 
 class ServerTimeService {
   private serverOffsetMs: number = 0;
   private monotonicBaseClientMs: number = 0;
+  private wallBaseClientMs: number = 0;
   private monotonicBaseServerMs: number = 0;
   private isInitialized: boolean = false;
   private isSyncing: boolean = false;
@@ -45,15 +56,28 @@ class ServerTimeService {
     await this.syncTime();
 
     // Resync when browser regains network connectivity
-    window.addEventListener('online', () => {
-      console.log('[ServerTime] Network reconnected; resynchronizing clock...');
-      this.syncTime();
-    });
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        console.log('[ServerTime] Network reconnected; resynchronizing clock...');
+        this.syncTime();
+      });
+    }
+
+    // Resync immediately when mobile/tablet PWA wakes from sleep or background
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this.syncTime();
+        }
+      });
+    }
 
     // Periodic synchronization
     if (this.syncTimer) clearInterval(this.syncTimer);
     this.syncTimer = setInterval(() => {
-      this.syncTime();
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        this.syncTime();
+      }
     }, SYNC_INTERVAL_MS);
   }
 
@@ -65,7 +89,6 @@ class ServerTimeService {
     this.isSyncing = true;
 
     const clientStart = Date.now();
-    const monotonicStart = performance.now();
 
     try {
       let serverEpoch: number | null = null;
@@ -90,14 +113,12 @@ class ServerTimeService {
       }
 
       // 2. Secondary Fallback: Supabase RPC get_server_time (only if the function exists)
-      // NOTE: This RPC may not be deployed — errors are suppressed silently.
       if (!serverEpoch) {
         try {
           const { data, error } = await supabase.rpc('get_server_time');
           if (!error && data && data.epochMs) {
             serverEpoch = Number(data.epochMs);
           }
-          // If error (404 / function not found), fall through silently
         } catch {
           // Fall through to HTTP Date header fallback
         }
@@ -106,19 +127,23 @@ class ServerTimeService {
       // 3. Tertiary Fallback: HTTP Date Header from Supabase REST endpoint
       if (!serverEpoch) {
         try {
-          const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6eXJzdGVob2VzbWh3a2h0b3hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMzc3NzUsImV4cCI6MjA5NDkxMzc3NX0.itHESCbXktM7ZVUuB4BhI_UB7qH8IGVM1ZYnml8pxBk';
+          const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
           const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://pzyrstehoesmhwkhtoxd.supabase.co';
-          const res = await fetch(`${supabaseUrl}/rest/v1/equipment?select=id&limit=1`, {
-            method: 'HEAD',
-            cache: 'no-store',
-            headers: {
-              'apikey': anonKey,
-              'Authorization': `Bearer ${anonKey}`,
+          if (anonKey && supabaseUrl) {
+            const headStart = Date.now();
+            const res = await fetch(`${supabaseUrl}/rest/v1/equipment?select=id&limit=1`, {
+              method: 'HEAD',
+              cache: 'no-store',
+              headers: {
+                'apikey': anonKey,
+                'Authorization': `Bearer ${anonKey}`,
+              }
+            });
+            const serverDateHeader = res.headers.get('date');
+            if (serverDateHeader) {
+              // Compensate for 1-second HTTP Date header quantization by adding 500ms midpoint
+              serverEpoch = new Date(serverDateHeader).getTime() + 500 + Math.floor((Date.now() - headStart) / 2);
             }
-          });
-          const serverDateHeader = res.headers.get('date');
-          if (serverDateHeader) {
-            serverEpoch = new Date(serverDateHeader).getTime();
           }
         } catch {}
       }
@@ -132,6 +157,7 @@ class ServerTimeService {
         const estimatedServerNow = serverEpoch + Math.floor(rtt / 2);
         this.serverOffsetMs = estimatedServerNow - clientEnd;
         this.monotonicBaseClientMs = monotonicEnd;
+        this.wallBaseClientMs = clientEnd;
         this.monotonicBaseServerMs = estimatedServerNow;
 
         try {
@@ -140,7 +166,7 @@ class ServerTimeService {
 
         console.log(
           `[ServerTime] Clock synchronized. RTT: ${rtt}ms, Server Offset: ${this.serverOffsetMs}ms, ` +
-          `Server Time: ${new Date(estimatedServerNow).toISOString()}`
+          `Server Time: ${new Date(estimatedServerNow).toISOString()} (MVT Date: ${this.getServerDate()})`
         );
 
         this.notifyListeners();
@@ -160,11 +186,21 @@ class ServerTimeService {
 
   /**
    * Returns authoritative server epoch time in milliseconds.
-   * Leverages monotonic performance.now() to prevent client clock tampering.
+   * Leverages monotonic performance.now() to prevent client clock tampering,
+   * while detecting mobile/tablet sleep drift where performance.now() pauses.
    */
   public getServerEpochMs(): number {
     if (this.monotonicBaseClientMs > 0 && this.monotonicBaseServerMs > 0) {
       const monotonicElapsed = performance.now() - this.monotonicBaseClientMs;
+      const wallElapsed = Date.now() - this.wallBaseClientMs;
+      // If tablet slept and performance.now() paused relative to wall clock (>5s divergence),
+      // use wall clock + serverOffsetMs and trigger an immediate background resync.
+      if (Math.abs(wallElapsed - monotonicElapsed) > 5000) {
+        if (!this.isSyncing) {
+          void this.syncTime();
+        }
+        return Date.now() + this.serverOffsetMs;
+      }
       return Math.round(this.monotonicBaseServerMs + monotonicElapsed);
     }
     return Date.now() + this.serverOffsetMs;
@@ -185,16 +221,75 @@ class ServerTimeService {
   }
 
   /**
-   * Returns authoritative server date string (YYYY-MM-DD).
+   * Returns authoritative server date string (YYYY-MM-DD) in Maldives Standard Time (UTC+5).
+   * Fixes the 00:00-04:59 MVT midnight bug where UTC .toISOString() returned yesterday's date.
    */
-  public getServerDate(): string {
-    return this.getServerIso().split('T')[0];
+  public getServerDate(timeZone: string = 'Indian/Maldives'): string {
+    if (timeZone === 'Indian/Maldives') {
+      const mvtDate = new Date(this.getServerEpochMs() + MALDIVES_OFFSET_MS);
+      return mvtDate.toISOString().split('T')[0];
+    }
+    try {
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(this.getServerTime());
+    } catch {
+      const mvtDate = new Date(this.getServerEpochMs() + MALDIVES_OFFSET_MS);
+      return mvtDate.toISOString().split('T')[0];
+    }
   }
 
   /**
-   * Formats authoritative server time to HH:mm (24-hour format) in local or specified timezone.
+   * Returns YYYY-MM-DD in Maldives Standard Time (UTC+5) offset by `daysOffset` days from server time.
+   */
+  public getRelativeDate(daysOffset: number): string {
+    const mvtDate = new Date(this.getServerEpochMs() + MALDIVES_OFFSET_MS + daysOffset * 86400000);
+    return mvtDate.toISOString().split('T')[0];
+  }
+
+  /**
+   * Returns broken-down calendar and clock parts in Maldives Standard Time (UTC+5),
+   * completely independent of the client browser's configured OS timezone.
+   */
+  public getMaldivesParts(epochMs?: number): MaldivesTimeParts {
+    const targetEpoch = epochMs !== undefined ? epochMs : this.getServerEpochMs();
+    const mvt = new Date(targetEpoch + MALDIVES_OFFSET_MS);
+    return {
+      year: mvt.getUTCFullYear(),
+      month: mvt.getUTCMonth() + 1,
+      day: mvt.getUTCDate(),
+      hour: mvt.getUTCHours(),
+      minute: mvt.getUTCMinutes(),
+      second: mvt.getUTCSeconds(),
+    };
+  }
+
+  /**
+   * Converts a Maldives operational date (YYYY-MM-DD) and local time (HH:mm or HH:mm:ss)
+   * into an authoritative UTC ISO string, immune to client device timezone settings.
+   */
+  public toMaldivesIso(dateStr: string, timeStr: string): string {
+    const cleanDate = (dateStr || this.getServerDate()).trim().split('T')[0];
+    const cleanTime = (timeStr || this.getServerTimeString()).trim();
+    const normalizedTime = /^\d{2}:\d{2}$/.test(cleanTime) ? `${cleanTime}:00` : cleanTime;
+    const parsed = new Date(`${cleanDate}T${normalizedTime}+05:00`);
+    if (isNaN(parsed.getTime())) {
+      return this.getServerIso();
+    }
+    return parsed.toISOString();
+  }
+
+  /**
+   * Formats authoritative server time to HH:mm (24-hour format) in Maldives (UTC+5) or specified timezone.
    */
   public getServerTimeString(timeZone: string = 'Indian/Maldives', hour12: boolean = false): string {
+    if (timeZone === 'Indian/Maldives' && !hour12) {
+      const { hour, minute } = this.getMaldivesParts();
+      return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    }
     try {
       return this.getServerTime().toLocaleTimeString('en-GB', {
         timeZone,
@@ -203,7 +298,8 @@ class ServerTimeService {
         hour12
       });
     } catch {
-      return this.getServerTime().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit' });
+      const { hour, minute } = this.getMaldivesParts();
+      return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
     }
   }
 

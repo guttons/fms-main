@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx/dist/xlsx.full.min.js';
 import { InternationalSchedule, ScheduleCrossCheckResult, PredictiveUpliftForecast, FlightJob, FlightLog } from '../types';
+import { serverTimeService } from './serverTimeService';
 
 export const INITIAL_MOCK_SCHEDULES: InternationalSchedule[] = [];
 
@@ -663,7 +664,7 @@ Air India,AI263,14:10,15:25,DEL,MLE,A320,0204060,2026-01-01,2026-10-31`;
         }
 
         const item: InternationalSchedule = {
-          id: `intl-sch-xl-${Date.now()}-${r}-${Math.random().toString(36).slice(2, 6)}`,
+          id: `intl-sch-xl-${serverTimeService.getServerEpochMs()}-${r}-${Math.random().toString(36).slice(2, 6)}`,
           flightNumber,
           airlineCode,
           airlineName: airlineNameRow,
@@ -679,7 +680,7 @@ Air India,AI263,14:10,15:25,DEL,MLE,A320,0204060,2026-01-01,2026-10-31`;
           isActive: true,
           isDomestic,
           season,
-          uploadedAt: new Date().toISOString(),
+          uploadedAt: serverTimeService.getServerIso(),
           uploadedBy: uploader,
           sourceFilename: fileName
         };
@@ -723,7 +724,7 @@ Air India,AI263,14:10,15:25,DEL,MLE,A320,0204060,2026-01-01,2026-10-31`;
       return [];
     }
 
-    const cleanDateStr = (dateStr || '').split('T')[0] || new Date().toISOString().split('T')[0];
+    const cleanDateStr = (dateStr || '').split('T')[0] || serverTimeService.getServerDate();
     const [yStr, mStr, dStr] = cleanDateStr.split('-');
     const y = parseInt(yStr, 10) || 2026;
     const m = parseInt(mStr, 10) || 8;

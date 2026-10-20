@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { supabase } from '../supabase';
 import { User } from '../types';
 import { activityLogService, LogModule, LogAction } from '../services/activityLogService';
+import { serverTimeService } from '../services/serverTimeService';
 
 interface UseStaffActivityTrackerParams {
   user: User | null;
@@ -86,11 +87,11 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
       const localLogsKey = `fms_staff_activity_${user.id}`;
       const existing = JSON.parse(localStorage.getItem(localLogsKey) || '[]');
       const newEntry = {
-        id: `local-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        id: `local-${serverTimeService.getServerEpochMs()}-${Math.random().toString(36).substring(2, 6)}`,
         staff_id: user.id,
         activity_type: type,
         activity_data: data,
-        created_at: new Date().toISOString()
+        created_at: serverTimeService.getServerIso()
       };
       localStorage.setItem(localLogsKey, JSON.stringify([newEntry, ...existing.slice(0, 49)]));
 
@@ -138,7 +139,7 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
           role: user.role,
           status,
           location: currentLocationRef.current,
-          lastActive: new Date().toISOString()
+          lastActive: serverTimeService.getServerIso()
         }).catch(() => {});
       }
 
@@ -146,7 +147,7 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
 
       const updates: any = { 
         current_status: status, 
-        last_active_at: new Date().toISOString() 
+        last_active_at: serverTimeService.getServerIso() 
       };
       if (jobId !== undefined) updates.current_job_id = jobId;
       if (vehicleId !== undefined) updates.current_vehicle_id = vehicleId;
@@ -178,7 +179,7 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
       lng,
       accuracy,
       zone,
-      timestamp: new Date().toISOString()
+      timestamp: serverTimeService.getServerIso()
     };
 
     setCurrentLocation(locationData);
@@ -195,7 +196,7 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
         role: user.role,
         status: statusRef.current,
         location: locationData,
-        lastActive: new Date().toISOString()
+        lastActive: serverTimeService.getServerIso()
       }).catch(() => {});
     }
 
@@ -207,7 +208,7 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
       if (ENABLE_REMOTE_STAFF_TRACKING) {
         const { error } = await supabase.from('staff').update({ 
           current_location: locationData,
-          last_active_at: new Date().toISOString() 
+          last_active_at: serverTimeService.getServerIso() 
         }).or(`id.eq.${user.id},employee_id.eq.${user.id}`);
 
         if (error) {
@@ -242,10 +243,10 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
           navigator.geolocation.clearWatch(watchIdRef.current);
         }
 
-        let lastUpdate = Date.now();
+        let lastUpdate = serverTimeService.getServerEpochMs();
         watchIdRef.current = navigator.geolocation.watchPosition(
           (watchPos) => {
-            const now = Date.now();
+            const now = serverTimeService.getServerEpochMs();
             // Debounce position updates to every 20 seconds
             if (now - lastUpdate >= 20000) {
               lastUpdate = now;
@@ -310,7 +311,7 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
             role: user.role,
             status: statusRef.current,
             location: currentLocationRef.current,
-            lastActive: new Date().toISOString()
+            lastActive: serverTimeService.getServerIso()
           }).catch(() => {});
         }
       });
@@ -322,6 +323,7 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
 
         // Heartbeat every 60 seconds to update last_active_at and presence
         intervalRef.current = setInterval(async () => {
+          if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
           if (presenceChannelRef.current) {
             presenceChannelRef.current.track({
               id: user.id,
@@ -329,13 +331,13 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
               role: user.role,
               status: statusRef.current,
               location: currentLocationRef.current,
-              lastActive: new Date().toISOString()
+              lastActive: serverTimeService.getServerIso()
             }).catch(() => {});
           }
 
           if (ENABLE_REMOTE_STAFF_TRACKING) {
             const { error } = await supabase.from('staff')
-              .update({ last_active_at: new Date().toISOString() })
+              .update({ last_active_at: serverTimeService.getServerIso() })
               .or(`id.eq.${user.id},employee_id.eq.${user.id}`);
             if (error) {
               console.warn('[Staff Tracker] Heartbeat update failed:', error.message || error);
@@ -383,7 +385,7 @@ export const useStaffActivityTracker = ({ user, isAuthenticated, skipLifecycle =
           
           supabase.from('staff').update({ 
             current_status: 'OFFLINE', 
-            last_active_at: new Date().toISOString() 
+            last_active_at: serverTimeService.getServerIso() 
           }).or(`id.eq.${user.id},employee_id.eq.${user.id}`).then();
         }
       };

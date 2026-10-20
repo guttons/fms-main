@@ -1,5 +1,6 @@
 import { Tank, FlightJob, FlightLog, BridgingLog, StaffMember, Equipment, Vessel } from '../types';
 import { CustomerAccount } from '../context/FinanceDataContext';
+import { serverTimeService } from './serverTimeService';
 
 export interface OutboxItem {
   id: string; // UUID or timestamp string
@@ -357,8 +358,8 @@ class FMSDatabase {
   async enqueueOutbox(item: Omit<OutboxItem, 'id' | 'timestamp' | 'syncStatus' | 'retryCount'>): Promise<OutboxItem> {
     const fullItem: OutboxItem = {
       ...item,
-      id: `outbox-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      timestamp: new Date().toISOString(),
+      id: `outbox-${serverTimeService.getServerEpochMs()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: serverTimeService.getServerIso(),
       syncStatus: 'PENDING',
       retryCount: 0
     };

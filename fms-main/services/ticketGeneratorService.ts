@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 import { TicketCategory, TicketSequenceConfig } from '../types';
 import { activityLogService, LogModule, LogAction } from './activityLogService';
+import { serverTimeService } from './serverTimeService';
 
 const STORAGE_KEY = 'fms_ticket_sequences_cache';
 
@@ -220,7 +221,7 @@ class TicketGeneratorService {
       ...current,
       ...updates,
       category,
-      updatedAt: new Date().toISOString(),
+      updatedAt: serverTimeService.getServerIso(),
       updatedBy: currentUser?.name || currentUser?.employeeId || 'System Admin'
     };
 
@@ -263,7 +264,7 @@ class TicketGeneratorService {
         .upsert({
           key: 'ticket_sequences',
           value: this.inMemoryCache,
-          updated_at: new Date().toISOString()
+          updated_at: serverTimeService.getServerIso()
         });
 
       // Audit log
@@ -314,7 +315,7 @@ class TicketGeneratorService {
         // Update local cache with newly returned number
         this.inMemoryCache[category].currentNumber = Number(data.sequence_number);
         this.inMemoryCache[category].lastGeneratedTicket = data.ticket_number;
-        this.inMemoryCache[category].lastGeneratedAt = new Date().toISOString();
+        this.inMemoryCache[category].lastGeneratedAt = serverTimeService.getServerIso();
         this.saveToLocalStorage();
         this.notifyListeners();
 
@@ -334,7 +335,7 @@ class TicketGeneratorService {
 
     config.currentNumber = nextNum;
     config.lastGeneratedTicket = ticket;
-    config.lastGeneratedAt = new Date().toISOString();
+    config.lastGeneratedAt = serverTimeService.getServerIso();
     config.updatedBy = operatorId;
 
     this.inMemoryCache[category] = config;

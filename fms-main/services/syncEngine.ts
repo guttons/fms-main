@@ -1,5 +1,6 @@
 import { fmsDb, OutboxItem } from './db';
 import { supabase } from '../supabase';
+import { serverTimeService } from './serverTimeService';
 
 export interface SyncEngineStatus {
   isOnline: boolean;
@@ -119,7 +120,7 @@ class SyncEngine {
 
       const remaining = await fmsDb.getPendingOutbox();
       this.pendingCount = remaining.length;
-      this.lastSyncedAt = new Date().toISOString();
+      this.lastSyncedAt = serverTimeService.getServerIso();
       localStorage.setItem('fms_last_synced_at', this.lastSyncedAt);
     } catch (err: any) {
       console.error('[SyncEngine] Global outbox flush error:', err);

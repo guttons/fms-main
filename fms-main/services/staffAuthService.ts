@@ -1,4 +1,6 @@
-﻿import { supabase } from '../supabase';
+import { supabase } from '../supabase';
+import { serverTimeService } from './serverTimeService';
+import { apiFetch, setStaffAuthToken } from './apiClient';
 
 interface StaffAuthRecord {
   staff_id: string;
@@ -9,6 +11,9 @@ interface StaffAuthRecord {
   locked_until?: string | null;
   last_password_change?: string;
 }
+
+const PBKDF2_ITERATIONS = 100000;
+const PBKDF2_PREFIX = `pbkdf2_${PBKDF2_ITERATIONS}$`;
 
 class StaffAuthService {
   /**
@@ -21,14 +26,41 @@ class StaffAuthService {
   }
 
   /**
-   * Hashes a password string with a salt using Web Crypto SHA-256
+   * Legacy single-pass SHA-256 hash (retained strictly for transparent migration of existing accounts)
    */
-  private async hashPassword(password: string, salt: string): Promise<string> {
+  private async legacyHashPassword(password: string, salt: string): Promise<string> {
     const enc = new TextEncoder();
     const data = enc.encode(`${salt}:${password}`);
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  /**
+   * Hashes a password string with a salt using Web Crypto PBKDF2-SHA256 (100,000 iterations)
+   */
+  private async hashPassword(password: string, salt: string): Promise<string> {
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      enc.encode(password),
+      { name: 'PBKDF2' },
+      false,
+      ['deriveBits']
+    );
+    const derivedBits = await crypto.subtle.deriveBits(
+      {
+        name: 'PBKDF2',
+        salt: enc.encode(salt),
+        iterations: PBKDF2_ITERATIONS,
+        hash: 'SHA-256'
+      },
+      keyMaterial,
+      256
+    );
+    const hashArray = Array.from(new Uint8Array(derivedBits));
+    const hex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return `${PBKDF2_PREFIX}${hex}`;
   }
 
   /**
@@ -44,7 +76,7 @@ class StaffAuthService {
 
       if (!error && data) return true;
 
-      // Fallback check in local storage if Supabase table is not yet created
+      // Fallback check in local storage if offline
       const local = localStorage.getItem(`fms_staff_pwd_${staffId}`);
       if (local) return true;
 
@@ -56,7 +88,7 @@ class StaffAuthService {
   }
 
   /**
-   * Verifies the staff password
+   * Verifies the staff password using authoritative server time and PBKDF2
    */
   async verifyPassword(staffId: string, plainText: string): Promise<{ 
     success: boolean; 
@@ -64,6 +96,7 @@ class StaffAuthService {
     mustChange?: boolean;
     isLocked?: boolean;
     lockedUntil?: Date;
+    token?: string;
   }> {
     if (!plainText || !plainText.trim()) {
       return { success: false, error: 'Password is required' };
@@ -81,8 +114,12 @@ class StaffAuthService {
 
       if (!error && data) {
         record = data as StaffAuthRecord;
+        // Remove any legacy plaintext hash cache from localStorage when online
+        try {
+          localStorage.removeItem(`fms_staff_pwd_${staffId}`);
+        } catch (_) {}
       } else {
-        // Check local storage fallback
+        // Check local storage fallback only when Supabase table is unreachable
         const local = localStorage.getItem(`fms_staff_pwd_${staffId}`);
         if (local) {
           try {
@@ -95,8 +132,11 @@ class StaffAuthService {
         return { success: false, error: 'No password set for this staff member' };
       }
 
-      // 2. Check if account is locked
-      if (record.locked_until && new Date(record.locked_until) > new Date()) {
+      const serverNow = serverTimeService.getServerTime();
+      const serverEpochMs = serverTimeService.getServerEpochMs();
+
+      // 2. Check if account is locked against authoritative server time
+      if (record.locked_until && new Date(record.locked_until) > serverNow) {
         return { 
           success: false, 
           error: `Account is temporarily locked until ${new Date(record.locked_until).toLocaleTimeString()}`,
@@ -105,9 +145,20 @@ class StaffAuthService {
         };
       }
 
-      // 3. Verify hash
-      const computedHash = await this.hashPassword(plainText, record.salt);
-      const isMatch = computedHash === record.password_hash;
+      // 3. Verify hash (supports PBKDF2-100k and transparent upgrade from legacy SHA-256)
+      let isMatch = false;
+      let needsHashUpgrade = false;
+
+      if (record.password_hash.startsWith(PBKDF2_PREFIX)) {
+        const computedPbkdf2 = await this.hashPassword(plainText, record.salt);
+        isMatch = computedPbkdf2 === record.password_hash;
+      } else {
+        const computedLegacy = await this.legacyHashPassword(plainText, record.salt);
+        isMatch = computedLegacy === record.password_hash;
+        if (isMatch) {
+          needsHashUpgrade = true;
+        }
+      }
 
       if (!isMatch) {
         const attempts = (record.failed_attempts || 0) + 1;
@@ -116,7 +167,7 @@ class StaffAuthService {
         let lockedUntilDate: Date | undefined;
 
         if (attempts >= 5) {
-          lockedUntilDate = new Date(Date.now() + 15 * 60 * 1000); // 15 mins lock
+          lockedUntilDate = new Date(serverEpochMs + 15 * 60 * 1000); // 15 mins lock via server time
           updates.locked_until = lockedUntilDate.toISOString();
           isLocked = true;
         }
@@ -126,12 +177,6 @@ class StaffAuthService {
           .from('staff_passwords')
           .update(updates)
           .eq('staff_id', staffId);
-
-        // Update in local storage
-        try {
-          const updatedRecord = { ...record, ...updates };
-          localStorage.setItem(`fms_staff_pwd_${staffId}`, JSON.stringify(updatedRecord));
-        } catch (_) {}
 
         if (isLocked) {
           return {
@@ -149,20 +194,43 @@ class StaffAuthService {
         };
       }
 
-      // 4. Success — reset failed attempts
+      // 4. Success — reset failed attempts and transparently upgrade hash to PBKDF2 if needed
+      const successUpdates: Record<string, any> = {
+        failed_attempts: 0,
+        locked_until: null,
+        updated_at: serverTimeService.getServerIso()
+      };
+
+      if (needsHashUpgrade) {
+        const upgradedSalt = this.generateSalt();
+        successUpdates.salt = upgradedSalt;
+        successUpdates.password_hash = await this.hashPassword(plainText, upgradedSalt);
+      }
+
       await supabase
         .from('staff_passwords')
-        .update({ failed_attempts: 0, locked_until: null })
+        .update(successUpdates)
         .eq('staff_id', staffId);
 
+      // 5. Request signed Staff JWT from backend API (non-blocking fallback if offline)
+      let issuedToken: string | undefined;
       try {
-        const updatedRecord = { ...record, failed_attempts: 0, locked_until: null };
-        localStorage.setItem(`fms_staff_pwd_${staffId}`, JSON.stringify(updatedRecord));
-      } catch (_) {}
+        const tokenRes = await apiFetch<{ success: boolean; token?: string }>('/auth/issue-staff-token', {
+          method: 'POST',
+          body: JSON.stringify({ staffId })
+        });
+        if (tokenRes?.token) {
+          issuedToken = tokenRes.token;
+          setStaffAuthToken(tokenRes.token);
+        }
+      } catch (_) {
+        // Offline or local dev without API running
+      }
 
       return { 
         success: true, 
-        mustChange: record.must_change_password || false 
+        mustChange: record.must_change_password || false,
+        token: issuedToken
       };
 
     } catch (err: any) {
@@ -172,7 +240,7 @@ class StaffAuthService {
   }
 
   /**
-   * Sets or updates an individual staff member's password
+   * Sets or updates an individual staff member's password using PBKDF2
    */
   async setPassword(staffId: string, newPassword: string, mustChange = false): Promise<{ success: boolean; error?: string }> {
     if (!newPassword || newPassword.length < 4) {
@@ -182,6 +250,7 @@ class StaffAuthService {
     try {
       const salt = this.generateSalt();
       const passwordHash = await this.hashPassword(newPassword, salt);
+      const nowIso = serverTimeService.getServerIso();
 
       const record: StaffAuthRecord = {
         staff_id: staffId,
@@ -190,7 +259,7 @@ class StaffAuthService {
         must_change_password: mustChange,
         failed_attempts: 0,
         locked_until: null,
-        last_password_change: new Date().toISOString()
+        last_password_change: nowIso
       };
 
       // 1. Save to Supabase
@@ -204,17 +273,19 @@ class StaffAuthService {
           failed_attempts: record.failed_attempts,
           locked_until: record.locked_until,
           last_password_change: record.last_password_change,
-          updated_at: new Date().toISOString()
+          updated_at: nowIso
         }, { onConflict: 'staff_id' });
 
       if (error) {
-        console.warn('[StaffAuthService] Supabase upsert failed (will save locally):', error.message);
+        console.warn('[StaffAuthService] Supabase upsert failed (will save offline fallback):', error.message);
+        try {
+          localStorage.setItem(`fms_staff_pwd_${staffId}`, JSON.stringify(record));
+        } catch (_) {}
+      } else {
+        try {
+          localStorage.removeItem(`fms_staff_pwd_${staffId}`);
+        } catch (_) {}
       }
-
-      // 2. Save locally for resilience
-      try {
-        localStorage.setItem(`fms_staff_pwd_${staffId}`, JSON.stringify(record));
-      } catch (_) {}
 
       return { success: true };
     } catch (err: any) {

@@ -11,6 +11,8 @@ import { FuelType, FlightLog, User } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell, ScatterChart, Scatter, ZAxis, AreaChart, Area, ComposedChart, LineChart, Line } from 'recharts';
 import { lookupDipSync, preloadCalibrationData } from '../services/calibrationService';
 import { supabaseService } from '../services/supabaseService';
+import { serverTimeService } from '../services/serverTimeService';
+import { escapeHtml } from '../utils/sanitize';
 import { PIT_MAPPING } from '../constants';
 
 interface FuelReportsProps {
@@ -492,7 +494,7 @@ const emptyGroundData = {
       };
     });
 
-    const thirtyDaysAgo = new Date();
+    const thirtyDaysAgo = serverTimeService.getServerTime();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const sales30DaysMap: { [dateStr: string]: number } = {};
     (flightLogs || []).filter(l => {
@@ -955,7 +957,7 @@ const emptyGroundData = {
       };
     });
 
-    const thirtyDaysAgo = new Date();
+    const thirtyDaysAgo = serverTimeService.getServerTime();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const sales30DaysMap: { [dateStr: string]: { diesel: number, petrol: number } } = {};
     (flightLogs || []).filter(l => {
@@ -1245,7 +1247,7 @@ const emptyGroundData = {
 
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const monthNames = months;
-      const today = new Date();
+      const today = serverTimeService.getServerTime();
       const todayFormatted = `${String(today.getDate()).padStart(2, '0')}-${monthNames[today.getMonth()]}-${today.getFullYear()}`;
       const pdfFileName = `FSS STOCK SUMMARY (${todayFormatted})`;
 
@@ -1924,14 +1926,14 @@ const emptyGroundData = {
         <tbody>
           ${offTanksData.map(t => `
             <tr>
-              <td>${t.name}</td>
+              <td>${escapeHtml(t.name)}</td>
               <td class="center font-mono">${t.dip !== null && t.dip > 0 ? t.dip.toLocaleString() : 'NIL'}</td>
               <td class="right font-mono" style="padding-right: 4px;">${t.volume.toLocaleString()}</td>
             </tr>
           `).join('')}
           ${offRefuellersData.map(r => `
             <tr>
-              <td>${r.name}</td>
+              <td>${escapeHtml(r.name)}</td>
               <td class="center font-mono">NIL</td>
               <td class="right font-mono" style="padding-right: 4px;">${r.volume.toLocaleString()}</td>
             </tr>

@@ -38,6 +38,8 @@ Deno.serve(async (req: Request) => {
     }
 
     const now = new Date();
+    const mvtNow = new Date(now.getTime() + 5 * 3600 * 1000);
+    const mvtDateStr = mvtNow.toISOString().split('T')[0];
     const alertsToSend: any[] = [];
     const jobUpdates: { id: string; fields: any }[] = [];
 
@@ -56,8 +58,11 @@ Deno.serve(async (req: Request) => {
       const minutes = parseInt(minutesStr, 10);
       if (isNaN(hours) || isNaN(minutes)) continue;
 
-      const targetTime = new Date(now);
-      targetTime.setHours(hours, minutes, 0, 0);
+      const jobDate = job.flight_date || job.flightDate || mvtDateStr;
+      const targetTime = new Date(
+        `${jobDate}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00+05:00`
+      );
+      if (isNaN(targetTime.getTime())) continue;
 
       const diffMs = targetTime.getTime() - now.getTime();
       const diffMins = diffMs / 60000;
@@ -80,7 +85,7 @@ Deno.serve(async (req: Request) => {
             severity: 'medium',
             flight_number: metadata.flightNumber,
             message: `⏰ ETA WARNING: Flight ${metadata.flightNumber} arriving in ~15 minutes at Stand ${metadata.stand || 'TBA'}`,
-            timestamp: new Date().toISOString(),
+            timestamp: now.toISOString(),
             acknowledged: false,
             target_role: 'ITP_OPERATOR',
             assigned_staff_id: assignedTo,
@@ -93,7 +98,7 @@ Deno.serve(async (req: Request) => {
             severity: 'medium',
             flight_number: metadata.flightNumber,
             message: `⏰ ETA WARNING: Flight ${metadata.flightNumber} arriving in ~15 minutes at Stand ${metadata.stand || 'TBA'}`,
-            timestamp: new Date().toISOString(),
+            timestamp: now.toISOString(),
             acknowledged: false,
             target_role: 'ITP_OFFICER',
             assigned_staff_id: assignedOfficer,
@@ -111,7 +116,7 @@ Deno.serve(async (req: Request) => {
             severity: 'critical',
             flight_number: metadata.flightNumber,
             message: `🚨 ETA CRITICAL: Flight ${metadata.flightNumber} arriving in ~5 minutes at Stand ${metadata.stand || 'TBA'}`,
-            timestamp: new Date().toISOString(),
+            timestamp: now.toISOString(),
             acknowledged: false,
             target_role: 'ITP_OPERATOR',
             assigned_staff_id: assignedTo,
@@ -124,7 +129,7 @@ Deno.serve(async (req: Request) => {
             severity: 'critical',
             flight_number: metadata.flightNumber,
             message: `🚨 ETA CRITICAL: Flight ${metadata.flightNumber} arriving in ~5 minutes at Stand ${metadata.stand || 'TBA'}`,
-            timestamp: new Date().toISOString(),
+            timestamp: now.toISOString(),
             acknowledged: false,
             target_role: 'ITP_OFFICER',
             assigned_staff_id: assignedOfficer,
@@ -155,6 +160,7 @@ Deno.serve(async (req: Request) => {
           .in('user_id', recipientIds);
 
         if (subscriptions && subscriptions.length > 0) {
+          const webhookSecret = Deno.env.get('FMS_WEBHOOK_SECRET') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
           for (const alert of alertsToSend) {
             const staffSubs = subscriptions.filter((s: any) => s.user_id === alert.assigned_staff_id);
             if (staffSubs.length > 0) {
@@ -170,7 +176,10 @@ Deno.serve(async (req: Request) => {
 
               await fetch(`${bigQueryApiUrl}/api/push/send`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(webhookSecret ? { 'X-Webhook-Secret': webhookSecret } : {})
+                },
                 body: JSON.stringify({ subscriptions: staffSubs, payload })
               }).catch(e => console.warn('Push send failed in Edge Function:', e));
             }

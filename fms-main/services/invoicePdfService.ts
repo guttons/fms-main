@@ -1,6 +1,7 @@
 import { FlightLog, User } from '../types';
 import { numberToWords } from '../utils/numberToWords';
 import { MACL_LOGO_BASE64 } from './maclLogoBase64';
+import { serverTimeService } from './serverTimeService';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -40,10 +41,10 @@ function formatTime(isoString?: string | null): string {
  */
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) {
-    const now = new Date();
-    const day = String(now.getDate()).padStart(2, '0');
-    const month = MONTHS[now.getMonth()];
-    const year = String(now.getFullYear()).slice(-2);
+    const parts = serverTimeService.getMaldivesParts();
+    const day = String(parts.day).padStart(2, '0');
+    const month = MONTHS[parts.month - 1];
+    const year = String(parts.year).slice(-2);
     return `${day}-${month}-${year}`;
   }
   try {
@@ -1802,15 +1803,15 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
   };
 
   // ── 1. HEADER ──
-  // Draw MACL Emblem Badge on left
+  // Draw official MACL Logo with correct aspect ratio (274 / 96 = 2.854)
   const logoImg = await loadImageSafe(MACL_LOGO_BASE64, 1000);
   let titleStartX = inX;
   if (logoImg) {
     try {
-      const lw = 110;
-      const lh = 52;
-      ctx.drawImage(logoImg, inX, curY + 4, lw, lh);
-      titleStartX = inX + lw + 16;
+      const lh = 64;
+      const lw = Math.round(lh * (274 / 96)); // 183px
+      ctx.drawImage(logoImg, inX, curY + 2, lw, lh);
+      titleStartX = inX + lw + 20;
     } catch {
       titleStartX = inX;
     }
@@ -1824,26 +1825,26 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
     ctx.fillText('MACL', inX + 38, curY + 36);
     ctx.fillStyle = '#0369a1';
     ctx.fillRect(inX, curY + 52, 76, 6);
-    titleStartX = inX + 92;
+    titleStartX = inX + 96;
   }
 
   ctx.textAlign = 'left';
   ctx.fillStyle = '#0f172a';
-  ctx.font = '900 20px Arial, Helvetica, sans-serif';
-  ctx.fillText('MALDIVES AIRPORTS COMPANY LIMITED', titleStartX, curY + 22);
+  ctx.font = '900 21px Arial, Helvetica, sans-serif';
+  ctx.fillText('MALDIVES AIRPORTS COMPANY LIMITED', titleStartX, curY + 20);
 
   ctx.fillStyle = '#0369a1';
   ctx.font = '900 15px Arial, Helvetica, sans-serif';
-  ctx.fillText('FUEL SERVICES SECTION', titleStartX, curY + 43);
+  ctx.fillText('FUEL SERVICES SECTION', titleStartX, curY + 44);
 
   ctx.fillStyle = '#64748b';
   ctx.font = 'bold 12.5px Arial, Helvetica, sans-serif';
-  ctx.fillText('VELANA INTERNATIONAL AIRPORT, MALDIVES', titleStartX, curY + 62);
+  ctx.fillText('VELANA INTERNATIONAL AIRPORT, MALDIVES', titleStartX, curY + 65);
 
   // Right side: JET A-1 badge + Delivery Ticket No
   const rightX = inX + inW;
-  const badgeW = 156;
-  const badgeH = 38;
+  const badgeW = 164;
+  const badgeH = 42;
   ctx.fillStyle = '#0369a1';
   ctx.beginPath();
   ctx.roundRect(rightX - badgeW, curY, badgeW, badgeH, 6);
@@ -1852,18 +1853,19 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
   ctx.fillStyle = '#ffffff';
   ctx.font = '900 23px Arial, Helvetica, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(d.productName || 'JET A-1', rightX - badgeW / 2, curY + 27);
+  ctx.fillText(d.productName || 'JET A-1', rightX - badgeW / 2, curY + 29);
 
   ctx.textAlign = 'right';
   ctx.fillStyle = '#64748b';
   ctx.font = '900 12px Arial, Helvetica, sans-serif';
-  ctx.fillText('DELIVERY TICKET NO', rightX, curY + 56);
+  ctx.fillText('DELIVERY TICKET NO', rightX, curY + 64);
 
   ctx.fillStyle = '#b91c1c';
-  ctx.font = '900 24px Arial, Helvetica, sans-serif';
-  ctx.fillText(d.deliveryNum, rightX, curY + 82);
+  ctx.font = '900 25px Arial, Helvetica, sans-serif';
+  ctx.fillText(d.deliveryNum, rightX, curY + 92);
 
-  curY += 98;
+  // Header bottom border
+  curY = 170;
   ctx.strokeStyle = '#0369a1';
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -1871,25 +1873,25 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
   ctx.lineTo(inX + inW, curY);
   ctx.stroke();
 
-  curY += 18;
+  curY = 188;
 
   // ── 2. META BAR ──
-  const metaH = 48;
+  const metaH = 58;
   ctx.fillStyle = '#f8fafc';
   ctx.fillRect(inX, curY, inW, metaH);
   ctx.strokeStyle = '#cbd5e1';
   ctx.lineWidth = 1.5;
   ctx.strokeRect(inX, curY, inW, metaH);
 
-  const metaTextY = curY + 30;
+  const metaTextY = curY + 36;
   ctx.textAlign = 'left';
   ctx.fillStyle = '#64748b';
   ctx.font = 'bold 12px Arial, Helvetica, sans-serif';
-  ctx.fillText('DATE:', inX + 14, metaTextY);
+  ctx.fillText('DATE:', inX + 16, metaTextY);
 
   ctx.fillStyle = '#0f172a';
   ctx.font = '900 16px Arial, Helvetica, sans-serif';
-  ctx.fillText(d.dateFormatted, inX + 60, metaTextY);
+  ctx.fillText(d.dateFormatted, inX + 64, metaTextY);
 
   // Payment Checkboxes
   let chkX = inX + 250;
@@ -1913,9 +1915,9 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
   curY += metaH + 18;
 
   // ── 3. FLIGHT & OPERATIONAL DETAILS TABLE ──
-  const r1H = 92;
-  const r2H = 68;
-  const r3H = 68;
+  const r1H = 110;
+  const r2H = 90;
+  const r3H = 90;
   const gridH = r1H + r2H + r3H;
 
   ctx.strokeStyle = '#cbd5e1';
@@ -1951,27 +1953,27 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
   const drawCellLabelVal = (cx: number, cy: number, cw: number, label: string, val: string, valColor = '#0f172a') => {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#64748b';
-    ctx.font = '900 11px Arial, Helvetica, sans-serif';
-    ctx.fillText(label, cx + 12, cy + 20);
+    ctx.font = '900 12px Arial, Helvetica, sans-serif';
+    ctx.fillText(label, cx + 14, cy + 26);
 
     ctx.fillStyle = valColor;
-    ctx.font = '900 15.5px Arial, Helvetica, sans-serif';
-    ctx.fillText(fitText(val, cw - 24), cx + 12, cy + 44);
+    ctx.font = '900 17px Arial, Helvetica, sans-serif';
+    ctx.fillText(fitText(val, cw - 28), cx + 14, cy + 56);
   };
 
   // Row 1 cells
   drawCellLabelVal(x1, curY, c1W, 'CUSTOMER / OPERATOR', d.customerDisplay);
-  let subY = curY + 64;
+  let subY = curY + 78;
   if (d.operatorDisplay && d.operatorDisplay !== d.customerDisplay) {
     ctx.fillStyle = '#475569';
-    ctx.font = '800 12px Arial, Helvetica, sans-serif';
-    ctx.fillText(fitText(`OP: ${d.operatorDisplay}`, c1W - 24), x1 + 12, subY);
-    subY += 16;
+    ctx.font = '800 13px Arial, Helvetica, sans-serif';
+    ctx.fillText(fitText(`OP: ${d.operatorDisplay}`, c1W - 28), x1 + 14, subY);
+    subY += 18;
   }
   if (d.coDisplay) {
     ctx.fillStyle = '#0369a1';
-    ctx.font = '800 12px Arial, Helvetica, sans-serif';
-    ctx.fillText(fitText(`C/O: ${d.coDisplay}`, c1W - 24), x1 + 12, subY);
+    ctx.font = '800 13px Arial, Helvetica, sans-serif';
+    ctx.fillText(fitText(`C/O: ${d.coDisplay}`, c1W - 28), x1 + 14, subY);
   }
 
   drawCellLabelVal(x2, curY, c2W, 'AIRCRAFT REG', d.aircraftReg);
@@ -2000,16 +2002,16 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
   ctx.lineTo(inX + tColW * 2, r3Y + r3H);
   ctx.stroke();
 
-  drawCellLabelVal(inX + 10, r3Y, tColW - 20, 'TIME REFUELLER ARRIVED', d.arrivedTime);
-  drawCellLabelVal(inX + tColW + 10, r3Y, tColW - 20, 'TIME COMMENCED', d.commencedTime);
-  drawCellLabelVal(inX + tColW * 2 + 10, r3Y, tColW - 20, 'TIME OVER (CLEARANCE)', d.overTime);
+  drawCellLabelVal(inX, r3Y, tColW, 'TIME REFUELLER ARRIVED', d.arrivedTime);
+  drawCellLabelVal(inX + tColW, r3Y, tColW, 'TIME COMMENCED', d.commencedTime);
+  drawCellLabelVal(inX + tColW * 2, r3Y, tColW, 'TIME OVER (CLEARANCE)', d.overTime);
 
   curY += gridH + 18;
 
   // ── 4. VOLUME & METER READINGS TABLE ──
-  const vHeadH = 42;
-  const vRowH = 54;
-  const vWordsH = 74;
+  const vHeadH = 48;
+  const vRowH = 74;
+  const vWordsH = 88;
   const volTableH = vHeadH + vRowH + vWordsH;
 
   // Header fill
@@ -2039,12 +2041,12 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
     }
     ctx.textAlign = 'center';
     ctx.fillStyle = '#0369a1';
-    ctx.font = '900 12.5px Arial, Helvetica, sans-serif';
-    ctx.fillText(vHeaders[i], vx + vColW / 2, curY + 26);
+    ctx.font = '900 13px Arial, Helvetica, sans-serif';
+    ctx.fillText(vHeaders[i], vx + vColW / 2, curY + 30);
 
     ctx.fillStyle = i === 3 ? '#0369a1' : '#0f172a';
-    ctx.font = i === 3 ? '900 22px Arial, Helvetica, sans-serif' : 'bold 16px Arial, Helvetica, sans-serif';
-    ctx.fillText(fitText(vValues[i], vColW - 14), vx + vColW / 2, curY + vHeadH + 34);
+    ctx.font = i === 3 ? '900 24px Arial, Helvetica, sans-serif' : 'bold 18px Arial, Helvetica, sans-serif';
+    ctx.fillText(fitText(vValues[i], vColW - 14), vx + vColW / 2, curY + vHeadH + 46);
   }
   ctx.stroke();
 
@@ -2057,17 +2059,17 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
 
   ctx.textAlign = 'left';
   ctx.fillStyle = '#64748b';
-  ctx.font = '900 11px Arial, Helvetica, sans-serif';
-  ctx.fillText('VOLUME DELIVERED (LITRES) IN WORDS:', inX + 14, wordsY + 22);
+  ctx.font = '900 12px Arial, Helvetica, sans-serif';
+  ctx.fillText('VOLUME DELIVERED (LITRES) IN WORDS:', inX + 16, wordsY + 28);
 
   ctx.fillStyle = '#0369a1';
-  ctx.font = 'italic 900 17px Arial, Helvetica, sans-serif';
-  ctx.fillText(fitText(d.volumeInWords, inW - 28), inX + 14, wordsY + 50);
+  ctx.font = 'italic 900 19px Georgia, serif';
+  ctx.fillText(fitText(d.volumeInWords, inW - 32), inX + 16, wordsY + 60);
 
   curY += volTableH + 18;
 
   // ── 5. PRE / POST REFUELLING CHECKS & JIG COMPLIANCE ──
-  const qcH = 132;
+  const qcH = 155;
   ctx.fillStyle = '#f8fafc';
   ctx.fillRect(inX, curY, inW, qcH);
   ctx.strokeStyle = '#cbd5e1';
@@ -2075,15 +2077,15 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
   ctx.strokeRect(inX, curY, inW, qcH);
 
   ctx.fillStyle = '#0369a1';
-  ctx.font = '900 13px Arial, Helvetica, sans-serif';
+  ctx.font = '900 14px Arial, Helvetica, sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillText('PRE / POST REFUELLING CHECKS & JIG COMPLIANCE', inX + 14, curY + 24);
+  ctx.fillText('PRE / POST REFUELLING CHECKS & JIG COMPLIANCE', inX + 16, curY + 28);
 
   ctx.strokeStyle = '#e2e8f0';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(inX + 14, curY + 34);
-  ctx.lineTo(inX + inW - 14, curY + 34);
+  ctx.moveTo(inX + 16, curY + 38);
+  ctx.lineTo(inX + inW - 16, curY + 38);
   ctx.stroke();
 
   const qcItems = [
@@ -2094,8 +2096,8 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
     'CLEAR & BRIGHT',
     'FREE OF WATER',
   ];
-  let qx = inX + 14;
-  const qy = curY + 66;
+  let qx = inX + 16;
+  const qy = curY + 74;
   for (const item of qcItems) {
     qx = drawCheckbox(qx, qy, true, item);
   }
@@ -2106,18 +2108,18 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
   ctx.strokeStyle = '#cbd5e1';
   ctx.lineWidth = 1.2;
   ctx.beginPath();
-  ctx.moveTo(inX + 14, curY + 86);
-  ctx.lineTo(inX + inW - 14, curY + 86);
+  ctx.moveTo(inX + 16, curY + 98);
+  ctx.lineTo(inX + inW - 16, curY + 98);
   ctx.stroke();
   ctx.restore();
 
   ctx.textAlign = 'center';
   ctx.fillStyle = '#334155';
-  ctx.font = '900 12px Arial, Helvetica, sans-serif';
+  ctx.font = '900 12.5px Arial, Helvetica, sans-serif';
   ctx.fillText(
     'THE FUEL DELIVERED WAS CHECKED BY AIRLINE REPRESENTATIVE AND FOUND CLEAR AND BRIGHT AND FREE OF WATER AND SEDIMENTS',
     inX + inW / 2,
-    curY + 112
+    curY + 130
   );
 
   curY += qcH + 18;
@@ -2125,7 +2127,7 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
   // ── 6. DUAL SIGNATURES SECTION ──
   const sigGap = 20;
   const sigColW = (inW - sigGap) / 2;
-  const sigH = 310;
+  const sigH = 598;
 
   const leftSigX = inX;
   const rightSigX = inX + sigColW + sigGap;
@@ -2138,85 +2140,84 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
 
   // Soft title ribbons
   ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(leftSigX, curY, sigColW, 36);
-  ctx.fillRect(rightSigX, curY, sigColW, 36);
+  ctx.fillRect(leftSigX, curY, sigColW, 44);
+  ctx.fillRect(rightSigX, curY, sigColW, 44);
 
   // Titles
   ctx.textAlign = 'left';
   ctx.fillStyle = '#0369a1';
-  ctx.font = '900 13px Arial, Helvetica, sans-serif';
-  ctx.fillText('DELIVERED BY (MACL FUEL SERVICES)', leftSigX + 14, curY + 24);
-  ctx.fillText('RECEIVED BY (AIRLINE REPRESENTATIVE)', rightSigX + 14, curY + 24);
+  ctx.font = '900 14px Arial, Helvetica, sans-serif';
+  ctx.fillText('DELIVERED BY (MACL FUEL SERVICES)', leftSigX + 16, curY + 28);
+  ctx.fillText('RECEIVED BY (AIRLINE REPRESENTATIVE)', rightSigX + 16, curY + 28);
 
   ctx.strokeStyle = '#e2e8f0';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(leftSigX, curY + 36);
-  ctx.lineTo(leftSigX + sigColW, curY + 36);
-  ctx.moveTo(rightSigX, curY + 36);
-  ctx.lineTo(rightSigX + sigColW, curY + 36);
+  ctx.moveTo(leftSigX, curY + 44);
+  ctx.lineTo(leftSigX + sigColW, curY + 44);
+  ctx.moveTo(rightSigX, curY + 44);
+  ctx.lineTo(rightSigX + sigColW, curY + 44);
   ctx.stroke();
 
   // Signature Pads
-  const padBottomY = curY + 186;
+  const padBottomY = curY + 360;
   ctx.strokeStyle = '#e2e8f0';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(leftSigX + 14, padBottomY);
-  ctx.lineTo(leftSigX + sigColW - 14, padBottomY);
-  ctx.moveTo(rightSigX + 14, padBottomY);
-  ctx.lineTo(rightSigX + sigColW - 14, padBottomY);
+  ctx.moveTo(leftSigX + 16, padBottomY);
+  ctx.lineTo(leftSigX + sigColW - 16, padBottomY);
+  ctx.moveTo(rightSigX + 16, padBottomY);
+  ctx.lineTo(rightSigX + sigColW - 16, padBottomY);
   ctx.stroke();
 
   // Left signature (Delivering Officer cursive)
   ctx.textAlign = 'center';
   ctx.fillStyle = '#0369a1';
-  ctx.font = 'italic bold 32px Georgia, "Times New Roman", serif';
-  ctx.fillText(fitText(d.deliveringOfficer, sigColW - 40), leftSigX + sigColW / 2, curY + 125);
+  ctx.font = 'italic bold 38px Georgia, "Times New Roman", serif';
+  ctx.fillText(fitText(d.deliveringOfficer, sigColW - 48), leftSigX + sigColW / 2, curY + 210);
 
   // Right signature (Customer Signature image)
   if (d.signatureImg) {
-    const sigImgEl = await loadImageSafe(d.signatureImg, 400);
+    const sigImgEl = await loadImageSafe(d.signatureImg, 1000);
     if (sigImgEl) {
       const maxW = sigColW - 48;
-      const maxH = 128;
+      const maxH = 260;
       const scale = Math.min(maxW / (sigImgEl.width || 400), maxH / (sigImgEl.height || 150));
       const dw = (sigImgEl.width || 400) * scale;
       const dh = (sigImgEl.height || 150) * scale;
       const dx = rightSigX + (sigColW - dw) / 2;
-      const dy = curY + 46 + (maxH - dh) / 2;
+      const dy = curY + 54 + (maxH - dh) / 2;
       ctx.drawImage(sigImgEl, dx, dy, dw, dh);
     }
   } else {
     ctx.fillStyle = '#94a3b8';
-    ctx.font = 'italic bold 16px Arial, Helvetica, sans-serif';
-    ctx.fillText('Signature on File', rightSigX + sigColW / 2, curY + 120);
+    ctx.font = 'italic bold 18px Arial, Helvetica, sans-serif';
+    ctx.fillText('Signature on File', rightSigX + sigColW / 2, curY + 200);
   }
 
   // Signature metadata rows
   const drawSigFieldRow = (colX: number, rowY: number, lbl: string, val: string) => {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#64748b';
-    ctx.font = '900 11.5px Arial, Helvetica, sans-serif';
-    ctx.fillText(lbl, colX + 14, rowY);
+    ctx.font = '900 12.5px Arial, Helvetica, sans-serif';
+    ctx.fillText(lbl, colX + 16, rowY);
 
     ctx.textAlign = 'right';
     ctx.fillStyle = '#0f172a';
-    ctx.font = '900 13px Arial, Helvetica, sans-serif';
-    ctx.fillText(fitText(val.toUpperCase(), sigColW - 130), colX + sigColW - 14, rowY);
+    ctx.font = '900 15px Arial, Helvetica, sans-serif';
+    ctx.fillText(fitText(val.toUpperCase(), sigColW - 150), colX + sigColW - 16, rowY);
   };
 
-  drawSigFieldRow(leftSigX, curY + 222, 'NAME:', d.deliveringOfficer);
-  drawSigFieldRow(leftSigX, curY + 258, 'DESIGNATION:', d.deliveringDesignation);
+  drawSigFieldRow(leftSigX, curY + 415, 'NAME:', d.deliveringOfficer);
+  drawSigFieldRow(leftSigX, curY + 472, 'DESIGNATION:', d.deliveringDesignation);
+  drawSigFieldRow(leftSigX, curY + 530, 'TIMESTAMP:', d.overTime ? `${d.dateFormatted} • ${d.overTime}` : d.dateFormatted);
 
-  drawSigFieldRow(rightSigX, curY + 222, 'NAME:', d.signerName);
-  drawSigFieldRow(rightSigX, curY + 258, 'DESIGNATION:', d.signerDesignation);
-  if (d.signedAtFormatted) {
-    drawSigFieldRow(rightSigX, curY + 292, 'SIGNED AT:', d.signedAtFormatted);
-  }
+  drawSigFieldRow(rightSigX, curY + 415, 'NAME:', d.signerName);
+  drawSigFieldRow(rightSigX, curY + 472, 'DESIGNATION:', d.signerDesignation);
+  drawSigFieldRow(rightSigX, curY + 530, 'SIGNED AT:', d.signedAtFormatted || d.dateFormatted);
 
   // ── 7. OFFICIAL CERTIFICATION FOOTER ──
-  const footerY = boxY + boxH - 86;
+  const footerY = 1600;
   ctx.strokeStyle = '#0369a1';
   ctx.lineWidth = 2.5;
   ctx.beginPath();
@@ -2226,24 +2227,24 @@ async function renderInvoiceToCanvas(log: Partial<FlightLog>, operatorUser?: Par
 
   ctx.textAlign = 'center';
   ctx.fillStyle = '#0369a1';
-  ctx.font = '900 12.5px Arial, Helvetica, sans-serif';
+  ctx.font = '900 13px Arial, Helvetica, sans-serif';
   ctx.fillText(
     '(CERTIFIED THAT THE PRODUCT SUPPLIED HEREIN CONFIRMS TO AFQRJOS, LATEST CHECK LIST)  •  FORM NO: G-001',
     inX + inW / 2,
-    footerY + 24
+    footerY + 26
   );
 
   ctx.fillStyle = '#64748b';
-  ctx.font = 'bold 11px Arial, Helvetica, sans-serif';
+  ctx.font = 'bold 12px Arial, Helvetica, sans-serif';
   ctx.fillText(
     'Maldives Airports Company Limited, Fuel Services, Velana International Airport, Republic of Maldives.',
     inX + inW / 2,
-    footerY + 46
+    footerY + 52
   );
   ctx.fillText(
     'Tel: (960) 3337261   |   E-mail: fuel@macl.aero   |   Website: www.macl.aero',
     inX + inW / 2,
-    footerY + 64
+    footerY + 74
   );
 
   return canvas;
@@ -2316,41 +2317,41 @@ async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?:
 
   // Left Title Banner
   ctx.fillStyle = '#1e293b';
-  ctx.fillRect(inX, curY, 350, 42);
+  ctx.fillRect(inX, curY, 360, 44);
   ctx.fillStyle = '#ffffff';
-  ctx.font = '900 20px Arial, Helvetica, sans-serif';
+  ctx.font = '900 21px Arial, Helvetica, sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillText('MULTI PRODUCT DELIVERY', inX + 16, curY + 28);
+  ctx.fillText('MULTI PRODUCT DELIVERY', inX + 16, curY + 30);
 
   ctx.fillStyle = '#0f172a';
-  ctx.font = '900 17px Arial, Helvetica, sans-serif';
-  ctx.fillText(d.stationTitle, inX, curY + 70);
+  ctx.font = '900 18px Arial, Helvetica, sans-serif';
+  ctx.fillText(d.stationTitle, inX, curY + 74);
 
   ctx.fillStyle = '#0369a1';
-  ctx.font = '700 14px Arial, Helvetica, sans-serif';
-  ctx.fillText('Fuel Services', inX, curY + 92);
+  ctx.font = '700 14.5px Arial, Helvetica, sans-serif';
+  ctx.fillText('Fuel Services', inX, curY + 98);
 
   ctx.fillStyle = '#64748b';
   ctx.font = '600 13px Arial, Helvetica, sans-serif';
-  ctx.fillText('Maldives Airports Company Limited.', inX, curY + 112);
+  ctx.fillText('Maldives Airports Company Limited.', inX, curY + 120);
 
   // Right: MACL Logo & Ticket Number
   if (logoImg) {
-    const lw = 130;
-    const lh = 60;
+    const lh = 58;
+    const lw = Math.round(lh * (274 / 96)); // 166px
     ctx.drawImage(logoImg, inX + inW - lw, curY, lw, lh);
   }
   ctx.textAlign = 'right';
   ctx.fillStyle = '#64748b';
-  ctx.font = '900 11px Arial, Helvetica, sans-serif';
-  ctx.fillText('VOUCHER / INVOICE NO', inX + inW, curY + 84);
+  ctx.font = '900 11.5px Arial, Helvetica, sans-serif';
+  ctx.fillText('VOUCHER / INVOICE NO', inX + inW, curY + 90);
 
   ctx.fillStyle = '#dc2626';
-  ctx.font = '900 26px monospace, Courier, Arial';
-  ctx.fillText(d.deliveryNum, inX + inW, curY + 116);
+  ctx.font = '900 27px monospace, Courier, Arial';
+  ctx.fillText(d.deliveryNum, inX + inW, curY + 124);
 
   // Header bottom border
-  curY += 134;
+  curY = 195;
   ctx.beginPath();
   ctx.moveTo(inX, curY);
   ctx.lineTo(inX + inW, curY);
@@ -2359,8 +2360,8 @@ async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?:
   ctx.stroke();
 
   // ── 2. META BAR: DATE, PAYMENT & PRODUCT CHECKBOXES ──
-  curY += 14;
-  const metaH = 50;
+  curY += 16;
+  const metaH = 56;
   ctx.fillStyle = '#f8fafc';
   ctx.fillRect(inX, curY, inW, metaH);
   ctx.strokeStyle = '#cbd5e1';
@@ -2370,25 +2371,25 @@ async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?:
   ctx.fillStyle = '#64748b';
   ctx.font = '900 12px Arial, Helvetica, sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillText('DATE:', inX + 14, curY + 30);
+  ctx.fillText('DATE:', inX + 14, curY + 35);
   ctx.fillStyle = '#0f172a';
-  ctx.font = '900 14px Arial, Helvetica, sans-serif';
-  ctx.fillText(d.dateFormatted, inX + 60, curY + 30);
+  ctx.font = '900 15px Arial, Helvetica, sans-serif';
+  ctx.fillText(d.dateFormatted, inX + 62, curY + 35);
 
-  let cbX = inX + 175;
-  cbX = drawCheckbox(cbX, curY + 30, d.isCash, 'CASH');
-  cbX = drawCheckbox(cbX, curY + 30, d.isCredit, 'CREDIT');
+  let cbX = inX + 180;
+  cbX = drawCheckbox(cbX, curY + 35, d.isCash, 'CASH');
+  cbX = drawCheckbox(cbX, curY + 35, d.isCredit, 'CREDIT');
 
   cbX = inX + 540;
-  cbX = drawCheckbox(cbX, curY + 30, d.isDiesel, 'DIESEL');
-  cbX = drawCheckbox(cbX, curY + 30, d.isPetrol, 'PETROL');
-  cbX = drawCheckbox(cbX, curY + 30, d.isLubOil, 'LUB OIL');
-  cbX = drawCheckbox(cbX, curY + 30, d.isInternal, 'INTERNAL');
+  cbX = drawCheckbox(cbX, curY + 35, d.isDiesel, 'DIESEL');
+  cbX = drawCheckbox(cbX, curY + 35, d.isPetrol, 'PETROL');
+  cbX = drawCheckbox(cbX, curY + 35, d.isLubOil, 'LUB OIL');
+  cbX = drawCheckbox(cbX, curY + 35, d.isInternal, 'INTERNAL');
 
   // ── 3. MAIN GRID (LEFT & RIGHT COLUMNS) ──
-  curY += metaH + 20;
+  curY += metaH + 20; // 287
   const colGap = 20;
-  const colW = (inW - colGap) / 2;
+  const colW = (inW - colGap) / 2; // 550
   const leftX = inX;
   const rightX = inX + colW + colGap;
   const gridStartY = curY;
@@ -2396,7 +2397,7 @@ async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?:
   // ── LEFT COLUMN ──
   // Box 1: On Account Of
   let lY = gridStartY;
-  const onAccH = 160;
+  const onAccH = 175;
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(leftX, lY, colW, onAccH);
   ctx.strokeStyle = '#cbd5e1';
@@ -2404,28 +2405,28 @@ async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?:
   ctx.strokeRect(leftX, lY, colW, onAccH);
 
   ctx.fillStyle = '#64748b';
-  ctx.font = '900 12px Arial, Helvetica, sans-serif';
-  ctx.fillText('ON ACCOUNT OF:', leftX + 16, lY + 32);
+  ctx.font = '900 12.5px Arial, Helvetica, sans-serif';
+  ctx.fillText('ON ACCOUNT OF:', leftX + 16, lY + 34);
 
   ctx.fillStyle = '#0f172a';
-  ctx.font = '900 24px Arial, Helvetica, sans-serif';
-  ctx.fillText(fitText(d.onAccountOf.toUpperCase(), colW - 32), leftX + 16, lY + 85);
+  ctx.font = '900 25px Arial, Helvetica, sans-serif';
+  ctx.fillText(fitText(d.onAccountOf.toUpperCase(), colW - 32), leftX + 16, lY + 95);
 
   // Box 2: Meter Table
-  lY += onAccH + 24;
-  const rowH = 80;
+  lY += onAccH + 20; // 482
+  const rowH = 88;
   const meterRows = [
     { label: 'METER NO:', val: d.meterNo },
     { label: 'BEFORE', val: d.meterBefore },
     { label: 'AFTER', val: d.meterAfter },
     { label: 'VOLUME DELIVERED', val: `${d.volumeNumber.toLocaleString()} L`, highlight: true }
   ];
-  const tableH = meterRows.length * rowH;
+  const tableH = meterRows.length * rowH; // 352
   ctx.strokeStyle = '#cbd5e1';
   ctx.lineWidth = 1.5;
   ctx.strokeRect(leftX, lY, colW, tableH);
 
-  const lblColW = 210;
+  const lblColW = 215;
   meterRows.forEach((row, i) => {
     const ry = lY + i * rowH;
     if (i > 0) {
@@ -2441,11 +2442,11 @@ async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?:
     ctx.fillStyle = row.highlight ? '#0369a1' : '#475569';
     ctx.font = '900 13px Arial, Helvetica, sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(row.label, leftX + 16, ry + 46);
+    ctx.fillText(row.label, leftX + 16, ry + 50);
 
     ctx.fillStyle = row.highlight ? '#0369a1' : '#0f172a';
-    ctx.font = row.highlight ? '900 24px Arial, Helvetica, sans-serif' : '800 16px Arial, Helvetica, sans-serif';
-    ctx.fillText(row.val, leftX + lblColW + 20, ry + 46);
+    ctx.font = row.highlight ? '900 25px Arial, Helvetica, sans-serif' : '800 17px Arial, Helvetica, sans-serif';
+    ctx.fillText(row.val, leftX + lblColW + 20, ry + 50);
   });
   ctx.beginPath();
   ctx.moveTo(leftX + lblColW, lY);
@@ -2454,8 +2455,8 @@ async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?:
   ctx.stroke();
 
   // Box 3: Signatures (Delivered By & Received By)
-  lY += tableH + 24;
-  const sigBoxH = 680;
+  lY += tableH + 20; // 854
+  const sigBoxH = 691;
   ctx.fillStyle = '#fafafa';
   ctx.fillRect(leftX, lY, colW, sigBoxH);
   ctx.strokeStyle = '#cbd5e1';
@@ -2475,27 +2476,34 @@ async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?:
   ctx.fillText('DELIVERED BY', leftX + 16, lY + 36);
 
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(leftX + 16, lY + 54, halfSigW - 32, 280);
+  ctx.fillRect(leftX + 16, lY + 54, halfSigW - 32, 290);
   ctx.strokeStyle = '#e2e8f0';
-  ctx.strokeRect(leftX + 16, lY + 54, halfSigW - 32, 280);
+  ctx.strokeRect(leftX + 16, lY + 54, halfSigW - 32, 290);
 
   ctx.fillStyle = '#0369a1';
-  ctx.font = 'italic 700 24px Georgia, serif';
-  ctx.fillText(fitText(d.deliveringOfficer, halfSigW - 48), leftX + 32, lY + 180);
+  ctx.font = 'italic 700 26px Georgia, serif';
+  ctx.fillText(fitText(d.deliveringOfficer, halfSigW - 48), leftX + 24, lY + 195);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '900 11.5px Arial, Helvetica, sans-serif';
+  ctx.fillText('(NAME):', leftX + 16, lY + 395);
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '900 15px Arial, Helvetica, sans-serif';
+  ctx.fillText(fitText(d.deliveringOfficer, halfSigW - 32), leftX + 16, lY + 428);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '900 11.5px Arial, Helvetica, sans-serif';
+  ctx.fillText('(DESIGNATION):', leftX + 16, lY + 480);
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '800 14px Arial, Helvetica, sans-serif';
+  ctx.fillText(fitText(d.deliveringDesignation, halfSigW - 32), leftX + 16, lY + 512);
 
   ctx.fillStyle = '#64748b';
   ctx.font = '900 11px Arial, Helvetica, sans-serif';
-  ctx.fillText('(NAME):', leftX + 16, lY + 380);
-  ctx.fillStyle = '#0f172a';
-  ctx.font = '900 14px Arial, Helvetica, sans-serif';
-  ctx.fillText(fitText(d.deliveringOfficer, halfSigW - 32), leftX + 16, lY + 410);
-
-  ctx.fillStyle = '#64748b';
-  ctx.font = '900 11px Arial, Helvetica, sans-serif';
-  ctx.fillText('(DESIGNATION):', leftX + 16, lY + 460);
-  ctx.fillStyle = '#0f172a';
+  ctx.fillText('(TIMESTAMP):', leftX + 16, lY + 565);
+  ctx.fillStyle = '#0369a1';
   ctx.font = '800 13px Arial, Helvetica, sans-serif';
-  ctx.fillText(fitText(d.deliveringDesignation, halfSigW - 32), leftX + 16, lY + 490);
+  ctx.fillText(d.dateFormatted, leftX + 16, lY + 596);
 
   // RECEIVED BY
   const recX = leftX + halfSigW;
@@ -2504,16 +2512,16 @@ async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?:
   ctx.fillText('RECEIVED BY', recX + 16, lY + 36);
 
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(recX + 16, lY + 54, halfSigW - 32, 280);
+  ctx.fillRect(recX + 16, lY + 54, halfSigW - 32, 290);
   ctx.strokeStyle = '#e2e8f0';
-  ctx.strokeRect(recX + 16, lY + 54, halfSigW - 32, 280);
+  ctx.strokeRect(recX + 16, lY + 54, halfSigW - 32, 290);
 
   if (d.signatureImg) {
-    const sigImg = await loadImageSafe(d.signatureImg, 500);
+    const sigImg = await loadImageSafe(d.signatureImg, 1000);
     if (sigImg) {
       try {
         const maxSW = halfSigW - 48;
-        const maxSH = 240;
+        const maxSH = 250;
         const aspect = (sigImg.width || 400) / (sigImg.height || 150);
         let sW = maxSW;
         let sH = maxSW / aspect;
@@ -2522,34 +2530,41 @@ async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?:
           sW = maxSH * aspect;
         }
         const sX = recX + 16 + ((halfSigW - 32) - sW) / 2;
-        const sY = lY + 54 + (280 - sH) / 2;
+        const sY = lY + 54 + (290 - sH) / 2;
         ctx.drawImage(sigImg, sX, sY, sW, sH);
       } catch {}
     }
   } else {
     ctx.fillStyle = '#94a3b8';
     ctx.font = 'italic 16px Arial, Helvetica, sans-serif';
-    ctx.fillText('(Electronic Signature)', recX + 32, lY + 180);
+    ctx.fillText('(Electronic Signature)', recX + 24, lY + 195);
   }
 
   ctx.fillStyle = '#64748b';
-  ctx.font = '900 11px Arial, Helvetica, sans-serif';
-  ctx.fillText('(NAME):', recX + 16, lY + 380);
+  ctx.font = '900 11.5px Arial, Helvetica, sans-serif';
+  ctx.fillText('(NAME):', recX + 16, lY + 395);
   ctx.fillStyle = '#0f172a';
-  ctx.font = '900 14px Arial, Helvetica, sans-serif';
-  ctx.fillText(fitText(d.signerName, halfSigW - 32), recX + 16, lY + 410);
+  ctx.font = '900 15px Arial, Helvetica, sans-serif';
+  ctx.fillText(fitText(d.signerName, halfSigW - 32), recX + 16, lY + 428);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '900 11.5px Arial, Helvetica, sans-serif';
+  ctx.fillText('(DESIGNATION):', recX + 16, lY + 480);
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '800 14px Arial, Helvetica, sans-serif';
+  ctx.fillText(fitText(d.signerDesignation, halfSigW - 32), recX + 16, lY + 512);
 
   ctx.fillStyle = '#64748b';
   ctx.font = '900 11px Arial, Helvetica, sans-serif';
-  ctx.fillText('(DESIGNATION):', recX + 16, lY + 460);
-  ctx.fillStyle = '#0f172a';
+  ctx.fillText('(SIGNED AT):', recX + 16, lY + 565);
+  ctx.fillStyle = '#0369a1';
   ctx.font = '800 13px Arial, Helvetica, sans-serif';
-  ctx.fillText(fitText(d.signerDesignation, halfSigW - 32), recX + 16, lY + 490);
+  ctx.fillText(d.dateFormatted, recX + 16, lY + 596);
 
   // ── RIGHT COLUMN ──
   // Box 1: Fleet & Equipment
   let rY = gridStartY;
-  const equipH = 260;
+  const equipH = 265;
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(rightX, rY, colW, equipH);
   ctx.strokeStyle = '#cbd5e1';
@@ -2558,27 +2573,27 @@ async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?:
 
   ctx.fillStyle = '#64748b';
   ctx.font = '900 12px Arial, Helvetica, sans-serif';
-  ctx.fillText('FLEET / REGISTRATION NO:', rightX + 16, rY + 34);
+  ctx.fillText('FLEET / REGISTRATION NO:', rightX + 16, rY + 36);
   ctx.fillStyle = '#0369a1';
-  ctx.font = '900 22px Arial, Helvetica, sans-serif';
-  ctx.fillText(fitText(d.fleetReg || 'N/A', colW - 32), rightX + 16, rY + 76);
+  ctx.font = '900 24px Arial, Helvetica, sans-serif';
+  ctx.fillText(fitText(d.fleetReg || 'N/A', colW - 32), rightX + 16, rY + 80);
 
   ctx.beginPath();
-  ctx.moveTo(rightX, rY + 125);
-  ctx.lineTo(rightX + colW, rY + 125);
+  ctx.moveTo(rightX, rY + 130);
+  ctx.lineTo(rightX + colW, rY + 130);
   ctx.strokeStyle = '#e2e8f0';
   ctx.stroke();
 
   ctx.fillStyle = '#64748b';
   ctx.font = '900 12px Arial, Helvetica, sans-serif';
-  ctx.fillText('EQUIPMENT NAME:', rightX + 16, rY + 158);
+  ctx.fillText('EQUIPMENT NAME:', rightX + 16, rY + 165);
   ctx.fillStyle = '#0f172a';
-  ctx.font = '900 20px Arial, Helvetica, sans-serif';
-  ctx.fillText(fitText(d.equipmentName || 'N/A', colW - 32), rightX + 16, rY + 198);
+  ctx.font = '900 21px Arial, Helvetica, sans-serif';
+  ctx.fillText(fitText(d.equipmentName || 'N/A', colW - 32), rightX + 16, rY + 208);
 
   // Box 2: Volume in words
-  rY += equipH + 24;
-  const wordsH = 220;
+  rY += equipH + 20; // 572
+  const wordsH = 230;
   ctx.fillStyle = '#f0f9ff';
   ctx.fillRect(rightX, rY, colW, wordsH);
   ctx.strokeStyle = '#bae6fd';
@@ -2586,20 +2601,20 @@ async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?:
   ctx.strokeRect(rightX, rY, colW, wordsH);
 
   ctx.fillStyle = '#0369a1';
-  ctx.font = '900 12px Arial, Helvetica, sans-serif';
+  ctx.font = '900 12.5px Arial, Helvetica, sans-serif';
   ctx.fillText('VOLUME DELIVERED (LITRES) IN WORDS:', rightX + 16, rY + 36);
 
   ctx.fillStyle = '#0369a1';
-  ctx.font = 'italic 900 19px Georgia, serif';
+  ctx.font = 'italic 900 20px Georgia, serif';
   const words = d.volumeInWords.split(' ');
   let curLine = '';
-  let lineY = rY + 84;
+  let lineY = rY + 85;
   for (const w of words) {
     const testLine = curLine ? `${curLine} ${w}` : w;
     if (ctx.measureText(testLine).width > colW - 32) {
       ctx.fillText(curLine, rightX + 16, lineY);
       curLine = w;
-      lineY += 34;
+      lineY += 36;
     } else {
       curLine = testLine;
     }
@@ -2609,13 +2624,13 @@ async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?:
   }
 
   // Box 3: Pricing Table
-  rY += wordsH + 24;
+  rY += wordsH + 20; // 822
   const priceRows = [
     { label: 'PRICE PER UNIT', val: d.pricePerUnit },
     { label: 'TOTAL AMOUNT (FIGURES)', val: d.totalAmountFigures, color: '#15803d' },
     { label: 'TOTAL AMOUNT (WORDS)', val: d.totalAmountWords, italic: true }
   ];
-  const prTableH = priceRows.length * rowH;
+  const prTableH = priceRows.length * rowH; // 264
   ctx.strokeStyle = '#cbd5e1';
   ctx.lineWidth = 1.5;
   ctx.strokeRect(rightX, rY, colW, prTableH);
@@ -2635,11 +2650,11 @@ async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?:
 
     ctx.fillStyle = '#475569';
     ctx.font = '900 12px Arial, Helvetica, sans-serif';
-    ctx.fillText(row.label, rightX + 16, ry + 46);
+    ctx.fillText(row.label, rightX + 16, ry + 50);
 
     ctx.fillStyle = row.color || '#0f172a';
     ctx.font = row.italic ? 'italic 800 15px Georgia, serif' : '900 18px Arial, Helvetica, sans-serif';
-    ctx.fillText(fitText(row.val, colW - prColW - 24), rightX + prColW + 20, ry + 46);
+    ctx.fillText(fitText(row.val, colW - prColW - 24), rightX + prColW + 20, ry + 50);
   });
   ctx.beginPath();
   ctx.moveTo(rightX + prColW, rY);
@@ -2648,31 +2663,54 @@ async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?:
   ctx.stroke();
 
   // Box 4: Official Use Box
-  rY += prTableH + 24;
-  const offH = sigBoxH - (equipH + 24 + wordsH + 24 + prTableH + 24 - (onAccH + 24 + tableH + 24));
-  const actualOffH = Math.max(offH, 152);
+  rY += prTableH + 20; // 1106
+  const offH = (gridStartY + 1258) - rY; // 439px
   ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(rightX, rY, colW, actualOffH);
+  ctx.fillRect(rightX, rY, colW, offH);
   ctx.setLineDash([6, 6]);
   ctx.strokeStyle = '#94a3b8';
   ctx.lineWidth = 1.5;
-  ctx.strokeRect(rightX, rY, colW, actualOffH);
+  ctx.strokeRect(rightX, rY, colW, offH);
   ctx.setLineDash([]);
 
   ctx.fillStyle = '#64748b';
-  ctx.font = '900 12px Arial, Helvetica, sans-serif';
-  ctx.fillText('OFFICIAL USE:', rightX + 16, rY + 36);
+  ctx.font = '900 13px Arial, Helvetica, sans-serif';
+  ctx.fillText('OFFICIAL USE & SYSTEM VALIDATION:', rightX + 16, rY + 38);
 
   ctx.fillStyle = '#475569';
+  ctx.font = '700 15px Arial, Helvetica, sans-serif';
+  ctx.fillText(`Station: ${d.stationTitle}`, rightX + 16, rY + 80);
   ctx.font = '700 14px Arial, Helvetica, sans-serif';
-  ctx.fillText(`Station: ${d.stationTitle}`, rightX + 16, rY + 74);
-  ctx.fillText('Verified & Synchronized with SCADA & Depot Operations System', rightX + 16, rY + 104);
+  ctx.fillText('Verified & Synchronized with SCADA & Depot Operations System', rightX + 16, rY + 115);
+  ctx.fillStyle = '#64748b';
+  ctx.font = '600 13px Arial, Helvetica, sans-serif';
+  ctx.fillText('Digital Delivery Record securely stored in MACL Aviation Fuel Logistics Database.', rightX + 16, rY + 150);
+
+  // Official certification emblem box inside official use
+  const stampW = colW - 32;
+  const stampH = 180;
+  const stampY = rY + 210;
+  ctx.fillStyle = '#f1f5f9';
+  ctx.fillRect(rightX + 16, stampY, stampW, stampH);
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(rightX + 16, stampY, stampW, stampH);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#0369a1';
+  ctx.font = '900 14px Arial, Helvetica, sans-serif';
+  ctx.fillText('MACL FUEL SERVICES AUDIT & COMPLIANCE VERIFIED', rightX + colW / 2, stampY + 45);
+  ctx.fillStyle = '#64748b';
+  ctx.font = 'bold 12px Arial, Helvetica, sans-serif';
+  ctx.fillText(`Invoice ID: ${d.deliveryNum} • ISO 9001:2015 Standards Certified`, rightX + colW / 2, stampY + 85);
+  ctx.fillText('Fuel Quality & Dispensation Calibrated According to Specs', rightX + colW / 2, stampY + 125);
+  ctx.textAlign = 'left';
 
   // ── 4. FOOTER ──
-  const footerY = boxY + boxH - 74;
+  const footerY = 1575;
   ctx.beginPath();
-  ctx.moveTo(inX, footerY - 18);
-  ctx.lineTo(inX + inW, footerY - 18);
+  ctx.moveTo(inX, footerY);
+  ctx.lineTo(inX + inW, footerY);
   ctx.strokeStyle = '#0369a1';
   ctx.lineWidth = 2.5;
   ctx.stroke();
@@ -2680,12 +2718,12 @@ async function renderG002InvoiceToCanvas(log: Partial<FlightLog>, operatorUser?:
   ctx.textAlign = 'center';
   ctx.fillStyle = '#dc2626';
   ctx.font = '900 13px Arial, Helvetica, sans-serif';
-  ctx.fillText('(CERTIFIED THAT THE PRODUCT SUPPLIED HEREIN CONFIRMS TO SPECIFICATION)  FORM NO: G-002', W / 2, footerY);
+  ctx.fillText('(CERTIFIED THAT THE PRODUCT SUPPLIED HEREIN CONFIRMS TO SPECIFICATION)  •  FORM NO: G-002', W / 2, footerY + 33);
 
   ctx.fillStyle = '#64748b';
-  ctx.font = '600 11px Arial, Helvetica, sans-serif';
-  ctx.fillText('Maldives Airports Company Limited, Fuel Services, Velana International Airport, Republic of Maldives.', W / 2, footerY + 22);
-  ctx.fillText('Tel: (960) 3026464, E-mail: fuel@macl.aero, Website: www.macl.aero', W / 2, footerY + 40);
+  ctx.font = 'bold 12px Arial, Helvetica, sans-serif';
+  ctx.fillText('Maldives Airports Company Limited, Fuel Services, Velana International Airport, Republic of Maldives.', W / 2, footerY + 61);
+  ctx.fillText('Tel: (960) 3026464   |   E-mail: fuel@macl.aero   |   Website: www.macl.aero', W / 2, footerY + 85);
 
   return canvas;
 }
@@ -2780,7 +2818,7 @@ export async function generateInvoicePdfFile(log: Partial<FlightLog>, operatorUs
   const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
   const cleanTicket = (log.deliveryNumber || 'MLE-INVOICE').replace(/[^A-Za-z0-9_-]/g, '_');
   const fileName = `MACL_Invoice_${cleanTicket}.pdf`;
-  return new File([pdfBlob], fileName, { type: 'application/pdf', lastModified: Date.now() });
+  return new File([pdfBlob], fileName, { type: 'application/pdf', lastModified: serverTimeService.getServerEpochMs() });
 }
 
 /**
@@ -3043,8 +3081,6 @@ Signer             : ${(signerName || 'Flight Crew').toUpperCase()} (${signerDes
 ATTACHMENT NOTE:
 The signed, official A4 PDF Delivery Invoice (${deliveryNum}.pdf) has been attached to this dispatch.
 
-Cc: ${cleanCc}
-
 Best regards,
 MACL Fuel Services Section
 Velana International Airport, Republic of Maldives
@@ -3201,26 +3237,30 @@ export function openInGmail(to: string, subject: string, bodyText: string, cc?: 
  * Opens the device's default mail client via mailto: with pre-filled To and CC
  */
 export function openSystemMailto(to: string, subject: string, bodyText: string, cc?: string): void {
-  const cleanTo = (to || '').replace(/\s+/g, '');
-  const cleanCc = (cc || '').replace(/\s+/g, '');
+  const cleanTo = (to || '').replace(/;/g, ',').replace(/\s+/g, '');
+  const cleanCc = (cc || '').replace(/;/g, ',').replace(/\s+/g, '');
   const params: string[] = [];
   if (cleanCc) params.push(`cc=${encodeURIComponent(cleanCc)}`);
   if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
   if (bodyText) params.push(`body=${encodeURIComponent(bodyText)}`);
   const query = params.length > 0 ? `?${params.join('&')}` : '';
   const uri = `mailto:${cleanTo}${query}`;
-  const link = document.createElement('a');
-  link.href = uri;
-  link.target = '_top';
-  link.rel = 'noopener noreferrer';
-  link.style.display = 'none';
-  document.body.appendChild(link);
-  link.click();
-  setTimeout(() => {
-    try {
-      document.body.removeChild(link);
-    } catch {}
-  }, 500);
+  try {
+    const link = document.createElement('a');
+    link.href = uri;
+    link.target = '_top';
+    link.rel = 'noopener noreferrer';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      try {
+        document.body.removeChild(link);
+      } catch {}
+    }, 500);
+  } catch {
+    window.location.href = uri;
+  }
 }
 
 /**
@@ -3261,8 +3301,8 @@ export async function downloadEmlDraft({
   attachmentFile?: File | Blob | null;
   attachmentFilename?: string;
 }): Promise<void> {
-  const boundaryMixed = `----=_Part_MACL_MIXED_${Date.now()}`;
-  const nowStr = new Date().toUTCString();
+  const boundaryMixed = `----=_Part_MACL_MIXED_${serverTimeService.getServerEpochMs()}`;
+  const nowStr = new Date(serverTimeService.getServerEpochMs()).toUTCString();
 
   let eml = `From: MACL Fuel Services <fuel@macl.aero>\r\n`;
   eml += `To: ${to}\r\n`;
@@ -3314,9 +3354,10 @@ export async function downloadEmlDraft({
 }
 
 /**
- * Dispatches an email to the representative and CCs airline & company:
- * - On mobile/tablets: uses native Web Share with the PDF attached directly to the mail app
- * - On desktop: downloads the Outlook .eml draft with the signed PDF attached, downloads the .pdf file, and opens compose
+ * Dispatches an email to the representative with Cc to airline & company:
+ * - On mobile/tablets: launches system mailto so Outlook/Mail apps populate actual To: and Cc: fields
+ *   while downloading the PDF invoice to the device
+ * - On desktop: downloads Outlook .eml draft with PDF attached (or opens Outlook Web / Gmail)
  */
 export async function sendInvoiceEmail(
   log: Partial<FlightLog>,
@@ -3325,7 +3366,7 @@ export async function sendInvoiceEmail(
   prebuiltFile?: File | null,
   options?: {
     ccOverride?: string;
-    preferredClient?: 'share' | 'eml' | 'm365' | 'gmail' | 'mailto';
+    preferredClient?: 'share' | 'eml' | 'm365' | 'gmail' | 'mailto' | 'system';
   }
 ): Promise<'shared' | 'eml_downloaded' | 'opened' | 'cancelled'> {
   const { to, cc, subject, bodyText, deliveryNum } = getInvoiceEmailDetails(
@@ -3344,20 +3385,20 @@ export async function sendInvoiceEmail(
     console.warn('[InvoiceEmail] PDF generation note:', err);
   }
 
-  // 2. Mobile / Tablet Native Share Sheet with PDF Attachment
-  // On iOS / iPadOS / Android, sharing a File to Mail or Outlook creates an email draft with the signed PDF directly attached!
-  const isMobile = typeof window !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
-  const canShareFile =
-    typeof navigator !== 'undefined' &&
-    typeof navigator.share === 'function' &&
-    (pdfFile && typeof navigator.canShare === 'function' ? navigator.canShare({ files: [pdfFile] }) : false);
+  // 2. Automatically save the official signed PDF to device downloads / files
+  if (pdfFile) {
+    downloadInvoicePdf(log, operatorUser, pdfFile).catch(() => {});
+  }
 
-  if (canShareFile && pdfFile && (isMobile || options?.preferredClient === 'share')) {
+  const isMobile = typeof window !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+
+  // 3. Explicit Web Share request (only if preferredClient === 'share' is specifically passed)
+  if (options?.preferredClient === 'share' && pdfFile && typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
     try {
       await navigator.share({
         files: [pdfFile],
         title: subject,
-        text: `To: ${to}\n${cc ? `Cc: ${cc}\n` : ''}\n${bodyText}`,
+        text: `MACL Fuel Services Delivery Invoice ${deliveryNum}.\nForm G-001 Certified.`
       });
       return 'shared';
     } catch (err: any) {
@@ -3367,18 +3408,16 @@ export async function sendInvoiceEmail(
     }
   }
 
-  // 3. Desktop / Fallback: Default to Outlook .eml draft because it natively contains the attached PDF!
+  // 4. Resolve client dispatch:
+  // On mobile / tablets (iOS, iPadOS, Android), launching system mailto URI directly opens Outlook Mobile,
+  // Apple Mail, or Gmail app with native To: and Cc: headers populated in the real recipient fields.
+  const storedPreference = typeof window !== 'undefined' ? localStorage.getItem('fms_preferred_email_client') : null;
   const preferred =
     options?.preferredClient ||
-    (typeof window !== 'undefined' ? localStorage.getItem('fms_preferred_email_client') : null) ||
-    'eml';
+    storedPreference ||
+    (isMobile ? 'system' : 'eml');
 
-  // Automatically trigger PDF download so the user always has the file
-  if (pdfFile) {
-    downloadInvoicePdf(log, operatorUser, pdfFile).catch(() => {});
-  }
-
-  if (preferred === 'eml' && pdfFile) {
+  if (preferred === 'eml' && !isMobile && pdfFile) {
     await downloadEmlDraft({
       filename: `${deliveryNum}_Draft`,
       to,
@@ -3401,7 +3440,7 @@ export async function sendInvoiceEmail(
     return 'opened';
   }
 
-  // Fallback: System mailto
+  // Mobile / Default: Native system mailto with real To and Cc headers
   openSystemMailto(to, subject, bodyText, cc);
   return 'opened';
 }
